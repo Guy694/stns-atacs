@@ -1,0 +1,323 @@
+import "server-only";
+
+import type { RowDataPacket } from "mysql2/promise";
+
+import { facilitySurveys as fallbackSurveys, type AssetRecord, type FacilitySurvey } from "@/app/atacs-data";
+import { executeStatement, selectRows } from "@/lib/mysql";
+
+// ── DB Row types ───────────────────────────────────────────────────────────
+
+type AssetRow = RowDataPacket & {
+  id: number;
+  survey_id: number;
+  facility_id: number;
+  facility_name: string | null;
+  district_name: string | null;
+  row_no: number | null;
+  asset_registration_no: string;
+  asset_name: string;
+  usage_description: string | null;
+  owner_name: string | null;
+  asset_category: "Hardware" | "Software" | null;
+  asset_group: string | null;
+  device_type: string | null;
+  operating_system: string | null;
+  operating_system_version: string | null;
+  private_ip: string | null;
+  public_ip: string | null;
+  location_detail: string | null;
+  installed_at: Date | string | null;
+  last_updated_at: Date | string | null;
+  current_status: string | null;
+  updated_by: string | null;
+  manufacturer_brand: string | null;
+  manufacturer_model: string | null;
+  manufacturer_specification: string | null;
+  serial_number: string | null;
+  maintenance_start_date: Date | string | null;
+  maintenance_end_date: Date | string | null;
+};
+
+type SurveyRow = RowDataPacket & {
+  id: number;
+  facility_id: number;
+  facility_name: string | null;
+  district_name: string | null;
+  survey_title: string | null;
+  survey_date: Date | string | null;
+  personnel_count: number | null;
+};
+
+// ── Normalise helpers ──────────────────────────────────────────────────────
+
+function toDateOnly(v: Date | string | null | undefined) {
+  if (!v) return "";
+  return (v instanceof Date ? v.toISOString() : String(v)).slice(0, 10);
+}
+
+function normalizeStatus(v: string | null): AssetRecord["currentStatus"] {
+  const s = (v ?? "").trim().toLowerCase();
+  if (["broken", "ชำรุด", "เสีย"].includes(s)) return "Broken";
+  if (["inactive", "in-active", "ไม่ใช้งาน"].includes(s)) return "Inactive";
+  return "Active";
+}
+
+function normalizeGroup(v: string | null): AssetRecord["assetGroup"] {
+  const s = (v ?? "").trim().toLowerCase();
+  if (["software", "system", "application", "app", "os"].includes(s)) return "Software";
+  return "Hardware";
+}
+
+function rowToAsset(row: AssetRow): AssetRecord & { surveyId: number; facilityId: number; facilityName: string; districtName: string } {
+  return {
+    id: row.id,
+    surveyId: row.survey_id,
+    facilityId: row.facility_id,
+    facilityName: row.facility_name ?? "",
+    districtName: row.district_name ?? "",
+    assetRegistrationNo: row.asset_registration_no,
+    assetName: row.asset_name,
+    usageDescription: row.usage_description ?? "",
+    ownerName: row.owner_name ?? "",
+    assetGroup: row.asset_category ?? normalizeGroup(row.asset_group),
+    deviceType: row.device_type ?? "",
+    operatingSystem: row.operating_system ?? "",
+    privateIp: row.private_ip ?? "",
+    publicIp: row.public_ip ?? undefined,
+    locationDetail: row.location_detail ?? "",
+    currentStatus: normalizeStatus(row.current_status),
+    updatedBy: row.updated_by ?? "",
+    updatedAt: toDateOnly(row.last_updated_at),
+    maintenanceEndDate: toDateOnly(row.maintenance_end_date),
+    manufacturerBrand: row.manufacturer_brand ?? "",
+    serialNumber: row.serial_number ?? "",
+  };
+}
+
+// ── Public API ─────────────────────────────────────────────────────────────
+
+export type AssetWithFacility = ReturnType<typeof rowToAsset>;
+
+export type AssetInput = {
+  surveyId: number;
+  assetRegistrationNo: string;
+  assetName: string;
+  usageDescription?: string;
+  ownerName?: string;
+  assetCategory: "Hardware" | "Software";
+  deviceType?: string;
+  operatingSystem?: string;
+  operatingSystemVersion?: string;
+  privateIp?: string;
+  publicIp?: string;
+  locationDetail?: string;
+  currentStatus?: string;
+  updatedBy?: string;
+  manufacturerBrand?: string;
+  manufacturerModel?: string;
+  manufacturerSpecification?: string;
+  serialNumber?: string;
+  maintenanceStartDate?: string;
+  maintenanceEndDate?: string;
+  installedAt?: string;
+  lastUpdatedAt?: string;
+  rowNo?: number;
+};
+
+const ASSET_JOIN_SQL = `
+  SELECT
+    a.*,
+    s.facility_id,
+    hf.name          AS facility_name,
+    hf.district_name
+  FROM information_assets a
+  JOIN information_asset_surveys s ON s.id = a.survey_id
+  JOIN health_facilities hf        ON hf.id = s.facility_id
+`;
+
+/** รายการทรัพย์สินทั้งหมด (admin) หรือเฉพาะหน่วยงาน (officer ไม่จำกัดในตอนนี้) */
+export async function listAssets(filter?: {
+  facilityId?: number;
+  status?: string;
+  search?: string;
+}): Promise<AssetWithFacility[]> {
+  const conditions: string[] = [];
+  const values: unknown[] = [];
+
+  if (filter?.facilityId) {
+    conditions.push("s.facility_id = ?");
+    values.push(filter.facilityId);
+  }
+  if (filter?.status) {
+    conditions.push("a.current_status = ?");
+    values.push(filter.status);
+  }
+  if (filter?.search) {
+    conditions.push("(a.asset_name LIKE ? OR a.asset_registration_no LIKE ? OR a.device_type LIKE ?)");
+    const like = `%${filter.search}%`;
+    values.push(like, like, like);
+  }
+
+  const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+  const sql = `${ASSET_JOIN_SQL} ${where} ORDER BY hf.district_name, hf.name, a.row_no, a.id`;
+
+  try {
+    const rows = await selectRows<AssetRow>(sql, values);
+    return rows.map(rowToAsset);
+  } catch {
+    // fallback
+    return fallbackSurveys.flatMap((s) =>
+      s.assets.map((a) => ({ ...a, surveyId: 0, facilityId: s.facilityId, facilityName: s.facilityName, districtName: s.districtName }))
+    );
+  }
+}
+
+/** ดึงทรัพย์สินเดี่ยว */
+export async function getAssetById(id: number): Promise<AssetWithFacility | null> {
+  try {
+    const rows = await selectRows<AssetRow>(`${ASSET_JOIN_SQL} WHERE a.id = ? LIMIT 1`, [id]);
+    return rows[0] ? rowToAsset(rows[0]) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** ดึง survey list (เพื่อใช้ใน dropdown เลือกหน่วยงานตอน add asset) */
+export async function listSurveys(): Promise<SurveyRow[]> {
+  try {
+    return await selectRows<SurveyRow>(`
+      SELECT s.id, s.facility_id, hf.name AS facility_name, hf.district_name, s.survey_title, s.survey_date, s.personnel_count
+      FROM information_asset_surveys s
+      JOIN health_facilities hf ON hf.id = s.facility_id
+      ORDER BY hf.district_name, hf.name
+    `);
+  } catch {
+    return [];
+  }
+}
+
+/** เพิ่มทรัพย์สินใหม่ */
+export async function createAsset(input: AssetInput) {
+  return executeStatement(
+    `INSERT INTO information_assets
+      (survey_id, row_no, asset_registration_no, asset_name, usage_description, owner_name,
+       asset_category, device_type, operating_system, operating_system_version,
+       private_ip, public_ip, location_detail, current_status, updated_by,
+       manufacturer_brand, manufacturer_model, manufacturer_specification,
+       serial_number, maintenance_start_date, maintenance_end_date, installed_at, last_updated_at)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    [
+      input.surveyId,
+      input.rowNo ?? null,
+      input.assetRegistrationNo,
+      input.assetName,
+      input.usageDescription ?? null,
+      input.ownerName ?? null,
+      input.assetCategory,
+      input.deviceType ?? null,
+      input.operatingSystem ?? null,
+      input.operatingSystemVersion ?? null,
+      input.privateIp ?? null,
+      input.publicIp ?? null,
+      input.locationDetail ?? null,
+      input.currentStatus ?? "Active",
+      input.updatedBy ?? null,
+      input.manufacturerBrand ?? null,
+      input.manufacturerModel ?? null,
+      input.manufacturerSpecification ?? null,
+      input.serialNumber ?? null,
+      input.maintenanceStartDate ?? null,
+      input.maintenanceEndDate ?? null,
+      input.installedAt ?? null,
+      input.lastUpdatedAt ?? null,
+    ]
+  );
+}
+
+/** แก้ไขทรัพย์สิน */
+export async function updateAsset(id: number, input: Partial<AssetInput>) {
+  const sets: string[] = [];
+  const values: unknown[] = [];
+
+  const fieldMap: Record<string, unknown> = {
+    asset_registration_no: input.assetRegistrationNo,
+    asset_name: input.assetName,
+    usage_description: input.usageDescription,
+    owner_name: input.ownerName,
+    asset_category: input.assetCategory,
+    device_type: input.deviceType,
+    operating_system: input.operatingSystem,
+    operating_system_version: input.operatingSystemVersion,
+    private_ip: input.privateIp,
+    public_ip: input.publicIp,
+    location_detail: input.locationDetail,
+    current_status: input.currentStatus,
+    updated_by: input.updatedBy,
+    manufacturer_brand: input.manufacturerBrand,
+    manufacturer_model: input.manufacturerModel,
+    manufacturer_specification: input.manufacturerSpecification,
+    serial_number: input.serialNumber,
+    maintenance_start_date: input.maintenanceStartDate ?? null,
+    maintenance_end_date: input.maintenanceEndDate ?? null,
+    installed_at: input.installedAt ?? null,
+    last_updated_at: input.lastUpdatedAt ?? null,
+  };
+
+  for (const [col, val] of Object.entries(fieldMap)) {
+    if (val !== undefined) {
+      sets.push(`${col} = ?`);
+      values.push(val === "" ? null : val);
+    }
+  }
+
+  if (sets.length === 0) return null;
+  values.push(id);
+  return executeStatement(`UPDATE information_assets SET ${sets.join(", ")} WHERE id = ?`, values);
+}
+
+/** ลบทรัพย์สิน */
+export async function deleteAsset(id: number) {
+  return executeStatement("DELETE FROM information_assets WHERE id = ?", [id]);
+}
+
+// ── Facilities ─────────────────────────────────────────────────────────────
+
+export type FacilityRow = RowDataPacket & {
+  id: number;
+  name: string;
+  typecode: string;
+  district_name: string | null;
+  tambon: string | null;
+  is_active: number;
+  asset_count: number;
+  hw_count: number;
+  sw_count: number;
+  has_survey: number;
+};
+
+/** รายการหน่วยบริการทั้งหมด พร้อมจำนวนทรัพย์สิน */
+export async function listFacilities(): Promise<FacilityRow[]> {
+  try {
+    return await selectRows<FacilityRow>(`
+      SELECT
+        hf.id,
+        hf.name,
+        hf.typecode,
+        hf.district_name,
+        hf.tambon,
+        hf.is_active,
+        COUNT(DISTINCT a.id)                                          AS asset_count,
+        SUM(CASE WHEN a.asset_category = 'Hardware' THEN 1 ELSE 0 END) AS hw_count,
+        SUM(CASE WHEN a.asset_category = 'Software' THEN 1 ELSE 0 END) AS sw_count,
+        COUNT(DISTINCT s.id)                                          AS has_survey
+      FROM health_facilities hf
+      LEFT JOIN information_asset_surveys s ON s.facility_id = hf.id
+      LEFT JOIN information_assets a        ON a.survey_id   = s.id
+      WHERE hf.is_active = 1
+      GROUP BY hf.id
+      ORDER BY hf.district_name, hf.typecode DESC, hf.name
+    `);
+  } catch {
+    return [];
+  }
+}
