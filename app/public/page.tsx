@@ -34,7 +34,7 @@ export default async function PublicDashboardPage() {
       <TopNavigation current="public" user={null} />
 
       {/* ── Hero ──────────────────────────────────────────────────────────── */}
-      <section className="relative overflow-hidden rounded-2xl bg-[linear-gradient(135deg,#0a4f47_0%,#0d6f63_50%,#0e8a7a_100%)] px-6 py-10 text-white sm:px-10 sm:py-12 lg:px-14 lg:py-14">
+      <section className="relative overflow-hidden rounded-2xl bg-[linear-gradient(135deg,#4c1d95_0%,#5b21b6_40%,#4338ca_80%,#3b82f6_100%)] px-6 py-10 text-white sm:px-10 sm:py-12 lg:px-14 lg:py-14">
         {/* grid texture */}
         <div className="absolute inset-0 opacity-10 [background-image:linear-gradient(rgba(255,255,255,0.2)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.2)_1px,transparent_1px)] [background-size:40px_40px]" />
         {/* glow blob */}

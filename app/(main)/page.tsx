@@ -116,26 +116,26 @@ export default async function Home() {
 
         {/* ── KPI Strip ────────────────────────────────────────────────────── */}
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="glass-panel rounded-2xl p-5">
-            <p className="text-xs font-medium uppercase tracking-[0.2em] text-[var(--muted)]">หน่วยงาน</p>
+          <div className="rounded-2xl bg-gradient-to-br from-sky-500 to-blue-600 p-5 text-white shadow-lg shadow-blue-900/20">
+            <p className="text-xs font-medium uppercase tracking-[0.2em] text-white/70">หน่วยงาน</p>
             <p className="mt-3 text-4xl font-semibold tracking-tight">{facilitySurveys.length}</p>
-            <div className="mt-2 flex items-center gap-1.5 text-xs text-[var(--muted)]">
-              <span className="h-1.5 w-1.5 rounded-full bg-[var(--accent)]" />
+            <div className="mt-2 flex items-center gap-1.5 text-xs text-white/70">
+              <span className="h-1.5 w-1.5 rounded-full bg-white" />
               {totalDistricts} อำเภอ
             </div>
           </div>
 
-          <div className="glass-panel rounded-2xl p-5">
-            <p className="text-xs font-medium uppercase tracking-[0.2em] text-[var(--muted)]">ทรัพย์สินรวม</p>
+          <div className="rounded-2xl bg-gradient-to-br from-violet-500 to-purple-600 p-5 text-white shadow-lg shadow-violet-900/20">
+            <p className="text-xs font-medium uppercase tracking-[0.2em] text-white/70">ทรัพย์สินรวม</p>
             <p className="mt-3 text-4xl font-semibold tracking-tight">{totalAssets}</p>
-            <div className="mt-2 flex items-center gap-2 text-xs text-[var(--muted)]">
+            <div className="mt-2 flex items-center gap-2 text-xs text-white/70">
               <span>{hardwareCount} HW</span>
-              <span className="text-black/20">·</span>
+              <span className="text-white/30">·</span>
               <span>{softwareCount} SW</span>
             </div>
           </div>
 
-          <div className="rounded-2xl bg-[var(--accent-strong)] p-5 text-white shadow-lg shadow-emerald-950/15">
+          <div className="rounded-2xl bg-gradient-to-br from-indigo-500 to-indigo-700 p-5 text-white shadow-lg shadow-indigo-900/20">
             <p className="text-xs font-medium uppercase tracking-[0.2em] text-white/60">พร้อมใช้งาน</p>
             <p className="mt-3 text-4xl font-semibold tracking-tight">{activeAssets}</p>
             <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/20">
