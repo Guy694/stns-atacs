@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 
 import { getCurrentUser } from "@/lib/auth";
 import { createAsset, deleteAsset, updateAsset, type AssetInput } from "@/lib/assets";
+import { writeAuditLog } from "@/lib/audit";
 
 function requireAuth() {
   // This will throw/redirect if not logged in — called inside action
@@ -64,7 +65,9 @@ export async function createAssetAction(_prev: string | null, fd: FormData): Pro
 
   try {
     const input = buildInput(fd, user.fullName);
-    await createAsset(input);
+    const result = await createAsset(input);
+    const newId = result.insertId;
+    await writeAuditLog({ userId: user.id, userName: user.fullName, action: "create", entity: "information_assets", entityId: newId, summary: `สร้างทรัพย์สิน ${input.assetName} (${input.assetRegistrationNo})` });
     revalidatePath("/assets");
     revalidatePath("/");
   } catch (err) {
@@ -83,6 +86,7 @@ export async function updateAssetAction(_prev: string | null, fd: FormData): Pro
   try {
     const input = buildInput(fd, user.fullName);
     await updateAsset(id, input);
+    await writeAuditLog({ userId: user.id, userName: user.fullName, action: "update", entity: "information_assets", entityId: id, summary: `แก้ไขทรัพย์สิน ${input.assetName}` });
     revalidatePath("/assets");
     revalidatePath("/");
     revalidatePath(`/facilities/${input.surveyId}`);
@@ -99,6 +103,7 @@ export async function deleteAssetAction(id: number): Promise<string | null> {
 
   try {
     await deleteAsset(id);
+    await writeAuditLog({ userId: user.id, userName: user.fullName, action: "delete", entity: "information_assets", entityId: id, summary: `ลบทรัพย์สิน #${id}` });
     revalidatePath("/assets");
     revalidatePath("/");
   } catch (err) {

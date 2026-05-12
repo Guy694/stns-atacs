@@ -240,6 +240,7 @@ export async function updateAsset(id: number, input: Partial<AssetInput>) {
   const values: unknown[] = [];
 
   const fieldMap: Record<string, unknown> = {
+    survey_id: input.surveyId,
     asset_registration_no: input.assetRegistrationNo,
     asset_name: input.assetName,
     usage_description: input.usageDescription,

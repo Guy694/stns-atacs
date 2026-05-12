@@ -1,9 +1,10 @@
 import Link from "next/link";
 
 import { getCurrentUser } from "@/lib/auth";
-import { listAssets, listSurveys } from "@/lib/assets";
+import { listAssets, listSurveys, listFacilities } from "@/lib/assets";
 import { AssetFormModal } from "./_components/asset-form-modal";
 import { DeleteAssetButton } from "./_components/delete-asset-button";
+import ImportExcelModal from "./_components/import-excel-modal";
 
 type AssetsPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -35,9 +36,10 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
   const statusFilter = readParam(params, "status");
   const facilityFilter = Number(readParam(params, "facility")) || undefined;
 
-  const [assets, surveys] = await Promise.all([
+  const [assets, surveys, facilities] = await Promise.all([
     listAssets({ search: search || undefined, status: statusFilter || undefined, facilityId: facilityFilter }),
     listSurveys(),
+    listFacilities(),
   ]);
 
   const isAdmin = user.role === "admin";
@@ -59,11 +61,14 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
           <p className="mt-1 text-sm text-[var(--muted)]">{assets.length} รายการ</p>
         </div>
         {isAdmin && (
-          <AssetFormModal surveys={surveys} updaterName={user.fullName} mode="create">
-            <button className="inline-flex items-center gap-2 rounded-full bg-[var(--accent-strong)] px-5 py-2.5 text-sm font-semibold text-white transition hover:opacity-90">
-              + เพิ่มทรัพย์สิน
-            </button>
-          </AssetFormModal>
+          <div className="flex gap-2">
+            <ImportExcelModal facilities={facilities} />
+            <AssetFormModal surveys={surveys} updaterName={user.fullName} mode="create">
+              <button className="inline-flex items-center gap-2 rounded-full bg-[var(--accent-strong)] px-5 py-2.5 text-sm font-semibold text-white transition hover:opacity-90">
+                + เพิ่มทรัพย์สิน
+              </button>
+            </AssetFormModal>
+          </div>
         )}
       </div>
 

@@ -24,10 +24,16 @@ type NavItem = {
 };
 
 const NAV_ITEMS: NavItem[] = [
-  { href: "/", label: "Dashboard", icon: "◈", exact: true },
-  { href: "/assets", label: "ทะเบียนทรัพย์สิน", icon: "◫" },
-  { href: "/facilities", label: "หน่วยบริการ", icon: "◧" },
-  { href: "/admin/users", label: "จัดการผู้ใช้", icon: "◉", adminOnly: true },
+  { href: "/", label: "Dashboard", icon: "⊞", exact: true },
+  { href: "/assets", label: "ทรัพย์สินทั้งหมด", icon: "☰" },
+  { href: "/inspection", label: "ตรวจนับทรัพย์สิน", icon: "✔" },
+  { href: "/transfer", label: "โอนย้ายทรัพย์สิน", icon: "⇄" },
+  { href: "/disposal", label: "จำหน่าย/ชำรุด/สูญหาย", icon: "⊠" },
+  { href: "/reports", label: "รายงาน", icon: "≡" },
+  { href: "/map", label: "แผนที่ทรัพย์สิน", icon: "◎" },
+  { href: "/admin/settings", label: "ตั้งค่าระบบ", icon: "◈", adminOnly: true },
+  { href: "/admin/users", label: "ผู้ใช้งาน", icon: "◉", adminOnly: true },
+  { href: "/admin/audit", label: "Audit Log", icon: "📋", adminOnly: true },
 ];
 
 function NavLink({ item, pathname, onClick }: { item: NavItem; pathname: string; onClick?: () => void }) {
