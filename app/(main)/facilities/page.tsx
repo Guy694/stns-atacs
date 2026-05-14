@@ -56,7 +56,7 @@ export default async function FacilitiesPage() {
         <div className="glass-panel rounded-2xl p-5">
           <p className="text-xs font-medium uppercase tracking-wider text-[var(--muted)]">ทรัพย์สินรวม</p>
           <p className="mt-2 text-3xl font-bold text-[var(--accent)]">{totalAssets.toLocaleString()}</p>
-          <p className="mt-0.5 text-xs text-[var(--muted)]">รายการ (HW+SW)</p>
+          <p className="mt-0.5 text-xs text-[var(--muted)]">รายการ (ฮาร์ดแวร์ + ซอฟต์แวร์)</p>
         </div>
       </div>
 
@@ -76,8 +76,8 @@ export default async function FacilitiesPage() {
                   <th className="px-5 py-3 text-left font-medium">ชื่อหน่วยบริการ</th>
                   <th className="px-4 py-3 text-left font-medium">ประเภท</th>
                   <th className="px-4 py-3 text-center font-medium">ทรัพย์สิน</th>
-                  <th className="px-4 py-3 text-center font-medium">HW</th>
-                  <th className="px-4 py-3 text-center font-medium">SW</th>
+                  <th className="px-4 py-3 text-center font-medium">ฮาร์ดแวร์</th>
+                  <th className="px-4 py-3 text-center font-medium">ซอฟต์แวร์</th>
                   <th className="px-4 py-3 text-center font-medium">สถานะข้อมูล</th>
                   <th className="px-4 py-3 text-right font-medium">รายละเอียด</th>
                 </tr>

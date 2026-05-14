@@ -5,10 +5,13 @@ import { useActionState, useRef, useState } from "react";
 import { createAssetAction, updateAssetAction } from "@/app/(main)/assets/actions";
 import type { AssetWithFacility } from "@/lib/assets";
 
-type SurveyOption = { id: number; facility_id: number; facility_name: string | null; district_name: string | null };
+type FacilityOption = { id: number; facility_name: string | null; district_name: string | null };
+type DeviceTypeOption = { name: string; category: string };
 
 type Props = {
-  surveys: SurveyOption[];
+  facilities: FacilityOption[];
+  deviceTypes?: DeviceTypeOption[];
+  fixedFacilityId?: number;
   updaterName: string;
   mode: "create" | "edit";
   asset?: AssetWithFacility;
@@ -17,9 +20,10 @@ type Props = {
 
 const INITIAL: string | null = null;
 
-export function AssetFormModal({ surveys, mode, asset, children }: Props) {
+export function AssetFormModal({ facilities, deviceTypes = [], fixedFacilityId, mode, asset, children }: Props) {
   const [open, setOpen] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
+  const today = new Date().toISOString().slice(0, 10);
 
   const action = mode === "create" ? createAssetAction : updateAssetAction;
   const [error, formAction, pending] = useActionState(
@@ -59,19 +63,28 @@ export function AssetFormModal({ surveys, mode, asset, children }: Props) {
               {/* Survey / หน่วยงาน */}
               <div>
                 <label className="block text-sm font-medium">หน่วยงาน <span className="text-rose-500">*</span></label>
-                <select
-                  name="surveyId"
-                  defaultValue={asset?.surveyId ?? ""}
-                  required
-                  className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
-                >
-                  <option value="">-- เลือกหน่วยงาน --</option>
-                  {surveys.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.facility_name} ({s.district_name})
-                    </option>
-                  ))}
-                </select>
+                {fixedFacilityId ? (
+                  <>
+                    <input type="hidden" name="facilityId" value={fixedFacilityId} />
+                    <div className="mt-1 rounded-xl border border-black/10 bg-white/60 px-3 py-2 text-sm text-[var(--muted)]">
+                      หน่วยงานนี้ถูกกำหนดไว้แล้ว
+                    </div>
+                  </>
+                ) : (
+                  <select
+                    name="facilityId"
+                    defaultValue={asset?.facilityId?.toString() ?? ""}
+                    required
+                    className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+                  >
+                    <option value="">-- เลือกหน่วยงาน --</option>
+                    {facilities.map((f) => (
+                      <option key={f.id} value={f.id}>
+                        {f.facility_name} {f.district_name ? `· อ.${f.district_name}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
@@ -106,7 +119,6 @@ export function AssetFormModal({ surveys, mode, asset, children }: Props) {
                   <select
                     name="assetCategory"
                     defaultValue={asset?.assetGroup ?? "Hardware"}
-                    required
                     className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
                   >
                     <option value="Hardware">Hardware</option>
@@ -118,10 +130,14 @@ export function AssetFormModal({ surveys, mode, asset, children }: Props) {
                   <label className="block text-sm font-medium">ประเภทอุปกรณ์</label>
                   <input
                     name="deviceType"
+                    list="device-type-list"
                     defaultValue={asset?.deviceType ?? ""}
                     placeholder="เช่น Firewall, Server, Switch"
                     className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
                   />
+                  <datalist id="device-type-list">
+                    {deviceTypes.map((t) => <option key={t.name} value={t.name} />)}
+                  </datalist>
                 </div>
               </div>
 
@@ -142,9 +158,23 @@ export function AssetFormModal({ surveys, mode, asset, children }: Props) {
                     name="privateIp"
                     defaultValue={asset?.privateIp ?? ""}
                     placeholder="10.x.x.x"
+                    pattern="^(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)(\\.(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)){3}$"
+                    title="กรอกเป็น IPv4 เช่น 10.0.0.1"
                     className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 font-mono text-sm outline-none focus:border-[var(--accent)]"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium">Public IP</label>
+                <input
+                  name="publicIp"
+                  defaultValue={asset?.publicIp ?? ""}
+                  placeholder="เช่น 1.2.3.4"
+                  pattern="^(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)(\\.(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)){3}$"
+                  title="กรอกเป็น IPv4 เช่น 1.2.3.4"
+                  className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 font-mono text-sm outline-none focus:border-[var(--accent)]"
+                />
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
@@ -177,6 +207,7 @@ export function AssetFormModal({ surveys, mode, asset, children }: Props) {
                     defaultValue={asset?.serialNumber ?? ""}
                     className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 font-mono text-sm outline-none focus:border-[var(--accent)]"
                   />
+                  <p className="mt-1 text-xs text-[var(--muted)]">Serial Number ต้องไม่ซ้ำในหน่วยงานเดียวกัน</p>
                 </div>
                 {/* MA Start */}
                 <div>
@@ -195,6 +226,41 @@ export function AssetFormModal({ surveys, mode, asset, children }: Props) {
                     type="date"
                     name="maintenanceEndDate"
                     defaultValue={asset?.maintenanceEndDate ?? ""}
+                    className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+                  />
+                </div>
+              </div>
+
+              {/* ── ข้อมูลราคาและการจัดซื้อ ── */}
+              <div className="grid gap-4 sm:grid-cols-3">
+                <div>
+                  <label className="block text-sm font-medium">ราคาที่ซื้อ (บาท)</label>
+                  <input
+                    type="number"
+                    name="purchasePrice"
+                    min="0"
+                    step="0.01"
+                    defaultValue={asset?.purchasePrice ?? ""}
+                    placeholder="0.00"
+                    className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium">วันที่ซื้อ / ได้รับมอบ</label>
+                  <input
+                    type="date"
+                    name="purchaseDate"
+                    defaultValue={asset?.purchaseDate ?? ""}
+                    max={today}
+                    className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium">เลขที่สัญญา / PO</label>
+                  <input
+                    name="purchaseOrderNo"
+                    defaultValue={asset?.purchaseOrderNo ?? ""}
+                    placeholder="เช่น 65-045/2567"
                     className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
                   />
                 </div>

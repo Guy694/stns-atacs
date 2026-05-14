@@ -23,6 +23,8 @@ const STATUS_STYLE: Record<string, string> = {
 export default async function DisposalPage({ searchParams }: Props) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
+  if (user.role === "viewer") redirect("/assets");
+  const canMutate = user.role !== "viewer";
 
   const params = await searchParams;
   const q = readParam(params, "q");
@@ -36,6 +38,20 @@ export default async function DisposalPage({ searchParams }: Props) {
         <div className="mx-auto max-w-2xl py-20 text-center text-[var(--muted)]">
           ไม่พบทรัพย์สิน ID {assetId} —{" "}
           <Link href="/disposal" className="text-indigo-600 hover:underline">ค้นหาใหม่</Link>
+        </div>
+      );
+    }
+
+    if (!canMutate) {
+      return (
+        <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-6">
+          <div>
+            <p className="text-xs font-medium uppercase tracking-[0.22em] text-[var(--muted)]">ATACS · จำหน่าย/ชำรุด/สูญหาย</p>
+            <h1 className="section-title mt-1 text-3xl font-semibold">บันทึกการดำเนินการ</h1>
+          </div>
+          <div className="glass-panel rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-800">
+            บัญชี Viewer ไม่มีสิทธิ์บันทึกการดำเนินการทรัพย์สิน
+          </div>
         </div>
       );
     }
@@ -106,12 +122,18 @@ export default async function DisposalPage({ searchParams }: Props) {
                   <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_STYLE[asset.currentStatus] ?? ""}`}>
                     {asset.currentStatus}
                   </span>
-                  <Link
-                    href={`/disposal?assetId=${asset.id}`}
-                    className="whitespace-nowrap rounded-xl bg-rose-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-rose-700"
-                  >
-                    ดำเนินการ →
-                  </Link>
+                  {canMutate ? (
+                    <Link
+                      href={`/disposal?assetId=${asset.id}`}
+                      className="whitespace-nowrap rounded-xl bg-rose-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-rose-700"
+                    >
+                      ดำเนินการ →
+                    </Link>
+                  ) : (
+                    <span className="rounded-xl border border-stone-300 bg-stone-100 px-4 py-2 text-xs font-medium text-stone-500">
+                      ดูข้อมูลเท่านั้น
+                    </span>
+                  )}
                 </div>
               </div>
             ))}

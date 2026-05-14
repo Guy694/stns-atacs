@@ -39,6 +39,7 @@ const TODAY = new Date("2026-05-08T00:00:00+07:00");
 export default async function ReportsPage({ searchParams }: Props) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
+  const canMutate = user.role !== "viewer";
 
   const params = await searchParams;
   const view = (readParam(params, "view") || "summary") as View;
@@ -360,9 +361,15 @@ export default async function ReportsPage({ searchParams }: Props) {
                       </td>
                       <td className="px-4 py-3 font-mono text-xs text-[var(--muted)]">{a.updatedAt || "–"}</td>
                       <td className="px-4 py-3 text-right">
-                        <Link href={`/disposal?assetId=${a.id}`} className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-medium text-rose-700 transition hover:bg-rose-100">
-                          ดำเนินการ
-                        </Link>
+                        {canMutate ? (
+                          <Link href={`/disposal?assetId=${a.id}`} className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-medium text-rose-700 transition hover:bg-rose-100">
+                            ดำเนินการ
+                          </Link>
+                        ) : (
+                          <span className="rounded-lg border border-stone-300 bg-stone-100 px-3 py-1 text-xs font-medium text-stone-500">
+                            ดูข้อมูลเท่านั้น
+                          </span>
+                        )}
                       </td>
                     </tr>
                   ))}

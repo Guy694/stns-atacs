@@ -2,9 +2,10 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { getCurrentUser } from "@/lib/auth";
-import { listAssets, listSurveys } from "@/lib/assets";
+import { getFacilityById, listAssets, listAllFacilitiesForSelect } from "@/lib/assets";
 import { AssetFormModal } from "@/app/(main)/assets/_components/asset-form-modal";
 import { DeleteAssetButton } from "@/app/(main)/assets/_components/delete-asset-button";
+import { FacilityEditForm } from "./_components/facility-edit-form";
 
 type Props = { params: Promise<{ id: string }> };
 
@@ -27,20 +28,26 @@ export default async function FacilityDetailPage({ params }: Props) {
   const facilityId = Number(id);
   if (!facilityId) notFound();
 
-  const [assets, surveys] = await Promise.all([
-    listAssets({ facilityId }),
-    listSurveys(),
-  ]);
-
-  if (assets.length === 0 && surveys.length > 0) {
-    const survey = surveys.find((s) => s.facility_id === facilityId);
-    if (!survey) notFound();
+  if (user.role === "officer" && user.facilityId && user.facilityId !== facilityId) {
+    redirect(`/facilities/${user.facilityId}`);
   }
 
-  const facilityName = assets[0]?.facilityName ?? surveys.find((s) => s.facility_id === facilityId)?.facility_name ?? `หน่วยงาน #${facilityId}`;
-  const districtName = assets[0]?.districtName ?? surveys.find((s) => s.facility_id === facilityId)?.district_name ?? "";
+  if (user.role === "officer" && !user.facilityId) {
+    redirect("/assets");
+  }
 
-  const isAdmin = user.role === "admin";
+  const [assets, facilitiesForSelect] = await Promise.all([
+    listAssets({ facilityId }),
+    listAllFacilitiesForSelect(),
+  ]);
+
+  const currentFacility = await getFacilityById(facilityId);
+  if (!currentFacility) notFound();
+
+  const facilityName = assets[0]?.facilityName ?? currentFacility.name ?? `หน่วยงาน #${facilityId}`;
+  const districtName = assets[0]?.districtName ?? currentFacility.district_name ?? "";
+
+  const canManage = user.role === "admin" || user.facilityId === facilityId;
 
   const totalAssets = assets.length;
   const activeCount = assets.filter((a) => a.currentStatus === "Active").length;
@@ -87,6 +94,8 @@ export default async function FacilityDetailPage({ params }: Props) {
         </div>
       </div>
 
+      {canManage && <FacilityEditForm facility={currentFacility} />}
+
       {/* MA Alert */}
       {expiringSoon.length > 0 && (
         <div className="glass-panel rounded-2xl p-5">
@@ -110,8 +119,8 @@ export default async function FacilityDetailPage({ params }: Props) {
       <div className="glass-panel overflow-hidden rounded-2xl">
         <div className="flex items-center justify-between border-b border-black/6 px-5 py-3">
           <h2 className="font-semibold">รายการทรัพย์สินทั้งหมด</h2>
-          {isAdmin && (
-            <AssetFormModal surveys={surveys} updaterName={user.fullName} mode="create">
+          {canManage && (
+            <AssetFormModal facilities={facilitiesForSelect} fixedFacilityId={facilityId} updaterName={user.fullName} mode="create">
               <button className="inline-flex items-center gap-1.5 rounded-full bg-[var(--accent-strong)] px-4 py-1.5 text-xs font-semibold text-white hover:opacity-90">
                 + เพิ่มทรัพย์สิน
               </button>
@@ -130,10 +139,10 @@ export default async function FacilityDetailPage({ params }: Props) {
                   <th className="px-4 py-2.5 text-left font-medium">ชื่อทรัพย์สิน</th>
                   <th className="px-4 py-2.5 text-left font-medium">ประเภท</th>
                   <th className="px-4 py-2.5 text-left font-medium">สถานะ</th>
-                  {isAdmin && <th className="px-4 py-2.5 text-left font-medium">IP / Location</th>}
-                  {isAdmin && <th className="px-4 py-2.5 text-left font-medium">Serial</th>}
+                  {canManage && <th className="px-4 py-2.5 text-left font-medium">IP / Location</th>}
+                  {canManage && <th className="px-4 py-2.5 text-left font-medium">Serial</th>}
                   <th className="px-4 py-2.5 text-left font-medium">MA หมด</th>
-                  {isAdmin && <th className="px-4 py-2.5 text-right font-medium">จัดการ</th>}
+                  {canManage && <th className="px-4 py-2.5 text-right font-medium">จัดการ</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-black/4">
@@ -155,20 +164,20 @@ export default async function FacilityDetailPage({ params }: Props) {
                         {STATUS_LABELS[asset.currentStatus] ?? asset.currentStatus}
                       </span>
                     </td>
-                    {isAdmin && (
+                    {canManage && (
                       <td className="px-4 py-3 font-mono text-xs">
                         <p>{asset.privateIp || "–"}</p>
                         <p className="text-[var(--muted)]">{asset.locationDetail || ""}</p>
                       </td>
                     )}
-                    {isAdmin && (
+                    {canManage && (
                       <td className="px-4 py-3 font-mono text-xs text-[var(--muted)]">{asset.serialNumber || "–"}</td>
                     )}
                     <td className="px-4 py-3 font-mono text-xs text-[var(--muted)]">{asset.maintenanceEndDate || "–"}</td>
-                    {isAdmin && (
+                    {canManage && (
                       <td className="px-4 py-3 text-right">
                         <div className="inline-flex gap-2">
-                          <AssetFormModal surveys={surveys} updaterName={user.fullName} mode="edit" asset={asset}>
+                          <AssetFormModal facilities={facilitiesForSelect} fixedFacilityId={facilityId} updaterName={user.fullName} mode="edit" asset={asset}>
                             <button className="rounded-lg border border-black/10 bg-white/80 px-3 py-1 text-xs font-medium text-[var(--accent-strong)] hover:bg-white">
                               แก้ไข
                             </button>

@@ -18,7 +18,7 @@ type UserRecord = RowDataPacket & {
   email: string | null;
   username: string | null;
   password_hash: string | null;
-  role: "admin" | "officer";
+  role: "admin" | "officer" | "viewer";
   is_active: number;
 };
 
@@ -27,7 +27,8 @@ type SessionUserRow = RowDataPacket & {
   thaid_cid: string;
   full_name: string;
   email: string | null;
-  role: "admin" | "officer";
+  role: "admin" | "officer" | "viewer";
+  facility_id: number | null;
 };
 
 type RegistrationClaim = {
@@ -286,23 +287,45 @@ export async function getCurrentUser() {
   }
 
   const tokenHash = sha256(rawToken);
-  const rows = await selectRows<SessionUserRow>(
-    `
-      SELECT
-        u.id,
-        u.thaid_cid,
-        u.full_name,
-        u.email,
-        u.role
-      FROM auth_sessions s
-      INNER JOIN users u ON u.id = s.user_id
-      WHERE s.session_token_hash = ?
-        AND s.expires_at > NOW()
-        AND u.is_active = 1
-      LIMIT 1
-    `,
-    [tokenHash]
-  );
+  let rows: SessionUserRow[] = [];
+  try {
+    rows = await selectRows<SessionUserRow>(
+      `
+        SELECT
+          u.id,
+          u.thaid_cid,
+          u.full_name,
+          u.email,
+          u.role,
+          u.facility_id
+        FROM auth_sessions s
+        INNER JOIN users u ON u.id = s.user_id
+        WHERE s.session_token_hash = ?
+          AND s.expires_at > NOW()
+          AND u.is_active = 1
+        LIMIT 1
+      `,
+      [tokenHash]
+    );
+  } catch {
+    rows = await selectRows<SessionUserRow>(
+      `
+        SELECT
+          u.id,
+          u.thaid_cid,
+          u.full_name,
+          u.email,
+          u.role
+        FROM auth_sessions s
+        INNER JOIN users u ON u.id = s.user_id
+        WHERE s.session_token_hash = ?
+          AND s.expires_at > NOW()
+          AND u.is_active = 1
+        LIMIT 1
+      `,
+      [tokenHash]
+    );
+  }
 
   if (!rows[0]) {
     cookieStore.delete(SESSION_COOKIE_NAME);
@@ -315,6 +338,7 @@ export async function getCurrentUser() {
     fullName: rows[0].full_name,
     email: rows[0].email,
     role: rows[0].role,
+    facilityId: rows[0].facility_id ?? null,
   };
 }
 

@@ -12,6 +12,7 @@ export type DisposalType = "Broken" | "Inactive" | "Disposed" | "Lost";
 export async function disposalAssetAction(_prev: string | null, fd: FormData): Promise<string | null> {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
+  if (user.role === "viewer") return "คุณไม่มีสิทธิ์ดำเนินการนี้";
 
   const assetId = Number(fd.get("assetId"));
   const disposalType = fd.get("disposalType") as DisposalType;

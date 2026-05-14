@@ -4,11 +4,10 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 
-import { logoutAction } from "@/app/auth/actions";
-
 type NavUser = {
   fullName: string;
-  role: "admin" | "officer";
+  role: "admin" | "officer" | "viewer";
+  facilityId?: number | null;
 };
 
 type SidebarProps = {
@@ -20,6 +19,7 @@ type NavItem = {
   label: string;
   icon: string;
   adminOnly?: boolean;
+  hideForViewer?: boolean;
   exact?: boolean;
 };
 
@@ -27,8 +27,8 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/", label: "Dashboard", icon: "⊞", exact: true },
   { href: "/assets", label: "ทรัพย์สินทั้งหมด", icon: "☰" },
   { href: "/inspection", label: "ตรวจนับทรัพย์สิน", icon: "✔" },
-  { href: "/transfer", label: "โอนย้ายทรัพย์สิน", icon: "⇄" },
-  { href: "/disposal", label: "จำหน่าย/ชำรุด/สูญหาย", icon: "⊠" },
+  { href: "/transfer", label: "โอนย้ายทรัพย์สิน", icon: "⇄", hideForViewer: true },
+  { href: "/disposal", label: "จำหน่าย/ชำรุด/สูญหาย", icon: "⊠", hideForViewer: true },
   { href: "/reports", label: "รายงาน", icon: "≡" },
   { href: "/map", label: "แผนที่ทรัพย์สิน", icon: "◎" },
   { href: "/admin/settings", label: "ตั้งค่าระบบ", icon: "◈", adminOnly: true },
@@ -58,22 +58,41 @@ export function Sidebar({ user }: SidebarProps) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  const items = NAV_ITEMS.filter((item) => !item.adminOnly || user.role === "admin");
+  const items = NAV_ITEMS.filter((item) => {
+    if (item.adminOnly && user.role !== "admin") return false;
+    if (item.hideForViewer && user.role === "viewer") return false;
+    return true;
+  });
 
   const sidebarContent = (
     <div className="flex h-full flex-col">
       {/* Brand */}
       <div className="border-b border-white/10 px-5 py-5">
         <p className="font-mono text-[10px] tracking-[0.3em] text-white/40 uppercase">ATACS</p>
-        <p className="mt-0.5 text-base font-semibold text-white">จ.สตูล</p>
-        <p className="mt-0.5 text-xs text-white/45">ทะเบียนทรัพย์สินสารสนเทศ</p>
+        <p className="mt-0.5 text-base font-semibold text-white"> ทะเบียนทรัพย์สินสารสนเทศ</p>
+        <p className="mt-0.5 text-xs text-white">สังกัด สป. จังหวัดสตูล</p>
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 py-4">
+      <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 py-4 text-white">
         {items.map((item) => (
           <NavLink key={item.href} item={item} pathname={pathname} onClick={() => setMobileOpen(false)} />
         ))}
+
+        {user.role === "officer" && user.facilityId && (
+          <Link
+            href={`/facilities/${user.facilityId}`}
+            onClick={() => setMobileOpen(false)}
+            className={`mt-1 flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all text-white ${
+              pathname === `/facilities/${user.facilityId}`
+                ? "bg-white/20 text-white shadow-sm ring-1 ring-white/25"
+                : "text-white/75 hover:bg-white/10 hover:text-white"
+            }`}
+          >
+            <span className="text-base leading-none">🏠</span>
+            หน่วยงานของฉัน
+          </Link>
+        )}
 
         <div className="my-3 h-px bg-white/10" />
 
@@ -86,33 +105,6 @@ export function Sidebar({ user }: SidebarProps) {
           Public Dashboard
         </Link>
       </nav>
-
-      {/* User footer */}
-      <div className="border-t border-white/10 px-3 py-3">
-        <Link
-          href="/profile"
-          onClick={() => setMobileOpen(false)}
-          className={`flex items-center gap-3 rounded-xl px-3 py-2.5 transition ${
-            pathname === "/profile" ? "bg-white/15" : "hover:bg-white/10"
-          }`}
-        >
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/20 text-sm font-semibold text-white">
-            {user.fullName.charAt(0)}
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium text-white">{user.fullName}</p>
-            <p className="text-xs text-white/40 uppercase tracking-wider">{user.role}</p>
-          </div>
-        </Link>
-        <form action={logoutAction} className="mt-1">
-          <button
-            type="submit"
-            className="w-full rounded-xl px-3 py-2 text-left text-xs font-medium text-white/40 transition hover:bg-white/10 hover:text-white/70"
-          >
-            ออกจากระบบ →
-          </button>
-        </form>
-      </div>
     </div>
   );
 

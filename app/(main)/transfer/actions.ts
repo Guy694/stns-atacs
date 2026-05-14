@@ -10,6 +10,7 @@ import { writeAuditLog } from "@/lib/audit";
 export async function transferAssetAction(_prev: string | null, fd: FormData): Promise<string | null> {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
+  if (user.role === "viewer") return "คุณไม่มีสิทธิ์ดำเนินการนี้";
 
   const assetId = Number(fd.get("assetId"));
   const newSurveyId = Number(fd.get("newSurveyId"));

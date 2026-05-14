@@ -16,6 +16,9 @@ export type AssetRecord = {
   maintenanceEndDate: string;
   manufacturerBrand: string;
   serialNumber: string;
+  purchasePrice?: number | null;
+  purchaseDate?: string;
+  purchaseOrderNo?: string;
 };
 
 export type FacilitySurvey = {

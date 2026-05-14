@@ -260,7 +260,7 @@ export async function getDashboardData(): Promise<DashboardData> {
       facilitySurveys,
       districtCoverage: buildDistrictCoverage(facilitySurveys),
       dataSource: "database",
-      connectionMessage: `โหลดข้อมูลจริงจาก MySQL ฐาน ${process.env.MYSQL_DATABASE}`,
+      connectionMessage: `สถานะฐานข้อมูล:เชื่อมต่อ (${facilitySurveys.length} สำรวจ, ${assets.length} ทรัพย์สิน)`,
       allowPublicOfficerBoard,
     };
   } catch (error) {

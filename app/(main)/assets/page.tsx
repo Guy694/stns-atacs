@@ -1,7 +1,8 @@
 import Link from "next/link";
 
 import { getCurrentUser } from "@/lib/auth";
-import { listAssets, listSurveys, listFacilities } from "@/lib/assets";
+import { listAssets, listAllFacilitiesForSelect, listFacilities } from "@/lib/assets";
+import { listDeviceTypes } from "@/lib/device-types";
 import { AssetFormModal } from "./_components/asset-form-modal";
 import { DeleteAssetButton } from "./_components/delete-asset-button";
 import ImportExcelModal from "./_components/import-excel-modal";
@@ -31,18 +32,29 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
   const user = await getCurrentUser();
   if (!user) return null;
 
+  const isAdmin = user.role === "admin";
+  const isOfficerWithFacility = user.role === "officer" && !!user.facilityId;
+
   const params = await searchParams;
   const search = readParam(params, "search");
   const statusFilter = readParam(params, "status");
-  const facilityFilter = Number(readParam(params, "facility")) || undefined;
+  const requestedFacilityFilter = Number(readParam(params, "facility")) || undefined;
+  const facilityFilter = isOfficerWithFacility ? Number(user.facilityId) : requestedFacilityFilter;
 
-  const [assets, surveys, facilities] = await Promise.all([
+  const [assets, facilitiesForSelect, facilities, deviceTypes] = await Promise.all([
     listAssets({ search: search || undefined, status: statusFilter || undefined, facilityId: facilityFilter }),
-    listSurveys(),
+    listAllFacilitiesForSelect(),
     listFacilities(),
+    listDeviceTypes(),
   ]);
 
-  const isAdmin = user.role === "admin";
+  const facilitiesForForm = isOfficerWithFacility
+    ? facilitiesForSelect.filter((f) => f.id === Number(user.facilityId))
+    : facilitiesForSelect;
+  const officerFacilityName = isOfficerWithFacility
+    ? facilitiesForSelect.find((f) => f.id === Number(user.facilityId))?.facility_name ?? "หน่วยงานของฉัน"
+    : null;
+  const canCreateAsset = isAdmin || isOfficerWithFacility;
 
   // Group by district
   const byDistrict = assets.reduce<Record<string, typeof assets>>((acc, a) => {
@@ -59,11 +71,22 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
           <p className="text-xs font-medium uppercase tracking-[0.22em] text-[var(--muted)]">ATACS · ทะเบียนทรัพย์สิน</p>
           <h1 className="section-title mt-1 text-3xl font-semibold">รายการทรัพย์สินสารสนเทศ</h1>
           <p className="mt-1 text-sm text-[var(--muted)]">{assets.length} รายการ</p>
+          {officerFacilityName && (
+            <p className="mt-2 inline-flex items-center rounded-full bg-sky-100 px-3 py-1 text-xs font-medium text-sky-700">
+              Officer Scope: {officerFacilityName}
+            </p>
+          )}
         </div>
-        {isAdmin && (
+        {canCreateAsset && (
           <div className="flex gap-2">
-            <ImportExcelModal facilities={facilities} />
-            <AssetFormModal surveys={surveys} updaterName={user.fullName} mode="create">
+            {isAdmin && <ImportExcelModal facilities={facilities} />}
+            <AssetFormModal
+              facilities={facilitiesForForm}
+              fixedFacilityId={isOfficerWithFacility ? Number(user.facilityId) : undefined}
+              deviceTypes={deviceTypes}
+              updaterName={user.fullName}
+              mode="create"
+            >
               <button className="inline-flex items-center gap-2 rounded-full bg-[var(--accent-strong)] px-5 py-2.5 text-sm font-semibold text-white transition hover:opacity-90">
                 + เพิ่มทรัพย์สิน
               </button>
@@ -90,25 +113,27 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
           <option value="Inactive">ไม่ใช้งาน</option>
           <option value="Broken">ชำรุด</option>
         </select>
-        <select
-          name="facility"
-          defaultValue={facilityFilter ?? ""}
-          className="rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
-        >
-          <option value="">ทุกหน่วยงาน</option>
-          {surveys.map((s) => (
-            <option key={s.id} value={s.facility_id}>
-              {s.facility_name}
-            </option>
-          ))}
-        </select>
+        {!isOfficerWithFacility && (
+          <select
+            name="facility"
+            defaultValue={facilityFilter ?? ""}
+            className="rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+          >
+            <option value="">ทุกหน่วยงาน</option>
+            {facilitiesForSelect.map((f) => (
+              <option key={f.id} value={f.id}>
+                {f.facility_name}
+              </option>
+            ))}
+          </select>
+        )}
         <button
           type="submit"
           className="rounded-xl bg-[var(--accent-strong)] px-5 py-2 text-sm font-semibold text-white transition hover:opacity-90"
         >
           ค้นหา
         </button>
-        {(search || statusFilter || facilityFilter) && (
+        {(search || statusFilter || requestedFacilityFilter) && (
           <Link href="/assets" className="rounded-xl border border-black/10 bg-white/80 px-4 py-2 text-sm text-[var(--muted)] hover:bg-white">
             ล้างตัวกรอง
           </Link>
@@ -134,9 +159,9 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
                   <th className="px-4 py-2.5 text-left font-medium">หน่วยงาน</th>
                   <th className="px-4 py-2.5 text-left font-medium">ประเภท</th>
                   <th className="px-4 py-2.5 text-left font-medium">สถานะ</th>
-                  {isAdmin && <th className="px-4 py-2.5 text-left font-medium">IP</th>}
+                  {(isAdmin || isOfficerWithFacility) && <th className="px-4 py-2.5 text-left font-medium">IP</th>}
                   <th className="px-4 py-2.5 text-left font-medium">MA หมด</th>
-                  {isAdmin && <th className="px-4 py-2.5 text-right font-medium">จัดการ</th>}
+                  {(isAdmin || isOfficerWithFacility) && <th className="px-4 py-2.5 text-right font-medium">จัดการ</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-black/4">
@@ -161,7 +186,7 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
                         {STATUS_LABELS[asset.currentStatus] ?? asset.currentStatus}
                       </span>
                     </td>
-                    {isAdmin && (
+                    {(isAdmin || (isOfficerWithFacility && asset.facilityId === Number(user.facilityId))) && (
                       <td className="px-4 py-3 font-mono text-xs text-[var(--muted)]">
                         {asset.privateIp || "–"}
                       </td>
@@ -169,10 +194,17 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
                     <td className="px-4 py-3 font-mono text-xs text-[var(--muted)]">
                       {asset.maintenanceEndDate || "–"}
                     </td>
-                    {isAdmin && (
+                    {(isAdmin || (isOfficerWithFacility && asset.facilityId === Number(user.facilityId))) && (
                       <td className="px-4 py-3 text-right">
                         <div className="inline-flex gap-2">
-                          <AssetFormModal surveys={surveys} updaterName={user.fullName} mode="edit" asset={asset}>
+                          <AssetFormModal
+                            facilities={facilitiesForForm}
+                            fixedFacilityId={isOfficerWithFacility ? Number(user.facilityId) : undefined}
+                            deviceTypes={deviceTypes}
+                            updaterName={user.fullName}
+                            mode="edit"
+                            asset={asset}
+                          >
                             <button className="rounded-lg border border-black/10 bg-white/80 px-3 py-1 text-xs font-medium text-[var(--accent-strong)] transition hover:bg-white">
                               แก้ไข
                             </button>

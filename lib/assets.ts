@@ -34,6 +34,9 @@ type AssetRow = RowDataPacket & {
   manufacturer_model: string | null;
   manufacturer_specification: string | null;
   serial_number: string | null;
+  purchase_price: number | null;
+  purchase_date: Date | string | null;
+  purchase_order_no: string | null;
   maintenance_start_date: Date | string | null;
   maintenance_end_date: Date | string | null;
 };
@@ -68,7 +71,7 @@ function normalizeGroup(v: string | null): AssetRecord["assetGroup"] {
   return "Hardware";
 }
 
-function rowToAsset(row: AssetRow): AssetRecord & { surveyId: number; facilityId: number; facilityName: string; districtName: string } {
+function rowToAsset(row: AssetRow) {
   return {
     id: row.id,
     surveyId: row.survey_id,
@@ -91,6 +94,9 @@ function rowToAsset(row: AssetRow): AssetRecord & { surveyId: number; facilityId
     maintenanceEndDate: toDateOnly(row.maintenance_end_date),
     manufacturerBrand: row.manufacturer_brand ?? "",
     serialNumber: row.serial_number ?? "",
+    purchasePrice: row.purchase_price ?? null,
+    purchaseDate: toDateOnly(row.purchase_date),
+    purchaseOrderNo: row.purchase_order_no ?? "",
   };
 }
 
@@ -117,6 +123,9 @@ export type AssetInput = {
   manufacturerModel?: string;
   manufacturerSpecification?: string;
   serialNumber?: string;
+  purchasePrice?: number | null;
+  purchaseDate?: string;
+  purchaseOrderNo?: string;
   maintenanceStartDate?: string;
   maintenanceEndDate?: string;
   installedAt?: string;
@@ -167,7 +176,17 @@ export async function listAssets(filter?: {
   } catch {
     // fallback
     return fallbackSurveys.flatMap((s) =>
-      s.assets.map((a) => ({ ...a, surveyId: 0, facilityId: s.facilityId, facilityName: s.facilityName, districtName: s.districtName }))
+      s.assets.map((a) => ({
+        ...a,
+        surveyId: 0,
+        facilityId: s.facilityId,
+        facilityName: s.facilityName,
+        districtName: s.districtName,
+        publicIp: a.publicIp ?? undefined,
+        purchasePrice: a.purchasePrice ?? null,
+        purchaseDate: a.purchaseDate ?? "",
+        purchaseOrderNo: a.purchaseOrderNo ?? "",
+      }))
     );
   }
 }
@@ -204,8 +223,9 @@ export async function createAsset(input: AssetInput) {
        asset_category, device_type, operating_system, operating_system_version,
        private_ip, public_ip, location_detail, current_status, updated_by,
        manufacturer_brand, manufacturer_model, manufacturer_specification,
-       serial_number, maintenance_start_date, maintenance_end_date, installed_at, last_updated_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+       serial_number, purchase_price, purchase_date, purchase_order_no,
+       maintenance_start_date, maintenance_end_date, installed_at, last_updated_at)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,  
     [
       input.surveyId,
       input.rowNo ?? null,
@@ -226,6 +246,9 @@ export async function createAsset(input: AssetInput) {
       input.manufacturerModel ?? null,
       input.manufacturerSpecification ?? null,
       input.serialNumber ?? null,
+      input.purchasePrice ?? null,
+      input.purchaseDate ?? null,
+      input.purchaseOrderNo ?? null,
       input.maintenanceStartDate ?? null,
       input.maintenanceEndDate ?? null,
       input.installedAt ?? null,
@@ -258,6 +281,9 @@ export async function updateAsset(id: number, input: Partial<AssetInput>) {
     manufacturer_model: input.manufacturerModel,
     manufacturer_specification: input.manufacturerSpecification,
     serial_number: input.serialNumber,
+    purchase_price: input.purchasePrice,
+    purchase_date: input.purchaseDate ?? null,
+    purchase_order_no: input.purchaseOrderNo,
     maintenance_start_date: input.maintenanceStartDate ?? null,
     maintenance_end_date: input.maintenanceEndDate ?? null,
     installed_at: input.installedAt ?? null,
@@ -281,6 +307,42 @@ export async function deleteAsset(id: number) {
   return executeStatement("DELETE FROM information_assets WHERE id = ?", [id]);
 }
 
+/** รายการหน่วยบริการทั้งหมดสำหรับ dropdown (ไม่ขึ้นกับว่ามี survey หรือไม่) */
+export type FacilitySelectRow = RowDataPacket & {
+  id: number;
+  facility_name: string;
+  district_name: string | null;
+  typecode: string;
+};
+
+export async function listAllFacilitiesForSelect(): Promise<FacilitySelectRow[]> {
+  try {
+    return await selectRows<FacilitySelectRow>(`
+      SELECT id, name AS facility_name, district_name, typecode
+      FROM health_facilities
+      WHERE is_active = 1
+      ORDER BY district_name, typecode DESC, name
+    `);
+  } catch {
+    return [];
+  }
+}
+
+/** หา survey ของหน่วยงาน หรือสร้างใหม่ถ้ายังไม่มี */
+export async function findOrCreateSurvey(facilityId: number): Promise<number> {
+  const rows = await selectRows<RowDataPacket & { id: number }>(
+    "SELECT id FROM information_asset_surveys WHERE facility_id = ? LIMIT 1",
+    [facilityId]
+  );
+  if (rows[0]) return rows[0].id;
+
+  const result = await executeStatement(
+    "INSERT INTO information_asset_surveys (facility_id, survey_date) VALUES (?, CURDATE())",
+    [facilityId]
+  );
+  return result.insertId;
+}
+
 // ── Facilities ─────────────────────────────────────────────────────────────
 
 export type FacilityRow = RowDataPacket & {
@@ -289,6 +351,8 @@ export type FacilityRow = RowDataPacket & {
   typecode: string;
   district_name: string | null;
   tambon: string | null;
+  lat: number | null;
+  lon: number | null;
   is_active: number;
   asset_count: number;
   hw_count: number;
@@ -306,6 +370,8 @@ export async function listFacilities(): Promise<FacilityRow[]> {
         hf.typecode,
         hf.district_name,
         hf.tambon,
+        hf.lat,
+        hf.lon,
         hf.is_active,
         COUNT(DISTINCT a.id)                                          AS asset_count,
         SUM(CASE WHEN a.asset_category = 'Hardware' THEN 1 ELSE 0 END) AS hw_count,
@@ -321,4 +387,108 @@ export async function listFacilities(): Promise<FacilityRow[]> {
   } catch {
     return [];
   }
+}
+
+export async function getFacilityById(id: number): Promise<FacilityRow | null> {
+  try {
+    const rows = await selectRows<FacilityRow>(`
+      SELECT
+        hf.id,
+        hf.name,
+        hf.typecode,
+        hf.district_name,
+        hf.tambon,
+        hf.lat,
+        hf.lon,
+        hf.is_active,
+        COUNT(DISTINCT a.id)                                          AS asset_count,
+        SUM(CASE WHEN a.asset_category = 'Hardware' THEN 1 ELSE 0 END) AS hw_count,
+        SUM(CASE WHEN a.asset_category = 'Software' THEN 1 ELSE 0 END) AS sw_count,
+        COUNT(DISTINCT s.id)                                          AS has_survey
+      FROM health_facilities hf
+      LEFT JOIN information_asset_surveys s ON s.facility_id = hf.id
+      LEFT JOIN information_assets a        ON a.survey_id   = s.id
+      WHERE hf.id = ?
+      GROUP BY hf.id
+      LIMIT 1
+    `, [id]);
+    return rows[0] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+// ── Facility admin CRUD ────────────────────────────────────────────────────
+
+export type FacilityAdminRow = RowDataPacket & {
+  id: number;
+  name: string;
+  typecode: string;
+  district_name: string | null;
+  tambon: string | null;
+  lat: number | null;
+  lon: number | null;
+  is_active: number;
+  asset_count: number;
+};
+
+export async function listFacilitiesAdmin(): Promise<FacilityAdminRow[]> {
+  try {
+    return await selectRows<FacilityAdminRow>(`
+      SELECT hf.id, hf.name, hf.typecode, hf.district_name, hf.tambon, hf.lat, hf.lon, hf.is_active,
+             COUNT(DISTINCT a.id) AS asset_count
+      FROM health_facilities hf
+      LEFT JOIN information_asset_surveys s ON s.facility_id = hf.id
+      LEFT JOIN information_assets a        ON a.survey_id   = s.id
+      GROUP BY hf.id
+      ORDER BY hf.district_name, hf.typecode DESC, hf.name
+    `);
+  } catch {
+    return [];
+  }
+}
+
+export async function createFacility(input: {
+  name: string;
+  typecode: string;
+  districtName: string;
+  tambon?: string;
+  lat?: number;
+  lon?: number;
+}) {
+  return executeStatement(
+    `INSERT INTO health_facilities (name, typecode, district_name, tambon, lat, lon, is_active)
+     VALUES (?, ?, ?, ?, ?, ?, 1)`,
+    [input.name, input.typecode, input.districtName, input.tambon ?? "", input.lat ?? 0, input.lon ?? 0]
+  );
+}
+
+export async function updateFacility(id: number, input: {
+  name?: string;
+  typecode?: string;
+  districtName?: string;
+  tambon?: string;
+  lat?: number;
+  lon?: number;
+}) {
+  const sets: string[] = [];
+  const values: unknown[] = [];
+  const map: Record<string, unknown> = {
+    name: input.name,
+    typecode: input.typecode,
+    district_name: input.districtName,
+    tambon: input.tambon,
+    lat: input.lat,
+    lon: input.lon,
+  };
+  for (const [col, val] of Object.entries(map)) {
+    if (val !== undefined) { sets.push(`${col} = ?`); values.push(val); }
+  }
+  if (!sets.length) return null;
+  values.push(id);
+  return executeStatement(`UPDATE health_facilities SET ${sets.join(", ")} WHERE id = ?`, values);
+}
+
+export async function toggleFacilityActive(id: number, active: boolean) {
+  return executeStatement("UPDATE health_facilities SET is_active = ? WHERE id = ?", [active ? 1 : 0, id]);
 }

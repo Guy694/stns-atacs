@@ -1,13 +1,36 @@
 "use client";
 
-import { useActionState, useRef, useState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { createUserAction } from "@/app/(main)/admin/users/actions";
 
-type Props = { children: React.ReactNode };
+type FacilityOption = {
+  id: number;
+  facility_name: string;
+  district_name: string | null;
+  typecode: string;
+};
 
-export function CreateUserModal({ children }: Props) {
+type Props = { children: React.ReactNode; facilities: FacilityOption[] };
+
+export function CreateUserModal({ children, facilities }: Props) {
   const [open, setOpen] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
+  const facilityRef = useRef<HTMLSelectElement>(null);
+  const [role, setRole] = useState<"admin" | "officer" | "viewer">("officer");
+  const [facilityId, setFacilityId] = useState("");
+
+  function handleRoleChange(nextRole: "admin" | "officer" | "viewer") {
+    setRole(nextRole);
+    if (nextRole !== "officer") {
+      setFacilityId("");
+    }
+  }
+
+  useEffect(() => {
+    if (open && role === "officer") {
+      facilityRef.current?.focus();
+    }
+  }, [open, role]);
 
   const [error, formAction, pending] = useActionState(
     async (prev: string | null, fd: FormData) => {
@@ -15,6 +38,8 @@ export function CreateUserModal({ children }: Props) {
       if (!result) {
         setOpen(false);
         formRef.current?.reset();
+        setRole("officer");
+        setFacilityId("");
       }
       return result;
     },
@@ -69,17 +94,49 @@ export function CreateUserModal({ children }: Props) {
 
               <div>
                 <label className="block text-sm font-medium">Role</label>
-                <select name="role" defaultValue="officer" className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]">
+                <select
+                  name="role"
+                  value={role}
+                  onChange={(e) => handleRoleChange(e.target.value as "admin" | "officer" | "viewer")}
+                  className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+                >
                   <option value="officer">Officer — เจ้าหน้าที่</option>
                   <option value="admin">Admin — ผู้ดูแลระบบ</option>
+                  <option value="viewer">Viewer — ดูข้อมูลเท่านั้น</option>
                 </select>
               </div>
+
+              {role === "officer" ? (
+                <div>
+                  <label className="block text-sm font-medium">หน่วยงานของเจ้าหน้าที่</label>
+                  <select
+                    ref={facilityRef}
+                    name="facilityId"
+                    value={facilityId}
+                    onChange={(e) => setFacilityId(e.target.value)}
+                    required
+                    className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+                  >
+                    <option value="">— เลือกหน่วยงาน —</option>
+                    {facilities.map((f) => (
+                      <option key={f.id} value={f.id}>
+                        {f.facility_name} {f.district_name ? `· อ.${f.district_name}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-xs text-[var(--muted)]">ใช้สำหรับกำหนดว่าเจ้าหน้าที่จะจัดการข้อมูลของหน่วยงานใด (จำเป็น)</p>
+                </div>
+              ) : (
+                <div className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-700">
+                  Role นี้ไม่ต้องกำหนดหน่วยงาน
+                </div>
+              )}
 
               <div className="flex justify-end gap-3 pt-2">
                 <button type="button" onClick={() => setOpen(false)} className="rounded-xl border border-black/10 bg-white/80 px-5 py-2 text-sm font-medium hover:bg-white">
                   ยกเลิก
                 </button>
-                <button type="submit" disabled={pending} className="rounded-xl bg-[var(--accent-strong)] px-6 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50">
+                <button type="submit" disabled={pending || (role === "officer" && !facilityId)} className="rounded-xl bg-[var(--accent-strong)] px-6 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50">
                   {pending ? "กำลังบันทึก…" : "เพิ่มผู้ใช้งาน"}
                 </button>
               </div>

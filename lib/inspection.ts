@@ -78,8 +78,8 @@ export async function listInspections(facilityId?: number): Promise<Inspection[]
     SELECT
       ai.id,
       ai.facility_id,
-      COALESCE(fs.facility_name, '') AS facility_name,
-      COALESCE(fs.district_name, '')  AS district_name,
+      COALESCE(hf.name, '')           AS facility_name,
+      COALESCE(hf.district_name, '')  AS district_name,
       ai.round_name,
       ai.inspected_by,
       ai.inspected_at,
@@ -87,7 +87,7 @@ export async function listInspections(facilityId?: number): Promise<Inspection[]
       COUNT(aii.id)                   AS total_items,
       SUM(aii.found)                  AS found_items
     FROM asset_inspections ai
-    LEFT JOIN facility_surveys fs ON fs.facility_id = ai.facility_id
+    LEFT JOIN health_facilities hf ON hf.id = ai.facility_id
     LEFT JOIN asset_inspection_items aii ON aii.inspection_id = ai.id
     ${facilityId ? "WHERE ai.facility_id = ?" : ""}
     GROUP BY ai.id
@@ -111,13 +111,13 @@ export async function listInspections(facilityId?: number): Promise<Inspection[]
 export async function getInspectionById(id: number): Promise<Inspection | null> {
   const rows = await selectRows<InspectionRow>(
     `SELECT ai.id, ai.facility_id,
-       COALESCE(fs.facility_name,'') AS facility_name,
-       COALESCE(fs.district_name,'') AS district_name,
+       COALESCE(hf.name,'') AS facility_name,
+       COALESCE(hf.district_name,'') AS district_name,
        ai.round_name, ai.inspected_by, ai.inspected_at,
        COALESCE(ai.note,'') AS note,
        COUNT(aii.id) AS total_items, SUM(aii.found) AS found_items
      FROM asset_inspections ai
-     LEFT JOIN facility_surveys fs ON fs.facility_id = ai.facility_id
+     LEFT JOIN health_facilities hf ON hf.id = ai.facility_id
      LEFT JOIN asset_inspection_items aii ON aii.inspection_id = ai.id
      WHERE ai.id = ?
      GROUP BY ai.id`,

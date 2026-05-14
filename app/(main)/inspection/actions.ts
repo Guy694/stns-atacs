@@ -13,6 +13,7 @@ export async function createInspectionAction(
 ): Promise<string | null> {
   const user = await getCurrentUser();
   if (!user) return "กรุณาเข้าสู่ระบบ";
+  if (user.role === "viewer") return "คุณไม่มีสิทธิ์ดำเนินการนี้";
 
   const facilityId = Number(formData.get("facilityId"));
   const roundName = String(formData.get("roundName") ?? "").trim();

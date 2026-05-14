@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { getCurrentUser } from "@/lib/auth";
-import { getAssetById, listSurveys } from "@/lib/assets";
+import { getAssetById, listAllFacilitiesForSelect } from "@/lib/assets";
 import { AssetFormModal } from "@/app/(main)/assets/_components/asset-form-modal";
 import { DeleteAssetButton } from "@/app/(main)/assets/_components/delete-asset-button";
 import { PrintButton } from "@/app/(main)/assets/_components/print-button";
@@ -38,10 +38,11 @@ export default async function AssetDetailPage({ params }: Props) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
-  const [asset, surveys] = await Promise.all([getAssetById(numId), listSurveys()]);
+  const [asset, facilitiesForSelect] = await Promise.all([getAssetById(numId), listAllFacilitiesForSelect()]);
   if (!asset) notFound();
 
   const isAdmin = user.role === "admin";
+  const canMutate = user.role !== "viewer";
 
   const maStart = asset.maintenanceEndDate
     ? (() => {
@@ -85,7 +86,7 @@ export default async function AssetDetailPage({ params }: Props) {
         </div>
         {isAdmin && (
           <div className="flex shrink-0 flex-wrap gap-2">
-            <AssetFormModal surveys={surveys} updaterName={user.fullName} mode="edit" asset={asset}>
+            <AssetFormModal facilities={facilitiesForSelect} updaterName={user.fullName} mode="edit" asset={asset}>
               <span className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2 text-sm font-medium text-indigo-700 transition hover:bg-indigo-100">
                 แก้ไข
               </span>
@@ -146,23 +147,44 @@ export default async function AssetDetailPage({ params }: Props) {
             </div>
           </div>
 
+          {/* ข้อมูลการจัดซื้อ */}
+          <div className="glass-panel rounded-2xl p-5">
+            <h2 className="mb-4 text-sm font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">ข้อมูลการจัดซื้อ</h2>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <Field
+                label="ราคาที่ซื้อ (บาท)"
+                value={asset.purchasePrice != null
+                  ? asset.purchasePrice.toLocaleString("th-TH", { minimumFractionDigits: 2 })
+                  : undefined}
+              />
+              <Field label="วันที่ซื้อ / ได้รับมอบ" value={asset.purchaseDate || undefined} />
+              <Field label="เลขที่สัญญา / PO" value={asset.purchaseOrderNo || undefined} />
+            </div>
+          </div>
+
           {/* การดำเนินการด่วน */}
           <div className="glass-panel rounded-2xl p-5">
             <h2 className="mb-4 text-sm font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">การดำเนินการ</h2>
-            <div className="flex flex-wrap gap-3">
-              <Link
-                href={`/transfer?assetId=${asset.id}`}
-                className="inline-flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-700 transition hover:bg-amber-100"
-              >
-                📦 โอนย้ายทรัพย์สิน
-              </Link>
-              <Link
-                href={`/disposal?assetId=${asset.id}`}
-                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100"
-              >
-                📋 จำหน่าย/ชำรุด
-              </Link>
-            </div>
+            {canMutate ? (
+              <div className="flex flex-wrap gap-3">
+                <Link
+                  href={`/transfer?assetId=${asset.id}`}
+                  className="inline-flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-700 transition hover:bg-amber-100"
+                >
+                  📦 โอนย้ายทรัพย์สิน
+                </Link>
+                <Link
+                  href={`/disposal?assetId=${asset.id}`}
+                  className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100"
+                >
+                  📋 จำหน่าย/ชำรุด
+                </Link>
+              </div>
+            ) : (
+              <div className="rounded-xl border border-stone-300 bg-stone-100 px-4 py-3 text-sm text-stone-600">
+                บัญชี Viewer ดูรายละเอียดได้อย่างเดียว
+              </div>
+            )}
           </div>
 
         </div>

@@ -20,8 +20,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   const params = await searchParams;
   const error = readQueryValue(params.error);
   const notice = readQueryValue(params.notice);
-  const tab = readQueryValue(params.tab) || "thaid";
-  const isThaiDTab = tab !== "password";
+  const isThaiDTab = readQueryValue(params.thaid) === "1";
 
   return (
     <div className="min-h-screen flex" style={{ background: "var(--background)" }}>
@@ -102,32 +101,43 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           <div className="mb-8">
             <h1 className="text-3xl font-bold" style={{ color: "var(--foreground)" }}>เข้าสู่ระบบ</h1>
             <p className="mt-2 text-sm" style={{ color: "var(--muted)" }}>
-              ยินดีต้อนรับกลับ — เลือกวิธีการยืนยันตัวตน
+              ยินดีต้อนรับกลับ — กรอก Username และรหัสผ่านเพื่อเข้าใช้งาน
             </p>
           </div>
 
-          {/* Tab switcher */}
-          <div className="flex gap-1 rounded-2xl p-1 mb-6"
-            style={{ background: "rgba(99,102,241,0.08)", border: "1px solid var(--line)" }}>
-            <Link
-              href="/login?tab=thaid"
-              className="flex-1 rounded-xl px-4 py-2.5 text-sm font-semibold text-center transition"
-              style={isThaiDTab
-                ? { background: "var(--accent)", color: "white", boxShadow: "0 2px 8px rgba(99,102,241,0.35)" }
-                : { color: "var(--muted)" }}
-            >
-              🪪 ThaiD
-            </Link>
-            <Link
-              href="/login?tab=password"
-              className="flex-1 rounded-xl px-4 py-2.5 text-sm font-semibold text-center transition"
-              style={!isThaiDTab
-                ? { background: "var(--accent)", color: "white", boxShadow: "0 2px 8px rgba(99,102,241,0.35)" }
-                : { color: "var(--muted)" }}
-            >
-              🔑 Username / Password
-            </Link>
-          </div>
+          {/* Dev credentials hint */}
+          {process.env.NODE_ENV !== "production" && (
+            <div className="mb-6 rounded-2xl p-4 text-xs space-y-2"
+              style={{ background: "rgba(234,179,8,0.08)", border: "1px dashed rgba(234,179,8,0.5)" }}>
+              <p className="font-bold" style={{ color: "#92400e" }}>🔧 Dev — บัญชีทดสอบ</p>
+              <table className="w-full border-separate" style={{ borderSpacing: "0 2px" }}>
+                <thead>
+                  <tr className="text-left" style={{ color: "#78350f" }}>
+                    <th className="pr-3 font-semibold">Role</th>
+                    <th className="pr-3 font-semibold">Username</th>
+                    <th className="font-semibold">Password</th>
+                  </tr>
+                </thead>
+                <tbody style={{ color: "#451a03" }}>
+                  <tr>
+                    <td className="pr-3 py-0.5">admin</td>
+                    <td className="pr-3 font-mono">atacs_admin</td>
+                    <td className="font-mono">Admin@2026</td>
+                  </tr>
+                  <tr>
+                    <td className="pr-3 py-0.5">officer</td>
+                    <td className="pr-3 font-mono">nakharin</td>
+                    <td className="font-mono">Officer@2026</td>
+                  </tr>
+                  <tr>
+                    <td className="pr-3 py-0.5">officer</td>
+                    <td className="pr-3 font-mono">thanaphon.r</td>
+                    <td className="font-mono">Staff@2026</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          )}
 
           {/* Alerts */}
           {notice && (
@@ -207,16 +217,14 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
                 <p className="text-xs text-center" style={{ color: "var(--muted)" }}>
                   ผู้ใช้งานใหม่จะถูกพาไปหน้าสมัครสมาชิกโดยอัตโนมัติ
                 </p>
+                <div className="text-center">
+                  <Link href="/login" className="text-sm font-semibold hover:underline" style={{ color: "var(--accent)" }}>
+                    ← กลับเข้าสู่ระบบด้วย Username
+                  </Link>
+                </div>
               </>
             ) : (
               <>
-                <div className="flex items-center gap-3 p-3 rounded-2xl"
-                  style={{ background: "rgba(99,102,241,0.06)" }}>
-                  <span className="text-2xl">🔑</span>
-                  <p className="text-sm" style={{ color: "var(--muted)" }}>
-                    เข้าสู่ระบบด้วย Username และรหัสผ่านที่ผู้ดูแลระบบกำหนดให้
-                  </p>
-                </div>
                 <form action={loginWithPasswordAction} className="space-y-4">
                   <div className="space-y-1.5">
                     <label htmlFor="username" className="text-sm font-semibold" style={{ color: "var(--foreground)" }}>
@@ -262,6 +270,27 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
                     เข้าสู่ระบบ →
                   </button>
                 </form>
+
+                {/* Divider */}
+                <div className="flex items-center gap-3">
+                  <div className="flex-1 h-px" style={{ background: "var(--line)" }} />
+                  <span className="text-xs" style={{ color: "var(--muted)" }}>หรือ</span>
+                  <div className="flex-1 h-px" style={{ background: "var(--line)" }} />
+                </div>
+
+                {/* ThaiD button */}
+                <Link
+                  href="/login?thaid=1"
+                  className="flex items-center justify-center gap-2 w-full rounded-2xl py-3 text-sm font-bold transition hover:opacity-80 active:scale-[0.98]"
+                  style={{
+                    border: "2px solid var(--accent)",
+                    color: "var(--accent)",
+                    background: "rgba(99,102,241,0.04)",
+                  }}
+                >
+                  🪪 เข้าด้วย thaiD
+                </Link>
+
                 <p className="text-xs text-center" style={{ color: "var(--muted)" }}>
                   ติดต่อผู้ดูแลระบบหากยังไม่มี Username
                 </p>

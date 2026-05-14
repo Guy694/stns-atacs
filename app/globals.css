@@ -26,17 +26,19 @@
 
 html {
   scroll-behavior: smooth;
-}
-
-body {
   background: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-body), sans-serif;
   background-image:
     radial-gradient(circle at top left, rgba(99, 102, 241, 0.22), transparent 30%),
     radial-gradient(circle at 85% 10%, rgba(168, 85, 247, 0.18), transparent 22%),
     radial-gradient(circle at 50% 80%, rgba(59, 130, 246, 0.12), transparent 25%),
     linear-gradient(180deg, #eef0ff 0%, #f0f2ff 50%, #eff1ff 100%);
+  background-attachment: fixed;
+  min-height: 100%;
+}
+
+body {
+  color: var(--foreground);
+  font-family: var(--font-body), sans-serif;
   min-height: 100vh;
 }
 
@@ -56,7 +58,7 @@ a {
 }
 
 .sidebar-gradient {
-  background: linear-gradient(160deg, #5b21b6 0%, #4338ca 55%, #3730a3 100%);
+  background: linear-gradient(160deg, #2155b6 0%, #149ee3 55%, #1e6ce9 100%);
 }
 
 .section-title {

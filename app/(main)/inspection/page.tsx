@@ -12,9 +12,10 @@ export default async function InspectionPage({
 }) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
+  const canMutate = user.role !== "viewer";
 
   const params = await searchParams;
-  const view = params["view"] === "new" ? "new" : "list";
+  const view = canMutate && params["view"] === "new" ? "new" : "list";
 
   const [inspections, facilities] = await Promise.all([
     listInspections(),
@@ -33,7 +34,7 @@ export default async function InspectionPage({
             บันทึกรอบการตรวจนับสินทรัพย์สารสนเทศประจำหน่วยบริการ
           </p>
         </div>
-        {view !== "new" && (
+        {canMutate && view !== "new" && (
           <a
             href="/inspection?view=new"
             className="px-4 py-2 rounded-lg text-sm font-semibold text-white"
@@ -43,6 +44,12 @@ export default async function InspectionPage({
           </a>
         )}
       </div>
+
+      {!canMutate && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          บัญชี Viewer เข้าดูผลการตรวจนับได้ แต่ไม่สามารถเริ่มรอบตรวจนับใหม่
+        </div>
+      )}
 
       {/* New form */}
       {view === "new" && (

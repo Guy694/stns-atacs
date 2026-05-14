@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 
 import { getCurrentUser } from "@/lib/auth";
+import { listAllFacilitiesForSelect } from "@/lib/assets";
 import { selectRows } from "@/lib/mysql";
 import type { RowDataPacket } from "mysql2/promise";
 import { CreateUserModal } from "./_components/create-user-modal";
@@ -12,7 +13,8 @@ type UserRow = RowDataPacket & {
   full_name: string;
   email: string | null;
   username: string | null;
-  role: "admin" | "officer";
+  role: "admin" | "officer" | "viewer";
+  facility_id: number | null;
   is_active: number;
   last_login_at: Date | string | null;
 };
@@ -27,16 +29,28 @@ export default async function AdminUsersPage() {
   if (!user) redirect("/login");
   if (user.role !== "admin") redirect("/");
 
+  const facilities = await listAllFacilitiesForSelect();
+  const facilityNameById = new Map(
+    facilities.map((f) => [f.id, `${f.facility_name}${f.district_name ? ` · อ.${f.district_name}` : ""}`])
+  );
   let users: UserRow[] = [];
   let dbError = false;
 
   try {
     users = await selectRows<UserRow>(
-      `SELECT id, thaid_cid, full_name, email, username, role, is_active, last_login_at
+      `SELECT id, thaid_cid, full_name, email, username, role, facility_id, is_active, last_login_at
        FROM users ORDER BY role DESC, full_name ASC`
     );
   } catch {
-    dbError = true;
+    try {
+      const fallback = await selectRows<any>(
+        `SELECT id, thaid_cid, full_name, email, username, role, is_active, last_login_at
+         FROM users ORDER BY role DESC, full_name ASC`
+      );
+      users = fallback.map((row) => ({ ...row, facility_id: null })) as UserRow[];
+    } catch {
+      dbError = true;
+    }
   }
 
   return (
@@ -48,7 +62,7 @@ export default async function AdminUsersPage() {
           <h1 className="section-title mt-1 text-3xl font-semibold">ผู้ใช้งานระบบ</h1>
           <p className="mt-1 text-sm text-[var(--muted)]">{users.length} บัญชีผู้ใช้งาน</p>
         </div>
-        <CreateUserModal>
+        <CreateUserModal facilities={facilities}>
           <button className="inline-flex items-center gap-2 rounded-full bg-[var(--accent-strong)] px-5 py-2.5 text-sm font-semibold text-white transition hover:opacity-90">
             + เพิ่มผู้ใช้งาน
           </button>
@@ -69,6 +83,7 @@ export default async function AdminUsersPage() {
                 <th className="px-4 py-3 text-left font-medium">ชื่อ-นามสกุล</th>
                 <th className="px-4 py-3 text-left font-medium">Username / ThaiD</th>
                 <th className="px-4 py-3 text-left font-medium">Email</th>
+                <th className="px-4 py-3 text-left font-medium">หน่วยงาน</th>
                 <th className="px-4 py-3 text-left font-medium">Role</th>
                 <th className="px-4 py-3 text-left font-medium">สถานะ</th>
                 <th className="px-4 py-3 text-left font-medium">เข้าใช้งานล่าสุด</th>
@@ -84,6 +99,13 @@ export default async function AdminUsersPage() {
                     {u.thaid_cid && <p className="text-[10px]">ThaiD: {u.thaid_cid}</p>}
                   </td>
                   <td className="px-4 py-3 text-[var(--muted)]">{u.email ?? "–"}</td>
+                  <td className="px-4 py-3 text-[var(--muted)]">
+                    {u.role === "officer"
+                      ? u.facility_id
+                        ? facilityNameById.get(u.facility_id) ?? `หน่วยงาน #${u.facility_id}`
+                        : "ยังไม่ระบุ"
+                      : "-"}
+                  </td>
                   <td className="px-4 py-3">
                     <span
                       className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
@@ -106,6 +128,12 @@ export default async function AdminUsersPage() {
                   <td className="px-4 py-3 text-right">
                     <UserRowActions
                       userId={u.id}
+                      fullName={u.full_name}
+                      email={u.email}
+                      username={u.username}
+                      thaidCid={u.thaid_cid}
+                      currentFacilityId={u.facility_id}
+                      facilities={facilities.map((f) => ({ id: f.id, facility_name: f.facility_name, district_name: f.district_name }))}
                       currentActive={!!u.is_active}
                       currentRole={u.role}
                       hasUsername={!!u.username}
@@ -116,7 +144,7 @@ export default async function AdminUsersPage() {
               ))}
               {users.length === 0 && !dbError && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-10 text-center text-[var(--muted)]">
+                  <td colSpan={8} className="px-4 py-10 text-center text-[var(--muted)]">
                     ไม่พบผู้ใช้งาน
                   </td>
                 </tr>

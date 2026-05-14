@@ -1,13 +1,11 @@
 import Link from "next/link";
 
-import { logoutAction } from "@/app/auth/actions";
-
 type TopNavigationProps = {
   current: "public" | "internal" | "assets" | "admin" | "profile" | "login" | "register";
   user?: {
     id?: number;
     fullName: string;
-    role: "admin" | "officer";
+    role: "admin" | "officer" | "viewer";
   } | null;
 };
 
@@ -64,7 +62,7 @@ export function TopNavigation({ current, user }: TopNavigationProps) {
               >
                 โปรไฟล์
               </Link>
-              <form action={logoutAction}>
+              <form action="/logout" method="post">
                 <button
                   type="submit"
                   className="rounded-full border border-black/12 bg-white/75 px-4 py-2 text-xs font-semibold text-[var(--accent-strong)] transition hover:bg-white"

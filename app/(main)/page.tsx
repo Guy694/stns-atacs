@@ -8,6 +8,7 @@ export default async function Home() {
   const { facilitySurveys, districtCoverage, dataSource, connectionMessage, allowPublicOfficerBoard } =
     await getDashboardData();
   const isAdmin = currentUser.role === "admin";
+  const isViewer = currentUser.role === "viewer";
   const canViewExactInfrastructure = isAdmin;
   const canViewPublicIpPanel = isAdmin || allowPublicOfficerBoard;
   const referenceDate = new Date("2026-05-08T00:00:00+07:00");
@@ -98,7 +99,7 @@ export default async function Home() {
               ATACS · Satun Digital Inventory
             </p>
             <h1 className="section-title mt-1 text-2xl font-semibold sm:text-3xl">
-              ทะเบียนทรัพย์สินสารสนเทศ จังหวัดสตูล
+              Dasboard ทะเบียนทรัพย์สินสารสนเทศ สังกัด สป. จังหวัดสตูล
             </h1>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -109,10 +110,16 @@ export default async function Home() {
               {connectionMessage}
             </div>
             <div className="rounded-full border border-black/10 bg-white/80 px-3 py-1.5 font-mono text-xs text-[var(--accent-strong)]">
-              snapshot 2026-05-08
+              ข้อมูลวันที่ {new Date(Date.now()).toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" })}
             </div>
           </div>
         </div>
+
+        {isViewer && (
+          <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-700">
+            Viewer Mode: บัญชีนี้ดูข้อมูลได้อย่างเดียว ไม่สามารถเพิ่ม แก้ไข หรือบันทึกการดำเนินการทรัพย์สิน
+          </div>
+        )}
 
         {/* ── KPI Strip ────────────────────────────────────────────────────── */}
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -129,9 +136,9 @@ export default async function Home() {
             <p className="text-xs font-medium uppercase tracking-[0.2em] text-white/70">ทรัพย์สินรวม</p>
             <p className="mt-3 text-4xl font-semibold tracking-tight">{totalAssets}</p>
             <div className="mt-2 flex items-center gap-2 text-xs text-white/70">
-              <span>{hardwareCount} HW</span>
+              <span>{hardwareCount}  ฮาร์ดแวร์</span>
               <span className="text-white/30">·</span>
-              <span>{softwareCount} SW</span>
+              <span>{softwareCount} ซอฟต์แวร์</span>
             </div>
           </div>
 
@@ -282,7 +289,7 @@ export default async function Home() {
                       </div>
                       <div className="flex shrink-0 items-center gap-3 text-xs text-[var(--muted)]">
                         <span>{summary.facilities} หน่วยงาน</span>
-                        <span className="font-mono font-medium text-[var(--foreground)]">{summary.assets} assets</span>
+                        <span className="font-mono font-medium text-[var(--foreground)]">{summary.assets} รายการ</span>
                       </div>
                     </div>
                     <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-stone-100">
