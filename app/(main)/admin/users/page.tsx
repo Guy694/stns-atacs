@@ -109,7 +109,7 @@ export default async function AdminUsersPage() {
                   <td className="px-4 py-3">
                     <span
                       className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                        u.role === "admin" ? "bg-violet-100 text-violet-700" : "bg-stone-100 text-stone-600"
+                        u.role === "admin" ? "bg-emerald-100 text-emerald-700" : "bg-stone-100 text-stone-600"
                       }`}
                     >
                       {u.role}

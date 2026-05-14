@@ -123,7 +123,7 @@ export default async function Home() {
 
         {/* ── KPI Strip ────────────────────────────────────────────────────── */}
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="rounded-2xl bg-gradient-to-br from-sky-500 to-blue-600 p-5 text-white shadow-lg shadow-blue-900/20">
+          <div className="rounded-2xl bg-gradient-to-br from-emerald-500 to-green-600 p-5 text-white shadow-lg shadow-emerald-900/20">
             <p className="text-xs font-medium uppercase tracking-[0.2em] text-white/70">หน่วยงาน</p>
             <p className="mt-3 text-4xl font-semibold tracking-tight">{facilitySurveys.length}</p>
             <div className="mt-2 flex items-center gap-1.5 text-xs text-white/70">
@@ -132,7 +132,7 @@ export default async function Home() {
             </div>
           </div>
 
-          <div className="rounded-2xl bg-gradient-to-br from-violet-500 to-purple-600 p-5 text-white shadow-lg shadow-violet-900/20">
+          <div className="rounded-2xl bg-gradient-to-br from-green-500 to-emerald-600 p-5 text-white shadow-lg shadow-green-900/20">
             <p className="text-xs font-medium uppercase tracking-[0.2em] text-white/70">ทรัพย์สินรวม</p>
             <p className="mt-3 text-4xl font-semibold tracking-tight">{totalAssets}</p>
             <div className="mt-2 flex items-center gap-2 text-xs text-white/70">
@@ -142,7 +142,7 @@ export default async function Home() {
             </div>
           </div>
 
-          <div className="rounded-2xl bg-gradient-to-br from-indigo-500 to-indigo-700 p-5 text-white shadow-lg shadow-indigo-900/20">
+          <div className="rounded-2xl bg-gradient-to-br from-teal-500 to-emerald-700 p-5 text-white shadow-lg shadow-teal-900/20">
             <p className="text-xs font-medium uppercase tracking-[0.2em] text-white/60">พร้อมใช้งาน</p>
             <p className="mt-3 text-4xl font-semibold tracking-tight">{activeAssets}</p>
             <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/20">

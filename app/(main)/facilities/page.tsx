@@ -21,8 +21,8 @@ export default async function FacilitiesPage() {
   const totalAssets = facilities.reduce((s, f) => s + f.asset_count, 0);
 
   const typeBadge = (typecode: string) => {
-    if (typecode.includes("รพ.ทั่วไป")) return "bg-violet-100 text-violet-700";
-    if (typecode.includes("รพ.ชุมชน")) return "bg-blue-100 text-blue-700";
+    if (typecode.includes("รพ.ทั่วไป")) return "bg-emerald-100 text-emerald-700";
+    if (typecode.includes("รพ.ชุมชน")) return "bg-lime-100 text-lime-700";
     if (typecode.includes("รพ.สต") || typecode.includes("สอน.") || typecode.includes("ศสช.")) return "bg-teal-100 text-teal-700";
     if (typecode.includes("สสจ") || typecode.includes("สสอ")) return "bg-amber-100 text-amber-700";
     return "bg-gray-100 text-gray-700";
@@ -92,8 +92,8 @@ export default async function FacilitiesPage() {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-center tabular-nums">{f.asset_count}</td>
-                    <td className="px-4 py-3 text-center tabular-nums text-blue-600">{f.hw_count}</td>
-                    <td className="px-4 py-3 text-center tabular-nums text-violet-600">{f.sw_count}</td>
+                    <td className="px-4 py-3 text-center tabular-nums text-emerald-600">{f.hw_count}</td>
+                    <td className="px-4 py-3 text-center tabular-nums text-lime-600">{f.sw_count}</td>
                     <td className="px-4 py-3 text-center">
                       {f.has_survey > 0 ? (
                         <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-700">

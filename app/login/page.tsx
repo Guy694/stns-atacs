@@ -28,31 +28,31 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
       {/* ── Left panel (decorative) ─────────────────────────────────── */}
       <div
         className="hidden lg:flex flex-col justify-between w-[46%] p-12 relative overflow-hidden"
-        style={{ background: "linear-gradient(145deg, #4c1d95 0%, #4338ca 50%, #3730a3 100%)" }}
+        style={{ background: "linear-gradient(145deg, #14532d 0%, #15803d 50%, #16a34a 100%)" }}
       >
         {/* Floating circles */}
         <div className="absolute -top-20 -left-20 w-80 h-80 rounded-full opacity-20"
-          style={{ background: "rgba(167,139,250,0.4)" }} />
+          style={{ background: "rgba(134,239,172,0.42)" }} />
         <div className="absolute top-1/3 -right-16 w-64 h-64 rounded-full opacity-15"
-          style={{ background: "rgba(196,181,253,0.5)" }} />
+          style={{ background: "rgba(187,247,208,0.48)" }} />
         <div className="absolute -bottom-10 left-1/4 w-48 h-48 rounded-full opacity-20"
-          style={{ background: "rgba(139,92,246,0.6)" }} />
+          style={{ background: "rgba(74,222,128,0.58)" }} />
 
         {/* Logo area */}
         <div className="relative z-10">
           <div className="flex items-center gap-3 mb-8">
-            <div className="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center text-2xl backdrop-blur-sm">
-              🏥
+            <div className="w-16 h-16 rounded-2xl bg-[var(--accent)]/20 flex items-center justify-center text-lg">
+              <img src="logo.png" alt="ATACS Satun Logo" />
             </div>
             <div>
               <p className="text-white font-bold text-lg leading-tight">ATACS</p>
-              <p className="text-violet-200 text-xs">Satun Health IT Assets</p>
+              <p className="text-emerald-100 text-xs">Satun Health IT Assets</p>
             </div>
           </div>
           <h2 className="text-white text-3xl font-bold leading-snug">
             ระบบทะเบียน<br />ทรัพย์สินสารสนเทศ<br />จังหวัดสตูล
           </h2>
-          <p className="text-violet-200 mt-4 text-sm leading-7">
+          <p className="text-emerald-100 mt-4 text-sm leading-7">
             บริหารจัดการทรัพย์สิน IT ของหน่วยบริการสาธารณสุข
             ในจังหวัดสตูลอย่างเป็นระบบ ครบวงจร
           </p>
@@ -68,14 +68,14 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
             <div key={s.label} className="rounded-2xl p-4 text-center"
               style={{ background: "rgba(255,255,255,0.12)", backdropFilter: "blur(8px)" }}>
               <p className="text-white text-2xl font-bold">{s.value}</p>
-              <p className="text-violet-200 text-xs mt-0.5">{s.label}</p>
+              <p className="text-emerald-100 text-xs mt-0.5">{s.label}</p>
             </div>
           ))}
         </div>
 
         {/* Bottom link */}
         <div className="relative z-10">
-          <Link href="/public" className="inline-flex items-center gap-2 text-violet-200 hover:text-white transition text-sm">
+          <Link href="/public" className="inline-flex items-center gap-2 text-emerald-100 hover:text-white transition text-sm">
             <span>←</span> ดู Public Dashboard
           </Link>
         </div>
@@ -86,13 +86,12 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
 
         {/* Mobile logo */}
         <div className="lg:hidden flex items-center gap-3 mb-8">
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl"
-            style={{ background: "var(--accent)" }}>
-            🏥
+          <div className="w-20 h-20 rounded-2xl bg-[var(--accent)]/20 flex items-center justify-center text-lg">
+          <img src="logo.png" alt="ATACS Satun Logo" />
           </div>
           <div>
             <p className="font-bold" style={{ color: "var(--foreground)" }}>ATACS Satun</p>
-            <p className="text-xs" style={{ color: "var(--muted)" }}>ระบบทะเบียนทรัพย์สิน IT</p>
+            <p className="text-xs" style={{ color: "var(--muted)" }}>ระบบทะเบียนทรัพย์สิน สารสนเทศในสังกัด สป. จังหวัดสตูล</p>
           </div>
         </div>
 
@@ -156,13 +155,13 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
             style={{
               background: "white",
               border: "1px solid var(--line)",
-              boxShadow: "0 20px 60px rgba(99,102,241,0.10)",
+              boxShadow: "0 20px 60px rgba(22,163,74,0.12)",
             }}>
 
             {isThaiDTab ? (
               <>
                 <div className="flex items-center gap-3 p-3 rounded-2xl"
-                  style={{ background: "rgba(99,102,241,0.06)" }}>
+                  style={{ background: "rgba(22,163,74,0.08)" }}>
                   <span className="text-2xl">🪪</span>
                   <p className="text-sm" style={{ color: "var(--muted)" }}>
                     ยืนยันตัวตนด้วยเลขบัตรประชาชน — หากยังไม่มีบัญชีจะพาไปสมัครสมาชิกอัตโนมัติ

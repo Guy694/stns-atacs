@@ -104,7 +104,7 @@ export default async function ReportsPage({ searchParams }: Props) {
   function navClass(key: View) {
     return `rounded-xl px-4 py-2 text-sm font-medium transition ${
       view === key
-        ? "bg-indigo-600 text-white shadow"
+        ? "bg-emerald-600 text-white shadow"
         : "bg-white/70 text-[var(--muted)] hover:bg-white hover:text-[var(--foreground)]"
     }`;
   }
@@ -131,14 +131,14 @@ export default async function ReportsPage({ searchParams }: Props) {
       {/* KPI strip */}
       <div className="grid gap-3 sm:grid-cols-4 lg:grid-cols-8">
         {[
-          { label: "ทรัพย์สินรวม", value: total, color: "text-indigo-600" },
+          { label: "ทรัพย์สินรวม", value: total, color: "text-emerald-600" },
           { label: "ใช้งานอยู่", value: active, color: "text-emerald-600" },
           { label: "ชำรุด", value: broken, color: "text-rose-600" },
           { label: "ไม่ใช้งาน", value: inactive, color: "text-amber-600" },
-          { label: "Hardware", value: hw, color: "text-sky-600" },
-          { label: "Software", value: sw, color: "text-violet-600" },
-          { label: "หน่วยงาน", value: facilities, color: "text-indigo-600" },
-          { label: "อำเภอ", value: districts, color: "text-indigo-600" },
+          { label: "Hardware", value: hw, color: "text-green-600" },
+          { label: "Software", value: sw, color: "text-lime-600" },
+          { label: "หน่วยงาน", value: facilities, color: "text-emerald-600" },
+          { label: "อำเภอ", value: districts, color: "text-emerald-600" },
         ].map((k) => (
           <div key={k.label} className="glass-panel rounded-2xl p-4 text-center">
             <p className={`text-2xl font-bold ${k.color}`}>{k.value}</p>
@@ -251,7 +251,7 @@ export default async function ReportsPage({ searchParams }: Props) {
                 {byType.map((t) => (
                   <tr key={t.type} className="transition hover:bg-white/50">
                     <td className="px-4 py-3">
-                      <span className="rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-medium text-indigo-700">{t.type}</span>
+                      <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700">{t.type}</span>
                     </td>
                     <td className="px-4 py-3 text-center font-semibold">{t.total}</td>
                     <td className="px-4 py-3 text-center text-emerald-600">{t.active}</td>
@@ -259,7 +259,7 @@ export default async function ReportsPage({ searchParams }: Props) {
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         <div className="h-1.5 w-24 overflow-hidden rounded-full bg-slate-100">
-                          <div className="h-full rounded-full bg-indigo-400" style={{ width: `${(t.total / Math.max(total, 1)) * 100}%` }} />
+                          <div className="h-full rounded-full bg-emerald-400" style={{ width: `${(t.total / Math.max(total, 1)) * 100}%` }} />
                         </div>
                         <span className="text-xs text-[var(--muted)]">{Math.round((t.total / Math.max(total, 1)) * 100)}%</span>
                       </div>
@@ -297,7 +297,7 @@ export default async function ReportsPage({ searchParams }: Props) {
                   {expiring.map((a) => (
                     <tr key={a.id} className="transition hover:bg-white/50">
                       <td className="px-4 py-3">
-                        <Link href={`/assets/${a.id}`} className="font-medium hover:text-indigo-600 hover:underline">{a.assetName}</Link>
+                        <Link href={`/assets/${a.id}`} className="font-medium hover:text-emerald-600 hover:underline">{a.assetName}</Link>
                         <p className="font-mono text-xs text-[var(--muted)]">{a.assetRegistrationNo}</p>
                       </td>
                       <td className="px-4 py-3 text-[var(--muted)]">{a.facilityName}</td>
@@ -347,7 +347,7 @@ export default async function ReportsPage({ searchParams }: Props) {
                   {brokenList.map((a) => (
                     <tr key={a.id} className="transition hover:bg-white/50">
                       <td className="px-4 py-3">
-                        <Link href={`/assets/${a.id}`} className="font-medium hover:text-indigo-600 hover:underline">{a.assetName}</Link>
+                        <Link href={`/assets/${a.id}`} className="font-medium hover:text-emerald-600 hover:underline">{a.assetName}</Link>
                         <p className="font-mono text-xs text-[var(--muted)]">{a.assetRegistrationNo}</p>
                       </td>
                       <td className="px-4 py-3 text-[var(--muted)]">{a.facilityName}</td>
