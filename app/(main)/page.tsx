@@ -1,17 +1,36 @@
+import Link from "next/link";
+
 import { getDashboardData } from "@/lib/atacs";
 import { getCurrentUser } from "@/lib/auth";
 
-export default async function Home() {
+type HomeProps = { searchParams: Promise<Record<string, string | undefined>> };
+
+export default async function Home({ searchParams }: HomeProps) {
   const currentUser = await getCurrentUser();
   if (!currentUser) return null;
 
-  const { facilitySurveys, districtCoverage, dataSource, connectionMessage, allowPublicOfficerBoard } =
+  const params = await searchParams;
+  const { facilitySurveys: allFacilitySurveys, districtCoverage, dataSource, connectionMessage, allowPublicOfficerBoard } =
     await getDashboardData();
   const isAdmin = currentUser.role === "admin";
+  const isOfficer = currentUser.role === "officer";
   const isViewer = currentUser.role === "viewer";
   const canViewExactInfrastructure = isAdmin;
   const canViewPublicIpPanel = isAdmin || allowPublicOfficerBoard;
   const referenceDate = new Date("2026-05-08T00:00:00+07:00");
+
+  // Officers can toggle: 'mine' (default) or 'all'
+  const hasOwnFacility = isOfficer && !!currentUser.facilityId;
+  const scopeParam = params.scope ?? "mine";
+  const showingOwn = hasOwnFacility && scopeParam !== "all";
+
+  const facilitySurveys = showingOwn
+    ? allFacilitySurveys.filter((s) => s.facilityId === Number(currentUser.facilityId))
+    : allFacilitySurveys;
+
+  const scopeFacilityName = showingOwn
+    ? (facilitySurveys[0]?.facilityName ?? "หน่วยงานของฉัน")
+    : null;
 
   const allAssets = facilitySurveys.flatMap((survey) =>
     survey.assets.map((asset) => ({ ...asset, facilityName: survey.facilityName, districtName: survey.districtName }))
@@ -99,10 +118,29 @@ export default async function Home() {
               ATACS · Satun Digital Inventory
             </p>
             <h1 className="section-title mt-1 text-2xl font-semibold sm:text-3xl">
-              Dasboard ทะเบียนทรัพย์สินสารสนเทศ สังกัด สป. จังหวัดสตูล
+              {scopeFacilityName
+                ? `Dashboard · ${scopeFacilityName}`
+                : "Dashboard ทะเบียนทรัพย์สินสารสนเทศ สังกัด สป. จังหวัดสตูล"}
             </h1>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            {/* Scope toggle for officers with a facility */}
+            {hasOwnFacility && (
+              <div className="flex overflow-hidden rounded-xl border border-black/10 bg-white/70 p-0.5 text-sm font-medium shadow-sm">
+                <Link
+                  href="/?scope=mine"
+                  className={`rounded-lg px-4 py-1.5 transition ${showingOwn ? "bg-[var(--accent-strong)] text-white shadow" : "text-[var(--muted)] hover:text-[var(--foreground)]"}`}
+                >
+                  หน่วยงานของฉัน
+                </Link>
+                <Link
+                  href="/?scope=all"
+                  className={`rounded-lg px-4 py-1.5 transition ${!showingOwn ? "bg-[var(--accent-strong)] text-white shadow" : "text-[var(--muted)] hover:text-[var(--foreground)]"}`}
+                >
+                  ทั้งหมด
+                </Link>
+              </div>
+            )}
             <div className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-white/80 px-3 py-1.5 text-xs text-[var(--muted)]">
               <span
                 className={`h-2 w-2 rounded-full ${dataSource === "database" ? "bg-emerald-500" : "bg-amber-400"}`}
@@ -124,11 +162,11 @@ export default async function Home() {
         {/* ── KPI Strip ────────────────────────────────────────────────────── */}
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <div className="rounded-2xl bg-gradient-to-br from-emerald-500 to-green-600 p-5 text-white shadow-lg shadow-emerald-900/20">
-            <p className="text-xs font-medium uppercase tracking-[0.2em] text-white/70">หน่วยงาน</p>
+            <p className="text-xs font-medium uppercase tracking-[0.2em] text-white/70">{scopeFacilityName ? "หน่วยงาน" : "หน่วยงาน"}</p>
             <p className="mt-3 text-4xl font-semibold tracking-tight">{facilitySurveys.length}</p>
             <div className="mt-2 flex items-center gap-1.5 text-xs text-white/70">
               <span className="h-1.5 w-1.5 rounded-full bg-white" />
-              {totalDistricts} อำเภอ
+              {scopeFacilityName ? scopeFacilityName : `${totalDistricts} อำเภอ`}
             </div>
           </div>
 
@@ -263,7 +301,8 @@ export default async function Home() {
           </div>
         </div>
 
-        {/* ── Provincial Coverage ───────────────────────────────────────────── */}
+        {/* ── Provincial Coverage (admin/viewer only) ───────────────────────── */}
+        {!scopeFacilityName && (
         <div className="glass-panel rounded-2xl p-6 lg:p-7">
           <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
             <div>
@@ -340,6 +379,7 @@ export default async function Home() {
             </div>
           </div>
         </div>
+        )}
 
         {/* ── MA Expiring Soon ──────────────────────────────────────────────── */}
         <div className="glass-panel rounded-2xl p-6">
@@ -405,7 +445,9 @@ export default async function Home() {
           <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <p className="text-xs font-medium uppercase tracking-[0.2em] text-[var(--muted)]">Facility Insight</p>
-              <h2 className="section-title mt-1 text-xl font-semibold">ทรัพย์สินรายหน่วยงาน</h2>
+              <h2 className="section-title mt-1 text-xl font-semibold">
+                {scopeFacilityName ? `ทรัพย์สิน · ${scopeFacilityName}` : "ทรัพย์สินรายหน่วยงาน"}
+              </h2>
             </div>
             <p className="text-xs text-[var(--muted)]">
               แสดงรายละเอียดตามสิทธิ์การเข้าถึง — {isAdmin ? "Admin (เต็ม)" : "Officer"}
