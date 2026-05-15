@@ -27,6 +27,25 @@ export async function updateProfileAction(_prev: string | null, fd: FormData): P
   return null;
 }
 
+export async function updateFacilityAction(_prev: string | null, fd: FormData): Promise<string | null> {
+  const user = await getUser();
+  if (user.role !== "officer") return "เฉพาะ officer เท่านั้นที่สามารถเลือกหน่วยงานได้";
+
+  const raw = (fd.get("facilityId") as string | null)?.trim() ?? "";
+  const facilityId = raw ? parseInt(raw, 10) : null;
+  if (!facilityId || isNaN(facilityId)) return "กรุณาเลือกหน่วยงาน";
+
+  try {
+    await executeStatement("UPDATE users SET facility_id = ? WHERE id = ?", [facilityId, user.id]);
+  } catch {
+    return "ไม่สามารถบันทึกได้ — กรุณาตรวจสอบว่ารัน migration add_facility_approval.sql แล้ว";
+  }
+
+  revalidatePath("/profile");
+  revalidatePath("/agent-download");
+  return null;
+}
+
 export async function changePasswordAction(_prev: string | null, fd: FormData): Promise<string | null> {
   const user = await getUser();
 

@@ -3,8 +3,10 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import { selectRows } from "@/lib/mysql";
 import type { RowDataPacket } from "mysql2/promise";
+import { listAllFacilitiesForSelect } from "@/lib/assets";
 import { ProfileForm } from "./_components/profile-form";
 import { ChangePasswordForm } from "./_components/change-password-form";
+import { FacilityForm } from "./_components/facility-form";
 
 type UserDetailRow = RowDataPacket & {
   full_name: string;
@@ -40,6 +42,14 @@ export default async function ProfilePage() {
 
   const hasPassword = !!detail?.password_hash;
   const hasThaiD = !!detail?.thaid_cid;
+
+  type FacilityOption = { id: number; facility_name: string; district_name: string | null };
+  let facilities: FacilityOption[] = [];
+  if (user.role === "officer") {
+    try {
+      facilities = await listAllFacilitiesForSelect();
+    } catch { /* ignore */ }
+  }
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6">
@@ -81,6 +91,14 @@ export default async function ProfilePage() {
         currentFullName={detail?.full_name ?? user.fullName}
         currentEmail={detail?.email ?? user.email ?? ""}
       />
+
+      {/* Facility selection — officer only */}
+      {user.role === "officer" && (
+        <FacilityForm
+          currentFacilityId={user.facilityId ?? null}
+          facilities={facilities}
+        />
+      )}
 
       {/* Change password */}
       {hasPassword ? (

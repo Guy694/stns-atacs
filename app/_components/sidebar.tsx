@@ -82,20 +82,26 @@ export function Sidebar({ user }: SidebarProps) {
           <NavLink key={item.href} item={item} pathname={pathname} onClick={() => setMobileOpen(false)} />
         ))}
 
-        {user.role === "officer" && user.facilityId && (
-          <Link
-            href={`/facilities/${user.facilityId}`}
-            onClick={() => setMobileOpen(false)}
-            className={`mt-1 flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all text-white ${
-              pathname === `/facilities/${user.facilityId}`
-                ? "bg-white/20 text-white shadow-sm ring-1 ring-white/25"
-                : "text-white/75 hover:bg-white/10 hover:text-white"
-            }`}
-          >
-            <span className="text-base leading-none">🏠</span>
-            หน่วยงานของฉัน
-          </Link>
-        )}
+        {user.role === "officer" && (() => {
+          const href = user.facilityId ? `/facilities/${user.facilityId}` : "/profile";
+          const isActive = user.facilityId
+            ? pathname === `/facilities/${user.facilityId}`
+            : pathname === "/profile";
+          return (
+            <Link
+              href={href}
+              onClick={() => setMobileOpen(false)}
+              className={`mt-1 flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all ${
+                isActive
+                  ? "bg-white/20 text-white shadow-sm ring-1 ring-white/25"
+                  : "text-white/75 hover:bg-white/10 hover:text-white"
+              }`}
+            >
+              <span className="text-base leading-none">🏠</span>
+              หน่วยงานของฉัน
+            </Link>
+          );
+        })()}
 
         <div className="my-3 h-px bg-white/10" />
 
