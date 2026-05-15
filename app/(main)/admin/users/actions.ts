@@ -156,6 +156,12 @@ export async function toggleUserActiveAction(userId: number, currentActive: bool
   revalidatePath("/admin/users");
 }
 
+export async function approveUserAction(userId: number): Promise<void> {
+  await requireAdmin();
+  await executeStatement("UPDATE users SET is_active = 1 WHERE id = ? AND is_active = 0", [userId]);
+  revalidatePath("/admin/users");
+}
+
 export async function updateUserRoleAction(userId: number, newRole: "admin" | "officer" | "viewer"): Promise<void> {
   await requireAdmin();
   await executeStatement("UPDATE users SET role = ? WHERE id = ?", [newRole, userId]);

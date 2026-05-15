@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 
 import { TopNavigation } from "@/app/_components/top-navigation";
 import { registerFromThaiDAction } from "@/app/auth/actions";
+import { listAllFacilitiesForSelect } from "@/lib/assets";
 import { getCurrentUser, getPendingRegistrationClaim } from "@/lib/auth";
 
 type RegisterPageProps = {
@@ -30,6 +31,8 @@ export default async function RegisterPage({ searchParams }: RegisterPageProps) 
   const params = await searchParams;
   const error = readQueryValue(params.error);
   const notice = readQueryValue(params.notice);
+
+  const facilities = await listAllFacilitiesForSelect();
 
   return (
     <main className="mx-auto flex w-full max-w-xl flex-1 flex-col justify-center px-6 py-10 sm:px-8">
@@ -94,11 +97,31 @@ export default async function RegisterPage({ searchParams }: RegisterPageProps) 
             />
           </div>
 
+          <div className="space-y-2">
+            <label htmlFor="facilityId" className="block text-sm font-medium">
+              หน่วยงานที่สังกัด <span className="text-rose-500">*</span>
+            </label>
+            <select
+              id="facilityId"
+              name="facilityId"
+              required
+              className="w-full rounded-2xl border border-black/10 bg-white/90 px-4 py-3 outline-none transition focus:border-[var(--accent)]"
+            >
+              <option value="">— เลือกหน่วยงาน —</option>
+              {facilities.map((f) => (
+                <option key={f.id} value={String(f.id)}>
+                  {f.facility_name}{f.district_name ? ` · อ.${f.district_name}` : ""}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-[var(--muted)]">ผู้ดูแลระบบจะอนุมัติการเข้าใช้งานหลังจากสมัครสมาชิก</p>
+          </div>
+
           <button
             type="submit"
             className="w-full rounded-2xl bg-[var(--accent-strong)] px-4 py-3 text-sm font-semibold text-white transition hover:opacity-90"
           >
-            สมัครสมาชิกและเข้าสู่ระบบ
+            สมัครสมาชิก — รอการอนุมัติ
           </button>
         </form>
       </section>

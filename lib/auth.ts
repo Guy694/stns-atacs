@@ -207,14 +207,27 @@ export async function createUserFromThaiD(input: {
   thaiCid: string;
   fullName: string;
   email?: string;
+  facilityId?: number | null;
 }) {
-  const result = await executeStatement(
-    `
-      INSERT INTO users (thaid_cid, full_name, email, role, is_active)
-      VALUES (?, ?, ?, 'officer', 1)
-    `,
-    [input.thaiCid, input.fullName, input.email || null]
-  );
+  let result;
+  try {
+    result = await executeStatement(
+      `INSERT INTO users (thaid_cid, full_name, email, role, facility_id, is_active)
+       VALUES (?, ?, ?, 'officer', ?, 0)`,
+      [input.thaiCid, input.fullName, input.email || null, input.facilityId ?? null]
+    );
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : "";
+    if (msg.includes("Unknown column") && msg.includes("facility_id")) {
+      result = await executeStatement(
+        `INSERT INTO users (thaid_cid, full_name, email, role, is_active)
+         VALUES (?, ?, ?, 'officer', 0)`,
+        [input.thaiCid, input.fullName, input.email || null]
+      );
+    } else {
+      throw error;
+    }
+  }
 
   const createdRows = await selectRows<SessionUserRow>(
     `

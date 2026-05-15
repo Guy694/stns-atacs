@@ -33,6 +33,9 @@ export async function loginWithThaiDAction(formData: FormData) {
 
   const user = await findUserByThaiCid(thaiCid);
   if (user) {
+    if (!user.is_active) {
+      redirect("/pending-approval");
+    }
     await clearPendingRegistrationClaim();
     await createSession(user.id);
     redirect("/");
@@ -53,6 +56,8 @@ export async function registerFromThaiDAction(formData: FormData) {
   const fullName = normalizeDisplayName(String(formData.get("fullName") ?? ""));
   const emailInput = String(formData.get("email") ?? "").trim().toLowerCase();
   const email = emailInput || undefined;
+  const facilityIdRaw = String(formData.get("facilityId") ?? "").trim();
+  const facilityId = facilityIdRaw ? Number(facilityIdRaw) : null;
 
   if (thaiCid !== claim.cid) {
     redirect(`/register?error=${toQuery("ข้อมูล ThaiD ไม่ตรงกับรอบยืนยันล่าสุด")}`);
@@ -65,6 +70,9 @@ export async function registerFromThaiDAction(formData: FormData) {
   const existingUser = await findUserByThaiCid(thaiCid);
   if (existingUser) {
     await clearPendingRegistrationClaim();
+    if (!existingUser.is_active) {
+      redirect("/pending-approval");
+    }
     await createSession(existingUser.id);
     redirect("/");
   }
@@ -74,6 +82,7 @@ export async function registerFromThaiDAction(formData: FormData) {
       thaiCid,
       fullName,
       email,
+      facilityId,
     });
 
     if (!createdUser) {
@@ -81,8 +90,7 @@ export async function registerFromThaiDAction(formData: FormData) {
     }
 
     await clearPendingRegistrationClaim();
-    await createSession(createdUser.id);
-    redirect("/");
+    redirect("/pending-approval");
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : "ไม่สามารถสมัครสมาชิกได้";
     if (errorMessage.includes("Duplicate") || errorMessage.includes("duplicate")) {
@@ -113,6 +121,9 @@ export async function loginWithPasswordAction(formData: FormData) {
     redirect(`/login?tab=password&error=${toQuery("Username หรือรหัสผ่านไม่ถูกต้อง")}`);
   }
 
+  if (user.is_active === 0) {
+    redirect("/pending-approval");
+  }
   if (!user.is_active) {
     redirect(`/login?tab=password&error=${toQuery("บัญชีผู้ใช้ถูกระงับการใช้งาน")}`);
   }

@@ -35,13 +35,23 @@ Run `database/agent_inventory.sql` after the main auth schema so the agent table
 
 ### Windows Agent
 
-Install the agent on the client machine with PowerShell:
+Install the agent on a Windows client machine with PowerShell:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File install-atacs-agent.ps1 -ApiBaseUrl https://your-domain.example -EnrollmentToken <token>
 ```
 
 The installer enrolls the device, stores credentials under `ProgramData`, and registers a scheduled task to report inventory every 4 hours.
+
+### Linux Agent
+
+Install the agent on a Linux client machine with sudo or root access:
+
+```bash
+sudo bash install-atacs-agent.sh --api-base-url https://your-domain.example --enrollment-token <token>
+```
+
+The installer copies the Python agent into `/opt/atacs-agent`, stores config under `/var/lib/atacs-agent`, and registers a systemd timer or cron fallback to report inventory every 4 hours.
 
 ### What the Agent Sends
 

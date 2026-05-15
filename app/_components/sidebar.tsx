@@ -19,6 +19,7 @@ type NavItem = {
   label: string;
   icon: string;
   adminOnly?: boolean;
+  officerOnly?: boolean;
   hideForViewer?: boolean;
   exact?: boolean;
 };
@@ -31,6 +32,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/disposal", label: "จำหน่าย/ชำรุด/สูญหาย", icon: "⊠", hideForViewer: true },
   { href: "/reports", label: "รายงาน", icon: "≡" },
   { href: "/map", label: "แผนที่ทรัพย์สิน", icon: "◎" },
+  { href: "/agent-download", label: "ดาวน์โหลด Agent", icon: "💾", officerOnly: true },
   { href: "/admin/settings", label: "ตั้งค่าระบบ", icon: "◈", adminOnly: true },
   { href: "/admin/users", label: "ผู้ใช้งาน", icon: "◉", adminOnly: true },
   { href: "/admin/audit", label: "Audit Log", icon: "📋", adminOnly: true },
@@ -60,6 +62,7 @@ export function Sidebar({ user }: SidebarProps) {
 
   const items = NAV_ITEMS.filter((item) => {
     if (item.adminOnly && user.role !== "admin") return false;
+    if (item.officerOnly && user.role !== "officer") return false;
     if (item.hideForViewer && user.role === "viewer") return false;
     return true;
   });

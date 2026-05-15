@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { listAllFacilitiesForSelect } from "@/lib/assets";
 import { selectRows } from "@/lib/mysql";
 import type { RowDataPacket } from "mysql2/promise";
+import { approveUserAction } from "./actions";
 import { CreateUserModal } from "./_components/create-user-modal";
 import { UserRowActions } from "./_components/user-row-actions";
 
@@ -116,13 +117,18 @@ export default async function AdminUsersPage() {
                     </span>
                   </td>
                   <td className="px-4 py-3">
-                    <span
-                      className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                        u.is_active ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-600"
-                      }`}
-                    >
-                      {u.is_active ? "ใช้งานอยู่" : "ปิดใช้งาน"}
-                    </span>
+                    {u.is_active ? (
+                      <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-700">ใช้งานอยู่</span>
+                    ) : !u.last_login_at ? (
+                      <div className="flex items-center gap-2">
+                        <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700">รออนุมัติ</span>
+                        <form action={approveUserAction.bind(null, u.id)}>
+                          <button type="submit" className="rounded-full bg-[var(--accent)] px-2.5 py-0.5 text-xs font-semibold text-white hover:opacity-80">อนุมัติ</button>
+                        </form>
+                      </div>
+                    ) : (
+                      <span className="rounded-full bg-rose-100 px-2.5 py-0.5 text-xs font-medium text-rose-600">ปิดใช้งาน</span>
+                    )}
                   </td>
                   <td className="px-4 py-3 font-mono text-xs text-[var(--muted)]">{formatDate(u.last_login_at)}</td>
                   <td className="px-4 py-3 text-right">
