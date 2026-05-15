@@ -9,6 +9,19 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+
+function Test-IsAdministrator {
+    $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+    $principal = [Security.Principal.WindowsPrincipal]::new($identity)
+    return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+}
+
+$isAdmin = Test-IsAdministrator
+if (-not $isAdmin -and $InstallRoot -eq "$env:ProgramData\ATACSAgent") {
+    $InstallRoot = "$env:LOCALAPPDATA\ATACSAgent"
+    Write-Warning "Not running as Administrator. Using per-user install path: $InstallRoot"
+}
+
 $agentScriptSource = Join-Path $PSScriptRoot "atacs-agent.ps1"
 $agentScriptTarget = Join-Path $InstallRoot "atacs-agent.ps1"
 $configPath = Join-Path $InstallRoot "agent-config.json"
@@ -32,13 +45,21 @@ $taskArgs = "-ExecutionPolicy Bypass -File `"$agentScriptTarget`" -ConfigPath `"
 
 try {
     $action = New-ScheduledTaskAction -Execute $taskCommand -Argument $taskArgs
-    $triggerStartup = New-ScheduledTaskTrigger -AtStartup
     $triggerRepeat = New-ScheduledTaskTrigger -Once -At (Get-Date).Date
     $triggerRepeat.Repetition = New-ScheduledTaskRepetitionSettingsSet -Interval (New-TimeSpan -Hours 4) -Duration ([TimeSpan]::MaxValue)
-    $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
+    if ($isAdmin) {
+        $triggerStartup = New-ScheduledTaskTrigger -AtStartup
+        $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
+        $triggers = @($triggerStartup, $triggerRepeat)
+    }
+    else {
+        $triggerLogon = New-ScheduledTaskTrigger -AtLogOn
+        $principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive -RunLevel Limited
+        $triggers = @($triggerLogon, $triggerRepeat)
+    }
     $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
 
-    Register-ScheduledTask -TaskName $taskName -Action $action -Trigger @($triggerStartup, $triggerRepeat) -Principal $principal -Settings $settings -Force | Out-Null
+    Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $triggers -Principal $principal -Settings $settings -Force | Out-Null
     Write-Host "Scheduled task '$taskName' created successfully."
 }
 catch {

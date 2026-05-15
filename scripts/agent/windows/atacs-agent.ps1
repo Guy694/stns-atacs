@@ -9,6 +9,28 @@ param(
 $ErrorActionPreference = "Stop"
 $script:AgentVersion = "1.0.0"
 
+function Enable-TlsForLegacyPowerShell {
+    try {
+        # PowerShell 5.1 may default to TLS 1.0/1.1 on some machines.
+        $tls12 = [Net.SecurityProtocolType]::Tls12
+        if ([Enum]::GetNames([Net.SecurityProtocolType]) -contains "Tls13") {
+            $tls13 = [Net.SecurityProtocolType]::Tls13
+            [Net.ServicePointManager]::SecurityProtocol = $tls12 -bor $tls13
+            return
+        }
+        [Net.ServicePointManager]::SecurityProtocol = $tls12
+    }
+    catch {
+        # Ignore when running on environments that do not expose these flags.
+    }
+}
+
+function Normalize-ApiBaseUrl {
+    param([string]$BaseUrl)
+    if (-not $BaseUrl) { return $null }
+    return $BaseUrl.Trim().TrimEnd('/')
+}
+
 function Ensure-Directory {
     param([string]$Path)
     $dir = Split-Path -Parent $Path
@@ -121,7 +143,25 @@ function Invoke-JsonPost {
     )
 
     $json = $Body | ConvertTo-Json -Depth 8
-    return Invoke-RestMethod -Method Post -Uri $Url -ContentType "application/json" -Headers $Headers -Body $json
+    try {
+        return Invoke-RestMethod -Method Post -Uri $Url -ContentType "application/json" -Headers $Headers -Body $json -TimeoutSec 30
+    }
+    catch {
+        $errorResponse = $_.Exception.Response
+        if ($errorResponse -and $errorResponse.GetResponseStream) {
+            try {
+                $reader = New-Object System.IO.StreamReader($errorResponse.GetResponseStream())
+                $rawBody = $reader.ReadToEnd()
+                if ($rawBody) {
+                    throw "HTTP request failed: $rawBody"
+                }
+            }
+            catch {
+                # Fall through to original error below.
+            }
+        }
+        throw
+    }
 }
 
 function Enroll-Agent {
@@ -131,11 +171,12 @@ function Enroll-Agent {
         [string]$Path
     )
 
-    if (-not $BaseUrl) { throw "ApiBaseUrl is required for enrollment." }
+    $normalizedBaseUrl = Normalize-ApiBaseUrl -BaseUrl $BaseUrl
+    if (-not $normalizedBaseUrl) { throw "ApiBaseUrl is required for enrollment." }
     if (-not $Token) { throw "EnrollmentToken is required for enrollment." }
 
     $payload = Get-InventoryPayload
-    $response = Invoke-JsonPost -Url "$($BaseUrl.TrimEnd('/'))/api/agent/enroll" -Body @{
+    $response = Invoke-JsonPost -Url "$normalizedBaseUrl/api/agent/enroll" -Body @{
         enrollmentToken = $Token
         fingerprint = $payload.fingerprint
         hostname = $payload.hostname
@@ -143,7 +184,7 @@ function Enroll-Agent {
     } -Headers @{}
 
     $config = @{
-        apiBaseUrl = $BaseUrl.TrimEnd('/')
+        apiBaseUrl = $normalizedBaseUrl
         facilityId = $response.facilityId
         facilityName = $response.facilityName
         agentId = $response.agentId
@@ -170,6 +211,8 @@ function Send-Inventory {
 }
 
 try {
+    Enable-TlsForLegacyPowerShell
+
     $config = Get-Config -Path $ConfigPath
     if (-not $config) {
         $config = Enroll-Agent -BaseUrl $ApiBaseUrl -Token $EnrollmentToken -Path $ConfigPath

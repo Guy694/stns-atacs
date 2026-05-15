@@ -40,10 +40,10 @@ export function AgentDownloadPanel({ facilityName }: AgentDownloadPanelProps) {
   const token = state.token;
 
   const winCmd = token
-    ? `powershell -ExecutionPolicy Bypass -File .\\install-atacs-agent.ps1 -ApiBaseUrl ${apiBaseUrl} -EnrollmentToken ${token}`
+    ? `powershell -ExecutionPolicy Bypass -File .\\install-atacs-agent.ps1 -ApiBaseUrl "${apiBaseUrl}" -EnrollmentToken "${token}"`
     : "";
   const linuxCmd = token
-    ? `sudo bash ./install-atacs-agent.sh --api-base-url ${apiBaseUrl} --enrollment-token ${token}`
+    ? `sudo bash ./install-atacs-agent.sh --api-base-url "${apiBaseUrl}" --enrollment-token "${token}"`
     : "";
 
   return (
