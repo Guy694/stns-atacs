@@ -1,12 +1,12 @@
 "use client";
 
-import { useActionState, useEffect, useMemo, useRef, useState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 
 import {
   createAgentEnrollmentAction,
-  getInitialAgentEnrollmentState,
   type AgentEnrollmentActionState,
 } from "@/app/(main)/admin/settings/agent/actions";
+import { agentEnrollmentInitialState } from "@/app/(main)/admin/settings/agent/types";
 
 type FacilityOption = {
   id: number;
@@ -21,8 +21,7 @@ type AgentEnrollmentPanelProps = {
 export function AgentEnrollmentPanel({ facilities }: AgentEnrollmentPanelProps) {
   const [selectedFacilityId, setSelectedFacilityId] = useState("");
   const [facilityLabel, setFacilityLabel] = useState("");
-  const initialState = useMemo<AgentEnrollmentActionState>(() => getInitialAgentEnrollmentState(), []);
-  const [state, formAction, pending] = useActionState(createAgentEnrollmentAction, initialState);
+  const [state, formAction, pending] = useActionState(createAgentEnrollmentAction, agentEnrollmentInitialState);
   const facilitiesRef = useRef(facilities);
 
   useEffect(() => {

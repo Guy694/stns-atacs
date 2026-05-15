@@ -41,7 +41,8 @@ export function MapClient({ facilities }: { facilities: Facility[] }) {
     const script = document.createElement("script");
     script.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
     script.onload = () => {
-      const L = (window as unknown as { L: typeof import("leaflet") }).L;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const L = (window as any).L as any;
 
       const map = L.map(mapRef.current!, {
         center: [6.75, 99.98],

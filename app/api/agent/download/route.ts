@@ -42,7 +42,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "File not found on server" }, { status: 404 });
   }
 
-  return new NextResponse(content, {
+  return new NextResponse(content as unknown as BodyInit, {
     headers: {
       "Content-Type": entry.contentType,
       "Content-Disposition": `attachment; filename="${entry.filename}"`,

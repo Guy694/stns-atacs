@@ -5,30 +5,16 @@ import { redirect } from "next/navigation";
 
 import { createAgentEnrollment, revokeAgentEnrollment } from "@/lib/agent";
 import { getCurrentUser } from "@/lib/auth";
+import type { AgentEnrollmentActionState } from "./types";
+import { agentEnrollmentInitialState } from "./types";
+
+export type { AgentEnrollmentActionState } from "./types";
 
 async function requireAdmin() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
   if (user.role !== "admin") redirect("/");
   return user;
-}
-
-export type AgentEnrollmentActionState = {
-  error: string | null;
-  createdToken: string | null;
-  facilityName: string | null;
-  enrollmentName: string | null;
-};
-
-const INITIAL_STATE: AgentEnrollmentActionState = {
-  error: null,
-  createdToken: null,
-  facilityName: null,
-  enrollmentName: null,
-};
-
-export function getInitialAgentEnrollmentState(): AgentEnrollmentActionState {
-  return INITIAL_STATE;
 }
 
 export async function createAgentEnrollmentAction(
@@ -43,7 +29,7 @@ export async function createAgentEnrollmentAction(
   const expiresAt = (formData.get("expiresAt") as string | null)?.trim() ?? "";
 
   if (!facilityId || Number.isNaN(facilityId)) {
-    return { ...INITIAL_STATE, error: "กรุณาเลือกหน่วยงาน" };
+    return { ...agentEnrollmentInitialState, error: "กรุณาเลือกหน่วยงาน" };
   }
 
   try {
@@ -63,9 +49,9 @@ export async function createAgentEnrollmentAction(
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
     if (message.includes("agent_enrollments")) {
-      return { ...INITIAL_STATE, error: "ยังไม่พบตาราง agent_enrollments กรุณารัน database/agent_inventory.sql ก่อน" };
+      return { ...agentEnrollmentInitialState, error: "ยังไม่พบตาราง agent_enrollments กรุณารัน database/agent_inventory.sql ก่อน" };
     }
-    return { ...INITIAL_STATE, error: "ไม่สามารถสร้าง enrollment token ได้" };
+    return { ...agentEnrollmentInitialState, error: "ไม่สามารถสร้าง enrollment token ได้" };
   }
 }
 

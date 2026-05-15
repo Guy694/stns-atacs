@@ -5,7 +5,7 @@ import { TopNavigation } from "@/app/_components/top-navigation";
 export default function PendingApprovalPage() {
   return (
     <main className="mx-auto flex w-full max-w-xl flex-1 flex-col justify-center px-6 py-10 sm:px-8">
-      <TopNavigation current="pending" user={null} />
+      <TopNavigation current="login" user={null} />
       <section className="glass-panel rounded-[2rem] border border-black/10 p-6 sm:p-8 text-center">
         <div className="text-5xl mb-4">⏳</div>
         <p className="text-sm uppercase tracking-[0.24em] text-[var(--muted)]">Pending Approval</p>

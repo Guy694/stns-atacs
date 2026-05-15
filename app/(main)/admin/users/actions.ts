@@ -34,11 +34,12 @@ export async function listUsersAction() {
        FROM users ORDER BY role DESC, full_name ASC`
     );
   } catch {
-    const rows = await selectRows<Omit<UserRow, "facility_id">>(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rows = await selectRows<any>(
       `SELECT id, thaid_cid, full_name, email, username, role, is_active, last_login_at
        FROM users ORDER BY role DESC, full_name ASC`
     );
-    return rows.map((row) => ({ ...row, facility_id: null }));
+    return rows.map((row: any) => ({ ...row, facility_id: null })) as UserRow[];
   }
 }
 

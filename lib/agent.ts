@@ -468,22 +468,21 @@ export async function reportAgentInventory(input: {
     linkedAssetId = await findAssetCandidate(deviceRow.facility_id, payload.serialNumber, payload.hostname);
   }
 
-  const assetInput = {
+  const commonAssetFields = {
     surveyId,
-    assetRegistrationNo: linkedAssetId ? undefined : autoRegistrationNo(deviceRow.facility_id, deviceRow.id),
     assetName: buildAssetName(payload),
     usageDescription: "Auto collected by ATACS Agent",
-    ownerName: payload.currentUser?.trim() || null,
+    ownerName: payload.currentUser?.trim() || undefined,
     assetCategory: "Hardware" as const,
     deviceType: payload.deviceType?.trim() || "Computer",
-    operatingSystem: payload.operatingSystem?.trim() || null,
-    operatingSystemVersion: payload.operatingSystemVersion?.trim() || null,
-    privateIp: payload.privateIp?.trim() || null,
-    locationDetail: payload.locationDetail?.trim() || payload.hostname?.trim() || null,
+    operatingSystem: payload.operatingSystem?.trim() || undefined,
+    operatingSystemVersion: payload.operatingSystemVersion?.trim() || undefined,
+    privateIp: payload.privateIp?.trim() || undefined,
+    locationDetail: payload.locationDetail?.trim() || payload.hostname?.trim() || undefined,
     currentStatus: payload.status?.trim() === "offline" ? "Inactive" : "Active",
     updatedBy: `agent:${payload.hostname?.trim() || deviceRow.agent_uuid}`,
-    manufacturerBrand: payload.manufacturerBrand?.trim() || null,
-    manufacturerModel: payload.manufacturerModel?.trim() || null,
+    manufacturerBrand: payload.manufacturerBrand?.trim() || undefined,
+    manufacturerModel: payload.manufacturerModel?.trim() || undefined,
     manufacturerSpecification: [
       payload.cpuModel?.trim(),
       payload.ramMb ? `RAM ${payload.ramMb} MB` : null,
@@ -492,14 +491,17 @@ export async function reportAgentInventory(input: {
     ]
       .filter(Boolean)
       .join(" | "),
-    serialNumber: payload.serialNumber?.trim() || payload.biosSerial?.trim() || null,
+    serialNumber: payload.serialNumber?.trim() || payload.biosSerial?.trim() || undefined,
     lastUpdatedAt: new Date().toISOString().slice(0, 10),
   };
 
   if (linkedAssetId) {
-    await updateAsset(linkedAssetId, assetInput);
+    await updateAsset(linkedAssetId, commonAssetFields);
   } else {
-    const result = await createAsset(assetInput);
+    const result = await createAsset({
+      ...commonAssetFields,
+      assetRegistrationNo: autoRegistrationNo(deviceRow.facility_id, deviceRow.id),
+    });
     linkedAssetId = result.insertId;
   }
 

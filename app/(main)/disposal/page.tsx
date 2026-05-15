@@ -24,7 +24,7 @@ export default async function DisposalPage({ searchParams }: Props) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
   if (user.role === "viewer") redirect("/assets");
-  const canMutate = user.role !== "viewer";
+  const canMutate = true;
 
   const params = await searchParams;
   const q = readParam(params, "q");
