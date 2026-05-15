@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { DashboardScopeToggle } from "@/app/_components/dashboard-scope-toggle";
 import { getDashboardData } from "@/lib/atacs";
 import { getCurrentUser } from "@/lib/auth";
 
@@ -21,8 +22,10 @@ export default async function Home({ searchParams }: HomeProps) {
 
   // Officers can toggle: 'mine' (default) or 'all'
   const hasOwnFacility = isOfficer && !!currentUser.facilityId;
+  const missingFacilityAssignment = isOfficer && !currentUser.facilityId;
   const scopeParam = params.scope ?? "mine";
   const showingOwn = hasOwnFacility && scopeParam !== "all";
+  const activeScope: "mine" | "all" = showingOwn ? "mine" : "all";
 
   const facilitySurveys = showingOwn
     ? allFacilitySurveys.filter((s) => s.facilityId === Number(currentUser.facilityId))
@@ -31,6 +34,7 @@ export default async function Home({ searchParams }: HomeProps) {
   const scopeFacilityName = showingOwn
     ? (facilitySurveys[0]?.facilityName ?? "หน่วยงานของฉัน")
     : null;
+  const hasScopedData = facilitySurveys.length > 0;
 
   const allAssets = facilitySurveys.flatMap((survey) =>
     survey.assets.map((asset) => ({ ...asset, facilityName: survey.facilityName, districtName: survey.districtName }))
@@ -108,6 +112,10 @@ export default async function Home({ searchParams }: HomeProps) {
     return "bg-amber-100 text-amber-700";
   };
 
+  const assetQuickLink = showingOwn && currentUser.facilityId ? `/assets?facility=${currentUser.facilityId}` : "/assets";
+  const brokenQuickLink = `${assetQuickLink}${assetQuickLink.includes("?") ? "&" : "?"}status=Broken`;
+  const activeQuickLink = `${assetQuickLink}${assetQuickLink.includes("?") ? "&" : "?"}status=Active`;
+
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6">
 
@@ -124,23 +132,7 @@ export default async function Home({ searchParams }: HomeProps) {
             </h1>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {/* Scope toggle for officers with a facility */}
-            {hasOwnFacility && (
-              <div className="flex overflow-hidden rounded-xl border border-black/10 bg-white/70 p-0.5 text-sm font-medium shadow-sm">
-                <Link
-                  href="/?scope=mine"
-                  className={`rounded-lg px-4 py-1.5 transition ${showingOwn ? "bg-[var(--accent-strong)] text-white shadow" : "text-[var(--muted)] hover:text-[var(--foreground)]"}`}
-                >
-                  หน่วยงานของฉัน
-                </Link>
-                <Link
-                  href="/?scope=all"
-                  className={`rounded-lg px-4 py-1.5 transition ${!showingOwn ? "bg-[var(--accent-strong)] text-white shadow" : "text-[var(--muted)] hover:text-[var(--foreground)]"}`}
-                >
-                  ทั้งหมด
-                </Link>
-              </div>
-            )}
+            <DashboardScopeToggle hasOwnFacility={hasOwnFacility} currentScope={activeScope} />
             <div className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-white/80 px-3 py-1.5 text-xs text-[var(--muted)]">
               <span
                 className={`h-2 w-2 rounded-full ${dataSource === "database" ? "bg-emerald-500" : "bg-amber-400"}`}
@@ -158,6 +150,57 @@ export default async function Home({ searchParams }: HomeProps) {
             Viewer Mode: บัญชีนี้ดูข้อมูลได้อย่างเดียว ไม่สามารถเพิ่ม แก้ไข หรือบันทึกการดำเนินการทรัพย์สิน
           </div>
         )}
+
+        {missingFacilityAssignment && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            บัญชี Officer นี้ยังไม่ถูกผูกกับหน่วยงาน จึงยังไม่สามารถใช้มุมมอง "หน่วยงานของฉัน" ได้ กรุณาให้ผู้ดูแลระบบกำหนดหน่วยงานก่อน
+          </div>
+        )}
+
+        <div className="glass-panel rounded-2xl p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-[0.2em] text-[var(--muted)]">Quick Actions</p>
+              <p className="mt-1 text-sm text-[var(--muted)]">
+                เปิดหน้าทำงานต่อทันทีจาก dashboard โดยใช้ตัวกรองที่เกี่ยวข้อง
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2 text-sm">
+              <Link href={assetQuickLink} className="rounded-xl border border-black/10 bg-white/80 px-4 py-2 font-medium text-[var(--foreground)] transition hover:bg-white">
+                {isOfficer ? "ไปหน้าทรัพย์สิน" : "ดูทรัพย์สินทั้งหมด"}
+              </Link>
+              <Link href={brokenQuickLink} className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-2 font-medium text-rose-700 transition hover:bg-rose-100">
+                ดูรายการชำรุด
+              </Link>
+              <Link href="/reports?view=expiring" className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 font-medium text-amber-700 transition hover:bg-amber-100">
+                ดู MA ใกล้หมดอายุ
+              </Link>
+              <Link href={activeQuickLink} className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 font-medium text-emerald-700 transition hover:bg-emerald-100">
+                ดูรายการพร้อมใช้งาน
+              </Link>
+            </div>
+          </div>
+        </div>
+
+        {showingOwn && hasOwnFacility && !hasScopedData && (
+          <div className="glass-panel rounded-2xl p-8 text-center">
+            <p className="text-lg font-semibold text-[var(--foreground)]">ยังไม่พบข้อมูลสำรวจของหน่วยงานนี้</p>
+            <p className="mt-2 text-sm text-[var(--muted)]">
+              คุณสามารถเพิ่มข้อมูลทรัพย์สินของหน่วยงานตนเอง หรือสลับไปดูภาพรวมทั้งหมดได้
+            </p>
+            <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
+              <Link href="/assets" className="rounded-xl bg-[var(--accent-strong)] px-5 py-2.5 text-sm font-semibold text-white transition hover:opacity-90">
+                ไปหน้าทรัพย์สิน
+              </Link>
+              <Link href="/?scope=all" className="rounded-xl border border-black/10 bg-white/80 px-5 py-2.5 text-sm font-medium text-[var(--foreground)] transition hover:bg-white">
+                ดูภาพรวมทั้งหมด
+              </Link>
+            </div>
+          </div>
+        )}
+
+        {(!showingOwn || hasScopedData) && (
+          <>
 
         {/* ── KPI Strip ────────────────────────────────────────────────────── */}
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -557,6 +600,8 @@ export default async function Home({ searchParams }: HomeProps) {
             })}
           </div>
         </div>
+          </>
+        )}
     </div>
   );
 }

@@ -1,0 +1,530 @@
+import "server-only";
+
+import crypto from "node:crypto";
+
+import type { RowDataPacket } from "mysql2/promise";
+
+import { createAsset, findOrCreateSurvey, updateAsset } from "@/lib/assets";
+import { executeStatement, selectRows } from "@/lib/mysql";
+
+type EnrollmentRow = RowDataPacket & {
+  id: number;
+  facility_id: number;
+  facility_name: string;
+  enrollment_name: string | null;
+  token_hash: string;
+  is_active: number;
+  expires_at: Date | string | null;
+  created_at: Date | string;
+  created_by_user_id: number | null;
+  last_used_at: Date | string | null;
+};
+
+type DeviceRow = RowDataPacket & {
+  id: number;
+  facility_id: number;
+  facility_name: string;
+  enrollment_id: number | null;
+  linked_asset_id: number | null;
+  agent_uuid: string;
+  agent_key_hash: string;
+  device_fingerprint: string;
+  hostname: string | null;
+  serial_number: string | null;
+  bios_serial: string | null;
+  device_type: string | null;
+  manufacturer_brand: string | null;
+  manufacturer_model: string | null;
+  operating_system: string | null;
+  operating_system_version: string | null;
+  private_ip: string | null;
+  mac_address: string | null;
+  current_user: string | null;
+  cpu_model: string | null;
+  ram_mb: number | null;
+  disk_total_gb: number | null;
+  location_detail: string | null;
+  agent_version: string | null;
+  status: string | null;
+  is_active: number;
+  first_seen_at: Date | string;
+  last_seen_at: Date | string | null;
+  last_reported_at: Date | string | null;
+  raw_payload_json: string | null;
+  linked_asset_registration_no: string | null;
+  linked_asset_name: string | null;
+};
+
+type AssetLinkRow = RowDataPacket & {
+  id: number;
+};
+
+export type AgentEnrollment = {
+  id: number;
+  facilityId: number;
+  facilityName: string;
+  enrollmentName: string;
+  isActive: boolean;
+  expiresAt: string | null;
+  createdAt: string;
+  createdByUserId: number | null;
+  lastUsedAt: string | null;
+};
+
+export type AgentDevice = {
+  id: number;
+  facilityId: number;
+  facilityName: string;
+  enrollmentId: number | null;
+  linkedAssetId: number | null;
+  linkedAssetRegistrationNo: string | null;
+  linkedAssetName: string | null;
+  agentUuid: string;
+  deviceFingerprint: string;
+  hostname: string | null;
+  serialNumber: string | null;
+  biosSerial: string | null;
+  deviceType: string | null;
+  manufacturerBrand: string | null;
+  manufacturerModel: string | null;
+  operatingSystem: string | null;
+  operatingSystemVersion: string | null;
+  privateIp: string | null;
+  macAddress: string | null;
+  currentUser: string | null;
+  cpuModel: string | null;
+  ramMb: number | null;
+  diskTotalGb: number | null;
+  locationDetail: string | null;
+  agentVersion: string | null;
+  status: string;
+  isActive: boolean;
+  firstSeenAt: string;
+  lastSeenAt: string | null;
+  lastReportedAt: string | null;
+};
+
+export type AgentReportPayload = {
+  fingerprint: string;
+  hostname?: string | null;
+  serialNumber?: string | null;
+  biosSerial?: string | null;
+  deviceType?: string | null;
+  manufacturerBrand?: string | null;
+  manufacturerModel?: string | null;
+  operatingSystem?: string | null;
+  operatingSystemVersion?: string | null;
+  privateIp?: string | null;
+  macAddress?: string | null;
+  currentUser?: string | null;
+  cpuModel?: string | null;
+  ramMb?: number | null;
+  diskTotalGb?: number | null;
+  locationDetail?: string | null;
+  agentVersion?: string | null;
+  status?: string | null;
+  collectedAt?: string | null;
+  raw?: unknown;
+};
+
+function toDateTime(value: Date | string | null | undefined) {
+  if (!value) return null;
+  if (value instanceof Date) {
+    return value.toISOString().slice(0, 19).replace("T", " ");
+  }
+  return String(value).replace("T", " ").slice(0, 19);
+}
+
+function hashSecret(value: string) {
+  return crypto.createHash("sha256").update(value).digest("hex");
+}
+
+function randomToken(prefix: string) {
+  return `${prefix}_${crypto.randomBytes(24).toString("base64url")}`;
+}
+
+function toEnrollment(row: EnrollmentRow): AgentEnrollment {
+  return {
+    id: row.id,
+    facilityId: row.facility_id,
+    facilityName: row.facility_name,
+    enrollmentName: row.enrollment_name ?? "ไม่มีชื่อกำกับ",
+    isActive: row.is_active === 1,
+    expiresAt: toDateTime(row.expires_at),
+    createdAt: toDateTime(row.created_at) ?? "-",
+    createdByUserId: row.created_by_user_id,
+    lastUsedAt: toDateTime(row.last_used_at),
+  };
+}
+
+function toDevice(row: DeviceRow): AgentDevice {
+  return {
+    id: row.id,
+    facilityId: row.facility_id,
+    facilityName: row.facility_name,
+    enrollmentId: row.enrollment_id,
+    linkedAssetId: row.linked_asset_id,
+    linkedAssetRegistrationNo: row.linked_asset_registration_no,
+    linkedAssetName: row.linked_asset_name,
+    agentUuid: row.agent_uuid,
+    deviceFingerprint: row.device_fingerprint,
+    hostname: row.hostname,
+    serialNumber: row.serial_number,
+    biosSerial: row.bios_serial,
+    deviceType: row.device_type,
+    manufacturerBrand: row.manufacturer_brand,
+    manufacturerModel: row.manufacturer_model,
+    operatingSystem: row.operating_system,
+    operatingSystemVersion: row.operating_system_version,
+    privateIp: row.private_ip,
+    macAddress: row.mac_address,
+    currentUser: row.current_user,
+    cpuModel: row.cpu_model,
+    ramMb: row.ram_mb,
+    diskTotalGb: row.disk_total_gb,
+    locationDetail: row.location_detail,
+    agentVersion: row.agent_version,
+    status: row.status ?? "online",
+    isActive: row.is_active === 1,
+    firstSeenAt: toDateTime(row.first_seen_at) ?? "-",
+    lastSeenAt: toDateTime(row.last_seen_at),
+    lastReportedAt: toDateTime(row.last_reported_at),
+  };
+}
+
+function normalizeFingerprint(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function autoRegistrationNo(facilityId: number, deviceId: number) {
+  return `AGT-${String(facilityId).padStart(3, "0")}-${String(deviceId).padStart(6, "0")}`;
+}
+
+function buildAssetName(payload: AgentReportPayload) {
+  const hostname = payload.hostname?.trim();
+  const model = payload.manufacturerModel?.trim();
+  const os = payload.operatingSystem?.trim();
+  if (hostname && model) return `${hostname} · ${model}`;
+  if (hostname) return hostname;
+  if (model) return model;
+  if (os) return `Computer ${os}`;
+  return "Computer (ATACS Agent)";
+}
+
+async function findAssetCandidate(facilityId: number, serialNumber?: string | null, hostname?: string | null) {
+  if (serialNumber?.trim()) {
+    const rows = await selectRows<AssetLinkRow>(
+      `SELECT a.id
+       FROM information_assets a
+       JOIN information_asset_surveys s ON s.id = a.survey_id
+       WHERE s.facility_id = ? AND a.serial_number = ?
+       LIMIT 1`,
+      [facilityId, serialNumber.trim()]
+    );
+    if (rows[0]) return rows[0].id;
+  }
+
+  if (hostname?.trim()) {
+    const rows = await selectRows<AssetLinkRow>(
+      `SELECT a.id
+       FROM information_assets a
+       JOIN information_asset_surveys s ON s.id = a.survey_id
+       WHERE s.facility_id = ? AND a.asset_name = ?
+       LIMIT 1`,
+      [facilityId, hostname.trim()]
+    );
+    if (rows[0]) return rows[0].id;
+  }
+
+  return null;
+}
+
+export async function listAgentEnrollments(): Promise<AgentEnrollment[]> {
+  const rows = await selectRows<EnrollmentRow>(
+    `SELECT ae.*, hf.name AS facility_name
+     FROM agent_enrollments ae
+     JOIN health_facilities hf ON hf.id = ae.facility_id
+     ORDER BY ae.created_at DESC, ae.id DESC`
+  );
+  return rows.map(toEnrollment);
+}
+
+export async function listAgentDevices(): Promise<AgentDevice[]> {
+  const rows = await selectRows<DeviceRow>(
+    `SELECT ad.*, hf.name AS facility_name,
+            a.asset_registration_no AS linked_asset_registration_no,
+            a.asset_name AS linked_asset_name
+     FROM agent_devices ad
+     JOIN health_facilities hf ON hf.id = ad.facility_id
+     LEFT JOIN information_assets a ON a.id = ad.linked_asset_id
+     ORDER BY ad.last_seen_at DESC, ad.id DESC`
+  );
+  return rows.map(toDevice);
+}
+
+export async function createAgentEnrollment(input: {
+  facilityId: number;
+  enrollmentName?: string | null;
+  expiresAt?: string | null;
+  createdByUserId?: number | null;
+}) {
+  const plainToken = randomToken("atacs_enroll");
+  const tokenHash = hashSecret(plainToken);
+  const enrollmentName = input.enrollmentName?.trim() || null;
+  const expiresAt = input.expiresAt?.trim() || null;
+
+  await executeStatement(
+    `INSERT INTO agent_enrollments (facility_id, enrollment_name, token_hash, expires_at, created_by_user_id, is_active)
+     VALUES (?, ?, ?, ?, ?, 1)`,
+    [input.facilityId, enrollmentName, tokenHash, expiresAt || null, input.createdByUserId ?? null]
+  );
+
+  return plainToken;
+}
+
+export async function revokeAgentEnrollment(id: number) {
+  await executeStatement("UPDATE agent_enrollments SET is_active = 0 WHERE id = ?", [id]);
+}
+
+async function getEnrollmentByToken(token: string) {
+  const tokenHash = hashSecret(token.trim());
+  const rows = await selectRows<EnrollmentRow>(
+    `SELECT ae.*, hf.name AS facility_name
+     FROM agent_enrollments ae
+     JOIN health_facilities hf ON hf.id = ae.facility_id
+     WHERE ae.token_hash = ?
+       AND ae.is_active = 1
+       AND (ae.expires_at IS NULL OR ae.expires_at > NOW())
+     LIMIT 1`,
+    [tokenHash]
+  );
+  return rows[0] ?? null;
+}
+
+async function getAgentDeviceByCredentials(agentId: string, agentKey: string) {
+  const rows = await selectRows<DeviceRow>(
+    `SELECT ad.*, hf.name AS facility_name,
+            a.asset_registration_no AS linked_asset_registration_no,
+            a.asset_name AS linked_asset_name
+     FROM agent_devices ad
+     JOIN health_facilities hf ON hf.id = ad.facility_id
+     LEFT JOIN information_assets a ON a.id = ad.linked_asset_id
+     WHERE ad.agent_uuid = ?
+       AND ad.agent_key_hash = ?
+       AND ad.is_active = 1
+     LIMIT 1`,
+    [agentId.trim(), hashSecret(agentKey.trim())]
+  );
+  return rows[0] ?? null;
+}
+
+export async function enrollAgentDevice(input: {
+  enrollmentToken: string;
+  fingerprint: string;
+  hostname?: string | null;
+  agentVersion?: string | null;
+}) {
+  const enrollment = await getEnrollmentByToken(input.enrollmentToken);
+  if (!enrollment) {
+    throw new Error("INVALID_ENROLLMENT_TOKEN");
+  }
+
+  const fingerprint = normalizeFingerprint(input.fingerprint);
+  if (!fingerprint) {
+    throw new Error("INVALID_FINGERPRINT");
+  }
+
+  const deviceSecret = randomToken("atacs_device");
+  const deviceSecretHash = hashSecret(deviceSecret);
+  const existing = await selectRows<DeviceRow>(
+    `SELECT ad.*, hf.name AS facility_name,
+            a.asset_registration_no AS linked_asset_registration_no,
+            a.asset_name AS linked_asset_name
+     FROM agent_devices ad
+     JOIN health_facilities hf ON hf.id = ad.facility_id
+     LEFT JOIN information_assets a ON a.id = ad.linked_asset_id
+     WHERE ad.facility_id = ? AND ad.device_fingerprint = ?
+     LIMIT 1`,
+    [enrollment.facility_id, fingerprint]
+  );
+
+  let deviceId = existing[0]?.id ?? 0;
+  const agentUuid = existing[0]?.agent_uuid ?? crypto.randomUUID();
+
+  if (existing[0]) {
+    await executeStatement(
+      `UPDATE agent_devices
+       SET enrollment_id = ?, agent_uuid = ?, agent_key_hash = ?, hostname = ?, agent_version = ?, is_active = 1, status = 'online', last_seen_at = NOW()
+       WHERE id = ?`,
+      [enrollment.id, agentUuid, deviceSecretHash, input.hostname?.trim() || null, input.agentVersion?.trim() || null, existing[0].id]
+    );
+    deviceId = existing[0].id;
+  } else {
+    const result = await executeStatement(
+      `INSERT INTO agent_devices
+         (facility_id, enrollment_id, agent_uuid, agent_key_hash, device_fingerprint, hostname, agent_version, status, is_active, first_seen_at, last_seen_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'online', 1, NOW(), NOW())`,
+      [
+        enrollment.facility_id,
+        enrollment.id,
+        agentUuid,
+        deviceSecretHash,
+        fingerprint,
+        input.hostname?.trim() || null,
+        input.agentVersion?.trim() || null,
+      ]
+    );
+    deviceId = result.insertId;
+  }
+
+  await executeStatement("UPDATE agent_enrollments SET last_used_at = NOW() WHERE id = ?", [enrollment.id]);
+
+  return {
+    agentId: agentUuid,
+    agentKey: deviceSecret,
+    facilityId: enrollment.facility_id,
+    facilityName: enrollment.facility_name,
+    deviceId,
+  };
+}
+
+export async function authenticateAgent(agentId: string, agentKey: string) {
+  const device = await getAgentDeviceByCredentials(agentId, agentKey);
+  if (!device) {
+    throw new Error("INVALID_AGENT_CREDENTIALS");
+  }
+  return toDevice(device);
+}
+
+export async function reportAgentInventory(input: {
+  agentId: string;
+  agentKey: string;
+  payload: AgentReportPayload;
+}) {
+  const deviceRow = await getAgentDeviceByCredentials(input.agentId, input.agentKey);
+  if (!deviceRow) {
+    throw new Error("INVALID_AGENT_CREDENTIALS");
+  }
+
+  const payload = input.payload;
+  const fingerprint = normalizeFingerprint(payload.fingerprint);
+  if (!fingerprint) {
+    throw new Error("INVALID_FINGERPRINT");
+  }
+
+  const lastReportedAt = payload.collectedAt?.trim() || new Date().toISOString().slice(0, 19).replace("T", " ");
+  await executeStatement(
+    `UPDATE agent_devices
+     SET device_fingerprint = ?,
+         hostname = ?,
+         serial_number = ?,
+         bios_serial = ?,
+         device_type = ?,
+         manufacturer_brand = ?,
+         manufacturer_model = ?,
+         operating_system = ?,
+         operating_system_version = ?,
+         private_ip = ?,
+         mac_address = ?,
+         current_user = ?,
+         cpu_model = ?,
+         ram_mb = ?,
+         disk_total_gb = ?,
+         location_detail = ?,
+         agent_version = ?,
+         status = ?,
+         last_seen_at = NOW(),
+         last_reported_at = ?,
+         raw_payload_json = ?
+     WHERE id = ?`,
+    [
+      fingerprint,
+      payload.hostname?.trim() || null,
+      payload.serialNumber?.trim() || null,
+      payload.biosSerial?.trim() || null,
+      payload.deviceType?.trim() || null,
+      payload.manufacturerBrand?.trim() || null,
+      payload.manufacturerModel?.trim() || null,
+      payload.operatingSystem?.trim() || null,
+      payload.operatingSystemVersion?.trim() || null,
+      payload.privateIp?.trim() || null,
+      payload.macAddress?.trim() || null,
+      payload.currentUser?.trim() || null,
+      payload.cpuModel?.trim() || null,
+      payload.ramMb ?? null,
+      payload.diskTotalGb ?? null,
+      payload.locationDetail?.trim() || null,
+      payload.agentVersion?.trim() || null,
+      payload.status?.trim() || "online",
+      lastReportedAt,
+      JSON.stringify(payload.raw ?? payload),
+      deviceRow.id,
+    ]
+  );
+
+  const surveyId = await findOrCreateSurvey(deviceRow.facility_id);
+  let linkedAssetId = deviceRow.linked_asset_id;
+  if (!linkedAssetId) {
+    linkedAssetId = await findAssetCandidate(deviceRow.facility_id, payload.serialNumber, payload.hostname);
+  }
+
+  const assetInput = {
+    surveyId,
+    assetRegistrationNo: linkedAssetId ? undefined : autoRegistrationNo(deviceRow.facility_id, deviceRow.id),
+    assetName: buildAssetName(payload),
+    usageDescription: "Auto collected by ATACS Agent",
+    ownerName: payload.currentUser?.trim() || null,
+    assetCategory: "Hardware" as const,
+    deviceType: payload.deviceType?.trim() || "Computer",
+    operatingSystem: payload.operatingSystem?.trim() || null,
+    operatingSystemVersion: payload.operatingSystemVersion?.trim() || null,
+    privateIp: payload.privateIp?.trim() || null,
+    locationDetail: payload.locationDetail?.trim() || payload.hostname?.trim() || null,
+    currentStatus: payload.status?.trim() === "offline" ? "Inactive" : "Active",
+    updatedBy: `agent:${payload.hostname?.trim() || deviceRow.agent_uuid}`,
+    manufacturerBrand: payload.manufacturerBrand?.trim() || null,
+    manufacturerModel: payload.manufacturerModel?.trim() || null,
+    manufacturerSpecification: [
+      payload.cpuModel?.trim(),
+      payload.ramMb ? `RAM ${payload.ramMb} MB` : null,
+      payload.diskTotalGb ? `Disk ${payload.diskTotalGb} GB` : null,
+      payload.macAddress?.trim() ? `MAC ${payload.macAddress.trim()}` : null,
+    ]
+      .filter(Boolean)
+      .join(" | "),
+    serialNumber: payload.serialNumber?.trim() || payload.biosSerial?.trim() || null,
+    lastUpdatedAt: new Date().toISOString().slice(0, 10),
+  };
+
+  if (linkedAssetId) {
+    await updateAsset(linkedAssetId, assetInput);
+  } else {
+    const result = await createAsset(assetInput);
+    linkedAssetId = result.insertId;
+  }
+
+  await executeStatement(
+    `UPDATE agent_devices SET linked_asset_id = ?, status = ?, last_seen_at = NOW(), last_reported_at = ? WHERE id = ?`,
+    [linkedAssetId, payload.status?.trim() || "online", lastReportedAt, deviceRow.id]
+  );
+
+  return {
+    deviceId: deviceRow.id,
+    linkedAssetId,
+    surveyId,
+  };
+}
+
+export async function heartbeatAgent(input: { agentId: string; agentKey: string; status?: string | null }) {
+  const device = await getAgentDeviceByCredentials(input.agentId, input.agentKey);
+  if (!device) {
+    throw new Error("INVALID_AGENT_CREDENTIALS");
+  }
+
+  await executeStatement(
+    `UPDATE agent_devices SET status = ?, last_seen_at = NOW() WHERE id = ?`,
+    [input.status?.trim() || "online", device.id]
+  );
+
+  return { deviceId: device.id };
+}

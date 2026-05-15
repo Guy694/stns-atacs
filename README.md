@@ -20,6 +20,36 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## ATACS Agent
+
+### Database Migration
+
+Run `database/agent_inventory.sql` after the main auth schema so the agent tables exist before creating enrollment tokens. The script adds `agent_enrollments` and `agent_devices`, and `users.id` must already be `bigint unsigned`.
+
+### Admin Flow
+
+1. Open `/admin/settings/agent`.
+2. Create an enrollment token for the target facility.
+3. Copy the token once and share it with the officer or installer.
+4. Revoke the token after the rollout if needed.
+
+### Windows Agent
+
+Install the agent on the client machine with PowerShell:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File install-atacs-agent.ps1 -ApiBaseUrl https://your-domain.example -EnrollmentToken <token>
+```
+
+The installer enrolls the device, stores credentials under `ProgramData`, and registers a scheduled task to report inventory every 4 hours.
+
+### What the Agent Sends
+
+- Hostname and device fingerprint
+- CPU, RAM, disk, operating system, and IP details
+- Current user and hardware identifiers
+- Periodic heartbeat updates so the admin page can show online/offline status
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

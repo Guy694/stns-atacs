@@ -34,6 +34,12 @@ export default async function AdminSettingsPage() {
       href: "/admin/settings/device-types",
     },
     {
+      title: "ATACS Agent",
+      desc: "สร้าง enrollment token ให้หน่วยงานติดตั้ง agent และรับ inventory อัตโนมัติ",
+      icon: "🖥️",
+      href: "/admin/settings/agent",
+    },
+    {
       title: "ประวัติการใช้งาน (Audit Log)",
       desc: "ดูว่าใครแก้ไขข้อมูลอะไร เมื่อไหร่",
       icon: "📝",
