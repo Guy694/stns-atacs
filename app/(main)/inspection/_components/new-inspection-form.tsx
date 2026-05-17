@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState, useEffect, useState } from "react";
 
 import type { FacilityRow } from "@/lib/assets";
@@ -18,16 +19,13 @@ export default function NewInspectionForm({ facilities }: { facilities: Facility
   const [error, formAction, pending] = useActionState(createInspectionAction, null);
   const [selectedFacilityId, setSelectedFacilityId] = useState<number | null>(null);
   const [assets, setAssets] = useState<Asset[]>([]);
-  const [loadingAssets, setLoadingAssets] = useState(false);
 
   useEffect(() => {
-    if (!selectedFacilityId) { setAssets([]); return; }
-    setLoadingAssets(true);
+    if (!selectedFacilityId) return;
     fetch(`/api/assets?facilityId=${selectedFacilityId}`)
       .then((r) => r.json())
       .then((data) => setAssets(data))
-      .catch(() => setAssets([]))
-      .finally(() => setLoadingAssets(false));
+      .catch(() => setAssets([]));
   }, [selectedFacilityId]);
 
   // Group facilities by district
@@ -57,7 +55,13 @@ export default function NewInspectionForm({ facilities }: { facilities: Facility
             className="w-full rounded-lg border px-3 py-2 text-sm"
             style={{ borderColor: "var(--line)", color: "var(--foreground)" }}
             value={selectedFacilityId ?? ""}
-            onChange={(e) => setSelectedFacilityId(e.target.value ? Number(e.target.value) : null)}
+            onChange={(e) => {
+              const nextId = e.target.value ? Number(e.target.value) : null;
+              setSelectedFacilityId(nextId);
+              if (!nextId) {
+                setAssets([]);
+              }
+            }}
           >
             <option value="">-- เลือกหน่วยบริการ --</option>
             {Object.entries(byDistrict).map(([district, facs]) => (
@@ -107,9 +111,7 @@ export default function NewInspectionForm({ facilities }: { facilities: Facility
           <p className="text-sm font-semibold" style={{ color: "var(--foreground)" }}>
             รายการทรัพย์สินในหน่วยบริการ ({assets.length} รายการ)
           </p>
-          {loadingAssets ? (
-            <div className="text-sm text-indigo-400 animate-pulse">กำลังโหลดรายการ...</div>
-          ) : assets.length === 0 ? (
+          {assets.length === 0 ? (
             <div className="text-sm" style={{ color: "var(--muted)" }}>ไม่พบทรัพย์สินในหน่วยบริการนี้</div>
           ) : (
             <div className="rounded-xl border overflow-hidden" style={{ borderColor: "var(--line)" }}>
@@ -173,13 +175,13 @@ export default function NewInspectionForm({ facilities }: { facilities: Facility
         >
           {pending ? "กำลังบันทึก..." : "บันทึกรอบตรวจนับ"}
         </button>
-        <a
+        <Link
           href="/inspection"
           className="px-5 py-2 rounded-lg text-sm font-semibold border"
           style={{ borderColor: "var(--line)", color: "var(--muted)" }}
         >
           ยกเลิก
-        </a>
+        </Link>
       </div>
     </form>
   );

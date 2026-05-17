@@ -26,6 +26,17 @@ type UserRow = RowDataPacket & {
   last_login_at: Date | string | null;
 };
 
+type UserRowWithoutFacility = RowDataPacket & {
+  id: number;
+  thaid_cid: string | null;
+  full_name: string;
+  email: string | null;
+  username: string | null;
+  role: "admin" | "officer" | "viewer";
+  is_active: number;
+  last_login_at: Date | string | null;
+};
+
 export async function listUsersAction() {
   await requireAdmin();
   try {
@@ -34,12 +45,11 @@ export async function listUsersAction() {
        FROM users ORDER BY role DESC, full_name ASC`
     );
   } catch {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const rows = await selectRows<any>(
+    const rows = await selectRows<UserRowWithoutFacility>(
       `SELECT id, thaid_cid, full_name, email, username, role, is_active, last_login_at
        FROM users ORDER BY role DESC, full_name ASC`
     );
-    return rows.map((row: any) => ({ ...row, facility_id: null })) as UserRow[];
+    return rows.map((row) => ({ ...row, facility_id: null }));
   }
 }
 

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { getCurrentUser } from "@/lib/auth";
@@ -35,13 +36,13 @@ export default async function InspectionPage({
           </p>
         </div>
         {canMutate && view !== "new" && (
-          <a
+          <Link
             href="/inspection?view=new"
             className="px-4 py-2 rounded-lg text-sm font-semibold text-white"
             style={{ background: "var(--accent)" }}
           >
             + เริ่มรอบตรวจนับใหม่
-          </a>
+          </Link>
         )}
       </div>
 
@@ -122,13 +123,13 @@ export default async function InspectionPage({
                         </div>
                       </td>
                       <td className="px-4 py-3">
-                        <a
+                        <Link
                           href={"/inspection/" + ins.id}
                           className="text-xs font-semibold"
                           style={{ color: "var(--accent)" }}
                         >
                           ดูรายละเอียด →
-                        </a>
+                        </Link>
                       </td>
                     </tr>
                   );

@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import * as XLSX from "xlsx";
 
 import { getCurrentUser } from "@/lib/auth";
-import { listSurveys, listFacilities } from "@/lib/assets";
 import { executeStatement, selectRows } from "@/lib/mysql";
 import type { RowDataPacket } from "mysql2/promise";
 

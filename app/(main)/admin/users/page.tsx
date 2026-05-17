@@ -20,6 +20,17 @@ type UserRow = RowDataPacket & {
   last_login_at: Date | string | null;
 };
 
+type UserRowWithoutFacility = RowDataPacket & {
+  id: number;
+  thaid_cid: string | null;
+  full_name: string;
+  email: string | null;
+  username: string | null;
+  role: "admin" | "officer" | "viewer";
+  is_active: number;
+  last_login_at: Date | string | null;
+};
+
 function formatDate(v: Date | string | null) {
   if (!v) return "–";
   return (v instanceof Date ? v.toISOString() : String(v)).slice(0, 16).replace("T", " ");
@@ -44,11 +55,11 @@ export default async function AdminUsersPage() {
     );
   } catch {
     try {
-      const fallback = await selectRows<any>(
+      const fallback = await selectRows<UserRowWithoutFacility>(
         `SELECT id, thaid_cid, full_name, email, username, role, is_active, last_login_at
          FROM users ORDER BY role DESC, full_name ASC`
       );
-      users = fallback.map((row) => ({ ...row, facility_id: null })) as UserRow[];
+      users = fallback.map((row) => ({ ...row, facility_id: null }));
     } catch {
       dbError = true;
     }

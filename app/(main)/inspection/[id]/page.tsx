@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { getCurrentUser } from "@/lib/auth";
@@ -23,13 +24,12 @@ export default async function InspectionDetailPage({
     ? Math.round((inspection.foundItems / inspection.totalItems) * 100)
     : 0;
   const missing = items.filter((i) => !i.found);
-  const found = items.filter((i) => i.found);
 
   return (
     <main className="p-6 space-y-6 max-w-5xl mx-auto">
       {/* Breadcrumb */}
       <nav className="text-sm" style={{ color: "var(--muted)" }}>
-        <a href="/inspection" style={{ color: "var(--accent)" }}>ตรวจนับทรัพย์สิน</a>
+        <Link href="/inspection" style={{ color: "var(--accent)" }}>ตรวจนับทรัพย์สิน</Link>
         <span className="mx-2">›</span>
         <span>{inspection.roundName}</span>
       </nav>
@@ -125,9 +125,9 @@ export default async function InspectionDetailPage({
                   {item.assetRegistrationNo}
                 </td>
                 <td className="px-4 py-3" style={{ color: "var(--foreground)" }}>
-                  <a href={`/assets/${item.assetId}`} style={{ color: "var(--accent)" }} className="hover:underline">
+                  <Link href={`/assets/${item.assetId}`} style={{ color: "var(--accent)" }} className="hover:underline">
                     {item.assetName}
-                  </a>
+                  </Link>
                 </td>
                 <td className="px-4 py-3 text-xs" style={{ color: "var(--muted)" }}>
                   {item.deviceType}

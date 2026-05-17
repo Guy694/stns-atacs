@@ -19,6 +19,7 @@ export default async function Home({ searchParams }: HomeProps) {
   const canViewExactInfrastructure = isAdmin;
   const canViewPublicIpPanel = isAdmin || allowPublicOfficerBoard;
   const referenceDate = new Date("2026-05-08T00:00:00+07:00");
+  const renderedAt = new Date().toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" });
 
   // Officers can toggle: 'mine' (default) or 'all'
   const hasOwnFacility = isOfficer && !!currentUser.facilityId;
@@ -140,7 +141,7 @@ export default async function Home({ searchParams }: HomeProps) {
               {connectionMessage}
             </div>
             <div className="rounded-full border border-black/10 bg-white/80 px-3 py-1.5 font-mono text-xs text-[var(--accent-strong)]">
-              ข้อมูลวันที่ {new Date(Date.now()).toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" })}
+              ข้อมูลวันที่ {renderedAt}
             </div>
           </div>
         </div>
@@ -153,7 +154,7 @@ export default async function Home({ searchParams }: HomeProps) {
 
         {missingFacilityAssignment && (
           <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-            บัญชี Officer นี้ยังไม่ถูกผูกกับหน่วยงาน จึงยังไม่สามารถใช้มุมมอง "หน่วยงานของฉัน" ได้ กรุณาให้ผู้ดูแลระบบกำหนดหน่วยงานก่อน
+            บัญชี Officer นี้ยังไม่ถูกผูกกับหน่วยงาน จึงยังไม่สามารถใช้มุมมอง &quot;หน่วยงานของฉัน&quot; ได้ กรุณาให้ผู้ดูแลระบบกำหนดหน่วยงานก่อน
           </div>
         )}
 

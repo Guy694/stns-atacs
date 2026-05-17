@@ -4,7 +4,6 @@ import { useActionState, useEffect, useRef, useState } from "react";
 
 import {
   createAgentEnrollmentAction,
-  type AgentEnrollmentActionState,
 } from "@/app/(main)/admin/settings/agent/actions";
 import { agentEnrollmentInitialState } from "@/app/(main)/admin/settings/agent/types";
 

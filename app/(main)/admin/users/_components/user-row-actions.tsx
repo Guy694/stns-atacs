@@ -37,7 +37,7 @@ export function UserRowActions({
   hasUsername,
   isSelf,
 }: Props) {
-  const [mounted, setMounted] = useState(false);
+  const mounted = typeof document !== "undefined";
   const [showEdit, setShowEdit] = useState(false);
   const [showReset, setShowReset] = useState(false);
   const [togglePending, startToggle] = useTransition();
@@ -54,17 +54,6 @@ export function UserRowActions({
       setEditFacilityId("");
     }
   }
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  useEffect(() => {
-    if (showEdit) {
-      setEditRole(currentRole);
-      setEditFacilityId(currentFacilityId?.toString() ?? "");
-    }
-  }, [showEdit, currentRole, currentFacilityId]);
 
   useEffect(() => {
     if (showEdit && editRole === "officer") {
@@ -94,7 +83,11 @@ export function UserRowActions({
     <div className="inline-flex items-center gap-2">
       {!isSelf && (
         <button
-          onClick={() => setShowEdit(true)}
+          onClick={() => {
+            setEditRole(currentRole);
+            setEditFacilityId(currentFacilityId?.toString() ?? "");
+            setShowEdit(true);
+          }}
           className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-700 transition hover:bg-indigo-100"
         >
           แก้ไขข้อมูล

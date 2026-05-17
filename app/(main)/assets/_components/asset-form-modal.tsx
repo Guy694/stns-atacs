@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState } from "react";
+import { useActionState, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { createAssetAction, updateAssetAction } from "@/app/(main)/assets/actions";
@@ -23,14 +23,9 @@ const INITIAL: string | null = null;
 
 export function AssetFormModal({ facilities, deviceTypes = [], fixedFacilityId, mode, asset, children }: Props) {
   const [open, setOpen] = useState(false);
-  const [mounted, setMounted] = useState(false);
+  const mounted = typeof document !== "undefined";
   const formRef = useRef<HTMLFormElement>(null);
   const today = new Date().toISOString().slice(0, 10);
-
-  useEffect(() => {
-    setMounted(true);
-    return () => setMounted(false);
-  }, []);
 
   const action = mode === "create" ? createAssetAction : updateAssetAction;
   const [error, formAction, pending] = useActionState(

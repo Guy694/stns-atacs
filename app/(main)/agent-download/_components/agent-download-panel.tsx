@@ -10,7 +10,7 @@ type AgentDownloadPanelProps = {
 
 const INITIAL = { token: null as string | null, error: null as string | null };
 
-const SCRIPT_BASE = "/api/agent/download";
+const SCRIPT_BASE = "/agent";
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
@@ -32,7 +32,7 @@ function CopyButton({ text }: { text: string }) {
 
 export function AgentDownloadPanel({ facilityName }: AgentDownloadPanelProps) {
   const [state, formAction, pending] = useActionState(
-    async (_prev: typeof INITIAL) => createOfficerDownloadTokenAction(),
+    async () => createOfficerDownloadTokenAction(),
     INITIAL
   );
 
@@ -92,8 +92,8 @@ export function AgentDownloadPanel({ facilityName }: AgentDownloadPanelProps) {
             <div className="flex items-center justify-between mb-3">
               <p className="font-semibold">🖥 Windows</p>
               <div className="flex gap-2">
-                <a href={`${SCRIPT_BASE}?file=windows-agent`} download="atacs-agent.ps1" className="rounded-lg border border-black/10 bg-white/70 px-3 py-1 text-xs font-medium text-[var(--muted)] hover:bg-white">atacs-agent.ps1</a>
-                <a href={`${SCRIPT_BASE}?file=windows-installer`} download="install-atacs-agent.ps1" className="rounded-lg border border-black/10 bg-white/70 px-3 py-1 text-xs font-medium text-[var(--muted)] hover:bg-white">installer.ps1</a>
+                <a href={`${SCRIPT_BASE}/windows/atacs-agent.ps1`} download="atacs-agent.ps1" className="rounded-lg border border-black/10 bg-white/70 px-3 py-1 text-xs font-medium text-[var(--muted)] hover:bg-white">atacs-agent.ps1</a>
+                <a href={`${SCRIPT_BASE}/windows/install-atacs-agent.ps1`} download="install-atacs-agent.ps1" className="rounded-lg border border-black/10 bg-white/70 px-3 py-1 text-xs font-medium text-[var(--muted)] hover:bg-white">installer.ps1</a>
               </div>
             </div>
             <div className="relative">
@@ -111,8 +111,8 @@ export function AgentDownloadPanel({ facilityName }: AgentDownloadPanelProps) {
             <div className="flex items-center justify-between mb-3">
               <p className="font-semibold">🐧 Linux</p>
               <div className="flex gap-2">
-                <a href={`${SCRIPT_BASE}?file=linux-agent`} download="atacs-agent.py" className="rounded-lg border border-black/10 bg-white/70 px-3 py-1 text-xs font-medium text-[var(--muted)] hover:bg-white">atacs-agent.py</a>
-                <a href={`${SCRIPT_BASE}?file=linux-installer`} download="install-atacs-agent.sh" className="rounded-lg border border-black/10 bg-white/70 px-3 py-1 text-xs font-medium text-[var(--muted)] hover:bg-white">installer.sh</a>
+                <a href={`${SCRIPT_BASE}/linux/atacs-agent.py`} download="atacs-agent.py" className="rounded-lg border border-black/10 bg-white/70 px-3 py-1 text-xs font-medium text-[var(--muted)] hover:bg-white">atacs-agent.py</a>
+                <a href={`${SCRIPT_BASE}/linux/install-atacs-agent.sh`} download="install-atacs-agent.sh" className="rounded-lg border border-black/10 bg-white/70 px-3 py-1 text-xs font-medium text-[var(--muted)] hover:bg-white">installer.sh</a>
               </div>
             </div>
             <div className="relative">

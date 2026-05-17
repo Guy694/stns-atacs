@@ -38,7 +38,11 @@ type RegistrationClaim = {
 };
 
 function getAuthSecret() {
-  return process.env.AUTH_SECRET ?? "dev-only-atacs-secret";
+  const secret = process.env.AUTH_SECRET;
+  if (process.env.NODE_ENV === "production" && !secret) {
+    throw new Error("AUTH_SECRET is required in production");
+  }
+  return secret ?? "dev-only-atacs-secret";
 }
 
 function sha256(value: string) {

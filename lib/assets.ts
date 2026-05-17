@@ -2,7 +2,7 @@ import "server-only";
 
 import type { RowDataPacket } from "mysql2/promise";
 
-import { facilitySurveys as fallbackSurveys, type AssetRecord, type FacilitySurvey } from "@/app/atacs-data";
+import { facilitySurveys as fallbackSurveys, type AssetRecord } from "@/app/atacs-data";
 import { executeStatement, selectRows } from "@/lib/mysql";
 
 // ── DB Row types ───────────────────────────────────────────────────────────

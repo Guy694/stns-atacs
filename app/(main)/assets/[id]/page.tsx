@@ -51,8 +51,10 @@ export default async function AssetDetailPage({ params }: Props) {
       })()
     : null;
 
+  const now = new Date();
+
   const daysLeft = maStart
-    ? Math.ceil((maStart.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+    ? Math.ceil((maStart.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
     : null;
 
   return (
