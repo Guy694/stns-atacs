@@ -2,8 +2,9 @@ import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { loginWithPasswordAction, loginWithThaiDAction } from "@/app/auth/actions";
+import { loginWithPasswordAction } from "@/app/auth/actions";
 import { getCurrentUser } from "@/lib/auth";
+import { getThaiIdStatus } from "@/lib/thaiid";
 
 type LoginPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -22,6 +23,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   const error = readQueryValue(params.error);
   const notice = readQueryValue(params.notice);
   const isThaiDTab = readQueryValue(params.thaid) === "1";
+  const thaiIdStatus = getThaiIdStatus();
 
   return (
     <div className="min-h-screen flex" style={{ background: "var(--background)" }}>
@@ -165,58 +167,27 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
                   style={{ background: "rgba(22,163,74,0.08)" }}>
                   <span className="text-2xl">🪪</span>
                   <p className="text-sm" style={{ color: "var(--muted)" }}>
-                    ยืนยันตัวตนด้วยเลขบัตรประชาชน — หากยังไม่มีบัญชีจะพาไปสมัครสมาชิกอัตโนมัติ
+                    ยืนยันตัวตนด้วย ThaiD ผ่าน DOPA OAuth 2.0 — หากยังไม่มีบัญชีจะพาไปสมัครสมาชิกอัตโนมัติ
                   </p>
                 </div>
-                <form action={loginWithThaiDAction} className="space-y-4">
-                  <div className="space-y-1.5">
-                    <label htmlFor="thaidCid" className="text-sm font-semibold" style={{ color: "var(--foreground)" }}>
-                      เลขบัตรประชาชน 13 หลัก
-                    </label>
-                    <div className="relative">
-                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-lg">🪪</span>
-                      <input
-                        id="thaidCid"
-                        name="thaidCid"
-                        type="text"
-                        inputMode="numeric"
-                        pattern="[0-9]{13}"
-                        maxLength={13}
-                        required
-                        className="w-full rounded-2xl border pl-11 pr-4 py-3 text-sm outline-none transition"
-                        style={{ borderColor: "var(--line)", color: "var(--foreground)" }}
-                        placeholder="เช่น 1234567890123"
-                      />
-                    </div>
+                {thaiIdStatus.enabled ? (
+                  <>
+                    <Link
+                      href="/api/auth/thaiid/authorize"
+                      className="flex items-center justify-center gap-2 w-full rounded-2xl py-3 text-sm font-bold text-white transition hover:opacity-90 active:scale-[0.98]"
+                      style={{ background: "linear-gradient(135deg, var(--accent) 0%, var(--accent-strong) 100%)", boxShadow: "0 4px 16px rgba(99,102,241,0.35)" }}
+                    >
+                      🪪 ดำเนินการผ่าน ThaiD →
+                    </Link>
+                    <p className="text-xs text-center" style={{ color: "var(--muted)" }}>
+                      หากไม่พบข้อมูลผู้ใช้งาน ระบบจะพาไปหน้าสมัครสมาชิกอัตโนมัติ
+                    </p>
+                  </>
+                ) : (
+                  <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                    {thaiIdStatus.reason ?? "ThaiD ไม่พร้อมใช้งานในขณะนี้"}
                   </div>
-                  <div className="space-y-1.5">
-                    <label htmlFor="displayName" className="text-sm font-semibold" style={{ color: "var(--foreground)" }}>
-                      ชื่อ-นามสกุล (จาก ThaiD)
-                    </label>
-                    <div className="relative">
-                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-lg">👤</span>
-                      <input
-                        id="displayName"
-                        name="displayName"
-                        type="text"
-                        required
-                        className="w-full rounded-2xl border pl-11 pr-4 py-3 text-sm outline-none transition"
-                        style={{ borderColor: "var(--line)", color: "var(--foreground)" }}
-                        placeholder="ระบุชื่อเพื่อยืนยันตัวตนครั้งแรก"
-                      />
-                    </div>
-                  </div>
-                  <button
-                    type="submit"
-                    className="w-full rounded-2xl py-3 text-sm font-bold text-white transition hover:opacity-90 active:scale-[0.98]"
-                    style={{ background: "linear-gradient(135deg, var(--accent) 0%, var(--accent-strong) 100%)", boxShadow: "0 4px 16px rgba(99,102,241,0.35)" }}
-                  >
-                    ดำเนินการเข้าสู่ระบบ →
-                  </button>
-                </form>
-                <p className="text-xs text-center" style={{ color: "var(--muted)" }}>
-                  ผู้ใช้งานใหม่จะถูกพาไปหน้าสมัครสมาชิกโดยอัตโนมัติ
-                </p>
+                )}
                 <div className="text-center">
                   <Link href="/login" className="text-sm font-semibold hover:underline" style={{ color: "var(--accent)" }}>
                     ← กลับเข้าสู่ระบบด้วย Username
@@ -279,17 +250,23 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
                 </div>
 
                 {/* ThaiD button */}
-                <Link
-                  href="/login?thaid=1"
-                  className="flex items-center justify-center gap-2 w-full rounded-2xl py-3 text-sm font-bold transition hover:opacity-80 active:scale-[0.98]"
-                  style={{
-                    border: "2px solid var(--accent)",
-                    color: "var(--accent)",
-                    background: "rgba(99,102,241,0.04)",
-                  }}
-                >
-                  🪪 เข้าด้วย thaiD
-                </Link>
+                {thaiIdStatus.enabled ? (
+                  <Link
+                    href="/login?thaid=1"
+                    className="flex items-center justify-center gap-2 w-full rounded-2xl py-3 text-sm font-bold transition hover:opacity-80 active:scale-[0.98]"
+                    style={{
+                      border: "2px solid var(--accent)",
+                      color: "var(--accent)",
+                      background: "rgba(99,102,241,0.04)",
+                    }}
+                  >
+                    🪪 เข้าสู่ระบบด้วย ThaiD
+                  </Link>
+                ) : (
+                  <div className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-xs text-stone-600 text-center">
+                    ThaiD ไม่พร้อมใช้งาน: {thaiIdStatus.reason ?? "กรุณาใช้ Username/Password ชั่วคราว"}
+                  </div>
+                )}
 
                 <p className="text-xs text-center" style={{ color: "var(--muted)" }}>
                   ติดต่อผู้ดูแลระบบหากยังไม่มี Username
