@@ -14,15 +14,11 @@ const STATE_COOKIE_NAME = "atacs_thaid_state";
 
 type ThaiIdTokenResponse = {
   access_token?: string;
-};
-
-type ThaiIdProfile = {
+  // Scope values are returned directly in the token response (when openid scope is NOT requested)
   pid?: string;
   name?: string;
   given_name?: string;
   family_name?: string;
-  first_name?: string;
-  last_name?: string;
 };
 
 function toLoginUrl(req: NextRequest, search: Record<string, string>) {
@@ -55,15 +51,15 @@ async function fetchWithTimeout(input: string, init: RequestInit, timeoutMs: num
   }
 }
 
-function readThaiCid(profile: ThaiIdProfile) {
-  return normalizeThaiCid(String(profile.pid ?? ""));
+function readThaiCid(token: ThaiIdTokenResponse) {
+  return normalizeThaiCid(String(token.pid ?? ""));
 }
 
-function readDisplayName(profile: ThaiIdProfile) {
-  const full = normalizeDisplayName(String(profile.name ?? ""));
+function readDisplayName(token: ThaiIdTokenResponse) {
+  const full = normalizeDisplayName(String(token.name ?? ""));
   if (full) return full;
   const merged = normalizeDisplayName(
-    `${String(profile.given_name ?? profile.first_name ?? "")} ${String(profile.family_name ?? profile.last_name ?? "")}`
+    `${String(token.given_name ?? "")} ${String(token.family_name ?? "")}`
   );
   return merged || "ผู้ใช้งาน ThaiD";
 }
@@ -74,6 +70,7 @@ export async function GET(req: NextRequest) {
   const queryState = req.nextUrl.searchParams.get("state")?.trim() ?? "";
   const code = req.nextUrl.searchParams.get("code")?.trim() ?? "";
   const error = req.nextUrl.searchParams.get("error")?.trim() ?? "";
+  const errorDescription = req.nextUrl.searchParams.get("error_description")?.trim() ?? "";
 
   if (!config.enabled) {
     const response = NextResponse.redirect(
@@ -87,9 +84,10 @@ export async function GET(req: NextRequest) {
   }
 
   if (error) {
+    const detail = errorDescription ? ` (${errorDescription})` : "";
     const response = NextResponse.redirect(
       toLoginUrl(req, {
-        error: `ThaiD เกิดข้อผิดพลาด: ${error}`,
+        error: `ThaiD เกิดข้อผิดพลาด: ${error}${detail}`,
         tab: "password",
       })
     );
@@ -120,12 +118,14 @@ export async function GET(req: NextRequest) {
   }
 
   try {
+    // Per official DOPA API doc v1.1.0 section 6.2.1:
+    // Token request uses Authorization: Basic Base64(client_id:client_secret)
+    const basicCredentials = Buffer.from(`${config.clientId}:${config.clientSecret}`).toString("base64");
+
     const tokenParams = new URLSearchParams({
       grant_type: "authorization_code",
       code,
       redirect_uri: config.callbackUrl,
-      client_id: config.clientId,
-      client_secret: config.clientSecret,
     });
 
     const tokenResponse = await fetchWithTimeout(
@@ -134,7 +134,7 @@ export async function GET(req: NextRequest) {
         method: "POST",
         headers: {
           "content-type": "application/x-www-form-urlencoded",
-          "x-api-key": config.apiKey,
+          authorization: `Basic ${basicCredentials}`,
         },
         body: tokenParams.toString(),
       },
@@ -145,33 +145,12 @@ export async function GET(req: NextRequest) {
       throw new Error(`ThaiD token exchange failed (${tokenResponse.status})`);
     }
 
+    // Per official DOPA API doc v1.1.0 section 6.2.2:
+    // When scope does NOT include "openid", scope values (pid, name, etc.) are
+    // returned directly in the token response JSON.
     const tokenJson = (await tokenResponse.json()) as ThaiIdTokenResponse;
-    const accessToken = String(tokenJson.access_token ?? "").trim();
-
-    if (!accessToken) {
-      throw new Error("ThaiD access token is missing");
-    }
-
-    const profileResponse = await fetchWithTimeout(
-      config.userInfoUrl,
-      {
-        method: "GET",
-        headers: {
-          authorization: `Bearer ${accessToken}`,
-          "x-api-key": config.apiKey,
-          accept: "application/json",
-        },
-      },
-      30000
-    );
-
-    if (!profileResponse.ok) {
-      throw new Error(`ThaiD user info failed (${profileResponse.status})`);
-    }
-
-    const profile = (await profileResponse.json()) as ThaiIdProfile;
-    const thaiCid = readThaiCid(profile);
-    const displayName = readDisplayName(profile);
+    const thaiCid = readThaiCid(tokenJson);
+    const displayName = readDisplayName(tokenJson);
 
     if (!/^\d{13}$/.test(thaiCid)) {
       throw new Error("ThaiD ไม่ส่งเลขบัตรประชาชน 13 หลัก");
