@@ -307,6 +307,42 @@ export async function deleteAsset(id: number) {
   return executeStatement("DELETE FROM information_assets WHERE id = ?", [id]);
 }
 
+/** ดึง asset สำหรับ dropdown เลือก (จำกัดตาม facilityId หลายรายการ) */
+export type AssetSelectOption = {
+  id: number;
+  facilityId: number;
+  assetRegistrationNo: string;
+  assetName: string;
+  deviceType: string | null;
+  serialNumber: string | null;
+};
+
+export async function listAssetsForFacilityIds(facilityIds: number[]): Promise<AssetSelectOption[]> {
+  if (facilityIds.length === 0) return [];
+  const placeholders = facilityIds.map(() => "?").join(",");
+  try {
+    const rows = await selectRows<RowDataPacket & AssetSelectOption>(
+      `SELECT a.id, s.facility_id AS facilityId, a.asset_registration_no AS assetRegistrationNo,
+              a.asset_name AS assetName, a.device_type AS deviceType, a.serial_number AS serialNumber
+       FROM information_assets a
+       JOIN information_asset_surveys s ON s.id = a.survey_id
+       WHERE s.facility_id IN (${placeholders})
+       ORDER BY s.facility_id, a.row_no, a.id`,
+      facilityIds
+    );
+    return rows.map((r) => ({
+      id: r.id,
+      facilityId: r.facilityId,
+      assetRegistrationNo: r.assetRegistrationNo,
+      assetName: r.assetName,
+      deviceType: r.deviceType ?? null,
+      serialNumber: r.serialNumber ?? null,
+    }));
+  } catch {
+    return [];
+  }
+}
+
 /** รายการหน่วยบริการทั้งหมดสำหรับ dropdown (ไม่ขึ้นกับว่ามี survey หรือไม่) */
 export type FacilitySelectRow = RowDataPacket & {
   id: number;

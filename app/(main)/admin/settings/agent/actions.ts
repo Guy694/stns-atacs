@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-import { createAgentEnrollment, revokeAgentEnrollment } from "@/lib/agent";
+import { createAgentEnrollment, linkAgentDeviceToAsset, revokeAgentEnrollment } from "@/lib/agent";
 import { getCurrentUser } from "@/lib/auth";
 import type { AgentEnrollmentActionState } from "./types";
 import { agentEnrollmentInitialState } from "./types";
@@ -60,5 +60,14 @@ export async function revokeAgentEnrollmentAction(formData: FormData) {
   const id = Number(formData.get("enrollmentId"));
   if (!id || Number.isNaN(id)) return;
   await revokeAgentEnrollment(id);
+  revalidatePath("/admin/settings/agent");
+}
+
+export async function linkAgentDeviceAction(formData: FormData) {
+  await requireAdmin();
+  const deviceId = Number(formData.get("deviceId"));
+  const assetId = formData.get("assetId");
+  if (!deviceId || Number.isNaN(deviceId)) return;
+  await linkAgentDeviceToAsset(deviceId, assetId ? Number(assetId) : null);
   revalidatePath("/admin/settings/agent");
 }

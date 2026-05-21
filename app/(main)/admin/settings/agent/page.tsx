@@ -1,10 +1,11 @@
 import { redirect } from "next/navigation";
 
+import { AgentDeviceLinkCell } from "@/app/(main)/admin/settings/agent/_components/agent-device-link-cell";
 import { AgentEnrollmentPanel } from "@/app/(main)/admin/settings/agent/_components/agent-enrollment-panel";
 import { revokeAgentEnrollmentAction } from "@/app/(main)/admin/settings/agent/actions";
 import { listAgentDevices, listAgentEnrollments } from "@/lib/agent";
 import { getCurrentUser } from "@/lib/auth";
-import { listAllFacilitiesForSelect } from "@/lib/assets";
+import { listAllFacilitiesForSelect, listAssetsForFacilityIds } from "@/lib/assets";
 
 function formatDate(value: string | null) {
   if (!value) return "-";
@@ -20,10 +21,13 @@ export default async function AgentSettingsPage() {
 
   let enrollments = [] as Awaited<ReturnType<typeof listAgentEnrollments>>;
   let devices = [] as Awaited<ReturnType<typeof listAgentDevices>>;
+  let assetOptions: Awaited<ReturnType<typeof listAssetsForFacilityIds>> = [];
   let dbError: string | null = null;
 
   try {
     [enrollments, devices] = await Promise.all([listAgentEnrollments(), listAgentDevices()]);
+    const facilityIds = [...new Set(devices.map((d) => d.facilityId))];
+    assetOptions = await listAssetsForFacilityIds(facilityIds);
   } catch {
     dbError = "ยังไม่พบตาราง agent_enrollments / agent_devices กรุณารัน database/agent_inventory.sql ก่อน";
   }
@@ -130,16 +134,14 @@ export default async function AgentSettingsPage() {
                           <p>{device.operatingSystem ?? "-"}</p>
                           <p className="font-mono text-xs text-[var(--muted)]">{device.privateIp ?? "-"}</p>
                         </td>
-                        <td className="px-4 py-3">
-                          {device.linkedAssetId ? (
-                            <div>
-                              <p className="font-medium">{device.linkedAssetName ?? "Asset linked"}</p>
-                              <p className="font-mono text-xs text-[var(--muted)]">{device.linkedAssetRegistrationNo ?? `#${device.linkedAssetId}`}</p>
-                            </div>
-                          ) : (
-                            <span className="text-[var(--muted)]">ยังไม่ผูก asset</span>
-                          )}
-                        </td>
+                        <AgentDeviceLinkCell
+                          deviceId={device.id}
+                          facilityId={device.facilityId}
+                          linkedAssetId={device.linkedAssetId}
+                          linkedAssetName={device.linkedAssetName}
+                          linkedAssetRegistrationNo={device.linkedAssetRegistrationNo}
+                          assets={assetOptions}
+                        />
                         <td className="px-4 py-3">
                           <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${device.status === "online" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
                             {device.status}

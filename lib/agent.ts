@@ -517,6 +517,13 @@ export async function reportAgentInventory(input: {
   };
 }
 
+export async function linkAgentDeviceToAsset(deviceId: number, assetId: number | null) {
+  await executeStatement(
+    `UPDATE agent_devices SET linked_asset_id = ? WHERE id = ?`,
+    [assetId ?? null, deviceId]
+  );
+}
+
 export async function heartbeatAgent(input: { agentId: string; agentKey: string; status?: string | null }) {
   const device = await getAgentDeviceByCredentials(input.agentId, input.agentKey);
   if (!device) {
