@@ -133,6 +133,17 @@ export type AssetInput = {
   rowNo?: number;
 };
 
+export type AssetListFilter = {
+  facilityId?: number;
+  status?: string;
+  search?: string;
+  district?: string;
+  assetGroup?: "Hardware" | "Software";
+  deviceType?: string;
+  maExpiringDays?: number;
+  sort?: "updated_desc" | "updated_asc" | "name_asc" | "name_desc" | "ma_soon";
+};
+
 const ASSET_JOIN_SQL = `
   SELECT
     a.*,
@@ -149,6 +160,11 @@ export async function listAssets(filter?: {
   facilityId?: number;
   status?: string;
   search?: string;
+  district?: string;
+  assetGroup?: "Hardware" | "Software";
+  deviceType?: string;
+  maExpiringDays?: number;
+  sort?: "updated_desc" | "updated_asc" | "name_asc" | "name_desc" | "ma_soon";
 }): Promise<AssetWithFacility[]> {
   const conditions: string[] = [];
   const values: unknown[] = [];
@@ -162,13 +178,37 @@ export async function listAssets(filter?: {
     values.push(filter.status);
   }
   if (filter?.search) {
-    conditions.push("(a.asset_name LIKE ? OR a.asset_registration_no LIKE ? OR a.device_type LIKE ?)");
+    conditions.push("(a.asset_name LIKE ? OR a.asset_registration_no LIKE ? OR a.device_type LIKE ? OR a.serial_number LIKE ?)");
     const like = `%${filter.search}%`;
-    values.push(like, like, like);
+    values.push(like, like, like, like);
+  }
+  if (filter?.district) {
+    conditions.push("hf.district_name = ?");
+    values.push(filter.district);
+  }
+  if (filter?.assetGroup) {
+    conditions.push("a.asset_category = ?");
+    values.push(filter.assetGroup);
+  }
+  if (filter?.deviceType) {
+    conditions.push("a.device_type = ?");
+    values.push(filter.deviceType);
+  }
+  if (filter?.maExpiringDays && Number.isFinite(filter.maExpiringDays) && filter.maExpiringDays > 0) {
+    conditions.push("a.maintenance_end_date IS NOT NULL AND DATEDIFF(a.maintenance_end_date, CURDATE()) BETWEEN 0 AND ?");
+    values.push(filter.maExpiringDays);
   }
 
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
-  const sql = `${ASSET_JOIN_SQL} ${where} ORDER BY hf.district_name, hf.name, a.row_no, a.id`;
+  const orderByMap: Record<NonNullable<AssetListFilter["sort"]>, string> = {
+    updated_desc: "a.last_updated_at DESC, a.id DESC",
+    updated_asc: "a.last_updated_at ASC, a.id ASC",
+    name_asc: "a.asset_name ASC, a.id ASC",
+    name_desc: "a.asset_name DESC, a.id DESC",
+    ma_soon: "a.maintenance_end_date ASC, a.id ASC",
+  };
+  const orderBy = filter?.sort ? orderByMap[filter.sort] : "hf.district_name, hf.name, a.row_no, a.id";
+  const sql = `${ASSET_JOIN_SQL} ${where} ORDER BY ${orderBy}`;
 
   try {
     const rows = await selectRows<AssetRow>(sql, values);
@@ -213,6 +253,27 @@ export async function listSurveys(): Promise<SurveyRow[]> {
   } catch {
     return [];
   }
+}
+
+export type SurveyLookup = {
+  id: number;
+  facilityId: number;
+};
+
+export async function getSurveyById(id: number): Promise<SurveyLookup | null> {
+  const rows = await selectRows<RowDataPacket & { id: number; facility_id: number }>(
+    `SELECT id, facility_id FROM information_asset_surveys WHERE id = ? LIMIT 1`,
+    [id]
+  );
+
+  if (!rows[0]) {
+    return null;
+  }
+
+  return {
+    id: rows[0].id,
+    facilityId: rows[0].facility_id,
+  };
 }
 
 /** เพิ่มทรัพย์สินใหม่ */

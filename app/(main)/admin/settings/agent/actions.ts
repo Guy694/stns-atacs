@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 
 import { createAgentEnrollment, linkAgentDeviceToAsset, revokeAgentEnrollment } from "@/lib/agent";
 import { getCurrentUser } from "@/lib/auth";
+import { hasPermission } from "@/lib/role-permissions";
 import type { AgentEnrollmentActionState } from "./types";
 import { agentEnrollmentInitialState } from "./types";
 
@@ -13,7 +14,8 @@ export type { AgentEnrollmentActionState } from "./types";
 async function requireAdmin() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
-  if (user.role !== "admin") redirect("/");
+  const allowAgentManage = user.role === "admin" || (await hasPermission(user.role, "agent.manage"));
+  if (!allowAgentManage) redirect("/");
   return user;
 }
 

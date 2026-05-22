@@ -6,6 +6,14 @@ import { executeStatement, selectRows } from "@/lib/mysql";
 
 export type AuditAction = "create" | "update" | "delete" | "transfer" | "dispose" | "inspect";
 
+export type AuditLogFilter = {
+  limit?: number;
+  action?: AuditAction;
+  entity?: string;
+  actor?: string;
+  search?: string;
+};
+
 export type AuditLog = {
   id: number;
   userId: number | null;
@@ -50,11 +58,46 @@ export async function writeAuditLog(input: {
   );
 }
 
-export async function listAuditLogs(limit = 100): Promise<AuditLog[]> {
+export async function listAuditLogs(limitOrFilter: number | AuditLogFilter = 100): Promise<AuditLog[]> {
+  const filter =
+    typeof limitOrFilter === "number"
+      ? { limit: limitOrFilter }
+      : limitOrFilter;
+
+  const limit = Math.max(1, Math.min(500, Number(filter.limit ?? 100)));
+  const conditions: string[] = [];
+  const values: unknown[] = [];
+
+  if (filter.action) {
+    conditions.push("action = ?");
+    values.push(filter.action);
+  }
+
+  if (filter.entity) {
+    conditions.push("entity = ?");
+    values.push(filter.entity);
+  }
+
+  if (filter.actor) {
+    conditions.push("user_name LIKE ?");
+    values.push(`%${filter.actor}%`);
+  }
+
+  if (filter.search) {
+    conditions.push("(summary LIKE ? OR entity LIKE ? OR COALESCE(user_name, '') LIKE ?)");
+    const like = `%${filter.search}%`;
+    values.push(like, like, like);
+  }
+
+  const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+
   const rows = await selectRows<AuditRow>(
     `SELECT id, user_id, user_name, action, entity, entity_id, summary, created_at
-     FROM audit_logs ORDER BY created_at DESC LIMIT ?`,
-    [limit]
+     FROM audit_logs
+     ${where}
+     ORDER BY created_at DESC
+     LIMIT ?`,
+    [...values, limit]
   );
   return rows.map((r) => ({
     id: r.id,

@@ -3,14 +3,16 @@ import { redirect } from "next/navigation";
 import { MainNavbar } from "@/app/_components/main-navbar";
 import { Sidebar } from "@/app/_components/sidebar";
 import { getCurrentUser } from "@/lib/auth";
+import { listGrantedPermissions } from "@/lib/role-permissions";
 
 export default async function MainLayout({ children }: { children: React.ReactNode }) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
+  const grantedPermissions = await listGrantedPermissions(user.role);
 
   return (
     <div className="flex min-h-screen">
-      <Sidebar user={user} />
+      <Sidebar user={user} grantedPermissions={grantedPermissions} />
       <div className="flex min-h-screen flex-1 flex-col overflow-x-hidden">
         <MainNavbar user={user} />
         {/* Mobile top padding to not overlap hamburger */}

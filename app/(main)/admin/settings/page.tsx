@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
+import { hasPermission } from "@/lib/role-permissions";
 
 type Section = {
   title: string;
@@ -12,7 +13,11 @@ type Section = {
 export default async function AdminSettingsPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
-  if (user.role !== "admin") redirect("/");
+  const allowed = user.role === "admin"
+    || (await hasPermission(user.role, "permissions.manage"))
+    || (await hasPermission(user.role, "facilities.manage"))
+    || (await hasPermission(user.role, "device-types.manage"));
+  if (!allowed) redirect("/");
 
   const settingSections: Section[] = [
     {
@@ -38,6 +43,12 @@ export default async function AdminSettingsPage() {
       desc: "สร้าง enrollment token ให้หน่วยงานติดตั้ง agent และรับ inventory อัตโนมัติ",
       icon: "🖥️",
       href: "/admin/settings/agent",
+    },
+    {
+      title: "Permission Matrix",
+      desc: "กำหนดสิทธิ์รายบทบาทแบบละเอียด ทั้งเมนูและ action",
+      icon: "🧩",
+      href: "/admin/settings/permissions",
     },
     {
       title: "ประวัติการใช้งาน (Audit Log)",

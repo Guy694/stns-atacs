@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 
 import { getCurrentUser } from "@/lib/auth";
 import { getAssetById, listAssets } from "@/lib/assets";
+import { canManageAsset, canMutateAssets } from "@/lib/permissions";
+import { hasPermission } from "@/lib/role-permissions";
 import { DisposalForm } from "./_components/disposal-form";
 
 type Props = {
@@ -23,8 +25,10 @@ const STATUS_STYLE: Record<string, string> = {
 export default async function DisposalPage({ searchParams }: Props) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
-  if (user.role === "viewer") redirect("/assets");
+  if (!canMutateAssets(user)) redirect("/assets");
+  if (!(await hasPermission(user.role, "disposal.manage"))) redirect("/assets");
   const canMutate = true;
+  const facilityScopeId = user.role === "officer" ? Number(user.facilityId ?? 0) : undefined;
 
   const params = await searchParams;
   const q = readParam(params, "q");
@@ -37,6 +41,15 @@ export default async function DisposalPage({ searchParams }: Props) {
       return (
         <div className="mx-auto max-w-2xl py-20 text-center text-[var(--muted)]">
           ไม่พบทรัพย์สิน ID {assetId} —{" "}
+          <Link href="/disposal" className="text-indigo-600 hover:underline">ค้นหาใหม่</Link>
+        </div>
+      );
+    }
+
+    if (!canManageAsset(user, asset.facilityId)) {
+      return (
+        <div className="mx-auto max-w-2xl py-20 text-center text-[var(--muted)]">
+          คุณไม่มีสิทธิ์ดำเนินการทรัพย์สินของหน่วยงานนี้ —{" "}
           <Link href="/disposal" className="text-indigo-600 hover:underline">ค้นหาใหม่</Link>
         </div>
       );
@@ -75,7 +88,7 @@ export default async function DisposalPage({ searchParams }: Props) {
   }
 
   // ── View: search ───────────────────────────────────────────────────────
-  const results = q ? await listAssets({ search: q }) : [];
+  const results = q ? await listAssets({ search: q, facilityId: facilityScopeId }) : [];
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6">

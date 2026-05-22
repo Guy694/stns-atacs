@@ -1,5 +1,7 @@
 import Link from "next/link";
 
+import { LogoutConfirmForm } from "@/app/_components/logout-confirm-form";
+
 type TopNavigationProps = {
   current: "public" | "internal" | "assets" | "admin" | "profile" | "login" | "register";
   user?: {
@@ -11,7 +13,7 @@ type TopNavigationProps = {
 
 function navItemClass(isActive: boolean) {
   return [
-    "rounded-full px-4 py-2 text-sm font-medium transition",
+    "rounded-full px-4 py-2 text-sm font-medium transition text-white",
     isActive ? "bg-[var(--accent-strong)] text-white" : "bg-white/70 text-[var(--accent-strong)] hover:bg-white",
   ].join(" ");
 }
@@ -62,14 +64,7 @@ export function TopNavigation({ current, user }: TopNavigationProps) {
               >
                 โปรไฟล์
               </Link>
-              <form action="/logout" method="post">
-                <button
-                  type="submit"
-                  className="rounded-full border border-black/12 bg-white/75 px-4 py-2 text-xs font-semibold text-[var(--accent-strong)] transition hover:bg-white"
-                >
-                  ออกจากระบบ
-                </button>
-              </form>
+              <LogoutConfirmForm buttonClassName="rounded-full border border-black/12 bg-white/75 px-4 py-2 text-xs font-semibold text-[var(--accent-strong)] transition hover:bg-white" />
             </>
           ) : (
             <div className="rounded-full border border-black/10 bg-white/70 px-3 py-2 text-xs text-[var(--muted)]">

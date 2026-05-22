@@ -8,6 +8,8 @@ import { getCurrentUser } from "@/lib/auth";
 import { createAsset, deleteAsset, findOrCreateSurvey, getAssetById, updateAsset, type AssetInput } from "@/lib/assets";
 import { writeAuditLog } from "@/lib/audit";
 import { selectRows } from "@/lib/mysql";
+import { canManageAsset, canMutateAssets } from "@/lib/permissions";
+import { hasPermission } from "@/lib/role-permissions";
 
 async function requireAuth() {
   const user = await getCurrentUser();
@@ -135,20 +137,15 @@ async function buildInput(fd: FormData, updaterName: string): Promise<AssetFormI
   };
 }
 
-function canManageFacility(user: Awaited<ReturnType<typeof getCurrentUser>>, facilityId: number) {
-  if (!user) return false;
-  if (user.role === "admin") return true;
-  return user.role === "officer" && user.facilityId === facilityId;
-}
-
 export async function createAssetAction(_prev: string | null, fd: FormData): Promise<string | null> {
   const user = await requireAuth();
-  if (user.role === "viewer") return "คุณไม่มีสิทธิ์ดำเนินการนี้";
+  if (!canMutateAssets(user)) return "คุณไม่มีสิทธิ์ดำเนินการนี้";
+  if (!(await hasPermission(user.role, "assets.create"))) return "สิทธิ์การเพิ่มทรัพย์สินถูกปิดใช้งาน";
 
   try {
     const input = await buildInput(fd, user.fullName);
     await validateAssetBusinessRules(input);
-    if (!canManageFacility(user, input.facilityId)) return "คุณไม่มีสิทธิ์ดำเนินการกับหน่วยงานนี้";
+    if (!canManageAsset(user, input.facilityId)) return "คุณไม่มีสิทธิ์ดำเนินการกับหน่วยงานนี้";
     const result = await createAsset(input);
     const newId = result.insertId;
     await writeAuditLog({ userId: user.id, userName: user.fullName, action: "create", entity: "information_assets", entityId: newId, summary: `สร้างทรัพย์สิน ${input.assetName} (${input.assetRegistrationNo})` });
@@ -162,7 +159,8 @@ export async function createAssetAction(_prev: string | null, fd: FormData): Pro
 
 export async function updateAssetAction(_prev: string | null, fd: FormData): Promise<string | null> {
   const user = await requireAuth();
-  if (user.role === "viewer") return "คุณไม่มีสิทธิ์ดำเนินการนี้";
+  if (!canMutateAssets(user)) return "คุณไม่มีสิทธิ์ดำเนินการนี้";
+  if (!(await hasPermission(user.role, "assets.update"))) return "สิทธิ์การแก้ไขทรัพย์สินถูกปิดใช้งาน";
 
   const id = Number(fd.get("assetId"));
   if (!id || isNaN(id)) return "ID ทรัพย์สินไม่ถูกต้อง";
@@ -170,7 +168,7 @@ export async function updateAssetAction(_prev: string | null, fd: FormData): Pro
   try {
     const input = await buildInput(fd, user.fullName);
     await validateAssetBusinessRules(input, id);
-    if (!canManageFacility(user, input.facilityId)) return "คุณไม่มีสิทธิ์ดำเนินการกับหน่วยงานนี้";
+    if (!canManageAsset(user, input.facilityId)) return "คุณไม่มีสิทธิ์ดำเนินการกับหน่วยงานนี้";
     await updateAsset(id, input);
     await writeAuditLog({ userId: user.id, userName: user.fullName, action: "update", entity: "information_assets", entityId: id, summary: `แก้ไขทรัพย์สิน ${input.assetName}` });
     revalidatePath("/assets");
@@ -184,12 +182,13 @@ export async function updateAssetAction(_prev: string | null, fd: FormData): Pro
 
 export async function deleteAssetAction(id: number): Promise<string | null> {
   const user = await requireAuth();
-  if (user.role === "viewer") return "คุณไม่มีสิทธิ์ดำเนินการนี้";
+  if (!canMutateAssets(user)) return "คุณไม่มีสิทธิ์ดำเนินการนี้";
+  if (!(await hasPermission(user.role, "assets.delete"))) return "สิทธิ์การลบทรัพย์สินถูกปิดใช้งาน";
 
   try {
     const asset = await getAssetById(id);
     if (!asset) return "ไม่พบทรัพย์สิน";
-    if (!canManageFacility(user, asset.facilityId)) return "คุณไม่มีสิทธิ์ลบทรัพย์สินของหน่วยงานนี้";
+    if (!canManageAsset(user, asset.facilityId)) return "คุณไม่มีสิทธิ์ลบทรัพย์สินของหน่วยงานนี้";
     await deleteAsset(id);
     await writeAuditLog({ userId: user.id, userName: user.fullName, action: "delete", entity: "information_assets", entityId: id, summary: `ลบทรัพย์สิน #${id}` });
     revalidatePath("/assets");

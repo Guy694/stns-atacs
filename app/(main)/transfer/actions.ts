@@ -4,13 +4,16 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { getCurrentUser } from "@/lib/auth";
-import { getAssetById, updateAsset } from "@/lib/assets";
+import { getAssetById, getSurveyById, updateAsset } from "@/lib/assets";
 import { writeAuditLog } from "@/lib/audit";
+import { canManageAsset, canMutateAssets } from "@/lib/permissions";
+import { hasPermission } from "@/lib/role-permissions";
 
 export async function transferAssetAction(_prev: string | null, fd: FormData): Promise<string | null> {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
-  if (user.role === "viewer") return "คุณไม่มีสิทธิ์ดำเนินการนี้";
+  if (!canMutateAssets(user)) return "คุณไม่มีสิทธิ์ดำเนินการนี้";
+  if (!(await hasPermission(user.role, "transfer.manage"))) return "สิทธิ์การโอนย้ายถูกปิดใช้งาน";
 
   const assetId = Number(fd.get("assetId"));
   const newSurveyId = Number(fd.get("newSurveyId"));
@@ -22,8 +25,11 @@ export async function transferAssetAction(_prev: string | null, fd: FormData): P
   if (!newSurveyId || isNaN(newSurveyId)) return "กรุณาเลือกหน่วยงานปลายทาง";
 
   try {
-    const asset = await getAssetById(assetId);
+    const [asset, destinationSurvey] = await Promise.all([getAssetById(assetId), getSurveyById(newSurveyId)]);
     if (!asset) return "ไม่พบทรัพย์สิน";
+    if (!destinationSurvey) return "ไม่พบหน่วยงานปลายทาง";
+    if (!canManageAsset(user, asset.facilityId)) return "คุณไม่มีสิทธิ์โอนย้ายทรัพย์สินของหน่วยงานนี้";
+    if (!canManageAsset(user, destinationSurvey.facilityId)) return "คุณไม่มีสิทธิ์โอนย้ายไปหน่วยงานปลายทางนี้";
 
     const transferNote = reason
       ? `[โอนย้าย] จาก ${asset.facilityName} (${asset.districtName}) → เหตุผล: ${reason} — บันทึกโดย ${user.fullName}`

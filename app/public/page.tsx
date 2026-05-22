@@ -37,7 +37,8 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
   const q = sp(params, "q");
   const districtFilter = sp(params, "district");
   const groupFilter = sp(params, "group"); // "Hardware" | "Software" | ""
-  const view = sp(params, "view") || "overview"; // "overview" | "facilities" | "types"
+  const requestedView = sp(params, "view");
+  const view = requestedView === "facilities" ? "facilities" : "overview";
 
   // ── Load all assets (server-only, no IP/serial exposed to client) ────────
   const allAssets = await listAssets();
@@ -155,7 +156,7 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
             <h1 className="section-title mt-4 text-4xl font-semibold leading-tight sm:text-5xl">
               ทะเบียนทรัพย์สิน<br className="hidden sm:block" />สารสนเทศ จ.สตูล
             </h1>
-            <p className="mt-3 max-w-lg text-sm leading-7 text-white/65">
+            <p className="mt-3 max-w-lg text-sm leading-7 text-white">
               ข้อมูลสรุประดับจังหวัดและอำเภอ — ไม่เปิดเผย IP, Serial, ผู้รับผิดชอบ และตำแหน่งติดตั้ง
             </p>
           </div>
@@ -170,10 +171,10 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
               </svg>
               <div className="z-10 text-center">
                 <p className="text-3xl font-semibold">{activeRate}%</p>
-                <p className="text-[11px] text-white/60">Active</p>
+                <p className="text-[11px] text-white">Active</p>
               </div>
             </div>
-            <p className="text-xs text-white/55">{active} / {total} รายการ</p>
+            <p className="text-xs text-white">{active} / {total} รายการ</p>
           </div>
         </div>
 
@@ -194,7 +195,7 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
               k.warn ? "border-rose-300/30 bg-rose-500/15" :
               "border-white/15 bg-white/10"
             }`}>
-              <p className="text-[10px] text-white/55">{k.label}</p>
+              <p className="text-[10px] text-white">{k.label}</p>
               <p className="mt-1.5 text-2xl font-semibold">{k.value}</p>
             </div>
           ))}
@@ -297,7 +298,6 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
         <div className="ml-auto flex gap-1.5">
           <Link href={filterHref({ view: "overview" })} className={tabClass("overview")}>ภาพรวม</Link>
           <Link href={filterHref({ view: "facilities" })} className={tabClass("facilities")}>รายหน่วยงาน</Link>
-          <Link href={filterHref({ view: "types" })} className={tabClass("types")}>ประเภทอุปกรณ์</Link>
         </div>
       </div>
 
@@ -311,7 +311,7 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
             {/* Donut chart */}
             <div className="glass-panel rounded-2xl p-6">
               <p className="text-xs font-medium uppercase tracking-[0.22em] text-[var(--muted)]">สถานะทรัพย์สิน</p>
-              <h2 className="section-title mt-1 text-xl font-semibold">สัดส่วน Active / Broken / Inactive</h2>
+              <h2 className="section-title mt-1 text-xl font-semibold">สัดส่วนสถานะทรัพย์สินสารสนเทศ</h2>
               <div className="mt-5 flex items-center gap-6">
                 {/* donut */}
                 <div className="relative shrink-0" style={{ width: 160, height: 160 }}>
@@ -467,10 +467,10 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
                   <th className="px-4 py-2.5 text-left font-medium">หน่วยงาน</th>
                   <th className="px-4 py-2.5 text-left font-medium">อำเภอ</th>
                   <th className="px-4 py-2.5 text-center font-medium">รวม</th>
-                  <th className="px-4 py-2.5 text-center font-medium">Active</th>
-                  <th className="px-4 py-2.5 text-center font-medium">Broken</th>
-                  <th className="px-4 py-2.5 text-center font-medium">Inactive</th>
-                  <th className="px-4 py-2.5 text-left font-medium">อัตรา Active</th>
+                  <th className="px-4 py-2.5 text-center font-medium">พร้อมใช้งาน</th>
+                  <th className="px-4 py-2.5 text-center font-medium">ชำรุด</th>
+                  <th className="px-4 py-2.5 text-center font-medium">ไม่ใช้งาน</th>
+                  <th className="px-4 py-2.5 text-left font-medium">อัตรา พร้อมใช้งาน</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-black/4">
@@ -506,108 +506,7 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
         </div>
       )}
 
-      {/* ════════════════════════════════════════════════════════════════════ */}
-      {/* VIEW: TYPES */}
-      {/* ════════════════════════════════════════════════════════════════════ */}
-      {view === "types" && (
-        <div className="grid gap-6 lg:grid-cols-2">
-          {/* Table */}
-          <div className="glass-panel overflow-hidden rounded-2xl">
-            <div className="border-b border-black/6 px-5 py-3 font-semibold">ตารางประเภทอุปกรณ์</div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-black/6 bg-slate-50/60 text-xs text-[var(--muted)]">
-                    <th className="px-4 py-2.5 text-left font-medium">ประเภท</th>
-                    <th className="px-4 py-2.5 text-center font-medium">รวม</th>
-                    <th className="px-4 py-2.5 text-center font-medium">Active</th>
-                    <th className="px-4 py-2.5 text-center font-medium">Broken</th>
-                    <th className="px-4 py-2.5 text-center font-medium">สัดส่วน</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-black/4">
-                  {byType.map((t) => (
-                    <tr key={t.type} className="hover:bg-white/50">
-                      <td className="px-4 py-2.5">
-                        <span className="rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-medium text-indigo-700">{t.type}</span>
-                      </td>
-                      <td className="px-4 py-2.5 text-center font-semibold">{t.total}</td>
-                      <td className="px-4 py-2.5 text-center text-emerald-600">{t.active}</td>
-                      <td className="px-4 py-2.5 text-center text-rose-600">{t.broken || "–"}</td>
-                      <td className="px-4 py-2.5 text-center text-xs">{Math.round((t.total / safeTotal) * 100)}%</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
 
-          {/* Bar chart (all types) */}
-          <div className="glass-panel rounded-2xl p-5">
-            <h2 className="mb-5 font-semibold">Chart — ทุกประเภท ({byType.length})</h2>
-            <div className="space-y-3">
-              {byType.map((t) => (
-                <div key={t.type}>
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="truncate">{t.type}</span>
-                    <span className="ml-2 shrink-0 font-semibold">{t.total}</span>
-                  </div>
-                  <div className="mt-1 flex h-4 overflow-hidden rounded bg-slate-100">
-                    <div className="bg-emerald-400 transition-all" style={{ width: `${(t.active / maxType) * 100}%` }} />
-                    <div className="bg-rose-400" style={{ width: `${(t.broken / maxType) * 100}%` }} />
-                    <div className="bg-amber-300" style={{ width: `${(t.inactive / maxType) * 100}%` }} />
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div className="mt-4 flex gap-4 text-[11px] text-[var(--muted)]">
-              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-emerald-400" />ใช้งานอยู่</span>
-              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-rose-400" />ชำรุด</span>
-              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-amber-300" />ไม่ใช้งาน</span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Data transparency ──────────────────────────────────────────────── */}
-      <section className="glass-panel rounded-2xl p-6 lg:p-8">
-        <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="text-xs font-medium uppercase tracking-[0.22em] text-[var(--muted)]">Data Transparency</p>
-            <h2 className="section-title mt-1 text-xl font-semibold">ข้อมูลที่เปิดเผยและที่ถูกปกป้อง</h2>
-          </div>
-          <Link href="/login"
-            className="mt-3 inline-flex items-center gap-2 rounded-full bg-[var(--accent-strong)] px-4 py-2 text-xs font-semibold text-white transition hover:opacity-90 sm:mt-0">
-            เข้าสู่ระบบเพื่อดูข้อมูลเพิ่มเติม <span>→</span>
-          </Link>
-        </div>
-        <div className="mt-5 grid gap-4 sm:grid-cols-2">
-          <div className="rounded-xl border border-emerald-200 bg-emerald-50/80 p-5">
-            <div className="flex items-center gap-2">
-              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">✓</span>
-              <p className="font-semibold text-emerald-800">ข้อมูลสาธารณะ</p>
-            </div>
-            <ul className="mt-3 space-y-1.5 text-xs leading-6 text-emerald-900/75">
-              <li className="flex items-start gap-2"><span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-emerald-500" />จำนวนทรัพย์สินรวม แยกตามอำเภอ / หน่วยงาน</li>
-              <li className="flex items-start gap-2"><span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-emerald-500" />สัดส่วน Hardware / Software / ประเภทอุปกรณ์</li>
-              <li className="flex items-start gap-2"><span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-emerald-500" />สถานะ Active / Broken / Inactive แบบ aggregate</li>
-              <li className="flex items-start gap-2"><span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-emerald-500" />ค้นหาจากเลขครุภัณฑ์ / ชื่ออุปกรณ์ (ชื่อ + หน่วยงาน + สถานะเท่านั้น)</li>
-            </ul>
-          </div>
-          <div className="rounded-xl border border-rose-200 bg-rose-50/80 p-5">
-            <div className="flex items-center gap-2">
-              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-rose-100 text-rose-700 text-sm font-bold">✕</span>
-              <p className="font-semibold text-rose-800">ต้องผ่านการยืนยันตัวตน</p>
-            </div>
-            <ul className="mt-3 space-y-1.5 text-xs leading-6 text-rose-900/75">
-              <li className="flex items-start gap-2"><span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-rose-500" />Public IP และ Private IP รายเครื่อง</li>
-              <li className="flex items-start gap-2"><span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-rose-500" />Serial Number และรายละเอียดทางเทคนิค</li>
-              <li className="flex items-start gap-2"><span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-rose-500" />ชื่อผู้รับผิดชอบรายบุคคล</li>
-              <li className="flex items-start gap-2"><span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-rose-500" />ตำแหน่งติดตั้งและ audit trail</li>
-            </ul>
-          </div>
-        </div>
-      </section>
     </main>
   );
 }

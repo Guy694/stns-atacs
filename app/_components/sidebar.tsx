@@ -12,6 +12,7 @@ type NavUser = {
 
 type SidebarProps = {
   user: NavUser;
+  grantedPermissions: string[];
 };
 
 type NavItem = {
@@ -21,21 +22,22 @@ type NavItem = {
   adminOnly?: boolean;
   officerOnly?: boolean;
   hideForViewer?: boolean;
+  permissionKey?: string;
   exact?: boolean;
 };
 
 const NAV_ITEMS: NavItem[] = [
   { href: "/", label: "Dashboard", icon: "⊞", exact: true },
-  { href: "/assets", label: "ทรัพย์สินทั้งหมด", icon: "☰" },
-  { href: "/inspection", label: "ตรวจนับทรัพย์สิน", icon: "✔" },
-  { href: "/transfer", label: "โอนย้ายทรัพย์สิน", icon: "⇄", hideForViewer: true },
-  { href: "/disposal", label: "จำหน่าย/ชำรุด/สูญหาย", icon: "⊠", hideForViewer: true },
-  { href: "/reports", label: "รายงาน", icon: "≡" },
+  { href: "/assets", label: "ทรัพย์สินทั้งหมด", icon: "☰", permissionKey: "assets.view" },
+  { href: "/inspection", label: "ตรวจนับทรัพย์สิน", icon: "✔", permissionKey: "inspection.view" },
+  { href: "/transfer", label: "โอนย้ายทรัพย์สิน", icon: "⇄", hideForViewer: true, permissionKey: "transfer.manage" },
+  { href: "/disposal", label: "จำหน่าย/ชำรุด/สูญหาย", icon: "⊠", hideForViewer: true, permissionKey: "disposal.manage" },
+  { href: "/reports", label: "รายงาน", icon: "≡", permissionKey: "reports.view" },
   { href: "/map", label: "แผนที่ทรัพย์สิน", icon: "◎" },
-  { href: "/agent-download", label: "ดาวน์โหลด Agent", icon: "💾", officerOnly: true },
-  { href: "/admin/settings", label: "ตั้งค่าระบบ", icon: "◈", adminOnly: true },
-  { href: "/admin/users", label: "ผู้ใช้งาน", icon: "◉", adminOnly: true },
-  { href: "/admin/audit", label: "Audit Log", icon: "📋", adminOnly: true },
+  { href: "/agent-download", label: "ดาวน์โหลด Agent", icon: "💾", officerOnly: true, permissionKey: "agent.manage" },
+  { href: "/admin/settings", label: "ตั้งค่าระบบ", icon: "◈", permissionKey: "permissions.manage" },
+  { href: "/admin/users", label: "ผู้ใช้งาน", icon: "◉", permissionKey: "users.manage" },
+  { href: "/admin/audit", label: "Audit Log", icon: "📋", permissionKey: "audit.view" },
 ];
 
 function NavLink({ item, pathname, onClick }: { item: NavItem; pathname: string; onClick?: () => void }) {
@@ -56,7 +58,7 @@ function NavLink({ item, pathname, onClick }: { item: NavItem; pathname: string;
   );
 }
 
-export function Sidebar({ user }: SidebarProps) {
+export function Sidebar({ user, grantedPermissions }: SidebarProps) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -64,6 +66,7 @@ export function Sidebar({ user }: SidebarProps) {
     if (item.adminOnly && user.role !== "admin") return false;
     if (item.officerOnly && user.role !== "officer") return false;
     if (item.hideForViewer && user.role === "viewer") return false;
+    if (item.permissionKey && !grantedPermissions.includes(item.permissionKey)) return false;
     return true;
   });
 

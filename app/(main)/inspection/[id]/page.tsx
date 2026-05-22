@@ -3,6 +3,8 @@ import { notFound, redirect } from "next/navigation";
 
 import { getCurrentUser } from "@/lib/auth";
 import { getInspectionById, getInspectionItems } from "@/lib/inspection";
+import { canManageFacility } from "@/lib/permissions";
+import { hasPermission } from "@/lib/role-permissions";
 
 export default async function InspectionDetailPage({
   params,
@@ -11,6 +13,7 @@ export default async function InspectionDetailPage({
 }) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
+  if (!(await hasPermission(user.role, "inspection.view"))) redirect("/");
 
   const { id } = await params;
   const [inspection, items] = await Promise.all([
@@ -19,6 +22,9 @@ export default async function InspectionDetailPage({
   ]);
 
   if (!inspection) notFound();
+  if (user.role === "officer" && !canManageFacility(user, inspection.facilityId)) {
+    redirect("/inspection");
+  }
 
   const pct = inspection.totalItems > 0
     ? Math.round((inspection.foundItems / inspection.totalItems) * 100)

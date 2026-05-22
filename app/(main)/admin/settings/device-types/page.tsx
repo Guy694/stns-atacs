@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth";
 import { listDeviceTypes } from "@/lib/device-types";
+import { hasPermission } from "@/lib/role-permissions";
 import { DeviceTypesClient } from "./_components/device-types-client";
 
 export const dynamic = "force-dynamic";
@@ -9,7 +10,8 @@ export const dynamic = "force-dynamic";
 export default async function AdminDeviceTypesPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
-  if (user.role !== "admin") redirect("/");
+  const allowManageDeviceTypes = user.role === "admin" || (await hasPermission(user.role, "device-types.manage"));
+  if (!allowManageDeviceTypes) redirect("/");
 
   const items = await listDeviceTypes();
 

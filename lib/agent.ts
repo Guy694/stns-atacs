@@ -426,7 +426,7 @@ export async function reportAgentInventory(input: {
          operating_system_version = ?,
          private_ip = ?,
          mac_address = ?,
-         current_user = ?,
+         \`current_user\` = ?,
          cpu_model = ?,
          ram_mb = ?,
          disk_total_gb = ?,

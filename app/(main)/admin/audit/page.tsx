@@ -2,6 +2,17 @@ import { redirect } from "next/navigation";
 
 import { getCurrentUser } from "@/lib/auth";
 import { listAuditLogs } from "@/lib/audit";
+import { hasPermission } from "@/lib/role-permissions";
+import Link from "next/link";
+
+type AuditPageProps = {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+};
+
+function readParam(p: Record<string, string | string[] | undefined>, key: string) {
+  const value = p[key];
+  return Array.isArray(value) ? value[0] : (value ?? "");
+}
 
 const ACTION_LABEL: Record<string, string> = {
   create: "สร้าง",
@@ -21,27 +32,124 @@ const ACTION_COLOR: Record<string, string> = {
   inspect: "bg-indigo-100 text-indigo-700",
 };
 
-export default async function AuditLogPage() {
+export default async function AuditLogPage({ searchParams }: AuditPageProps) {
   const user = await getCurrentUser();
-  if (!user || user.role !== "admin") redirect("/");
+  if (!user) redirect("/login");
+  const canViewAudit = user.role === "admin" || (await hasPermission(user.role, "audit.view"));
+  if (!canViewAudit) redirect("/");
+  const canExportAudit = user.role === "admin" || (await hasPermission(user.role, "audit.export"));
 
-  const logs = await listAuditLogs(200);
+  const params = await searchParams;
+  const actionFilter = readParam(params, "action") as "create" | "update" | "delete" | "transfer" | "dispose" | "inspect";
+  const entityFilter = readParam(params, "entity");
+  const actorFilter = readParam(params, "actor");
+  const search = readParam(params, "search");
+  const dateFrom = readParam(params, "dateFrom");
+  const dateTo = readParam(params, "dateTo");
+
+  const logs = await listAuditLogs({
+    limit: 300,
+    action: ACTION_LABEL[actionFilter] ? actionFilter : undefined,
+    entity: entityFilter || undefined,
+    actor: actorFilter || undefined,
+    search: search || undefined,
+  });
+
+  const countsByAction = logs.reduce<Record<string, number>>((acc, log) => {
+    acc[log.action] = (acc[log.action] ?? 0) + 1;
+    return acc;
+  }, {});
+  const uniqueUsers = new Set(logs.map((log) => log.userName).filter(Boolean)).size;
 
   return (
-    <main className="p-6 space-y-6 max-w-6xl mx-auto">
+    <main className="mx-auto max-w-7xl space-y-6 p-6">
       <div>
-        <h1 className="text-2xl font-bold" style={{ color: "var(--foreground)" }}>
-          📋 ประวัติการใช้งาน (Audit Log)
-        </h1>
-        <p className="text-sm mt-1" style={{ color: "var(--muted)" }}>
-          บันทึกการดำเนินการล่าสุด 200 รายการ
+        <p className="text-xs font-medium uppercase tracking-[0.22em] text-[var(--muted)]">Admin · Security & Tracking</p>
+        <h1 className="section-title mt-1 text-3xl font-semibold">ประวัติการใช้งาน (Audit Log)</h1>
+        <p className="mt-1 text-sm" style={{ color: "var(--muted)" }}>
+          บันทึกการดำเนินการล่าสุด พร้อมค้นหาและกรองเชิงลึก
         </p>
       </div>
+
+      <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        <div className="glass-panel rounded-2xl p-4">
+          <p className="text-xs text-[var(--muted)]">รายการที่แสดง</p>
+          <p className="mt-1 text-2xl font-semibold text-[var(--foreground)]">{logs.length}</p>
+        </div>
+        <div className="glass-panel rounded-2xl p-4">
+          <p className="text-xs text-[var(--muted)]">ผู้ใช้งานที่เคลื่อนไหว</p>
+          <p className="mt-1 text-2xl font-semibold text-[var(--foreground)]">{uniqueUsers}</p>
+        </div>
+        {(["create", "update", "delete", "transfer"] as const).map((key) => (
+          <div key={key} className="glass-panel rounded-2xl p-4">
+            <p className="text-xs text-[var(--muted)]">{ACTION_LABEL[key]}</p>
+            <p className="mt-1 text-2xl font-semibold text-[var(--foreground)]">{countsByAction[key] ?? 0}</p>
+          </div>
+        ))}
+      </div>
+
+      <form method="GET" className="glass-panel flex flex-wrap gap-3 rounded-2xl p-4">
+        <input
+          name="search"
+          defaultValue={search}
+          placeholder="ค้นหาจากรายละเอียด / entity / ผู้ใช้"
+          className="min-w-0 flex-1 rounded-xl border border-black/10 bg-white/80 px-4 py-2 text-sm outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/20"
+        />
+        <input
+          name="actor"
+          defaultValue={actorFilter}
+          placeholder="ชื่อผู้ใช้"
+          className="rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+        />
+        <input
+          name="entity"
+          defaultValue={entityFilter}
+          placeholder="entity เช่น users"
+          className="rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+        />
+        <input
+          name="dateFrom"
+          type="date"
+          defaultValue={dateFrom}
+          className="rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+        />
+        <input
+          name="dateTo"
+          type="date"
+          defaultValue={dateTo}
+          className="rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+        />
+        <select
+          name="action"
+          defaultValue={actionFilter}
+          className="rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+        >
+          <option value="">ทุกการดำเนินการ</option>
+          {Object.entries(ACTION_LABEL).map(([key, label]) => (
+            <option key={key} value={key}>{label}</option>
+          ))}
+        </select>
+        <button type="submit" className="rounded-xl bg-[var(--accent-strong)] px-5 py-2 text-sm font-semibold text-white transition hover:opacity-90">
+          ค้นหา
+        </button>
+        {canExportAudit && (
+          <a
+            href={`/api/export/audit?search=${encodeURIComponent(search)}&actor=${encodeURIComponent(actorFilter)}&entity=${encodeURIComponent(entityFilter)}&action=${encodeURIComponent(actionFilter)}&dateFrom=${encodeURIComponent(dateFrom)}&dateTo=${encodeURIComponent(dateTo)}`}
+            className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-100"
+          >
+            Export CSV
+          </a>
+        )}
+        {(search || actorFilter || entityFilter || actionFilter || dateFrom || dateTo) && (
+          <Link href="/admin/audit" className="rounded-xl border border-black/10 bg-white/80 px-4 py-2 text-sm text-[var(--muted)] hover:bg-white">
+            ล้างตัวกรอง
+          </Link>
+        )}
+      </form>
 
       <div className="glass-panel rounded-2xl overflow-hidden">
         {logs.length === 0 ? (
           <div className="text-center py-16" style={{ color: "var(--muted)" }}>
-            <p className="text-4xl mb-3">📭</p>
             <p>ยังไม่มีประวัติการใช้งาน</p>
           </div>
         ) : (
@@ -72,7 +180,7 @@ export default async function AuditLogPage() {
                   <td className="px-4 py-3 text-xs" style={{ color: "var(--muted)" }}>
                     {log.entity}{log.entityId ? ` #${log.entityId}` : ""}
                   </td>
-                  <td className="px-4 py-3 text-xs max-w-xs truncate" style={{ color: "var(--foreground)" }}>
+                  <td className="max-w-xl px-4 py-3 text-xs" style={{ color: "var(--foreground)" }}>
                     {log.summary}
                   </td>
                 </tr>

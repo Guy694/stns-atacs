@@ -43,6 +43,16 @@ powershell.exe -ExecutionPolicy Bypass -File $agentScriptTarget -ApiBaseUrl $Api
 $taskCommand = "powershell.exe"
 $taskArgs = "-ExecutionPolicy Bypass -File `"$agentScriptTarget`" -ConfigPath `"$configPath`" -RunOnce"
 
+function Register-TaskWithSchtasksFallback {
+    $taskRun = "$taskCommand $taskArgs"
+    if ($isAdmin) {
+        schtasks.exe /Create /TN "$taskName" /SC HOURLY /MO 4 /TR "$taskRun" /RU "SYSTEM" /F | Out-Null
+    }
+    else {
+        schtasks.exe /Create /TN "$taskName" /SC HOURLY /MO 4 /TR "$taskRun" /F | Out-Null
+    }
+}
+
 try {
     $action = New-ScheduledTaskAction -Execute $taskCommand -Argument $taskArgs
     $triggerRepeat = New-ScheduledTaskTrigger -Once -At (Get-Date).Date
@@ -65,6 +75,14 @@ try {
 catch {
     Write-Warning "Unable to create scheduled task automatically. Run PowerShell as Administrator and try again if needed."
     Write-Warning $_
+    try {
+        Register-TaskWithSchtasksFallback
+        Write-Host "Scheduled task '$taskName' created with schtasks fallback."
+    }
+    catch {
+        Write-Warning "Fallback with schtasks also failed."
+        Write-Warning $_
+    }
 }
 
 Write-Host "Install completed. Files stored in $InstallRoot"

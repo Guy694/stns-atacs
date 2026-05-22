@@ -5,11 +5,13 @@ import { redirect } from "next/navigation";
 
 import { getCurrentUser } from "@/lib/auth";
 import { createDeviceType, toggleDeviceTypeActive, updateDeviceType } from "@/lib/device-types";
+import { hasPermission } from "@/lib/role-permissions";
 
 async function requireAdmin() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
-  if (user.role !== "admin") redirect("/");
+  const allowManageDeviceTypes = user.role === "admin" || (await hasPermission(user.role, "device-types.manage"));
+  if (!allowManageDeviceTypes) redirect("/");
 }
 
 const REVALIDATE = () => revalidatePath("/admin/settings/device-types");

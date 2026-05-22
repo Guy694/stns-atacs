@@ -4,6 +4,8 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import { listInspections } from "@/lib/inspection";
 import { listFacilities } from "@/lib/assets";
+import { canManageFacility } from "@/lib/permissions";
+import { hasPermission } from "@/lib/role-permissions";
 import NewInspectionForm from "./_components/new-inspection-form";
 
 export default async function InspectionPage({
@@ -13,15 +15,21 @@ export default async function InspectionPage({
 }) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
-  const canMutate = user.role !== "viewer";
+  const canViewInspection = await hasPermission(user.role, "inspection.view");
+  if (!canViewInspection) redirect("/");
+  const canMutate = user.role !== "viewer" && (await hasPermission(user.role, "inspection.create"));
 
   const params = await searchParams;
   const view = canMutate && params["view"] === "new" ? "new" : "list";
+  const facilityScopeId = user.role === "officer" ? Number(user.facilityId ?? 0) : undefined;
 
   const [inspections, facilities] = await Promise.all([
-    listInspections(),
+    listInspections(facilityScopeId),
     listFacilities(),
   ]);
+  const facilitiesForForm = facilityScopeId
+    ? facilities.filter((facility) => canManageFacility(user, facility.id))
+    : facilities;
 
   return (
     <main className="p-6 space-y-6">
@@ -58,7 +66,7 @@ export default async function InspectionPage({
           <h2 className="text-lg font-bold mb-4" style={{ color: "var(--foreground)" }}>
             เริ่มรอบตรวจนับใหม่
           </h2>
-          <NewInspectionForm facilities={facilities} />
+          <NewInspectionForm facilities={facilitiesForForm} />
         </div>
       )}
 

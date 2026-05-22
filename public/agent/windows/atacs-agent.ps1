@@ -214,7 +214,8 @@ try {
     Enable-TlsForLegacyPowerShell
 
     $config = Get-Config -Path $ConfigPath
-    if (-not $config) {
+    $forceEnroll = -not [string]::IsNullOrWhiteSpace($ApiBaseUrl) -and -not [string]::IsNullOrWhiteSpace($EnrollmentToken)
+    if (-not $config -or $forceEnroll) {
         $config = Enroll-Agent -BaseUrl $ApiBaseUrl -Token $EnrollmentToken -Path $ConfigPath
         Write-Host "Enrolled device for facility: $($config.facilityName)"
     }

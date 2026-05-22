@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 
 import { getCurrentUser } from "@/lib/auth";
 import { getAssetById, listAssets, listSurveys } from "@/lib/assets";
+import { canManageAsset, canMutateAssets } from "@/lib/permissions";
+import { hasPermission } from "@/lib/role-permissions";
 import { TransferForm } from "./_components/transfer-form";
 
 type Props = {
@@ -23,8 +25,10 @@ const STATUS_STYLE: Record<string, string> = {
 export default async function TransferPage({ searchParams }: Props) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
-  if (user.role === "viewer") redirect("/assets");
+  if (!canMutateAssets(user)) redirect("/assets");
+  if (!(await hasPermission(user.role, "transfer.manage"))) redirect("/assets");
   const canMutate = true;
+  const facilityScopeId = user.role === "officer" ? Number(user.facilityId ?? 0) : undefined;
 
   const params = await searchParams;
   const q = readParam(params, "q");
@@ -41,6 +45,19 @@ export default async function TransferPage({ searchParams }: Props) {
         </div>
       );
     }
+
+    if (!canManageAsset(user, asset.facilityId)) {
+      return (
+        <div className="mx-auto max-w-2xl py-20 text-center text-[var(--muted)]">
+          คุณไม่มีสิทธิ์โอนย้ายทรัพย์สินของหน่วยงานนี้ —{" "}
+          <Link href="/transfer" className="text-indigo-600 hover:underline">ค้นหาใหม่</Link>
+        </div>
+      );
+    }
+
+    const scopedSurveys = facilityScopeId
+      ? surveys.filter((survey) => survey.facility_id === facilityScopeId)
+      : surveys;
 
     if (!canMutate) {
       return (
@@ -68,14 +85,14 @@ export default async function TransferPage({ searchParams }: Props) {
           <h1 className="section-title mt-1 text-3xl font-semibold">โอนย้ายทรัพย์สิน</h1>
         </div>
         <div className="glass-panel rounded-2xl p-6">
-          <TransferForm asset={asset} surveys={surveys} />
+          <TransferForm asset={asset} surveys={scopedSurveys} />
         </div>
       </div>
     );
   }
 
   // ── View: search ───────────────────────────────────────────────────────
-  const results = q ? await listAssets({ search: q }) : [];
+  const results = q ? await listAssets({ search: q, facilityId: facilityScopeId }) : [];
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6">

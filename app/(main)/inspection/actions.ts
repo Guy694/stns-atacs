@@ -6,6 +6,8 @@ import { writeAuditLog } from "@/lib/audit";
 import { createInspection } from "@/lib/inspection";
 import { getCurrentUser } from "@/lib/auth";
 import { listAssets } from "@/lib/assets";
+import { canManageFacility, canMutateAssets } from "@/lib/permissions";
+import { hasPermission } from "@/lib/role-permissions";
 
 export async function createInspectionAction(
   _prev: string | null,
@@ -13,16 +15,23 @@ export async function createInspectionAction(
 ): Promise<string | null> {
   const user = await getCurrentUser();
   if (!user) return "กรุณาเข้าสู่ระบบ";
-  if (user.role === "viewer") return "คุณไม่มีสิทธิ์ดำเนินการนี้";
+  if (!canMutateAssets(user)) return "คุณไม่มีสิทธิ์ดำเนินการนี้";
+  if (!(await hasPermission(user.role, "inspection.create"))) return "สิทธิ์การสร้างรอบตรวจนับถูกปิดใช้งาน";
 
   const facilityId = Number(formData.get("facilityId"));
   const roundName = String(formData.get("roundName") ?? "").trim();
   const note = String(formData.get("note") ?? "").trim();
 
   if (!facilityId || !roundName) return "กรุณากรอกข้อมูลให้ครบถ้วน";
+  if (!canManageFacility(user, facilityId)) return "คุณไม่มีสิทธิ์ตรวจนับหน่วยงานนี้";
 
   // Collect item results from form (assetId_found, assetId_note)
   const assetIds = (formData.getAll("assetId") as string[]).map(Number);
+  const scopedAssets = await listAssets({ facilityId });
+  const allowedAssetIds = new Set(scopedAssets.map((asset) => asset.id));
+  if (assetIds.some((assetId) => !allowedAssetIds.has(assetId))) {
+    return "มีรายการทรัพย์สินที่ไม่อยู่ในหน่วยงานที่คุณเลือก";
+  }
   const items = assetIds.map((assetId) => ({
     assetId,
     found: formData.get(`found_${assetId}`) === "1",
@@ -57,5 +66,9 @@ export async function createInspectionAction(
 
 export async function getAssetsForFacility(facilityId: number) {
   "use server";
+  const user = await getCurrentUser();
+  if (!user) return [];
+  if (!(await hasPermission(user.role, "inspection.view"))) return [];
+  if (!canManageFacility(user, facilityId)) return [];
   return listAssets({ facilityId });
 }

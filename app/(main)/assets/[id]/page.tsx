@@ -6,6 +6,8 @@ import { getAssetById, listAllFacilitiesForSelect } from "@/lib/assets";
 import { AssetFormModal } from "@/app/(main)/assets/_components/asset-form-modal";
 import { DeleteAssetButton } from "@/app/(main)/assets/_components/delete-asset-button";
 import { PrintButton } from "@/app/(main)/assets/_components/print-button";
+import { canManageAsset, canSeeSensitiveAssetNetwork } from "@/lib/permissions";
+import { hasPermission } from "@/lib/role-permissions";
 
 type Props = { params: Promise<{ id: string }> };
 
@@ -41,8 +43,9 @@ export default async function AssetDetailPage({ params }: Props) {
   const [asset, facilitiesForSelect] = await Promise.all([getAssetById(numId), listAllFacilitiesForSelect()]);
   if (!asset) notFound();
 
-  const isAdmin = user.role === "admin";
-  const canMutate = user.role !== "viewer";
+  const canMutateThisAsset = (await hasPermission(user.role, "assets.update")) && canManageAsset(user, asset.facilityId);
+  const canDeleteThisAsset = (await hasPermission(user.role, "assets.delete")) && canManageAsset(user, asset.facilityId);
+  const canViewNetwork = (await hasPermission(user.role, "assets.network.view")) && canSeeSensitiveAssetNetwork(user, asset.facilityId);
 
   const maStart = asset.maintenanceEndDate
     ? (() => {
@@ -86,14 +89,14 @@ export default async function AssetDetailPage({ params }: Props) {
           <h1 className="section-title mt-2 text-2xl font-semibold sm:text-3xl">{asset.assetName}</h1>
           <p className="mt-1 font-mono text-sm text-[var(--muted)]">{asset.assetRegistrationNo}</p>
         </div>
-        {isAdmin && (
+        {canMutateThisAsset && (
           <div className="flex shrink-0 flex-wrap gap-2">
             <AssetFormModal facilities={facilitiesForSelect} updaterName={user.fullName} mode="edit" asset={asset}>
               <span className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2 text-sm font-medium text-indigo-700 transition hover:bg-indigo-100">
                 แก้ไข
               </span>
             </AssetFormModal>
-            <DeleteAssetButton assetId={asset.id} assetName={asset.assetName} />
+            {canDeleteThisAsset && <DeleteAssetButton assetId={asset.id} assetName={asset.assetName} />}
           </div>
         )}
       </div>
@@ -122,8 +125,8 @@ export default async function AssetDetailPage({ params }: Props) {
               <Field label="ยี่ห้อ (Brand)" value={asset.manufacturerBrand} />
               <Field label="Serial Number" value={asset.serialNumber} />
               <Field label="ระบบปฏิบัติการ" value={asset.operatingSystem} />
-              <Field label="Private IP" value={isAdmin ? (asset.privateIp || "–") : "ซ่อนข้อมูล"} />
-              <Field label="Public IP" value={isAdmin ? (asset.publicIp || "–") : "ซ่อนข้อมูล"} />
+              <Field label="Private IP" value={canViewNetwork ? (asset.privateIp || "–") : "ซ่อนข้อมูล"} />
+              <Field label="Public IP" value={canViewNetwork ? (asset.publicIp || "–") : "ซ่อนข้อมูล"} />
             </div>
           </div>
 
@@ -167,7 +170,7 @@ export default async function AssetDetailPage({ params }: Props) {
           {/* การดำเนินการด่วน */}
           <div className="glass-panel rounded-2xl p-5">
             <h2 className="mb-4 text-sm font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">การดำเนินการ</h2>
-            {canMutate ? (
+            {canMutateThisAsset ? (
               <div className="flex flex-wrap gap-3">
                 <Link
                   href={`/transfer?assetId=${asset.id}`}
@@ -184,7 +187,7 @@ export default async function AssetDetailPage({ params }: Props) {
               </div>
             ) : (
               <div className="rounded-xl border border-stone-300 bg-stone-100 px-4 py-3 text-sm text-stone-600">
-                บัญชี Viewer ดูรายละเอียดได้อย่างเดียว
+                คุณสามารถดูข้อมูลได้อย่างเดียว เนื่องจากไม่มีสิทธิ์จัดการทรัพย์สินของหน่วยงานนี้
               </div>
             )}
           </div>

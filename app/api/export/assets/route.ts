@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { getCurrentUser } from "@/lib/auth";
 import { listAssets } from "@/lib/assets";
+import { hasPermission } from "@/lib/role-permissions";
 
 function escapeCsv(val: string | undefined | null) {
   const s = String(val ?? "");
@@ -15,6 +16,11 @@ export async function GET(req: NextRequest) {
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const canExportAssets = await hasPermission(user.role, "assets.view");
+  if (!canExportAssets) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   const { searchParams } = req.nextUrl;

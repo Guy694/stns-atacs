@@ -36,6 +36,9 @@ export async function POST(req: NextRequest) {
     if (message === "INVALID_FINGERPRINT") {
       return NextResponse.json({ error: "Fingerprint is invalid" }, { status: 400 });
     }
+    if (process.env.NODE_ENV !== "production") {
+      return NextResponse.json({ error: "Unable to process inventory report", detail: message }, { status: 500 });
+    }
     return NextResponse.json({ error: "Unable to process inventory report" }, { status: 500 });
   }
 }

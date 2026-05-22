@@ -4,13 +4,18 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { getCurrentUser, hashPassword } from "@/lib/auth";
+import { writeAuditLog } from "@/lib/audit";
 import { executeStatement, selectRows } from "@/lib/mysql";
+import { hasPermission } from "@/lib/role-permissions";
 import type { RowDataPacket } from "mysql2/promise";
 
 async function requireAdmin() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
-  if (user.role !== "admin") redirect("/");
+
+  const canManageUsers = user.role === "admin" || (await hasPermission(user.role, "users.manage"));
+  if (!canManageUsers) redirect("/");
+
   return user;
 }
 
@@ -37,6 +42,20 @@ type UserRowWithoutFacility = RowDataPacket & {
   last_login_at: Date | string | null;
 };
 
+type UserAuditRow = RowDataPacket & {
+  id: number;
+  full_name: string;
+  role: "admin" | "officer" | "viewer";
+};
+
+async function getUserAuditRow(userId: number) {
+  const rows = await selectRows<UserAuditRow>(
+    "SELECT id, full_name, role FROM users WHERE id = ? LIMIT 1",
+    [userId]
+  );
+  return rows[0] ?? null;
+}
+
 export async function listUsersAction() {
   await requireAdmin();
   try {
@@ -54,7 +73,7 @@ export async function listUsersAction() {
 }
 
 export async function createUserAction(_prev: string | null, fd: FormData): Promise<string | null> {
-  await requireAdmin();
+  const actor = await requireAdmin();
 
   const fullName = (fd.get("fullName") as string | null)?.trim() ?? "";
   const email = (fd.get("email") as string | null)?.trim() || null;
@@ -78,27 +97,43 @@ export async function createUserAction(_prev: string | null, fd: FormData): Prom
   }
 
   try {
+    let createdUserId: number | null = null;
     try {
       await executeStatement(
         `INSERT INTO users (thaid_cid, full_name, email, username, password_hash, role, facility_id, is_active)
          VALUES (?, ?, ?, ?, ?, ?, ?, 1)`,
         [thaidCid, fullName, email, username, passwordHash, role, role === "officer" ? facilityId : null]
       );
+      const createdRows = await selectRows<RowDataPacket & { id: number }>(
+        `SELECT id FROM users WHERE (username = ? AND ? IS NOT NULL) OR (thaid_cid = ? AND ? IS NOT NULL)
+         ORDER BY id DESC LIMIT 1`,
+        [username, username, thaidCid, thaidCid]
+      );
+      createdUserId = createdRows[0]?.id ?? null;
     } catch (error) {
       const msg = error instanceof Error ? error.message : "";
       if (msg.includes("Unknown column") && msg.includes("facility_id")) {
         if (role === "officer") {
           return "กรุณารัน migration users.facility_id ก่อนสร้างบัญชีเจ้าหน้าที่";
         }
-        await executeStatement(
+        const result = await executeStatement(
           `INSERT INTO users (thaid_cid, full_name, email, username, password_hash, role, is_active)
            VALUES (?, ?, ?, ?, ?, ?, 1)`,
           [thaidCid, fullName, email, username, passwordHash, role]
         );
+        createdUserId = result.insertId;
       } else {
         throw error;
       }
     }
+    await writeAuditLog({
+      userId: actor.id,
+      userName: actor.fullName,
+      action: "create",
+      entity: "users",
+      entityId: createdUserId,
+      summary: `สร้างผู้ใช้ ${fullName} (${role})`,
+    });
     revalidatePath("/admin/users");
   } catch (err) {
     const msg = err instanceof Error ? err.message : "";
@@ -111,7 +146,7 @@ export async function createUserAction(_prev: string | null, fd: FormData): Prom
 }
 
 export async function updateUserProfileAction(_prev: string | null, fd: FormData): Promise<string | null> {
-  await requireAdmin();
+  const actor = await requireAdmin();
 
   const userId = Number(fd.get("userId"));
   const fullName = (fd.get("fullName") as string | null)?.trim() ?? "";
@@ -129,6 +164,7 @@ export async function updateUserProfileAction(_prev: string | null, fd: FormData
   if (role === "officer" && (!facilityId || Number.isNaN(facilityId))) return "กรุณาเลือกหน่วยงานสำหรับเจ้าหน้าที่";
 
   try {
+    const before = await getUserAuditRow(userId);
     try {
       await executeStatement(
         `UPDATE users
@@ -150,6 +186,15 @@ export async function updateUserProfileAction(_prev: string | null, fd: FormData
         throw error;
       }
     }
+    const after = await getUserAuditRow(userId);
+    await writeAuditLog({
+      userId: actor.id,
+      userName: actor.fullName,
+      action: "update",
+      entity: "users",
+      entityId: userId,
+      summary: `แก้ไขผู้ใช้ ${after?.full_name ?? before?.full_name ?? `#${userId}`} (${before?.role ?? "-"} -> ${after?.role ?? role})`,
+    });
     revalidatePath("/admin/users");
   } catch (err) {
     const msg = err instanceof Error ? err.message : "";
@@ -162,25 +207,52 @@ export async function updateUserProfileAction(_prev: string | null, fd: FormData
 }
 
 export async function toggleUserActiveAction(userId: number, currentActive: boolean): Promise<void> {
-  await requireAdmin();
+  const actor = await requireAdmin();
+  const target = await getUserAuditRow(userId);
   await executeStatement("UPDATE users SET is_active = ? WHERE id = ?", [currentActive ? 0 : 1, userId]);
+  await writeAuditLog({
+    userId: actor.id,
+    userName: actor.fullName,
+    action: "update",
+    entity: "users",
+    entityId: userId,
+    summary: `${currentActive ? "ปิดใช้งาน" : "เปิดใช้งาน"} ผู้ใช้ ${target?.full_name ?? `#${userId}`}`,
+  });
   revalidatePath("/admin/users");
 }
 
 export async function approveUserAction(userId: number): Promise<void> {
-  await requireAdmin();
+  const actor = await requireAdmin();
+  const target = await getUserAuditRow(userId);
   await executeStatement("UPDATE users SET is_active = 1 WHERE id = ? AND is_active = 0", [userId]);
+  await writeAuditLog({
+    userId: actor.id,
+    userName: actor.fullName,
+    action: "update",
+    entity: "users",
+    entityId: userId,
+    summary: `อนุมัติผู้ใช้ ${target?.full_name ?? `#${userId}`}`,
+  });
   revalidatePath("/admin/users");
 }
 
 export async function updateUserRoleAction(userId: number, newRole: "admin" | "officer" | "viewer"): Promise<void> {
-  await requireAdmin();
+  const actor = await requireAdmin();
+  const before = await getUserAuditRow(userId);
   await executeStatement("UPDATE users SET role = ? WHERE id = ?", [newRole, userId]);
+  await writeAuditLog({
+    userId: actor.id,
+    userName: actor.fullName,
+    action: "update",
+    entity: "users",
+    entityId: userId,
+    summary: `เปลี่ยนสิทธิ์ผู้ใช้ ${before?.full_name ?? `#${userId}`} (${before?.role ?? "-"} -> ${newRole})`,
+  });
   revalidatePath("/admin/users");
 }
 
 export async function updateUserFacilityAction(_prev: string | null, fd: FormData): Promise<string | null> {
-  await requireAdmin();
+  const actor = await requireAdmin();
 
   const userId = Number(fd.get("userId"));
   const role = (fd.get("role") as string | null) ?? "officer";
@@ -193,6 +265,15 @@ export async function updateUserFacilityAction(_prev: string | null, fd: FormDat
 
   try {
     await executeStatement("UPDATE users SET facility_id = ? WHERE id = ?", [facilityId, userId]);
+    const target = await getUserAuditRow(userId);
+    await writeAuditLog({
+      userId: actor.id,
+      userName: actor.fullName,
+      action: "update",
+      entity: "users",
+      entityId: userId,
+      summary: `แก้ไขหน่วยงานผู้ใช้ ${target?.full_name ?? `#${userId}`} -> ${facilityId ?? "none"}`,
+    });
     revalidatePath("/admin/users");
   } catch (error) {
     const msg = error instanceof Error ? error.message : "";
@@ -206,7 +287,7 @@ export async function updateUserFacilityAction(_prev: string | null, fd: FormDat
 }
 
 export async function resetUserPasswordAction(_prev: string | null, fd: FormData): Promise<string | null> {
-  await requireAdmin();
+  const actor = await requireAdmin();
 
   const userId = Number(fd.get("userId"));
   const newPassword = (fd.get("newPassword") as string | null)?.trim() ?? "";
@@ -214,8 +295,17 @@ export async function resetUserPasswordAction(_prev: string | null, fd: FormData
   if (!userId || isNaN(userId)) return "User ID ไม่ถูกต้อง";
   if (newPassword.length < 8) return "รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร";
 
+  const target = await getUserAuditRow(userId);
   const hash = hashPassword(newPassword);
   await executeStatement("UPDATE users SET password_hash = ? WHERE id = ?", [hash, userId]);
+  await writeAuditLog({
+    userId: actor.id,
+    userName: actor.fullName,
+    action: "update",
+    entity: "users",
+    entityId: userId,
+    summary: `รีเซ็ตรหัสผ่านผู้ใช้ ${target?.full_name ?? `#${userId}`}`,
+  });
   revalidatePath("/admin/users");
   return null;
 }

@@ -5,11 +5,13 @@ import { redirect } from "next/navigation";
 
 import { getCurrentUser } from "@/lib/auth";
 import { createFacility, toggleFacilityActive, updateFacility } from "@/lib/assets";
+import { hasPermission } from "@/lib/role-permissions";
 
 async function requireAdmin() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
-  if (user.role !== "admin") redirect("/");
+  const allowManageFacilities = user.role === "admin" || (await hasPermission(user.role, "facilities.manage"));
+  if (!allowManageFacilities) redirect("/");
   return user;
 }
 

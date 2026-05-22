@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth";
 import { listFacilitiesAdmin } from "@/lib/assets";
+import { hasPermission } from "@/lib/role-permissions";
 import { FacilitiesClient } from "./_components/facilities-client";
 
 export const dynamic = "force-dynamic";
@@ -9,7 +10,8 @@ export const dynamic = "force-dynamic";
 export default async function AdminFacilitiesPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
-  if (user.role !== "admin") redirect("/");
+  const allowManageFacilities = user.role === "admin" || (await hasPermission(user.role, "facilities.manage"));
+  if (!allowManageFacilities) redirect("/");
 
   const facilities = await listFacilitiesAdmin();
 

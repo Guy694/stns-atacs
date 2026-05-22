@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import { listAllFacilitiesForSelect } from "@/lib/assets";
 import { selectRows } from "@/lib/mysql";
+import { hasPermission } from "@/lib/role-permissions";
 import type { RowDataPacket } from "mysql2/promise";
 import { approveUserAction } from "./actions";
 import { CreateUserModal } from "./_components/create-user-modal";
@@ -39,7 +40,8 @@ function formatDate(v: Date | string | null) {
 export default async function AdminUsersPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
-  if (user.role !== "admin") redirect("/");
+  const canManageUsers = user.role === "admin" || (await hasPermission(user.role, "users.manage"));
+  if (!canManageUsers) redirect("/");
 
   const facilities = await listAllFacilitiesForSelect();
   const facilityNameById = new Map(

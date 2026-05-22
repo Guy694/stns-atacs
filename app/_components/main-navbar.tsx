@@ -1,6 +1,8 @@
 import Image from "next/image";
 import Link from "next/link";
 
+import { LogoutConfirmForm } from "@/app/_components/logout-confirm-form";
+
 type MainNavbarProps = {
   user: {
     fullName: string;
@@ -38,14 +40,7 @@ export function MainNavbar({ user }: MainNavbarProps) {
           >
             โปรไฟล์
           </Link>
-          <form action="/logout" method="post">
-            <button
-              type="submit"
-              className="rounded-full border border-black/12 bg-white/75 px-4 py-2 text-xs font-semibold text-[var(--accent-strong)] transition hover:bg-white"
-            >
-              ออกจากระบบ
-            </button>
-          </form>
+          <LogoutConfirmForm buttonClassName="rounded-full border border-black/12 bg-white/75 px-4 py-2 text-xs font-semibold text-[var(--accent-strong)] transition hover:bg-white" />
         </div>
       </div>
     </header>

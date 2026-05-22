@@ -260,7 +260,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
                       background: "rgba(99,102,241,0.04)",
                     }}
                   >
-                    🪪 เข้าสู่ระบบด้วย ThaiD
+                    <img src="thaid.png" alt="ThaiD" className="h-8 w-8 rounded-full" /> เข้าสู่ระบบด้วย ThaiD
                   </Link>
                 ) : (
                   <div className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-xs text-stone-600 text-center">

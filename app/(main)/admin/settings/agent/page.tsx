@@ -6,6 +6,7 @@ import { revokeAgentEnrollmentAction } from "@/app/(main)/admin/settings/agent/a
 import { listAgentDevices, listAgentEnrollments } from "@/lib/agent";
 import { getCurrentUser } from "@/lib/auth";
 import { listAllFacilitiesForSelect, listAssetsForFacilityIds } from "@/lib/assets";
+import { hasPermission } from "@/lib/role-permissions";
 
 function formatDate(value: string | null) {
   if (!value) return "-";
@@ -15,7 +16,8 @@ function formatDate(value: string | null) {
 export default async function AgentSettingsPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
-  if (user.role !== "admin") redirect("/");
+  const allowAgentManage = user.role === "admin" || (await hasPermission(user.role, "agent.manage"));
+  if (!allowAgentManage) redirect("/");
 
   const facilities = await listAllFacilitiesForSelect();
 

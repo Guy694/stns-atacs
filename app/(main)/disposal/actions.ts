@@ -6,13 +6,16 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import { getAssetById, updateAsset } from "@/lib/assets";
 import { writeAuditLog } from "@/lib/audit";
+import { canManageAsset, canMutateAssets } from "@/lib/permissions";
+import { hasPermission } from "@/lib/role-permissions";
 
 export type DisposalType = "Broken" | "Inactive" | "Disposed" | "Lost";
 
 export async function disposalAssetAction(_prev: string | null, fd: FormData): Promise<string | null> {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
-  if (user.role === "viewer") return "คุณไม่มีสิทธิ์ดำเนินการนี้";
+  if (!canMutateAssets(user)) return "คุณไม่มีสิทธิ์ดำเนินการนี้";
+  if (!(await hasPermission(user.role, "disposal.manage"))) return "สิทธิ์การจำหน่าย/ชำรุดถูกปิดใช้งาน";
 
   const assetId = Number(fd.get("assetId"));
   const disposalType = fd.get("disposalType") as DisposalType;
@@ -35,6 +38,7 @@ export async function disposalAssetAction(_prev: string | null, fd: FormData): P
   try {
     const asset = await getAssetById(assetId);
     if (!asset) return "ไม่พบทรัพย์สิน";
+    if (!canManageAsset(user, asset.facilityId)) return "คุณไม่มีสิทธิ์บันทึกการดำเนินการทรัพย์สินของหน่วยงานนี้";
 
     const note = `[${labelMap[disposalType]}] ${noteDate} — ${reason} — บันทึกโดย ${user.fullName}`;
 
