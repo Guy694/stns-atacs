@@ -10,7 +10,7 @@ const promptFont = Prompt({
 });
 
 export const metadata: Metadata = {
-  title: "ATACS Satun",
+  title: "ระบบติดตามทรัพย์สินสารสนเทศ จังหวัดสตูล - ATACS Satun",
   description:
     "ระบบติดตามทรัพย์สินสารสนเทศ จังหวัดสตูล สำหรับสำรวจ ตรวจสอบ และสรุปสถานะอุปกรณ์ของหน่วยบริการสาธารณสุข",
 };
