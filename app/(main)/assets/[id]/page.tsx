@@ -1,26 +1,34 @@
 import Link from "next/link";
+import Image from "next/image";
+import { headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 
+import { AppIcon } from "@/app/_components/ui/icon";
+import { StatusBadge } from "@/app/_components/ui/status-badge";
 import { getCurrentUser } from "@/lib/auth";
 import { getAssetById, listAllFacilitiesForSelect } from "@/lib/assets";
 import { AssetFormModal } from "@/app/(main)/assets/_components/asset-form-modal";
 import { DeleteAssetButton } from "@/app/(main)/assets/_components/delete-asset-button";
 import { PrintButton } from "@/app/(main)/assets/_components/print-button";
+import { listAssetStatusHistory } from "@/lib/asset-status-history";
 import { canManageAsset, canSeeSensitiveAssetNetwork } from "@/lib/permissions";
+import { formatThaiDate, formatThaiDateTime } from "@/lib/date-format";
 import { hasPermission } from "@/lib/role-permissions";
 
 type Props = { params: Promise<{ id: string }> };
 
-function statusBadge(status: string) {
-  if (status === "Active") return "bg-emerald-100 text-emerald-700 border-emerald-200";
-  if (status === "Broken") return "bg-rose-100 text-rose-700 border-rose-200";
-  return "bg-amber-100 text-amber-700 border-amber-200";
-}
-
 function statusLabel(status: string) {
   if (status === "Active") return "ใช้งานอยู่";
   if (status === "Broken") return "ชำรุด";
+  if (status === "Disposed") return "จำหน่ายแล้ว";
+  if (status === "Lost") return "สูญหาย";
   return "ไม่ใช้งาน";
+}
+
+function statusTone(status: string): "success" | "danger" | "warning" {
+  if (status === "Active") return "success";
+  if (status === "Broken") return "danger";
+  return "warning";
 }
 
 function Field({ label, value }: { label: string; value?: string | null }) {
@@ -40,8 +48,16 @@ export default async function AssetDetailPage({ params }: Props) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
-  const [asset, facilitiesForSelect] = await Promise.all([getAssetById(numId), listAllFacilitiesForSelect()]);
+  const [asset, facilitiesForSelect, statusHistory] = await Promise.all([
+    getAssetById(numId),
+    listAllFacilitiesForSelect(),
+    listAssetStatusHistory(numId),
+  ]);
   if (!asset) notFound();
+  const requestHeaders = await headers();
+  const host = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host") ?? "";
+  const protocol = requestHeaders.get("x-forwarded-proto") ?? (host.includes("localhost") ? "http" : "https");
+  const assetScanUrl = host ? `${protocol}://${host}/scan/assets/${asset.id}` : `/scan/assets/${asset.id}`;
 
   const canMutateThisAsset = (await hasPermission(user.role, "assets.update")) && canManageAsset(user, asset.facilityId);
   const canDeleteThisAsset = (await hasPermission(user.role, "assets.delete")) && canManageAsset(user, asset.facilityId);
@@ -76,14 +92,14 @@ export default async function AssetDetailPage({ params }: Props) {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <div className="flex flex-wrap items-center gap-2">
-            <span className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold ${statusBadge(asset.currentStatus)}`}>
+            <StatusBadge tone={statusTone(asset.currentStatus)}>
               {statusLabel(asset.currentStatus)}
-            </span>
-            <span className="rounded-full bg-indigo-100 px-2.5 py-0.5 text-xs font-semibold text-indigo-700">
+            </StatusBadge>
+            <StatusBadge tone="primary">
               {asset.assetGroup}
-            </span>
+            </StatusBadge>
             {asset.deviceType && (
-              <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs text-slate-600">{asset.deviceType}</span>
+              <StatusBadge tone="neutral">{asset.deviceType}</StatusBadge>
             )}
           </div>
           <h1 className="section-title mt-2 text-2xl font-semibold sm:text-3xl">{asset.assetName}</h1>
@@ -92,7 +108,7 @@ export default async function AssetDetailPage({ params }: Props) {
         {canMutateThisAsset && (
           <div className="flex shrink-0 flex-wrap gap-2">
             <AssetFormModal facilities={facilitiesForSelect} updaterName={user.fullName} mode="edit" asset={asset}>
-              <span className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2 text-sm font-medium text-indigo-700 transition hover:bg-indigo-100">
+              <span className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-[var(--primary-soft-strong)] bg-[var(--primary-soft)] px-4 py-2 text-sm font-medium text-[var(--primary-text)] transition hover:bg-[var(--primary-soft-strong)]">
                 แก้ไข
               </span>
             </AssetFormModal>
@@ -134,22 +150,69 @@ export default async function AssetDetailPage({ params }: Props) {
           <div className="glass-panel rounded-2xl p-5">
             <h2 className="mb-4 text-sm font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">สัญญาบำรุงรักษา (MA)</h2>
             <div className="grid gap-4 sm:grid-cols-3">
-              <Field label="วันสิ้นสุด MA" value={asset.maintenanceEndDate || "–"} />
+              <Field label="วันเริ่มต้น MA" value={formatThaiDate(asset.maintenanceStartDate)} />
+              <Field label="วันสิ้นสุด MA" value={formatThaiDate(asset.maintenanceEndDate)} />
               <div>
                 <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-[var(--muted)]">สถานะ MA</p>
                 <div className="mt-1">
                   {daysLeft === null ? (
                     <span className="text-sm text-[var(--muted)]">ไม่มีข้อมูล</span>
                   ) : daysLeft < 0 ? (
-                    <span className="rounded-full bg-rose-100 px-2.5 py-0.5 text-xs font-semibold text-rose-700">หมดอายุแล้ว</span>
+                    <StatusBadge tone="danger">หมดอายุแล้ว</StatusBadge>
                   ) : daysLeft <= 30 ? (
-                    <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-700">ใกล้หมดอายุ ({daysLeft} วัน)</span>
+                    <StatusBadge tone="warning">ใกล้หมดอายุ ({daysLeft} วัน)</StatusBadge>
                   ) : (
-                    <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">ยังใช้ได้ ({daysLeft} วัน)</span>
+                    <StatusBadge tone="success">ยังใช้ได้ ({daysLeft} วัน)</StatusBadge>
                   )}
                 </div>
               </div>
             </div>
+          </div>
+
+          {/* ประวัติสถานะ */}
+          <div className="glass-panel overflow-hidden rounded-2xl">
+            <div className="border-b border-black/8 px-5 py-4">
+              <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">ประวัติสถานะอุปกรณ์</h2>
+              <p className="mt-1 text-xs text-[var(--muted)]">แสดงการอัปเดตข้อมูลของอุปกรณ์นี้จากการแก้ไข โอนย้าย หรือบันทึกจำหน่าย/ชำรุด</p>
+            </div>
+            {statusHistory.length === 0 ? (
+              <div className="px-5 py-8 text-center text-sm text-[var(--muted)]">
+                ยังไม่มีประวัติการอัปเดตสถานะสำหรับอุปกรณ์นี้
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-[760px] w-full text-left text-sm">
+                  <thead className="border-b border-black/8 bg-[var(--neutral-bg)] text-xs text-[var(--muted)]">
+                    <tr>
+                      <th className="px-4 py-3 font-medium">วันที่/เวลา</th>
+                      <th className="px-4 py-3 font-medium">สถานะเดิม</th>
+                      <th className="px-4 py-3 font-medium">สถานะใหม่</th>
+                      <th className="px-4 py-3 font-medium">ผู้บันทึก</th>
+                      <th className="px-4 py-3 font-medium">รายละเอียด</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-black/6 bg-white/70">
+                    {statusHistory.map((entry) => (
+                      <tr key={entry.id} className="align-top hover:bg-[var(--primary-soft)]/30">
+                        <td className="px-4 py-3 text-xs text-[var(--muted)]">{formatThaiDateTime(entry.changedAt)}</td>
+                        <td className="px-4 py-3">
+                          {entry.fromStatus ? (
+                            <StatusBadge tone={statusTone(entry.fromStatus)}>{statusLabel(entry.fromStatus)}</StatusBadge>
+                          ) : (
+                            <span className="text-xs text-[var(--muted)]">เริ่มต้น</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          <StatusBadge tone={statusTone(entry.toStatus)}>{statusLabel(entry.toStatus)}</StatusBadge>
+                        </td>
+                        <td className="px-4 py-3 text-[var(--foreground)]">{entry.changedBy || "system"}</td>
+                        <td className="max-w-md px-4 py-3 text-xs leading-5 text-[var(--muted)]">{entry.note || "-"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
 
           {/* ข้อมูลการจัดซื้อ */}
@@ -162,7 +225,7 @@ export default async function AssetDetailPage({ params }: Props) {
                   ? asset.purchasePrice.toLocaleString("th-TH", { minimumFractionDigits: 2 })
                   : undefined}
               />
-              <Field label="วันที่ซื้อ / ได้รับมอบ" value={asset.purchaseDate || undefined} />
+              <Field label="วันที่ซื้อ / ได้รับมอบ" value={formatThaiDate(asset.purchaseDate)} />
               <Field label="เลขที่สัญญา / PO" value={asset.purchaseOrderNo || undefined} />
             </div>
           </div>
@@ -176,13 +239,13 @@ export default async function AssetDetailPage({ params }: Props) {
                   href={`/transfer?assetId=${asset.id}`}
                   className="inline-flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-700 transition hover:bg-amber-100"
                 >
-                  📦 โอนย้ายทรัพย์สิน
+                  <AppIcon name="package" className="h-4 w-4" /> โอนย้ายทรัพย์สิน
                 </Link>
                 <Link
                   href={`/disposal?assetId=${asset.id}`}
                   className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100"
                 >
-                  📋 จำหน่าย/ชำรุด
+                  <AppIcon name="clipboard-check" className="h-4 w-4" /> จำหน่าย/ชำรุด
                 </Link>
               </div>
             ) : (
@@ -200,17 +263,18 @@ export default async function AssetDetailPage({ params }: Props) {
           {/* QR Code */}
           <div className="glass-panel rounded-2xl p-5 text-center print:shadow-none">
             <p className="text-xs font-medium uppercase tracking-[0.2em] text-[var(--muted)]">QR Code ทรัพย์สิน</p>
-            <div className="mx-auto mt-3 flex h-36 w-36 items-center justify-center overflow-hidden rounded-xl border border-indigo-100 bg-white shadow-sm">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={`https://api.qrserver.com/v1/create-qr-code/?size=144x144&data=${encodeURIComponent(asset.assetRegistrationNo)}&color=3730a3&bgcolor=ffffff&qzone=1`}
-                alt={`QR Code: ${asset.assetRegistrationNo}`}
+            <div className="mx-auto mt-3 flex h-36 w-36 items-center justify-center overflow-hidden rounded-xl border border-[var(--primary-soft-strong)] bg-white shadow-sm">
+              <Image
+                src={`/api/qr/asset/${asset.id}`}
+                alt={`QR Code: ${asset.assetRegistrationNo || asset.assetName}`}
                 width={144}
                 height={144}
+                unoptimized
                 className="h-full w-full object-contain"
               />
             </div>
             <p className="mt-2 font-mono text-xs text-[var(--muted)]">{asset.assetRegistrationNo}</p>
+            <p className="mt-1 break-all text-[11px] text-[var(--muted)]">{assetScanUrl}</p>
             <PrintButton />
           </div>
 
@@ -220,9 +284,9 @@ export default async function AssetDetailPage({ params }: Props) {
             <div className="mt-3 space-y-3">
               <div className="flex items-center justify-between text-sm">
                 <span className="text-[var(--muted)]">สถานะ</span>
-                <span className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${statusBadge(asset.currentStatus)}`}>
+                <StatusBadge tone={statusTone(asset.currentStatus)}>
                   {statusLabel(asset.currentStatus)}
-                </span>
+                </StatusBadge>
               </div>
               <div className="flex items-center justify-between text-sm">
                 <span className="text-[var(--muted)]">หมวด</span>
@@ -234,7 +298,7 @@ export default async function AssetDetailPage({ params }: Props) {
               </div>
               <div className="flex items-center justify-between text-sm">
                 <span className="text-[var(--muted)]">อัปเดตล่าสุด</span>
-                <span className="font-mono text-xs text-[var(--foreground)]">{asset.updatedAt || "–"}</span>
+                <span className="text-xs text-[var(--foreground)]">{formatThaiDate(asset.updatedAt)}</span>
               </div>
               {asset.updatedBy && (
                 <div className="flex items-center justify-between text-sm">

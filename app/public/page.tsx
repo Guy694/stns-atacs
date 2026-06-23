@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { StatusBadge } from "@/app/_components/ui/status-badge";
 import { TopNavigation } from "@/app/_components/top-navigation";
 import { listAssets } from "@/lib/assets";
 
@@ -12,16 +13,16 @@ function sp(params: Record<string, string | string[] | undefined>, key: string) 
   return (Array.isArray(v) ? v[0] : v ?? "").trim();
 }
 
-const STATUS_STYLE: Record<string, string> = {
-  Active: "bg-emerald-100 text-emerald-700",
-  Inactive: "bg-amber-100 text-amber-700",
-  Broken: "bg-rose-100 text-rose-700",
-};
 const STATUS_LABEL: Record<string, string> = {
   Active: "ใช้งานอยู่",
   Inactive: "ไม่ใช้งาน",
   Broken: "ชำรุด",
 };
+const STATUS_TONE = {
+  Active: "success",
+  Inactive: "warning",
+  Broken: "danger",
+} as const;
 
 function PctBar({ value, max, color }: { value: number; max: number; color: string }) {
   const w = max > 0 ? Math.round((value / max) * 100) : 0;
@@ -134,7 +135,7 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
   }
 
   function tabClass(v: string) {
-    return `rounded-xl px-4 py-2 text-sm font-medium transition ${view === v ? "bg-indigo-600 text-white shadow" : "bg-white/70 text-[var(--muted)] hover:bg-white hover:text-[var(--foreground)]"}`;
+    return `rounded-xl px-4 py-2 text-sm font-medium transition ${view === v ? "bg-[var(--primary)] text-white shadow-sm" : "bg-white/70 text-[var(--muted)] hover:bg-white hover:text-[var(--foreground)]"}`;
   }
 
   return (
@@ -142,10 +143,8 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
       <TopNavigation current="public" user={null} />
 
       {/* ── Hero ──────────────────────────────────────────────────────────── */}
-      <section className="relative overflow-hidden rounded-2xl bg-[linear-gradient(135deg,#4c1d95_0%,#5b21b6_40%,#4338ca_80%,#3b82f6_100%)] px-6 py-10 text-white sm:px-10 sm:py-12 lg:px-14 lg:py-14">
+      <section className="relative overflow-hidden rounded-2xl bg-[linear-gradient(135deg,#123d2f_0%,#14532d_58%,#166534_100%)] px-6 py-10 text-white sm:px-10 sm:py-12 lg:px-14 lg:py-14">
         <div className="absolute inset-0 opacity-10 [background-image:linear-gradient(rgba(255,255,255,0.2)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.2)_1px,transparent_1px)] [background-size:40px_40px]" />
-        <div className="absolute -right-24 -top-24 h-72 w-72 rounded-full bg-white/10 blur-3xl" />
-        <div className="absolute -bottom-16 left-1/3 h-48 w-48 rounded-full bg-emerald-300/10 blur-2xl" />
 
         <div className="relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-2xl">
@@ -220,10 +219,12 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
           <input type="hidden" name="district" value={districtFilter} />
           <input type="hidden" name="group" value={groupFilter} />
           <input type="hidden" name="view" value={view} />
+          <label htmlFor="public-search" className="sr-only">ค้นหาทรัพย์สินสาธารณะ</label>
           <input type="search" name="q" defaultValue={q}
+            id="public-search"
             placeholder="เลขครุภัณฑ์, ชื่ออุปกรณ์, ประเภท…"
-            className="min-w-0 flex-1 rounded-xl border border-[var(--line)] bg-white/80 px-4 py-2.5 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100" />
-          <button type="submit" className="shrink-0 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-700">ค้นหา</button>
+            className="min-w-0 flex-1 rounded-xl border border-[var(--line)] bg-white/80 px-4 py-2.5 text-sm outline-none focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/15" />
+          <button type="submit" className="shrink-0 rounded-xl bg-[var(--primary)] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[var(--primary-hover)]">ค้นหา</button>
         </form>
 
         {q.length >= 2 && (
@@ -245,17 +246,17 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-black/4">
-                      {searchResults.map((a) => (
-                        <tr key={a.assetRegistrationNo} className="hover:bg-white/50">
-                          <td className="py-2.5 pr-4 font-mono text-xs">{a.assetRegistrationNo}</td>
-                          <td className="py-2.5 pr-4 font-medium">{a.assetName}</td>
-                          <td className="py-2.5 pr-4"><span className="rounded-full bg-indigo-50 px-2 py-0.5 text-xs text-indigo-700">{a.deviceType || a.assetGroup}</span></td>
-                          <td className="py-2.5 pr-4 text-[var(--muted)]">{a.facilityName}</td>
-                          <td className="py-2.5 text-center">
-                            <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_STYLE[a.currentStatus] ?? ""}`}>
-                              {STATUS_LABEL[a.currentStatus] ?? a.currentStatus}
-                            </span>
-                          </td>
+	                      {searchResults.map((a) => (
+	                        <tr key={`${a.assetRegistrationNo}-${a.assetName}-${a.facilityName}`} className="hover:bg-white/50">
+	                          <td className="py-2.5 pr-4 font-mono text-xs">{a.assetRegistrationNo}</td>
+	                          <td className="py-2.5 pr-4 font-medium">{a.assetName}</td>
+	                          <td className="py-2.5 pr-4"><StatusBadge tone="primary">{a.deviceType || a.assetGroup}</StatusBadge></td>
+	                          <td className="py-2.5 pr-4 text-[var(--muted)]">{a.facilityName}</td>
+	                          <td className="py-2.5 text-center">
+	                            <StatusBadge tone={STATUS_TONE[a.currentStatus as keyof typeof STATUS_TONE] ?? "neutral"}>
+	                              {STATUS_LABEL[a.currentStatus] ?? a.currentStatus}
+	                            </StatusBadge>
+	                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -275,9 +276,11 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
           <input type="hidden" name="view" value={view} />
           <input type="hidden" name="group" value={groupFilter} />
           <input type="hidden" name="q" value={q} />
+          <label htmlFor="public-district-filter" className="sr-only">กรองอำเภอ</label>
           <select name="district" defaultValue={districtFilter}
+            id="public-district-filter"
             onChange={undefined}
-            className="rounded-xl border border-[var(--line)] bg-white/80 px-3 py-2 text-sm text-[var(--foreground)] outline-none focus:border-indigo-400">
+            className="rounded-xl border border-[var(--line)] bg-white/80 px-3 py-2 text-sm text-[var(--foreground)] outline-none focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/15">
             <option value="">ทุกอำเภอ</option>
             {allDistricts.map((d) => <option key={d} value={d}>{d}</option>)}
           </select>
@@ -288,7 +291,7 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
         <div className="flex gap-1.5">
           {[["", "ทั้งหมด"], ["Hardware", "Hardware"], ["Software", "Software"]].map(([val, label]) => (
             <Link key={val} href={filterHref({ group: val })}
-              className={`rounded-xl px-3 py-2 text-xs font-medium transition ${groupFilter === val ? "bg-indigo-600 text-white" : "bg-white/70 text-[var(--muted)] hover:bg-white"}`}>
+              className={`rounded-xl px-3 py-2 text-xs font-medium transition ${groupFilter === val ? "bg-[var(--primary)] text-white shadow-sm" : "bg-white/70 text-[var(--muted)] hover:bg-white"}`}>
               {label}
             </Link>
           ))}
@@ -317,7 +320,7 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
                 <div className="relative shrink-0" style={{ width: 160, height: 160 }}>
                   <div className="h-full w-full rounded-full" style={{ background: donutGradient }} />
                   <div className="absolute inset-0 m-auto flex h-[100px] w-[100px] flex-col items-center justify-center rounded-full bg-white shadow-sm">
-                    <p className="text-2xl font-bold text-indigo-700">{activeRate}%</p>
+                    <p className="text-2xl font-bold text-[var(--primary-text)]">{activeRate}%</p>
                     <p className="text-[10px] text-[var(--muted)]">Active</p>
                   </div>
                 </div>
@@ -346,7 +349,7 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
               <h2 className="section-title mt-1 text-xl font-semibold">Asset Mix</h2>
               {/* stacked bar */}
               <div className="mt-5 flex h-8 overflow-hidden rounded-xl text-xs font-semibold text-white">
-                <div className="flex items-center justify-center bg-indigo-600" style={{ width: `${Math.round((hw / safeTotal) * 100)}%` }}>
+                <div className="flex items-center justify-center bg-[var(--primary)]" style={{ width: `${Math.round((hw / safeTotal) * 100)}%` }}>
                   {hw > 0 && `${Math.round((hw / safeTotal) * 100)}%`}
                 </div>
                 <div className="flex flex-1 items-center justify-center bg-emerald-400 text-emerald-900">
@@ -354,9 +357,9 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
                 </div>
               </div>
               <div className="mt-3 grid grid-cols-2 gap-3">
-                <div className="rounded-xl bg-indigo-50 p-4">
-                  <div className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-indigo-600" /><span className="text-xs text-[var(--muted)]">Hardware</span></div>
-                  <p className="mt-2 text-2xl font-bold text-indigo-700">{hw}</p>
+                <div className="rounded-xl bg-[var(--primary-soft)] p-4">
+                  <div className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-[var(--primary)]" /><span className="text-xs text-[var(--muted)]">Hardware</span></div>
+                  <p className="mt-2 text-2xl font-bold text-[var(--primary-text)]">{hw}</p>
                   <p className="text-xs text-[var(--muted)]">{Math.round((hw / safeTotal) * 100)}% ของทั้งหมด</p>
                 </div>
                 <div className="rounded-xl bg-emerald-50 p-4">
@@ -368,14 +371,14 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
               {/* status quick bars */}
               <div className="mt-4 space-y-3 border-t border-black/6 pt-4">
                 {[
-                  { label: "พร้อมใช้งาน", value: active, color: "bg-emerald-500", badge: "bg-emerald-100 text-emerald-700" },
-                  { label: "ชำรุด", value: broken, color: "bg-rose-500", badge: "bg-rose-100 text-rose-700" },
-                  { label: "ไม่ใช้งาน", value: inactive, color: "bg-amber-400", badge: "bg-amber-100 text-amber-700" },
+	                  { label: "พร้อมใช้งาน", value: active, color: "bg-emerald-500", tone: "success" as const },
+	                  { label: "ชำรุด", value: broken, color: "bg-rose-500", tone: "danger" as const },
+	                  { label: "ไม่ใช้งาน", value: inactive, color: "bg-amber-400", tone: "warning" as const },
                 ].map((s) => (
                   <div key={s.label}>
                     <div className="flex items-center justify-between text-xs">
                       <span>{s.label}</span>
-                      <span className={`rounded-full px-2 py-0.5 font-semibold ${s.badge}`}>{s.value} ({Math.round((s.value / safeTotal) * 100)}%)</span>
+                      <StatusBadge tone={s.tone}>{s.value} ({Math.round((s.value / safeTotal) * 100)}%)</StatusBadge>
                     </div>
                     <PctBar value={s.value} max={total} color={s.color} />
                   </div>
@@ -395,24 +398,24 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
                 const rate = Math.round((d.active / Math.max(d.total, 1)) * 100);
                 const barColor = rate >= 85 ? "bg-emerald-500" : rate >= 70 ? "bg-amber-400" : "bg-rose-500";
                 return (
-                  <div key={d.name} className="grid grid-cols-[1fr_auto_auto_auto_auto] items-center gap-4 px-5 py-3 text-sm hover:bg-white/40">
-                    <div>
-                      <Link href={filterHref({ district: d.name })} className="font-semibold hover:text-indigo-600 hover:underline">
+                  <div key={d.name} className="grid gap-3 px-5 py-4 text-sm hover:bg-white/40 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center lg:grid-cols-[minmax(0,1fr)_auto_auto_auto_auto] lg:gap-4 lg:py-3">
+                    <div className="min-w-0">
+                      <Link href={filterHref({ district: d.name })} className="font-semibold hover:text-[var(--primary)] hover:underline">
                         อ.{d.name}
                       </Link>
                       <div className="mt-1.5">
-                        <PctBar value={d.total} max={maxDistrict} color="bg-indigo-300" />
+                        <PctBar value={d.total} max={maxDistrict} color="bg-[var(--primary-soft-strong)]" />
                       </div>
                     </div>
-                    <span className="text-center text-xs text-[var(--muted)]">{d.facilityCount} หน่วยงาน</span>
-                    <span className="text-center font-semibold">{d.total}</span>
-                    <div className="flex items-center gap-1.5">
+                    <span className="text-xs text-[var(--muted)] sm:text-center">{d.facilityCount} หน่วยงาน</span>
+                    <span className="font-semibold sm:text-center">{d.total}</span>
+                    <div className="flex items-center gap-1.5 sm:col-span-2 lg:col-span-1">
                       <div className="h-1.5 w-16 overflow-hidden rounded-full bg-slate-100">
                         <div className={`h-full rounded-full ${barColor}`} style={{ width: `${rate}%` }} />
                       </div>
                       <span className="text-xs">{rate}%</span>
                     </div>
-                    <div className="flex gap-2 text-xs">
+                    <div className="flex flex-wrap gap-2 text-xs sm:col-span-3 lg:col-span-1">
                       <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-emerald-700">{d.active}</span>
                       {d.broken > 0 && <span className="rounded-full bg-rose-100 px-2 py-0.5 text-rose-700">{d.broken}</span>}
                       {d.inactive > 0 && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-amber-700">{d.inactive}</span>}
@@ -481,7 +484,7 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
                     <tr key={f.id} className="hover:bg-white/50">
                       <td className="px-4 py-3 font-medium">{f.name}</td>
                       <td className="px-4 py-3 text-[var(--muted)]">
-                        <Link href={filterHref({ view: "facilities", district: f.district })} className="hover:text-indigo-600 hover:underline">
+                        <Link href={filterHref({ view: "facilities", district: f.district })} className="hover:text-[var(--primary)] hover:underline">
                           อ.{f.district}
                         </Link>
                       </td>

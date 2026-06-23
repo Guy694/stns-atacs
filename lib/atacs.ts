@@ -14,6 +14,7 @@ type SurveyRow = RowDataPacket & {
   survey_id: number;
   facility_id: number;
   facility_name: string | null;
+  facility_typecode: string | null;
   district_name: string | null;
   survey_date: Date | string | null;
   personnel_count: number | null;
@@ -23,7 +24,7 @@ type SurveyRow = RowDataPacket & {
 type AssetRow = RowDataPacket & {
   id: number;
   survey_id: number;
-  asset_registration_no: string;
+  asset_registration_no: string | null;
   asset_name: string;
   usage_description: string | null;
   owner_name: string | null;
@@ -143,7 +144,11 @@ function buildDistrictCoverage(facilitySurveys: FacilitySurvey[]) {
     const current = completionByDistrict[district.district];
 
     if (!current) {
-      return district;
+      return {
+        ...district,
+        completionRate: 0,
+        facilities: 0,
+      };
     }
 
     return {
@@ -164,6 +169,7 @@ export async function getDashboardData(): Promise<DashboardData> {
           s.id AS survey_id,
           s.facility_id,
           hf.name AS facility_name,
+          hf.typecode AS facility_typecode,
           hf.district_name,
           s.survey_date,
           s.personnel_count,
@@ -218,7 +224,7 @@ export async function getDashboardData(): Promise<DashboardData> {
       const current = summary[asset.survey_id] ?? [];
       current.push({
         id: asset.id,
-        assetRegistrationNo: asset.asset_registration_no,
+        assetRegistrationNo: asset.asset_registration_no ?? "",
         assetName: asset.asset_name,
         usageDescription: asset.usage_description ?? "-",
         assetGroup: asset.asset_category ?? normalizeAssetGroup(asset.asset_group),
@@ -243,6 +249,7 @@ export async function getDashboardData(): Promise<DashboardData> {
       const surveyBase = {
         facilityId: survey.facility_id,
         facilityName: survey.facility_name ?? `Facility ${survey.facility_id}`,
+        facilityTypeCode: survey.facility_typecode ?? "",
         districtName: survey.district_name ?? "ไม่ระบุอำเภอ",
         surveyDate: toDateOnly(survey.survey_date),
         personnelCount: survey.personnel_count ?? 0,

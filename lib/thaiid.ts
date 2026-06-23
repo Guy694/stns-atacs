@@ -1,5 +1,7 @@
 import "server-only";
 
+import { getBooleanSetting } from "@/lib/app-settings";
+
 type ThaiIdStatus = {
   enabled: boolean;
   reason: string | null;
@@ -22,6 +24,7 @@ const DEFAULT_TOKEN_URL = "https://imauth.bora.dopa.go.th/api/v2/oauth2/token/";
 const DEFAULT_USERINFO_URL = "https://imauth.bora.dopa.go.th/api/v2/oauth2/userinfo/";
 
 const THAIID_CALLBACK_PATH = "/api/auth/thaiid/callback";
+const THAI_D_ENABLED_KEY = "auth.thaid.enabled";
 
 function isEnabledByFlag() {
   const rawFlag = (process.env.THAID_ENABLED ?? process.env.THAIID_ENABLED ?? "true").trim().toLowerCase();
@@ -57,8 +60,10 @@ function normalizeCallbackUrl(origin: string) {
   return `${origin}${THAIID_CALLBACK_PATH}`;
 }
 
-export function getThaiIdStatus(): ThaiIdStatus {
-  if (!isEnabledByFlag()) {
+export async function getThaiIdStatus(): Promise<ThaiIdStatus> {
+  const enabled = await getBooleanSetting(THAI_D_ENABLED_KEY, isEnabledByFlag());
+
+  if (!enabled) {
     return {
       enabled: false,
       reason: "ระบบ ThaiD ถูกปิดใช้งานชั่วคราว กรุณาเข้าสู่ระบบด้วย Username/Password",
@@ -82,8 +87,8 @@ export function getThaiIdStatus(): ThaiIdStatus {
   };
 }
 
-export function getThaiIdConfig(origin: string): ThaiIdConfig {
-  const status = getThaiIdStatus();
+export async function getThaiIdConfig(origin: string): Promise<ThaiIdConfig> {
+  const status = await getThaiIdStatus();
   const clientId = (process.env.CLIENT_ID ?? "").trim();
   const clientSecret = (process.env.CLIENT_SECRET ?? "").trim();
   const apiKey = (process.env.APIKEY ?? process.env.THAIID_API_KEY ?? "").trim();

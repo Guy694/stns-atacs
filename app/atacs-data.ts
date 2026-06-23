@@ -25,6 +25,7 @@ export type FacilitySurvey = {
   facilityId: number;
   facilityName: string;
   districtName: string;
+  facilityTypeCode?: string;
   surveyDate: string;
   personnelCount: number;
   completionRate: number;
@@ -38,6 +39,7 @@ export const facilitySurveys: FacilitySurvey[] = [
     facilityId: 65,
     facilityName: "สสจ.สตูล",
     districtName: "เมืองสตูล",
+    facilityTypeCode: "สสจ.",
     surveyDate: "2026-05-04",
     personnelCount: 92,
     completionRate: 96,
@@ -124,6 +126,7 @@ export const facilitySurveys: FacilitySurvey[] = [
     facilityId: 1,
     facilityName: "รพ.สตูล",
     districtName: "เมืองสตูล",
+    facilityTypeCode: "รพ.ทั่วไป",
     surveyDate: "2026-05-03",
     personnelCount: 214,
     completionRate: 88,
@@ -210,6 +213,7 @@ export const facilitySurveys: FacilitySurvey[] = [
     facilityId: 7,
     facilityName: "รพ.ละงู",
     districtName: "ละงู",
+    facilityTypeCode: "รพ.ชุมชน",
     surveyDate: "2026-05-02",
     personnelCount: 61,
     completionRate: 74,
@@ -278,6 +282,7 @@ export const facilitySurveys: FacilitySurvey[] = [
     facilityId: 2,
     facilityName: "รพ.ควนกาหลง",
     districtName: "ควนกาหลง",
+    facilityTypeCode: "รพ.ชุมชน",
     surveyDate: "2026-05-01",
     personnelCount: 78,
     completionRate: 82,
@@ -346,6 +351,7 @@ export const facilitySurveys: FacilitySurvey[] = [
     facilityId: 5,
     facilityName: "รพ.ทุ่งหว้า",
     districtName: "ทุ่งหว้า",
+    facilityTypeCode: "รพ.ชุมชน",
     surveyDate: "2026-04-28",
     personnelCount: 55,
     completionRate: 71,
@@ -414,6 +420,7 @@ export const facilitySurveys: FacilitySurvey[] = [
     facilityId: 6,
     facilityName: "รพ.มะนัง",
     districtName: "มะนัง",
+    facilityTypeCode: "รพ.ชุมชน",
     surveyDate: "2026-04-30",
     personnelCount: 43,
     completionRate: 79,

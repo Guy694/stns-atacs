@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { StatusBadge } from "@/app/_components/ui/status-badge";
 import { getCurrentUser } from "@/lib/auth";
 import { listFacilities } from "@/lib/assets";
 
@@ -20,12 +21,12 @@ export default async function FacilitiesPage() {
   const surveyed = facilities.filter((f) => f.has_survey > 0).length;
   const totalAssets = facilities.reduce((s, f) => s + f.asset_count, 0);
 
-  const typeBadge = (typecode: string) => {
-    if (typecode.includes("รพ.ทั่วไป")) return "bg-emerald-100 text-emerald-700";
-    if (typecode.includes("รพ.ชุมชน")) return "bg-lime-100 text-lime-700";
-    if (typecode.includes("รพ.สต") || typecode.includes("สอน.") || typecode.includes("ศสช.")) return "bg-teal-100 text-teal-700";
-    if (typecode.includes("สสจ") || typecode.includes("สสอ")) return "bg-amber-100 text-amber-700";
-    return "bg-gray-100 text-gray-700";
+  const typeBadge = (typecode: string): "success" | "info" | "primary" | "warning" | "neutral" => {
+    if (typecode.includes("รพ.ทั่วไป")) return "success";
+    if (typecode.includes("รพ.ชุมชน")) return "info";
+    if (typecode.includes("รพ.สต") || typecode.includes("สอน.") || typecode.includes("ศสช.")) return "primary";
+    if (typecode.includes("สสจ") || typecode.includes("สสอ")) return "warning";
+    return "neutral";
   };
 
   return (
@@ -87,22 +88,22 @@ export default async function FacilitiesPage() {
                   <tr key={f.id} className="transition-colors hover:bg-black/[0.02]">
                     <td className="px-5 py-3 font-medium text-[var(--foreground)]">{f.name}</td>
                     <td className="px-4 py-3">
-                      <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${typeBadge(f.typecode)}`}>
-                        {f.typecode}
-                      </span>
+	                      <StatusBadge tone={typeBadge(f.typecode)}>
+	                        {f.typecode}
+	                      </StatusBadge>
                     </td>
                     <td className="px-4 py-3 text-center tabular-nums">{f.asset_count}</td>
                     <td className="px-4 py-3 text-center tabular-nums text-emerald-600">{f.hw_count}</td>
                     <td className="px-4 py-3 text-center tabular-nums text-lime-600">{f.sw_count}</td>
                     <td className="px-4 py-3 text-center">
                       {f.has_survey > 0 ? (
-                        <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-700">
-                          มีข้อมูล
-                        </span>
-                      ) : (
-                        <span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-500">
-                          ยังไม่มีข้อมูล
-                        </span>
+	                        <StatusBadge tone="success">
+	                          มีข้อมูล
+	                        </StatusBadge>
+	                      ) : (
+	                        <StatusBadge tone="neutral">
+	                          ยังไม่มีข้อมูล
+	                        </StatusBadge>
                       )}
                     </td>
                     <td className="px-4 py-3 text-right">

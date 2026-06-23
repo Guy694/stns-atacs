@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import Link from "next/link";
 
+import { StatusBadge } from "@/app/_components/ui/status-badge";
 import { disposalAssetAction } from "@/app/(main)/disposal/actions";
 import type { AssetWithFacility } from "@/lib/assets";
 
@@ -27,8 +28,8 @@ const DISPOSAL_TYPES = [
     value: "Disposed",
     label: "จำหน่ายออก",
     desc: "ตัดทรัพย์สินออกจากระบบ จำหน่ายหรือโอนออก",
-    color: "border-violet-400 bg-violet-50 text-violet-700",
-    dot: "bg-violet-500",
+    color: "border-[var(--primary-soft-strong)] bg-[var(--primary-soft)] text-[var(--primary-text)]",
+    dot: "bg-[var(--primary)]",
   },
   {
     value: "Lost",
@@ -68,11 +69,9 @@ export function DisposalForm({ asset }: Props) {
           </div>
           <div>
             <span className="text-[var(--muted)]">สถานะปัจจุบัน: </span>
-            <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
-              asset.currentStatus === "Active" ? "bg-emerald-100 text-emerald-700" :
-              asset.currentStatus === "Broken" ? "bg-rose-100 text-rose-700" :
-              "bg-amber-100 text-amber-700"
-            }`}>{asset.currentStatus}</span>
+            <StatusBadge tone={asset.currentStatus === "Active" ? "success" : asset.currentStatus === "Broken" ? "danger" : "warning"}>
+              {asset.currentStatus}
+            </StatusBadge>
           </div>
         </div>
       </div>
@@ -84,8 +83,8 @@ export function DisposalForm({ asset }: Props) {
         </label>
         <div className="grid gap-2 sm:grid-cols-2">
           {DISPOSAL_TYPES.map((t) => (
-            <label key={t.value} className={`flex cursor-pointer items-start gap-3 rounded-xl border-2 px-4 py-3 transition has-[:checked]:ring-2 has-[:checked]:ring-offset-1 has-[:checked]:ring-indigo-300 ${t.color}`}>
-              <input type="radio" name="disposalType" value={t.value} required className="mt-0.5 accent-indigo-600" />
+            <label key={t.value} className={`flex cursor-pointer items-start gap-3 rounded-xl border-2 px-4 py-3 transition has-[:checked]:ring-2 has-[:checked]:ring-offset-1 has-[:checked]:ring-[var(--primary-soft-strong)] ${t.color}`}>
+              <input type="radio" name="disposalType" value={t.value} required className="mt-0.5 accent-[var(--primary)]" />
               <div>
                 <p className="text-sm font-semibold">{t.label}</p>
                 <p className="mt-0.5 text-xs opacity-80">{t.desc}</p>
@@ -102,7 +101,7 @@ export function DisposalForm({ asset }: Props) {
           type="date"
           name="noteDate"
           defaultValue={new Date().toISOString().slice(0, 10)}
-          className="rounded-xl border border-[var(--line)] bg-white/80 px-3 py-2 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-200"
+          className="rounded-xl border border-[var(--line)] bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/15"
         />
       </div>
 
@@ -116,7 +115,7 @@ export function DisposalForm({ asset }: Props) {
           rows={4}
           required
           placeholder="ระบุเหตุผลให้ชัดเจน เช่น อุปกรณ์ไหม้เสียหายจากไฟฟ้าลัดวงจร, ครบอายุการใช้งาน 7 ปี, ไม่พบ ณ สถานที่ตั้ง…"
-          className="w-full rounded-xl border border-[var(--line)] bg-white/80 px-3 py-2.5 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-200"
+          className="w-full rounded-xl border border-[var(--line)] bg-white/80 px-3 py-2.5 text-sm outline-none focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/15"
         />
       </div>
 

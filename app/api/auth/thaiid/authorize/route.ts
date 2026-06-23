@@ -15,7 +15,7 @@ function toLoginUrl(req: NextRequest, search: Record<string, string>) {
 }
 
 export async function GET(req: NextRequest) {
-  const config = getThaiIdConfig(req.nextUrl.origin);
+  const config = await getThaiIdConfig(req.nextUrl.origin);
 
   if (!config.enabled) {
     return NextResponse.redirect(

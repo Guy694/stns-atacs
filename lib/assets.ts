@@ -14,7 +14,7 @@ type AssetRow = RowDataPacket & {
   facility_name: string | null;
   district_name: string | null;
   row_no: number | null;
-  asset_registration_no: string;
+  asset_registration_no: string | null;
   asset_name: string;
   usage_description: string | null;
   owner_name: string | null;
@@ -78,7 +78,7 @@ function rowToAsset(row: AssetRow) {
     facilityId: row.facility_id,
     facilityName: row.facility_name ?? "",
     districtName: row.district_name ?? "",
-    assetRegistrationNo: row.asset_registration_no,
+    assetRegistrationNo: row.asset_registration_no ?? "",
     assetName: row.asset_name,
     usageDescription: row.usage_description ?? "",
     ownerName: row.owner_name ?? "",
@@ -91,6 +91,7 @@ function rowToAsset(row: AssetRow) {
     currentStatus: normalizeStatus(row.current_status),
     updatedBy: row.updated_by ?? "",
     updatedAt: toDateOnly(row.last_updated_at),
+    maintenanceStartDate: toDateOnly(row.maintenance_start_date),
     maintenanceEndDate: toDateOnly(row.maintenance_end_date),
     manufacturerBrand: row.manufacturer_brand ?? "",
     serialNumber: row.serial_number ?? "",
@@ -106,7 +107,7 @@ export type AssetWithFacility = ReturnType<typeof rowToAsset>;
 
 export type AssetInput = {
   surveyId: number;
-  assetRegistrationNo: string;
+  assetRegistrationNo: string | null;
   assetName: string;
   usageDescription?: string;
   ownerName?: string;
@@ -142,7 +143,15 @@ export type AssetListFilter = {
   deviceType?: string;
   maExpiringDays?: number;
   sort?: "updated_desc" | "updated_asc" | "name_asc" | "name_desc" | "ma_soon";
+  limit?: number;
+  offset?: number;
 };
+
+const ASSET_FROM_SQL = `
+  FROM information_assets a
+  JOIN information_asset_surveys s ON s.id = a.survey_id
+  JOIN health_facilities hf        ON hf.id = s.facility_id
+`;
 
 const ASSET_JOIN_SQL = `
   SELECT
@@ -150,22 +159,10 @@ const ASSET_JOIN_SQL = `
     s.facility_id,
     hf.name          AS facility_name,
     hf.district_name
-  FROM information_assets a
-  JOIN information_asset_surveys s ON s.id = a.survey_id
-  JOIN health_facilities hf        ON hf.id = s.facility_id
+  ${ASSET_FROM_SQL}
 `;
 
-/** รายการทรัพย์สินทั้งหมด (admin) หรือเฉพาะหน่วยงาน (officer ไม่จำกัดในตอนนี้) */
-export async function listAssets(filter?: {
-  facilityId?: number;
-  status?: string;
-  search?: string;
-  district?: string;
-  assetGroup?: "Hardware" | "Software";
-  deviceType?: string;
-  maExpiringDays?: number;
-  sort?: "updated_desc" | "updated_asc" | "name_asc" | "name_desc" | "ma_soon";
-}): Promise<AssetWithFacility[]> {
+function buildAssetFilter(filter?: AssetListFilter) {
   const conditions: string[] = [];
   const values: unknown[] = [];
 
@@ -199,7 +196,67 @@ export async function listAssets(filter?: {
     values.push(filter.maExpiringDays);
   }
 
-  const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+  return {
+    where: conditions.length ? `WHERE ${conditions.join(" AND ")}` : "",
+    values,
+  };
+}
+
+function sortFallbackAssets(assets: AssetWithFacility[], sort?: AssetListFilter["sort"]) {
+  const sorted = [...assets];
+  sorted.sort((a, b) => {
+    if (sort === "updated_desc") return b.updatedAt.localeCompare(a.updatedAt) || b.id - a.id;
+    if (sort === "updated_asc") return a.updatedAt.localeCompare(b.updatedAt) || a.id - b.id;
+    if (sort === "name_asc") return a.assetName.localeCompare(b.assetName) || a.id - b.id;
+    if (sort === "name_desc") return b.assetName.localeCompare(a.assetName) || b.id - a.id;
+    if (sort === "ma_soon") return (a.maintenanceEndDate || "9999-12-31").localeCompare(b.maintenanceEndDate || "9999-12-31") || a.id - b.id;
+    return (
+      a.districtName.localeCompare(b.districtName) ||
+      a.facilityName.localeCompare(b.facilityName) ||
+      a.id - b.id
+    );
+  });
+  return sorted;
+}
+
+function filterFallbackAssets(filter?: AssetListFilter) {
+  let assets = fallbackSurveys.flatMap((s) =>
+    s.assets.map((a) => ({
+      ...a,
+      surveyId: 0,
+      facilityId: s.facilityId,
+      facilityName: s.facilityName,
+      districtName: s.districtName,
+      publicIp: a.publicIp ?? undefined,
+      purchasePrice: a.purchasePrice ?? null,
+      purchaseDate: a.purchaseDate ?? "",
+      purchaseOrderNo: a.purchaseOrderNo ?? "",
+      maintenanceStartDate: "",
+    }))
+  );
+
+  if (filter?.facilityId) assets = assets.filter((asset) => asset.facilityId === filter.facilityId);
+  if (filter?.status) assets = assets.filter((asset) => asset.currentStatus === filter.status);
+  if (filter?.district) assets = assets.filter((asset) => asset.districtName === filter.district);
+  if (filter?.assetGroup) assets = assets.filter((asset) => asset.assetGroup === filter.assetGroup);
+  if (filter?.deviceType) assets = assets.filter((asset) => asset.deviceType === filter.deviceType);
+  if (filter?.search) {
+    const q = filter.search.toLowerCase();
+    assets = assets.filter(
+      (asset) =>
+        asset.assetName.toLowerCase().includes(q) ||
+        asset.assetRegistrationNo.toLowerCase().includes(q) ||
+        asset.deviceType.toLowerCase().includes(q) ||
+        asset.serialNumber.toLowerCase().includes(q)
+    );
+  }
+
+  return sortFallbackAssets(assets, filter?.sort);
+}
+
+/** รายการทรัพย์สินทั้งหมด (admin) หรือเฉพาะหน่วยงาน (officer ไม่จำกัดในตอนนี้) */
+export async function listAssets(filter?: AssetListFilter): Promise<AssetWithFacility[]> {
+  const { where, values } = buildAssetFilter(filter);
   const orderByMap: Record<NonNullable<AssetListFilter["sort"]>, string> = {
     updated_desc: "a.last_updated_at DESC, a.id DESC",
     updated_asc: "a.last_updated_at ASC, a.id ASC",
@@ -208,26 +265,32 @@ export async function listAssets(filter?: {
     ma_soon: "a.maintenance_end_date ASC, a.id ASC",
   };
   const orderBy = filter?.sort ? orderByMap[filter.sort] : "hf.district_name, hf.name, a.row_no, a.id";
-  const sql = `${ASSET_JOIN_SQL} ${where} ORDER BY ${orderBy}`;
+  const limit = filter?.limit && Number.isFinite(filter.limit) ? Math.max(1, Math.floor(filter.limit)) : null;
+  const offset = filter?.offset && Number.isFinite(filter.offset) ? Math.max(0, Math.floor(filter.offset)) : 0;
+  const pageSql = limit ? " LIMIT ? OFFSET ?" : "";
+  const sql = `${ASSET_JOIN_SQL} ${where} ORDER BY ${orderBy}${pageSql}`;
+  const queryValues = limit ? [...values, limit, offset] : values;
 
   try {
-    const rows = await selectRows<AssetRow>(sql, values);
+    const rows = await selectRows<AssetRow>(sql, queryValues);
     return rows.map(rowToAsset);
   } catch {
-    // fallback
-    return fallbackSurveys.flatMap((s) =>
-      s.assets.map((a) => ({
-        ...a,
-        surveyId: 0,
-        facilityId: s.facilityId,
-        facilityName: s.facilityName,
-        districtName: s.districtName,
-        publicIp: a.publicIp ?? undefined,
-        purchasePrice: a.purchasePrice ?? null,
-        purchaseDate: a.purchaseDate ?? "",
-        purchaseOrderNo: a.purchaseOrderNo ?? "",
-      }))
+    const fallback = filterFallbackAssets(filter);
+    return limit ? fallback.slice(offset, offset + limit) : fallback;
+  }
+}
+
+export async function countAssets(filter?: AssetListFilter): Promise<number> {
+  const { where, values } = buildAssetFilter(filter);
+
+  try {
+    const rows = await selectRows<RowDataPacket & { total: number }>(
+      `SELECT COUNT(*) AS total ${ASSET_FROM_SQL} ${where}`,
+      values
     );
+    return Number(rows[0]?.total ?? 0);
+  } catch {
+    return filterFallbackAssets(filter).length;
   }
 }
 
@@ -290,7 +353,7 @@ export async function createAsset(input: AssetInput) {
     [
       input.surveyId,
       input.rowNo ?? null,
-      input.assetRegistrationNo,
+      input.assetRegistrationNo ?? null,
       input.assetName,
       input.usageDescription ?? null,
       input.ownerName ?? null,

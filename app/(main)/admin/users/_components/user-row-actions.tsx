@@ -2,7 +2,7 @@
 
 import { useActionState, useEffect, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
-import { toggleUserActiveAction, updateUserRoleAction, resetUserPasswordAction, updateUserProfileAction } from "@/app/(main)/admin/users/actions";
+import { toggleUserActiveAction, resetUserPasswordAction, updateUserProfileAction } from "@/app/(main)/admin/users/actions";
 
 type FacilityOption = {
   id: number;
@@ -13,6 +13,7 @@ type FacilityOption = {
 type Props = {
   userId: number;
   fullName: string;
+  officerPosition: string | null;
   email: string | null;
   username: string | null;
   thaidCid: string | null;
@@ -27,6 +28,7 @@ type Props = {
 export function UserRowActions({
   userId,
   fullName,
+  officerPosition,
   email,
   username,
   thaidCid,
@@ -38,10 +40,10 @@ export function UserRowActions({
   isSelf,
 }: Props) {
   const mounted = typeof document !== "undefined";
+  const [showActions, setShowActions] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [showReset, setShowReset] = useState(false);
   const [togglePending, startToggle] = useTransition();
-  const [rolePending, startRole] = useTransition();
   const formRef = useRef<HTMLFormElement>(null);
   const editFormRef = useRef<HTMLFormElement>(null);
   const editFacilityRef = useRef<HTMLSelectElement>(null);
@@ -61,8 +63,24 @@ export function UserRowActions({
     }
   }, [showEdit, editRole]);
 
+  useEffect(() => {
+    if (!showActions && !showEdit && !showReset) return;
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      setShowActions(false);
+      setShowEdit(false);
+      setShowReset(false);
+    }
+    document.addEventListener("keydown", closeOnEscape);
+    return () => document.removeEventListener("keydown", closeOnEscape);
+  }, [showActions, showEdit, showReset]);
+
   const [editError, editAction, editPending] = useActionState(
     async (prev: string | null, fd: FormData) => {
+      const nextRole = String(fd.get("role") ?? currentRole);
+      if (nextRole !== currentRole && !window.confirm(`ยืนยันเปลี่ยนสิทธิ์ของ ${fullName} จาก ${currentRole} เป็น ${nextRole}?`)) {
+        return "ยกเลิกการเปลี่ยนสิทธิ์แล้ว";
+      }
       const res = await updateUserProfileAction(prev, fd);
       if (!res) setShowEdit(false);
       return res;
@@ -80,62 +98,82 @@ export function UserRowActions({
   );
 
   return (
-    <div className="inline-flex items-center gap-2">
-      {!isSelf && (
-        <button
-          onClick={() => {
-            setEditRole(currentRole);
-            setEditFacilityId(currentFacilityId?.toString() ?? "");
-            setShowEdit(true);
-          }}
-          className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-700 transition hover:bg-indigo-100"
-        >
-          แก้ไขข้อมูล
-        </button>
-      )}
+    <div className="inline-flex items-center">
+      <button
+        type="button"
+        onClick={() => setShowActions(true)}
+        className="min-h-11 rounded-xl border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-stone-700 transition hover:bg-stone-50"
+        aria-label={`จัดการผู้ใช้ ${fullName}`}
+      >
+        จัดการ
+      </button>
 
-      {/* Toggle active */}
-      {!isSelf && (
-        <button
-          onClick={() => startToggle(() => toggleUserActiveAction(userId, currentActive))}
-          disabled={togglePending}
-          className={`rounded-lg border px-3 py-1 text-xs font-medium transition disabled:opacity-50 ${
-            currentActive
-              ? "border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100"
-              : "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
-          }`}
-        >
-          {togglePending ? "…" : currentActive ? "ปิดใช้งาน" : "เปิดใช้งาน"}
-        </button>
-      )}
-
-      {/* Toggle role */}
-      {!isSelf && (
-        <button
-          onClick={() => startRole(() => updateUserRoleAction(userId, currentRole === "admin" ? "officer" : currentRole === "officer" ? "viewer" : "admin"))}
-          disabled={rolePending}
-          className="rounded-lg border border-violet-200 bg-violet-50 px-3 py-1 text-xs font-medium text-violet-700 transition hover:bg-violet-100 disabled:opacity-50"
-        >
-          {rolePending ? "…" : currentRole === "admin" ? "→ Officer" : currentRole === "officer" ? "→ Viewer" : "→ Admin"}
-        </button>
-      )}
-
-      {/* Reset password */}
-      {hasUsername && (
-        <button
-          onClick={() => setShowReset(true)}
-          className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700 transition hover:bg-amber-100"
-        >
-          รีเซ็ต PW
-        </button>
+      {mounted && showActions && createPortal(
+        <div className="fixed inset-0 z-50 flex items-end justify-center p-3 sm:items-center" role="presentation">
+          <button type="button" aria-label="ปิดเมนูจัดการ" className="absolute inset-0 bg-black/40" onClick={() => setShowActions(false)} />
+          <section role="dialog" aria-modal="true" aria-labelledby={`manage-user-${userId}`} className="relative z-10 w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 id={`manage-user-${userId}`} className="text-lg font-semibold">จัดการผู้ใช้งาน</h3>
+                <p className="mt-1 text-sm text-[var(--muted)]">{fullName}</p>
+              </div>
+              <button type="button" onClick={() => setShowActions(false)} aria-label="ปิด" className="min-h-11 min-w-11 rounded-xl text-stone-500 hover:bg-stone-100">✕</button>
+            </div>
+            <div className="mt-5 grid gap-2">
+              {!isSelf && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditRole(currentRole);
+                    setEditFacilityId(currentFacilityId?.toString() ?? "");
+                    setShowActions(false);
+                    setShowEdit(true);
+                  }}
+                  className="min-h-11 rounded-xl border border-stone-200 px-4 py-2 text-left text-sm font-semibold hover:bg-stone-50"
+                >
+                  แก้ไขข้อมูลและสิทธิ์
+                </button>
+              )}
+              {hasUsername && (
+                <button
+                  type="button"
+                  onClick={() => { setShowActions(false); setShowReset(true); }}
+                  className="min-h-11 rounded-xl border border-stone-200 px-4 py-2 text-left text-sm font-semibold hover:bg-stone-50"
+                >
+                  รีเซ็ตรหัสผ่าน
+                </button>
+              )}
+              {!isSelf && (
+                <button
+                  type="button"
+                  disabled={togglePending}
+                  onClick={() => {
+                    const nextAction = currentActive ? "ปิดใช้งาน" : "เปิดใช้งาน";
+                    if (!window.confirm(`ยืนยัน${nextAction}บัญชี ${fullName}?`)) return;
+                    startToggle(async () => {
+                      await toggleUserActiveAction(userId, currentActive);
+                      setShowActions(false);
+                    });
+                  }}
+                  className={`min-h-11 rounded-xl border px-4 py-2 text-left text-sm font-semibold disabled:opacity-50 ${
+                    currentActive ? "border-rose-200 text-rose-800 hover:bg-rose-50" : "border-emerald-200 text-emerald-800 hover:bg-emerald-50"
+                  }`}
+                >
+                  {togglePending ? "กำลังบันทึก..." : currentActive ? "ปิดใช้งานบัญชี" : "เปิดใช้งานบัญชี"}
+                </button>
+              )}
+            </div>
+          </section>
+        </div>,
+        document.body
       )}
 
       {/* Reset password modal */}
       {mounted && showReset && createPortal(
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
+        <div className="fixed inset-0 z-50 flex items-end justify-center p-3 sm:items-center">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowReset(false)} />
-          <div className="relative z-10 w-full max-w-sm rounded-2xl bg-[var(--surface-strong)] p-6 shadow-2xl">
-            <h3 className="section-title text-lg font-semibold">รีเซ็ตรหัสผ่าน</h3>
+          <div role="dialog" aria-modal="true" aria-labelledby={`reset-password-${userId}`} className="relative z-10 w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
+            <h3 id={`reset-password-${userId}`} className="text-lg font-semibold">รีเซ็ตรหัสผ่าน</h3>
 
             {resetError && (
               <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{resetError}</div>
@@ -168,10 +206,10 @@ export function UserRowActions({
       )}
 
       {mounted && showEdit && createPortal(
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
+        <div className="fixed inset-0 z-50 flex items-end justify-center p-3 sm:items-center">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowEdit(false)} />
-          <div className="relative z-10 w-full max-w-lg rounded-2xl bg-[var(--surface-strong)] p-6 shadow-2xl">
-            <h3 className="section-title text-lg font-semibold">แก้ไขข้อมูลผู้ใช้</h3>
+          <div role="dialog" aria-modal="true" aria-labelledby={`edit-user-${userId}`} className="relative z-10 max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-xl">
+            <h3 id={`edit-user-${userId}`} className="text-lg font-semibold">แก้ไขข้อมูลผู้ใช้</h3>
 
             {editError && (
               <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{editError}</div>
@@ -183,6 +221,12 @@ export function UserRowActions({
                 <label className="block text-sm font-medium">ชื่อ-นามสกุล</label>
                 <input name="fullName" required defaultValue={fullName} className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]" />
               </div>
+              {editRole === "officer" && (
+                <div>
+                  <label className="block text-sm font-medium">ตำแหน่งเจ้าหน้าที่</label>
+                  <input name="officerPosition" required maxLength={150} defaultValue={officerPosition ?? ""} className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]" />
+                </div>
+              )}
               <div className="grid gap-3 sm:grid-cols-2">
                 <div>
                   <label className="block text-sm font-medium">Email</label>
@@ -196,9 +240,9 @@ export function UserRowActions({
                     onChange={(e) => handleEditRoleChange(e.target.value as "admin" | "officer" | "viewer")}
                     className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
                   >
-                    <option value="officer">Officer</option>
-                    <option value="admin">Admin</option>
-                    <option value="viewer">Viewer</option>
+                    <option value="officer">เจ้าหน้าที่</option>
+                    <option value="admin">ผู้ดูแลระบบ</option>
+                    <option value="viewer">ผู้ดูข้อมูล</option>
                   </select>
                 </div>
               </div>

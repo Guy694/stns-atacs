@@ -1,7 +1,9 @@
 import Link from "next/link";
 
+import { StatusBadge } from "@/app/_components/ui/status-badge";
 import { getCurrentUser } from "@/lib/auth";
-import { listAssets, listAllFacilitiesForSelect, listFacilities } from "@/lib/assets";
+import { countAssets, listAssets, listAllFacilitiesForSelect, listFacilities, type AssetListFilter } from "@/lib/assets";
+import { formatThaiDate } from "@/lib/date-format";
 import { listDeviceTypes } from "@/lib/device-types";
 import { canManageAsset, canSeeSensitiveAssetNetwork } from "@/lib/permissions";
 import { hasPermission } from "@/lib/role-permissions";
@@ -18,17 +20,57 @@ function readParam(p: Record<string, string | string[] | undefined>, key: string
   return Array.isArray(v) ? v[0] : (v ?? "");
 }
 
+function readPositiveIntParam(p: Record<string, string | string[] | undefined>, key: string, fallback: number) {
+  const parsed = Number(readParam(p, key));
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function normalizePerPage(value: number) {
+  return [10, 25, 50, 100].includes(value) ? value : 25;
+}
+
+function buildAssetsHref(params: Record<string, string | number | undefined>, page: number) {
+  const query = new URLSearchParams();
+
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== "") {
+      query.set(key, String(value));
+    }
+  }
+
+  if (page > 1) {
+    query.set("page", String(page));
+  } else {
+    query.delete("page");
+  }
+
+  const queryString = query.toString();
+  return queryString ? `/assets?${queryString}` : "/assets";
+}
+
+function buildPageNumbers(currentPage: number, totalPages: number) {
+  const pages = new Set([1, totalPages]);
+  const start = Math.max(1, currentPage - 2);
+  const end = Math.min(totalPages, currentPage + 2);
+
+  for (let page = start; page <= end; page += 1) {
+    pages.add(page);
+  }
+
+  return [...pages].sort((a, b) => a - b);
+}
+
 const STATUS_LABELS: Record<string, string> = {
   Active: "พร้อมใช้งาน",
   Inactive: "ไม่ใช้งาน",
   Broken: "ชำรุด",
 };
 
-const STATUS_STYLE: Record<string, string> = {
-  Active: "bg-emerald-100 text-emerald-700",
-  Inactive: "bg-stone-100 text-stone-500",
-  Broken: "bg-rose-100 text-rose-700",
-};
+const STATUS_TONE = {
+  Active: "success",
+  Inactive: "warning",
+  Broken: "danger",
+} as const;
 
 export default async function AssetsPage({ searchParams }: AssetsPageProps) {
   const user = await getCurrentUser();
@@ -50,24 +92,47 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
   const sort = readParam(params, "sort") as "updated_desc" | "updated_asc" | "name_asc" | "name_desc" | "ma_soon";
   const requestedFacilityFilter = Number(readParam(params, "facility")) || undefined;
   const facilityFilter = isOfficerWithFacility ? Number(user.facilityId) : requestedFacilityFilter;
+  const requestedPage = readPositiveIntParam(params, "page", 1);
+  const perPage = normalizePerPage(readPositiveIntParam(params, "perPage", 25));
+  const assetFilter: AssetListFilter = {
+    search: search || undefined,
+    status: statusFilter || undefined,
+    facilityId: facilityFilter,
+    district: districtFilter || undefined,
+    assetGroup: groupFilter === "Hardware" || groupFilter === "Software" ? groupFilter : undefined,
+    deviceType: deviceTypeFilter || undefined,
+    maExpiringDays,
+    sort: ["updated_desc", "updated_asc", "name_asc", "name_desc", "ma_soon"].includes(sort) ? sort : undefined,
+  };
 
-  const [assets, facilitiesForSelect, facilities, deviceTypes] = await Promise.all([
-    listAssets({
-      search: search || undefined,
-      status: statusFilter || undefined,
-      facilityId: facilityFilter,
-      district: districtFilter || undefined,
-      assetGroup: groupFilter === "Hardware" || groupFilter === "Software" ? groupFilter : undefined,
-      deviceType: deviceTypeFilter || undefined,
-      maExpiringDays,
-      sort: ["updated_desc", "updated_asc", "name_asc", "name_desc", "ma_soon"].includes(sort) ? sort : undefined,
-    }),
+  const [totalAssets, facilitiesForSelect, facilities, deviceTypes] = await Promise.all([
+    countAssets(assetFilter),
     listAllFacilitiesForSelect(),
     listFacilities(),
     listDeviceTypes(),
   ]);
+  const totalPages = Math.max(1, Math.ceil(totalAssets / perPage));
+  const currentPage = Math.min(requestedPage, totalPages);
+  const offset = (currentPage - 1) * perPage;
+  const assets = await listAssets({ ...assetFilter, limit: perPage, offset });
+  const pageStart = totalAssets === 0 ? 0 : offset + 1;
+  const pageEnd = Math.min(offset + assets.length, totalAssets);
+  const pageQuery = {
+    search: search || undefined,
+    status: statusFilter || undefined,
+    group: groupFilter || undefined,
+    deviceType: deviceTypeFilter || undefined,
+    district: districtFilter || undefined,
+    maDays: maExpiringDays,
+    facility: !isOfficerWithFacility ? requestedFacilityFilter : undefined,
+    sort: sort || undefined,
+    perPage: perPage === 25 ? undefined : perPage,
+  };
+  const pageNumbers = buildPageNumbers(currentPage, totalPages);
 
-  const districtOptions = [...new Set(facilitiesForSelect.map((facility) => facility.district_name).filter(Boolean))].sort();
+  const districtOptions = [
+    ...new Set(facilitiesForSelect.map((facility) => facility.district_name).filter((district): district is string => Boolean(district))),
+  ].sort();
 
   const facilitiesForForm = isOfficerWithFacility
     ? facilitiesForSelect.filter((f) => f.id === Number(user.facilityId))
@@ -94,7 +159,12 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
         <div>
           <p className="text-xs font-medium uppercase tracking-[0.22em] text-[var(--muted)]">ATACS · ทะเบียนทรัพย์สิน</p>
           <h1 className="section-title mt-1 text-3xl font-semibold">รายการทรัพย์สินสารสนเทศ</h1>
-          <p className="mt-1 text-sm text-[var(--muted)]">{assets.length} รายการ</p>
+          <p className="mt-1 text-sm text-[var(--muted)]">
+            {totalAssets.toLocaleString("th-TH")} รายการ
+            {totalAssets > 0 && (
+              <span> · แสดง {pageStart.toLocaleString("th-TH")}-{pageEnd.toLocaleString("th-TH")}</span>
+            )}
+          </p>
           {officerFacilityName && (
             <p className="mt-2 inline-flex items-center rounded-full bg-sky-100 px-3 py-1 text-xs font-medium text-sky-700">
               Officer Scope: {officerFacilityName}
@@ -121,13 +191,17 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
 
       {/* Filters */}
       <form method="GET" className="glass-panel flex flex-wrap gap-3 rounded-2xl p-4">
+        <label htmlFor="asset-search" className="sr-only">ค้นหาทรัพย์สิน</label>
         <input
+          id="asset-search"
           name="search"
           defaultValue={search}
           placeholder="ค้นหาชื่อ / เลขทะเบียน / ประเภท…"
           className="min-w-0 flex-1 rounded-xl border border-black/10 bg-white/80 px-4 py-2 text-sm outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/20"
         />
+        <label htmlFor="asset-status-filter" className="sr-only">กรองสถานะทรัพย์สิน</label>
         <select
+          id="asset-status-filter"
           name="status"
           defaultValue={statusFilter}
           className="rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
@@ -137,7 +211,9 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
           <option value="Inactive">ไม่ใช้งาน</option>
           <option value="Broken">ชำรุด</option>
         </select>
+        <label htmlFor="asset-group-filter" className="sr-only">กรองหมวดทรัพย์สิน</label>
         <select
+          id="asset-group-filter"
           name="group"
           defaultValue={groupFilter}
           className="rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
@@ -146,7 +222,9 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
           <option value="Hardware">Hardware</option>
           <option value="Software">Software</option>
         </select>
+        <label htmlFor="asset-device-type-filter" className="sr-only">กรองประเภทอุปกรณ์</label>
         <select
+          id="asset-device-type-filter"
           name="deviceType"
           defaultValue={deviceTypeFilter}
           className="rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
@@ -158,7 +236,9 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
             </option>
           ))}
         </select>
+        <label htmlFor="asset-district-filter" className="sr-only">กรองอำเภอ</label>
         <select
+          id="asset-district-filter"
           name="district"
           defaultValue={districtFilter}
           className="rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
@@ -170,7 +250,9 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
             </option>
           ))}
         </select>
+        <label htmlFor="asset-ma-days-filter" className="sr-only">กรองช่วง MA ใกล้หมดอายุ</label>
         <select
+          id="asset-ma-days-filter"
           name="maDays"
           defaultValue={maExpiringDays?.toString() ?? ""}
           className="rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
@@ -181,20 +263,26 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
           <option value="90">MA ภายใน 90 วัน</option>
         </select>
         {!isOfficerWithFacility && (
-          <select
-            name="facility"
-            defaultValue={facilityFilter ?? ""}
-            className="rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
-          >
-            <option value="">ทุกหน่วยงาน</option>
-            {facilitiesForSelect.map((f) => (
-              <option key={f.id} value={f.id}>
-                {f.facility_name} {f.district_name ? `· อ.${f.district_name}` : ""}
-              </option>
-            ))}
-          </select>
+          <>
+            <label htmlFor="asset-facility-filter" className="sr-only">กรองหน่วยงาน</label>
+            <select
+              id="asset-facility-filter"
+              name="facility"
+              defaultValue={facilityFilter ?? ""}
+              className="rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+            >
+              <option value="">ทุกหน่วยงาน</option>
+              {facilitiesForSelect.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.facility_name} {f.district_name ? `· อ.${f.district_name}` : ""}
+                </option>
+              ))}
+            </select>
+          </>
         )}
+        <label htmlFor="asset-sort" className="sr-only">เรียงลำดับทรัพย์สิน</label>
         <select
+          id="asset-sort"
           name="sort"
           defaultValue={sort || ""}
           className="rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
@@ -206,13 +294,25 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
           <option value="name_desc">ชื่อ Z-A</option>
           <option value="ma_soon">MA ใกล้หมดก่อน</option>
         </select>
+        <label htmlFor="asset-per-page" className="sr-only">จำนวนรายการต่อหน้า</label>
+        <select
+          id="asset-per-page"
+          name="perPage"
+          defaultValue={perPage.toString()}
+          className="rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+        >
+          <option value="10">10 รายการ/หน้า</option>
+          <option value="25">25 รายการ/หน้า</option>
+          <option value="50">50 รายการ/หน้า</option>
+          <option value="100">100 รายการ/หน้า</option>
+        </select>
         <button
           type="submit"
           className="rounded-xl bg-[var(--accent-strong)] px-5 py-2 text-sm font-semibold text-white transition hover:opacity-90"
         >
           ค้นหา
         </button>
-        {(search || statusFilter || requestedFacilityFilter || districtFilter || groupFilter || deviceTypeFilter || maExpiringDays || sort) && (
+        {(search || statusFilter || requestedFacilityFilter || districtFilter || groupFilter || deviceTypeFilter || maExpiringDays || sort || perPage !== 25) && (
           <Link href="/assets" className="rounded-xl border border-black/10 bg-white/80 px-4 py-2 text-sm text-[var(--muted)] hover:bg-white">
             ล้างตัวกรอง
           </Link>
@@ -261,9 +361,9 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
                       <span className="rounded-full bg-stone-100 px-2.5 py-0.5 text-xs">{asset.deviceType || asset.assetGroup}</span>
                     </td>
                     <td className="px-4 py-3">
-                      <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_STYLE[asset.currentStatus] ?? ""}`}>
+                      <StatusBadge tone={STATUS_TONE[asset.currentStatus as keyof typeof STATUS_TONE] ?? "neutral"}>
                         {STATUS_LABELS[asset.currentStatus] ?? asset.currentStatus}
-                      </span>
+                      </StatusBadge>
                     </td>
                     {canViewNetworkByPolicy && canSeeSensitiveAssetNetwork(user, asset.facilityId) && (
                       <td className="px-4 py-3 font-mono text-xs text-[var(--muted)]">
@@ -271,7 +371,7 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
                       </td>
                     )}
                     <td className="px-4 py-3 font-mono text-xs text-[var(--muted)]">
-                      {asset.maintenanceEndDate || "–"}
+                      {formatThaiDate(asset.maintenanceEndDate)}
                     </td>
                     {canUpdateAssetByPolicy && canManageAsset(user, asset.facilityId) && (
                       <td className="px-4 py-3 text-right">
@@ -284,7 +384,7 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
                             mode="edit"
                             asset={asset}
                           >
-                            <button className="rounded-lg border border-black/10 bg-white/80 px-3 py-1 text-xs font-medium text-[var(--accent-strong)] transition hover:bg-white">
+                            <button className="inline-flex min-h-11 items-center rounded-lg border border-black/10 bg-white/80 px-3 py-2 text-xs font-medium text-[var(--accent-strong)] transition hover:bg-white">
                               แก้ไข
                             </button>
                           </AssetFormModal>
@@ -304,6 +404,53 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
         <div className="glass-panel rounded-2xl p-12 text-center text-[var(--muted)]">
           ไม่พบรายการทรัพย์สินที่ตรงกับเงื่อนไข
         </div>
+      )}
+
+      {totalAssets > 0 && (
+        <nav className="glass-panel flex flex-col gap-3 rounded-2xl px-4 py-3 sm:flex-row sm:items-center sm:justify-between" aria-label="Asset pagination">
+          <p className="text-sm text-[var(--muted)]">
+            หน้า {currentPage.toLocaleString("th-TH")} จาก {totalPages.toLocaleString("th-TH")}
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            {currentPage > 1 ? (
+              <Link href={buildAssetsHref(pageQuery, currentPage - 1)} className="rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm font-medium hover:bg-white">
+                ก่อนหน้า
+              </Link>
+            ) : (
+              <span className="rounded-xl border border-black/6 bg-white/50 px-3 py-2 text-sm text-[var(--muted)] opacity-60">ก่อนหน้า</span>
+            )}
+
+            {pageNumbers.map((pageNumber, index) => {
+              const previous = pageNumbers[index - 1];
+              const showGap = previous !== undefined && pageNumber - previous > 1;
+
+              return (
+                <span key={pageNumber} className="inline-flex items-center gap-2">
+                  {showGap && <span className="px-1 text-sm text-[var(--muted)]">…</span>}
+                  <Link
+                    href={buildAssetsHref(pageQuery, pageNumber)}
+                    aria-current={pageNumber === currentPage ? "page" : undefined}
+                    className={`min-w-10 rounded-xl px-3 py-2 text-center text-sm font-medium transition ${
+                      pageNumber === currentPage
+                        ? "bg-[var(--accent-strong)] text-white"
+                        : "border border-black/10 bg-white/80 hover:bg-white"
+                    }`}
+                  >
+                    {pageNumber.toLocaleString("th-TH")}
+                  </Link>
+                </span>
+              );
+            })}
+
+            {currentPage < totalPages ? (
+              <Link href={buildAssetsHref(pageQuery, currentPage + 1)} className="rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm font-medium hover:bg-white">
+                ถัดไป
+              </Link>
+            ) : (
+              <span className="rounded-xl border border-black/6 bg-white/50 px-3 py-2 text-sm text-[var(--muted)] opacity-60">ถัดไป</span>
+            )}
+          </div>
+        </nav>
       )}
     </div>
   );

@@ -41,7 +41,7 @@ CREATE TABLE `information_assets` (
   `id` int NOT NULL AUTO_INCREMENT,
   `survey_id` int NOT NULL COMMENT 'อ้างอิงหัวแบบสำรวจจาก information_asset_surveys',
   `row_no` int DEFAULT NULL COMMENT 'ลำดับจากแบบฟอร์ม',
-  `asset_registration_no` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT 'เลขทะเบียนทรัพย์สินสารสนเทศ',
+  `asset_registration_no` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'เลขทะเบียนทรัพย์สินสารสนเทศ',
   `asset_name` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT 'ชื่อของอุปกรณ์ หรือ เซิร์ฟเวอร์',
   `usage_description` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci COMMENT 'คำอธิบายการใช้งานอุปกรณ์',
   `owner_name` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'ผู้รับผิดชอบหรือผู้ดูแลจัดการ',

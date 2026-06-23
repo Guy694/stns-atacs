@@ -1,16 +1,17 @@
 import { redirect } from "next/navigation";
+import { StatusBadge } from "@/app/_components/ui/status-badge";
 import { getCurrentUser } from "@/lib/auth";
 import { listFacilities } from "@/lib/assets";
 import { MapClient } from "./_components/map-client";
 
 const TYPE_COLOR: Record<string, string> = {
-  "รพ.ทั่วไป": "#6366f1",
-  "รพ.ชุมชน": "#0ea5e9",
-  "รพ.สต.": "#10b981",
-  "ศสช.": "#f59e0b",
-  "สสจ.": "#ec4899",
-  "สสอ.": "#8b5cf6",
-  "สอน.": "#64748b",
+  "รพ.ทั่วไป": "#14532d",
+  "รพ.ชุมชน": "#2563eb",
+  "รพ.สต.": "#059669",
+  "ศสช.": "#b45309",
+  "สสจ.": "#0f766e",
+  "สสอ.": "#64748b",
+  "สอน.": "#475569",
 };
 
 export default async function MapPage() {
@@ -69,7 +70,7 @@ export default async function MapPage() {
             {Object.entries(byDistrict).sort().map(([district, count]) => (
               <li key={district} className="flex items-center justify-between text-sm">
                 <span className="text-[var(--foreground)]">{district}</span>
-                <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-semibold text-indigo-700">{count}</span>
+                <StatusBadge tone="primary">{count}</StatusBadge>
               </li>
             ))}
           </ul>
@@ -83,4 +84,3 @@ export default async function MapPage() {
     </div>
   );
 }
-

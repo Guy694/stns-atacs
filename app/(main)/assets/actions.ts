@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import type { RowDataPacket } from "mysql2/promise";
 
 import { getCurrentUser } from "@/lib/auth";
+import { recordAssetStatusHistory } from "@/lib/asset-status-history";
 import { createAsset, deleteAsset, findOrCreateSurvey, getAssetById, updateAsset, type AssetInput } from "@/lib/assets";
 import { writeAuditLog } from "@/lib/audit";
 import { selectRows } from "@/lib/mysql";
@@ -63,16 +64,18 @@ async function validateAssetBusinessRules(input: AssetFormInput, assetId?: numbe
     throw new Error("วันสิ้นสุดสัญญาต้องไม่ก่อนวันเริ่มสัญญา");
   }
 
-  const duplicateRows = await selectRows<RowDataPacket & { id: number }>(
-    `SELECT id
-     FROM information_assets
-     WHERE asset_registration_no = ?
-       AND (? IS NULL OR id <> ?)
-     LIMIT 1`,
-    [input.assetRegistrationNo, assetId ?? null, assetId ?? null]
-  );
-  if (duplicateRows.length > 0) {
-    throw new Error("เลขทะเบียนทรัพย์สินนี้มีในระบบแล้ว");
+  if (input.assetRegistrationNo) {
+    const duplicateRows = await selectRows<RowDataPacket & { id: number }>(
+      `SELECT id
+       FROM information_assets
+       WHERE asset_registration_no = ?
+         AND (? IS NULL OR id <> ?)
+       LIMIT 1`,
+      [input.assetRegistrationNo, assetId ?? null, assetId ?? null]
+    );
+    if (duplicateRows.length > 0) {
+      throw new Error("เลขทะเบียนทรัพย์สินนี้มีในระบบแล้ว");
+    }
   }
 
   const serial = input.serialNumber?.trim();
@@ -99,8 +102,7 @@ async function buildInput(fd: FormData, updaterName: string): Promise<AssetFormI
   if (!facilityId || isNaN(facilityId)) throw new Error("กรุณาเลือกหน่วยงาน");
   const surveyId = await findOrCreateSurvey(facilityId);
 
-  const assetRegistrationNo = readStr(fd, "assetRegistrationNo");
-  if (!assetRegistrationNo) throw new Error("กรุณากรอกเลขทะเบียนทรัพย์สิน");
+  const assetRegistrationNo = readOptional(fd, "assetRegistrationNo") ?? null;
 
   const assetName = readStr(fd, "assetName");
   if (!assetName) throw new Error("กรุณากรอกชื่อทรัพย์สิน");
@@ -148,7 +150,15 @@ export async function createAssetAction(_prev: string | null, fd: FormData): Pro
     if (!canManageAsset(user, input.facilityId)) return "คุณไม่มีสิทธิ์ดำเนินการกับหน่วยงานนี้";
     const result = await createAsset(input);
     const newId = result.insertId;
-    await writeAuditLog({ userId: user.id, userName: user.fullName, action: "create", entity: "information_assets", entityId: newId, summary: `สร้างทรัพย์สิน ${input.assetName} (${input.assetRegistrationNo})` });
+    await recordAssetStatusHistory({
+      assetId: newId,
+      fromStatus: null,
+      toStatus: input.currentStatus ?? "Active",
+      note: "สร้างทะเบียนทรัพย์สิน",
+      changedByUserId: user.id,
+      changedBy: user.fullName,
+    });
+    await writeAuditLog({ userId: user.id, userName: user.fullName, action: "create", entity: "information_assets", entityId: newId, summary: input.assetRegistrationNo ? `สร้างทรัพย์สิน ${input.assetName} (${input.assetRegistrationNo})` : `สร้างทรัพย์สิน ${input.assetName}` });
     revalidatePath("/assets");
     revalidatePath("/");
   } catch (err) {
@@ -166,10 +176,21 @@ export async function updateAssetAction(_prev: string | null, fd: FormData): Pro
   if (!id || isNaN(id)) return "ID ทรัพย์สินไม่ถูกต้อง";
 
   try {
+    const currentAsset = await getAssetById(id);
+    if (!currentAsset) return "ไม่พบทรัพย์สิน";
     const input = await buildInput(fd, user.fullName);
     await validateAssetBusinessRules(input, id);
+    if (!canManageAsset(user, currentAsset.facilityId)) return "คุณไม่มีสิทธิ์ดำเนินการกับทรัพย์สินนี้";
     if (!canManageAsset(user, input.facilityId)) return "คุณไม่มีสิทธิ์ดำเนินการกับหน่วยงานนี้";
     await updateAsset(id, input);
+    await recordAssetStatusHistory({
+      assetId: id,
+      fromStatus: currentAsset.currentStatus,
+      toStatus: input.currentStatus ?? currentAsset.currentStatus,
+      note: "แก้ไขข้อมูลทรัพย์สิน",
+      changedByUserId: user.id,
+      changedBy: user.fullName,
+    });
     await writeAuditLog({ userId: user.id, userName: user.fullName, action: "update", entity: "information_assets", entityId: id, summary: `แก้ไขทรัพย์สิน ${input.assetName}` });
     revalidatePath("/assets");
     revalidatePath("/");

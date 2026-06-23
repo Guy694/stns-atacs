@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { AppIcon } from "@/app/_components/ui/icon";
+import { StatusBadge } from "@/app/_components/ui/status-badge";
 import { getCurrentUser } from "@/lib/auth";
 import { getAssetById, listAssets } from "@/lib/assets";
 import { canManageAsset, canMutateAssets } from "@/lib/permissions";
@@ -16,11 +18,11 @@ function readParam(p: Record<string, string | string[] | undefined>, key: string
   return Array.isArray(v) ? v[0] : (v ?? "");
 }
 
-const STATUS_STYLE: Record<string, string> = {
-  Active: "bg-emerald-100 text-emerald-700",
-  Inactive: "bg-amber-100 text-amber-700",
-  Broken: "bg-rose-100 text-rose-700",
-};
+const STATUS_TONE = {
+  Active: "success",
+  Inactive: "warning",
+  Broken: "danger",
+} as const;
 
 export default async function DisposalPage({ searchParams }: Props) {
   const user = await getCurrentUser();
@@ -41,7 +43,7 @@ export default async function DisposalPage({ searchParams }: Props) {
       return (
         <div className="mx-auto max-w-2xl py-20 text-center text-[var(--muted)]">
           ไม่พบทรัพย์สิน ID {assetId} —{" "}
-          <Link href="/disposal" className="text-indigo-600 hover:underline">ค้นหาใหม่</Link>
+          <Link href="/disposal" className="text-[var(--primary)] hover:underline">ค้นหาใหม่</Link>
         </div>
       );
     }
@@ -50,7 +52,7 @@ export default async function DisposalPage({ searchParams }: Props) {
       return (
         <div className="mx-auto max-w-2xl py-20 text-center text-[var(--muted)]">
           คุณไม่มีสิทธิ์ดำเนินการทรัพย์สินของหน่วยงานนี้ —{" "}
-          <Link href="/disposal" className="text-indigo-600 hover:underline">ค้นหาใหม่</Link>
+          <Link href="/disposal" className="text-[var(--primary)] hover:underline">ค้นหาใหม่</Link>
         </div>
       );
     }
@@ -104,9 +106,9 @@ export default async function DisposalPage({ searchParams }: Props) {
           defaultValue={q}
           autoFocus
           placeholder="ค้นหาชื่อ / เลขทะเบียน / ประเภท…"
-          className="min-w-0 flex-1 rounded-xl border border-[var(--line)] bg-white/80 px-4 py-2.5 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-200"
+          className="min-w-0 flex-1 rounded-xl border border-[var(--line)] bg-white/80 px-4 py-2.5 text-sm outline-none focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/15"
         />
-        <button type="submit" className="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-700">
+        <button type="submit" className="rounded-xl bg-[var(--primary)] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[var(--primary-hover)]">
           ค้นหา
         </button>
       </form>
@@ -132,9 +134,9 @@ export default async function DisposalPage({ searchParams }: Props) {
                   <p className="mt-0.5 text-xs text-[var(--muted)]">{asset.facilityName} · อ.{asset.districtName}</p>
                 </div>
                 <div className="ml-4 flex items-center gap-3">
-                  <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_STYLE[asset.currentStatus] ?? ""}`}>
+                  <StatusBadge tone={STATUS_TONE[asset.currentStatus as keyof typeof STATUS_TONE] ?? "neutral"}>
                     {asset.currentStatus}
-                  </span>
+                  </StatusBadge>
                   {canMutate ? (
                     <Link
                       href={`/disposal?assetId=${asset.id}`}
@@ -156,11 +158,10 @@ export default async function DisposalPage({ searchParams }: Props) {
 
       {!q && (
         <div className="glass-panel rounded-2xl p-10 text-center text-[var(--muted)]">
-          <p className="mb-3 text-4xl">📋</p>
+          <AppIcon name="clipboard-check" className="mx-auto mb-3 h-10 w-10 text-[var(--primary)]" />
           <p className="text-sm">ป้อนชื่อหรือรหัสทรัพย์สินเพื่อเริ่มต้น</p>
         </div>
       )}
     </div>
   );
 }
-

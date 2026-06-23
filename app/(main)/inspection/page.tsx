@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { AppIcon } from "@/app/_components/ui/icon";
 import { getCurrentUser } from "@/lib/auth";
 import { listInspections } from "@/lib/inspection";
 import { listFacilities } from "@/lib/assets";
@@ -36,8 +37,8 @@ export default async function InspectionPage({
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: "var(--foreground)" }}>
-            ✔ ตรวจนับทรัพย์สิน
+          <h1 className="flex items-center gap-2 text-2xl font-bold" style={{ color: "var(--foreground)" }}>
+            <AppIcon name="clipboard-check" className="h-6 w-6 text-[var(--primary)]" /> ตรวจนับทรัพย์สิน
           </h1>
           <p className="text-sm mt-1" style={{ color: "var(--muted)" }}>
             บันทึกรอบการตรวจนับสินทรัพย์สารสนเทศประจำหน่วยบริการ
@@ -75,14 +76,14 @@ export default async function InspectionPage({
         <div className="glass-panel rounded-2xl overflow-hidden">
           {inspections.length === 0 ? (
             <div className="text-center py-16" style={{ color: "var(--muted)" }}>
-              <p className="text-4xl mb-3">📋</p>
+	              <AppIcon name="clipboard-check" className="mx-auto mb-3 h-10 w-10 text-[var(--primary)]" />
               <p className="font-semibold">ยังไม่มีรอบการตรวจนับ</p>
               <p className="text-sm mt-1">คลิก &quot;เริ่มรอบตรวจนับใหม่&quot; เพื่อบันทึกครั้งแรก</p>
             </div>
           ) : (
             <table className="w-full text-sm">
               <thead>
-                <tr style={{ borderBottom: "1px solid var(--line)", background: "rgba(99,102,241,0.04)" }}>
+	                <tr style={{ borderBottom: "1px solid var(--line)", background: "var(--neutral-bg)" }}>
                   {["รอบการตรวจนับ", "หน่วยบริการ", "อำเภอ", "ผู้ตรวจ", "วันที่", "พบ/ทั้งหมด", ""].map((h) => (
                     <th key={h} className="px-4 py-3 text-left font-semibold" style={{ color: "var(--muted)" }}>
                       {h}
@@ -97,7 +98,7 @@ export default async function InspectionPage({
                     <tr
                       key={ins.id}
                       style={{ borderBottom: "1px solid var(--line)" }}
-                      className="hover:bg-indigo-50/40 transition-colors"
+	                      className="hover:bg-[var(--neutral-bg)] transition-colors"
                     >
                       <td className="px-4 py-3 font-medium" style={{ color: "var(--foreground)" }}>
                         {ins.roundName}
@@ -116,7 +117,7 @@ export default async function InspectionPage({
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
-                          <div className="flex-1 h-2 rounded-full bg-indigo-100 overflow-hidden w-20">
+	                          <div className="flex-1 h-2 rounded-full bg-[var(--primary-soft)] overflow-hidden w-20">
                             <div
                               className="h-full rounded-full"
                               style={{

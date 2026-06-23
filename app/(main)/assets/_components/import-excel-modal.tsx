@@ -1,7 +1,8 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 
+import { AppIcon } from "@/app/_components/ui/icon";
 import type { FacilityRow } from "@/lib/assets";
 
 export default function ImportExcelModal({ facilities }: { facilities: FacilityRow[] }) {
@@ -12,6 +13,7 @@ export default function ImportExcelModal({ facilities }: { facilities: FacilityR
   const [result, setResult] = useState<{ inserted: number; skipped: number; errors: string[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const titleId = useId();
 
   const byDistrict = facilities.reduce<Record<string, FacilityRow[]>>((acc, f) => {
     const d = f.district_name ?? "อื่นๆ";
@@ -53,18 +55,31 @@ export default function ImportExcelModal({ facilities }: { facilities: FacilityR
     <>
       <button
         onClick={() => setOpen(true)}
-        className="px-4 py-2 rounded-lg text-sm font-semibold border"
+        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold border"
         style={{ borderColor: "var(--accent)", color: "var(--accent)" }}
       >
-        📥 นำเข้า Excel
+        <AppIcon name="download" className="h-4 w-4" /> นำเข้า Excel
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(30,27,75,0.4)" }}>
-          <div className="glass-panel rounded-2xl p-6 w-full max-w-lg space-y-4" style={{ background: "white" }}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(17,49,39,0.42)" }}>
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={titleId}
+            className="glass-panel rounded-2xl p-6 w-full max-w-lg space-y-4"
+            style={{ background: "white" }}
+          >
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-bold" style={{ color: "var(--foreground)" }}>นำเข้าทรัพย์สินจาก Excel</h2>
-              <button onClick={handleClose} className="text-gray-400 hover:text-gray-600 text-xl">✕</button>
+              <h2 id={titleId} className="text-lg font-bold" style={{ color: "var(--foreground)" }}>นำเข้าทรัพย์สินจาก Excel</h2>
+              <button
+                type="button"
+                onClick={handleClose}
+                aria-label="ปิดหน้าต่างนำเข้า Excel"
+                className="min-h-11 min-w-11 rounded-xl text-gray-500 hover:bg-stone-100 hover:text-gray-700 text-xl"
+              >
+                ✕
+              </button>
             </div>
 
             {!result ? (
@@ -116,10 +131,10 @@ export default function ImportExcelModal({ facilities }: { facilities: FacilityR
                 <div>
                   <a
                     href="/api/export/assets?template=1"
-                    className="text-xs font-semibold"
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold"
                     style={{ color: "var(--accent)" }}
                   >
-                    ⬇ ดาวน์โหลด Template Excel
+                    <AppIcon name="download" className="h-3.5 w-3.5" /> ดาวน์โหลด Template Excel
                   </a>
                 </div>
 

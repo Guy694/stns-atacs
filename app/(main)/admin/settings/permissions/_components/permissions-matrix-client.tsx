@@ -3,7 +3,7 @@
 import { useTransition } from "react";
 
 import { updateRolePermissionAction } from "@/app/(main)/admin/settings/permissions/actions";
-import { APP_ROLES, type AppRole, type PermissionKey } from "@/lib/role-permissions";
+import { APP_ROLES, type AppRole, type PermissionKey } from "@/lib/permission-definitions";
 
 type PermissionDefinition = {
   key: PermissionKey;
@@ -68,10 +68,10 @@ export function PermissionsMatrixClient({ definitions, matrix }: Props) {
                             await updateRolePermissionAction(null, form);
                           });
                         }}
-                        className={`inline-flex min-w-16 items-center justify-center rounded-full px-3 py-1 text-xs font-semibold transition ${
+                        className={`inline-flex min-w-16 items-center justify-center rounded-full border px-3 py-1 text-xs font-semibold transition ${
                           checked
-                            ? "bg-emerald-100 text-emerald-700"
-                            : "bg-stone-100 text-stone-500"
+                            ? "border-[var(--state-success-border)] bg-[var(--state-success-bg)] text-[var(--state-success-fg)]"
+                            : "border-[var(--state-neutral-border)] bg-[var(--state-neutral-bg)] text-[var(--state-neutral-fg)]"
                         } disabled:opacity-50`}
                       >
                         {checked ? "Allow" : "Deny"}

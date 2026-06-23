@@ -4,6 +4,7 @@ import * as XLSX from "xlsx";
 import { getCurrentUser } from "@/lib/auth";
 import { executeStatement, selectRows } from "@/lib/mysql";
 import type { RowDataPacket } from "mysql2/promise";
+import { readRequestIp, recordSecurityEvent } from "@/lib/security";
 
 type AssetImportRow = {
   asset_registration_no: string;
@@ -28,6 +29,13 @@ type SurveyRow = RowDataPacket & { id: number; facility_id: number; facility_nam
 export async function POST(req: NextRequest) {
   const user = await getCurrentUser();
   if (!user || user.role !== "admin") {
+    await recordSecurityEvent({
+      eventType: user ? "api_forbidden" : "api_unauthorized",
+      ipAddress: readRequestIp(req.headers),
+      identity: user?.fullName,
+      path: req.nextUrl.pathname,
+      detail: "พยายาม import ทรัพย์สินโดยไม่มีสิทธิ์ admin",
+    });
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

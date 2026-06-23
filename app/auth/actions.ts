@@ -1,10 +1,13 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 
 import {
   clearPendingRegistrationClaim,
   createSession,
+  createOfficerFromPassword,
+  createUserFromGoogle,
   createUserFromThaiD,
   destroySession,
   findUserByThaiCid,
@@ -12,14 +15,48 @@ import {
   getPendingRegistrationClaim,
   normalizeDisplayName,
   normalizeThaiCid,
-  setPendingRegistrationClaim,
+  setPendingThaiDRegistrationClaim,
   validatePasswordLoginInput,
+  validateOfficerRegistrationInput,
   validateThaiDLoginInput,
   verifyPassword,
 } from "@/lib/auth";
+import { notifyTelegramSafe } from "@/lib/telegram";
+import { recordSecurityEvent } from "@/lib/security";
 
 function toQuery(message: string) {
   return encodeURIComponent(message);
+}
+
+function safeNextPath(value: FormDataEntryValue | string | null | undefined) {
+  if (typeof value !== "string") return "/";
+  if (!value.startsWith("/") || value.startsWith("//")) return "/";
+  if (value.includes("\\")) return "/";
+  return value;
+}
+
+async function requestDetails() {
+  const requestHeaders = await headers();
+  return {
+    IP: requestHeaders.get("x-forwarded-for")?.split(",")[0]?.trim() ?? requestHeaders.get("x-real-ip") ?? "unknown",
+    "User Agent": requestHeaders.get("user-agent") ?? "unknown",
+  };
+}
+
+async function recordLoginSecurityEvent(eventType: string, identity: string, detail: string) {
+  const context = await requestDetails();
+  await recordSecurityEvent({
+    eventType,
+    ipAddress: context.IP,
+    identity,
+    path: "/login",
+    detail,
+  });
+  return context;
+}
+
+function maskThaiCid(cid: string) {
+  return cid.length === 13 ? `${cid.slice(0, 3)}******${cid.slice(-4)}` : "invalid";
 }
 
 export async function loginWithThaiDAction(formData: FormData) {
@@ -28,77 +65,183 @@ export async function loginWithThaiDAction(formData: FormData) {
 
   const inputError = validateThaiDLoginInput(thaiCid, displayName);
   if (inputError) {
+    const context = await recordLoginSecurityEvent("login_invalid_input", maskThaiCid(thaiCid), inputError);
+    await notifyTelegramSafe({
+      category: "security",
+      title: "พยายามเข้าสู่ระบบด้วย ThaiD แต่ข้อมูลไม่ถูกต้อง",
+      details: { ThaiD: maskThaiCid(thaiCid), ...context },
+    });
     redirect(`/login?error=${toQuery(inputError)}`);
   }
 
   const user = await findUserByThaiCid(thaiCid);
   if (user) {
     if (!user.is_active) {
+      const context = await recordLoginSecurityEvent("login_pending_account", maskThaiCid(thaiCid), "ThaiD");
+      await notifyTelegramSafe({
+        category: "security",
+        title: "บัญชีที่ยังไม่ได้รับอนุมัติพยายามเข้าสู่ระบบ",
+        details: { ผู้ใช้: user.full_name, วิธี: "ThaiD", ...context },
+      });
       redirect("/pending-approval");
     }
     await clearPendingRegistrationClaim();
     await createSession(user.id);
+    await notifyTelegramSafe({
+      category: "security",
+      title: "เข้าสู่ระบบสำเร็จ",
+      details: { ผู้ใช้: user.full_name, วิธี: "ThaiD", ...(await requestDetails()) },
+    });
     redirect("/");
   }
 
-  await setPendingRegistrationClaim(thaiCid, displayName);
+  await setPendingThaiDRegistrationClaim(thaiCid, displayName);
   redirect(`/register?notice=${toQuery("ไม่พบข้อมูลผู้ใช้ในระบบ กรุณาสมัครสมาชิกครั้งแรก")}`);
 }
 
-export async function registerFromThaiDAction(formData: FormData) {
+export async function registerFirstTimeAction(formData: FormData) {
   const claim = await getPendingRegistrationClaim();
 
   if (!claim) {
-    redirect(`/login?error=${toQuery("เซสชันยืนยันตัวตนหมดอายุ กรุณาเข้าสู่ระบบผ่าน ThaiD ใหม่")}`);
+    redirect(`/login?error=${toQuery("เซสชันยืนยันตัวตนหมดอายุ กรุณาเข้าสู่ระบบใหม่")}`);
   }
 
-  const thaiCid = normalizeThaiCid(String(formData.get("thaidCid") ?? ""));
   const fullName = normalizeDisplayName(String(formData.get("fullName") ?? ""));
-  const emailInput = String(formData.get("email") ?? "").trim().toLowerCase();
-  const email = emailInput || undefined;
+  const officerPosition = normalizeDisplayName(String(formData.get("officerPosition") ?? ""));
   const facilityIdRaw = String(formData.get("facilityId") ?? "").trim();
   const facilityId = facilityIdRaw ? Number(facilityIdRaw) : null;
-
-  if (thaiCid !== claim.cid) {
-    redirect(`/register?error=${toQuery("ข้อมูล ThaiD ไม่ตรงกับรอบยืนยันล่าสุด")}`);
-  }
 
   if (!fullName) {
     redirect(`/register?error=${toQuery("กรุณาระบุชื่อ-นามสกุล")}`);
   }
+  if (officerPosition.length < 2 || officerPosition.length > 150) {
+    redirect(`/register?error=${toQuery("กรุณาระบุตำแหน่งเจ้าหน้าที่ให้ครบถ้วน")}`);
+  }
+  if (!facilityId || !Number.isInteger(facilityId)) {
+    redirect(`/register?error=${toQuery("กรุณาเลือกหน่วยงานที่สังกัด")}`);
+  }
 
-  const existingUser = await findUserByThaiCid(thaiCid);
-  if (existingUser) {
-    await clearPendingRegistrationClaim();
-    if (!existingUser.is_active) {
-      redirect("/pending-approval");
+  if (claim.provider === "thaid") {
+    const thaiCid = normalizeThaiCid(String(formData.get("thaidCid") ?? ""));
+    const emailInput = String(formData.get("email") ?? "").trim().toLowerCase();
+    const email = emailInput || undefined;
+
+    if (thaiCid !== claim.cid) {
+      redirect(`/register?error=${toQuery("ข้อมูล ThaiD ไม่ตรงกับรอบยืนยันล่าสุด")}`);
     }
-    await createSession(existingUser.id);
-    redirect("/");
+
+    const existingUser = await findUserByThaiCid(thaiCid);
+    if (existingUser) {
+      await clearPendingRegistrationClaim();
+      if (!existingUser.is_active) {
+        redirect("/pending-approval");
+      }
+      await createSession(existingUser.id);
+      redirect("/");
+    }
+
+    try {
+      await createUserFromThaiD({ thaiCid, fullName, officerPosition, email, facilityId });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "";
+      if (errorMessage.includes("Duplicate") || errorMessage.includes("duplicate")) {
+        redirect(`/register?error=${toQuery("เลข ThaiD หรืออีเมลนี้ถูกใช้งานแล้ว")}`);
+      }
+      redirect(`/register?error=${toQuery("เกิดข้อผิดพลาดในการสมัครสมาชิก")}`);
+    }
+    await notifyTelegramSafe({
+      category: "registration",
+      title: "มีผู้ลงทะเบียนใหม่ รอการอนุมัติ",
+      details: { ชื่อ: fullName, ตำแหน่ง: officerPosition, อีเมล: email, ThaiD: maskThaiCid(thaiCid), หน่วยงาน: facilityId, วิธี: "ThaiD" },
+    });
+    await clearPendingRegistrationClaim();
+    redirect("/pending-approval");
   }
 
   try {
-    const createdUser = await createUserFromThaiD({
-      thaiCid,
+    await createUserFromGoogle({
+      googleSub: claim.googleSub,
       fullName,
-      email,
+      officerPosition,
+      email: claim.email,
       facilityId,
     });
-
-    if (!createdUser) {
-      redirect(`/register?error=${toQuery("ไม่สามารถสร้างผู้ใช้งานได้ กรุณาลองใหม่")}`);
-    }
-
-    await clearPendingRegistrationClaim();
-    redirect("/pending-approval");
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : "ไม่สามารถสมัครสมาชิกได้";
+    const errorMessage = error instanceof Error ? error.message : "";
     if (errorMessage.includes("Duplicate") || errorMessage.includes("duplicate")) {
-      redirect(`/register?error=${toQuery("เลข ThaiD หรืออีเมลนี้ถูกใช้งานแล้ว")}`);
+      redirect(`/register?error=${toQuery("บัญชี Google หรืออีเมลนี้ถูกใช้งานแล้ว")}`);
     }
-
     redirect(`/register?error=${toQuery("เกิดข้อผิดพลาดในการสมัครสมาชิก")}`);
   }
+  await notifyTelegramSafe({
+    category: "registration",
+    title: "มีผู้ลงทะเบียนใหม่ รอการอนุมัติ",
+    details: { ชื่อ: fullName, ตำแหน่ง: officerPosition, อีเมล: claim.email, หน่วยงาน: facilityId, วิธี: "Google" },
+  });
+  await clearPendingRegistrationClaim();
+  redirect("/pending-approval");
+}
+
+export async function registerOfficerWithPasswordAction(formData: FormData) {
+  const fullName = normalizeDisplayName(String(formData.get("fullName") ?? ""));
+  const officerPosition = normalizeDisplayName(String(formData.get("officerPosition") ?? ""));
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const username = String(formData.get("username") ?? "").trim().toLowerCase();
+  const password = String(formData.get("password") ?? "");
+  const confirmPassword = String(formData.get("confirmPassword") ?? "");
+  const facilityIdRaw = String(formData.get("facilityId") ?? "").trim();
+  const facilityId = facilityIdRaw ? Number(facilityIdRaw) : null;
+
+  const inputError = validateOfficerRegistrationInput({
+    fullName,
+    officerPosition,
+    email,
+    username,
+    password,
+    confirmPassword,
+    facilityId,
+  });
+  if (inputError) {
+    await recordLoginSecurityEvent("officer_registration_invalid", username || email || "(empty)", inputError);
+    redirect(`/login?register=1&error=${toQuery(inputError)}`);
+  }
+
+  if (await findUserByUsername(username)) {
+    redirect(`/login?register=1&error=${toQuery("Username นี้ถูกใช้งานแล้ว กรุณาเลือก Username อื่น")}`);
+  }
+
+  try {
+    await createOfficerFromPassword({
+      fullName,
+      officerPosition,
+      email,
+      username,
+      password,
+      facilityId: facilityId!,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    await recordLoginSecurityEvent("officer_registration_failed", username, message || "Database error");
+    if (message.toLowerCase().includes("duplicate")) {
+      redirect(`/login?register=1&error=${toQuery("Username หรืออีเมลนี้ถูกใช้งานแล้ว")}`);
+    }
+    redirect(`/login?register=1&error=${toQuery("ไม่สามารถลงทะเบียนได้ กรุณาลองใหม่")}`);
+  }
+
+  await notifyTelegramSafe({
+    category: "registration",
+    title: "เจ้าหน้าที่ลงทะเบียนใหม่ รอการอนุมัติ",
+    details: {
+      ชื่อ: fullName,
+      ตำแหน่ง: officerPosition,
+      อีเมล: email,
+      Username: username,
+      หน่วยงาน: facilityId,
+      วิธี: "Username/Password",
+      ...(await requestDetails()),
+    },
+  });
+  redirect("/pending-approval");
 }
 
 export async function logoutAction() {
@@ -109,25 +252,49 @@ export async function logoutAction() {
 export async function loginWithPasswordAction(formData: FormData) {
   const username = String(formData.get("username") ?? "").trim();
   const password = String(formData.get("password") ?? "");
+  const nextPath = safeNextPath(formData.get("next"));
 
   const inputError = validatePasswordLoginInput(username, password);
   if (inputError) {
-    redirect(`/login?tab=password&error=${toQuery(inputError)}`);
+    const context = await recordLoginSecurityEvent("login_invalid_input", username || "(empty)", inputError);
+    await notifyTelegramSafe({
+      category: "security",
+      title: "พยายามเข้าสู่ระบบด้วย Username แต่ข้อมูลไม่ครบ",
+      details: { Username: username || "(ว่าง)", ...context },
+    });
+    redirect(`/login?tab=password&next=${encodeURIComponent(nextPath)}&error=${toQuery(inputError)}`);
   }
 
   const user = await findUserByUsername(username);
 
   if (!user || !user.password_hash || !verifyPassword(password, user.password_hash)) {
-    redirect(`/login?tab=password&error=${toQuery("Username หรือรหัสผ่านไม่ถูกต้อง")}`);
+    const context = await recordLoginSecurityEvent("login_failed_password", username, "Username/Password ไม่ถูกต้อง");
+    await notifyTelegramSafe({
+      category: "security",
+      title: "เข้าสู่ระบบไม่สำเร็จ",
+      details: { Username: username, วิธี: "Username/Password", ...context },
+    });
+    redirect(`/login?tab=password&next=${encodeURIComponent(nextPath)}&error=${toQuery("Username หรือรหัสผ่านไม่ถูกต้อง")}`);
   }
 
   if (user.is_active === 0) {
+    const context = await recordLoginSecurityEvent("login_pending_account", username, "บัญชียังไม่ได้รับอนุมัติ");
+    await notifyTelegramSafe({
+      category: "security",
+      title: "บัญชีที่ยังไม่ได้รับอนุมัติพยายามเข้าสู่ระบบ",
+      details: { ผู้ใช้: user.full_name, Username: username, ...context },
+    });
     redirect("/pending-approval");
   }
   if (!user.is_active) {
-    redirect(`/login?tab=password&error=${toQuery("บัญชีผู้ใช้ถูกระงับการใช้งาน")}`);
+    redirect(`/login?tab=password&next=${encodeURIComponent(nextPath)}&error=${toQuery("บัญชีผู้ใช้ถูกระงับการใช้งาน")}`);
   }
 
   await createSession(user.id);
-  redirect("/");
+  await notifyTelegramSafe({
+    category: "security",
+    title: "เข้าสู่ระบบสำเร็จ",
+    details: { ผู้ใช้: user.full_name, Username: username, วิธี: "Username/Password", ...(await requestDetails()) },
+  });
+  redirect(nextPath);
 }

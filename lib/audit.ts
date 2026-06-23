@@ -3,6 +3,7 @@ import "server-only";
 import type { RowDataPacket } from "mysql2/promise";
 
 import { executeStatement, selectRows } from "@/lib/mysql";
+import { notifyTelegramSafe } from "@/lib/telegram";
 
 export type AuditAction = "create" | "update" | "delete" | "transfer" | "dispose" | "inspect";
 
@@ -36,6 +37,23 @@ type AuditRow = RowDataPacket & {
   created_at: Date | string;
 };
 
+const ACTION_LABELS: Record<AuditAction, string> = {
+  create: "สร้างข้อมูล",
+  update: "แก้ไขข้อมูล",
+  delete: "ลบข้อมูล",
+  transfer: "โอนย้ายทรัพย์สิน",
+  dispose: "จำหน่าย/เปลี่ยนสถานะทรัพย์สิน",
+  inspect: "ตรวจนับทรัพย์สิน",
+};
+
+const ENTITY_LABELS: Record<string, string> = {
+  information_assets: "ทะเบียนทรัพย์สิน",
+  asset_inspections: "รอบตรวจนับทรัพย์สิน",
+  health_facilities: "ข้อมูลหน่วยงาน",
+  users: "ผู้ใช้งานระบบ",
+  role_permissions: "สิทธิ์การใช้งาน",
+};
+
 export async function writeAuditLog(input: {
   userId?: number | null;
   userName?: string;
@@ -56,6 +74,17 @@ export async function writeAuditLog(input: {
       input.summary ?? null,
     ]
   );
+
+  await notifyTelegramSafe({
+    category: "data",
+    title: ACTION_LABELS[input.action],
+    details: {
+      ผู้ดำเนินการ: input.userName ?? "system",
+      ประเภทข้อมูล: ENTITY_LABELS[input.entity] ?? input.entity,
+      รหัสข้อมูล: input.entityId,
+      รายละเอียด: input.summary,
+    },
+  });
 }
 
 export async function listAuditLogs(limitOrFilter: number | AuditLogFilter = 100): Promise<AuditLog[]> {

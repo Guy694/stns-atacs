@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import type { RowDataPacket } from "mysql2/promise";
 
+import { StatusBadge, activeTone } from "@/app/_components/ui/status-badge";
 import { getCurrentUser } from "@/lib/auth";
 import { selectRows } from "@/lib/mysql";
 import {
@@ -110,15 +111,15 @@ export default async function AdminPermissionsPage() {
                   <tr key={account.id} className="transition hover:bg-white/50">
                     <td className="px-4 py-3 font-medium">{account.full_name}</td>
                     <td className="px-4 py-3">
-                      <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-600">
-                        {account.role}
-                      </span>
+	                      <StatusBadge tone="info">
+	                        {account.role}
+	                      </StatusBadge>
                     </td>
                     <td className="px-4 py-3">
                       {account.is_active ? (
-                        <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">active</span>
-                      ) : (
-                        <span className="rounded-full bg-stone-100 px-2.5 py-0.5 text-xs font-semibold text-stone-500">inactive</span>
+	                        <StatusBadge tone={activeTone(!!account.is_active)}>active</StatusBadge>
+	                      ) : (
+	                        <StatusBadge tone={activeTone(!!account.is_active)}>inactive</StatusBadge>
                       )}
                     </td>
                     <td className="px-4 py-3 text-sm font-semibold text-[var(--foreground)]">

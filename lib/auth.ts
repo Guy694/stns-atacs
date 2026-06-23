@@ -8,12 +8,13 @@ import { cookies } from "next/headers";
 import { executeStatement, selectRows } from "@/lib/mysql";
 
 const SESSION_COOKIE_NAME = "atacs_session";
-const REGISTRATION_COOKIE_NAME = "atacs_thaid_claim";
+const REGISTRATION_COOKIE_NAME = "atacs_registration_claim";
 const SESSION_TTL_DAYS = Number(process.env.AUTH_SESSION_DAYS ?? 7);
 
 type UserRecord = RowDataPacket & {
   id: number;
   thaid_cid: string | null;
+  google_sub: string | null;
   full_name: string;
   email: string | null;
   username: string | null;
@@ -31,11 +32,22 @@ type SessionUserRow = RowDataPacket & {
   facility_id: number | null;
 };
 
-type RegistrationClaim = {
+type ThaiDRegistrationClaim = {
+  provider: "thaid";
   cid: string;
   displayName: string;
   issuedAt: number;
 };
+
+type GoogleRegistrationClaim = {
+  provider: "google";
+  googleSub: string;
+  email: string;
+  displayName: string;
+  issuedAt: number;
+};
+
+export type RegistrationClaim = ThaiDRegistrationClaim | GoogleRegistrationClaim;
 
 function getAuthSecret() {
   const secret = process.env.AUTH_SECRET?.trim();
@@ -81,13 +93,51 @@ function decodeClaim(value: string): RegistrationClaim | null {
   }
 
   try {
-    const payload = JSON.parse(Buffer.from(payloadBase64, "base64url").toString("utf8")) as RegistrationClaim;
+    const payload = JSON.parse(Buffer.from(payloadBase64, "base64url").toString("utf8")) as {
+      provider?: string;
+      cid?: string;
+      googleSub?: string;
+      email?: string;
+      displayName?: string;
+      issuedAt?: number;
+    };
 
-    if (!payload.cid || !isValidThaiCid(payload.cid)) {
-      return null;
+    if (
+      payload.provider === "thaid" &&
+      payload.cid &&
+      isValidThaiCid(payload.cid) &&
+      payload.displayName &&
+      payload.issuedAt
+    ) {
+      return {
+        provider: "thaid",
+        cid: payload.cid,
+        displayName: payload.displayName,
+        issuedAt: payload.issuedAt,
+      };
     }
 
-    return payload;
+    if (payload.provider === "google" && payload.googleSub && payload.email && payload.displayName && payload.issuedAt) {
+      return {
+        provider: "google",
+        googleSub: payload.googleSub,
+        email: payload.email,
+        displayName: payload.displayName,
+        issuedAt: payload.issuedAt,
+      };
+    }
+
+    // Support ThaiD claims issued before registration claims became provider-aware.
+    if (!payload.provider && payload.cid && isValidThaiCid(payload.cid) && payload.displayName && payload.issuedAt) {
+      return {
+        provider: "thaid",
+        cid: payload.cid,
+        displayName: payload.displayName,
+        issuedAt: payload.issuedAt,
+      };
+    }
+
+    return null;
   } catch {
     return null;
   }
@@ -132,10 +182,36 @@ export function validatePasswordLoginInput(username: string, password: string) {
   return null;
 }
 
+export function validateOfficerRegistrationInput(input: {
+  fullName: string;
+  officerPosition: string;
+  email: string;
+  username: string;
+  password: string;
+  confirmPassword: string;
+  facilityId: number | null;
+}) {
+  if (input.fullName.length < 3) return "กรุณาระบุชื่อ-นามสกุลให้ครบถ้วน";
+  if (input.officerPosition.length < 2 || input.officerPosition.length > 150) {
+    return "กรุณาระบุตำแหน่งเจ้าหน้าที่ให้ครบถ้วน";
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.email)) return "กรุณาระบุอีเมลให้ถูกต้อง";
+  if (!/^[a-zA-Z0-9._-]{4,50}$/.test(input.username)) {
+    return "Username ต้องมี 4-50 ตัว และใช้เฉพาะ a-z, 0-9, จุด, ขีดกลาง หรือขีดล่าง";
+  }
+  if (input.password.length < 10) return "รหัสผ่านต้องมีอย่างน้อย 10 ตัวอักษร";
+  if (!/[A-Za-z]/.test(input.password) || !/[0-9]/.test(input.password)) {
+    return "รหัสผ่านต้องมีทั้งตัวอักษรและตัวเลข";
+  }
+  if (input.password !== input.confirmPassword) return "ยืนยันรหัสผ่านไม่ตรงกัน";
+  if (!input.facilityId || !Number.isInteger(input.facilityId)) return "กรุณาเลือกหน่วยงานที่สังกัด";
+  return null;
+}
+
 export async function findUserByThaiCid(thaiCid: string): Promise<UserRecord | null> {
   const rows = await selectRows<UserRecord>(
     `
-      SELECT id, thaid_cid, full_name, email, username, password_hash, role, is_active
+      SELECT id, thaid_cid, NULL AS google_sub, full_name, email, username, password_hash, role, is_active
       FROM users
       WHERE thaid_cid = ?
       LIMIT 1
@@ -151,26 +227,36 @@ export async function findUserByThaiCid(thaiCid: string): Promise<UserRecord | n
 }
 
 export async function findUserByUsername(username: string): Promise<UserRecord | null> {
-  const rows = await selectRows<UserRecord>(
-    `
-      SELECT id, thaid_cid, full_name, email, username, password_hash, role, is_active
-      FROM users
-      WHERE username = ?
-      LIMIT 1
-    `,
+  const rows = await selectRows<UserRecord & RowDataPacket>(
+    `SELECT id, thaid_cid, NULL AS google_sub, full_name, email, username, password_hash, role, is_active
+     FROM users WHERE username = ? LIMIT 1`,
     [username]
   );
 
   return rows[0] ?? null;
 }
 
-export async function setPendingRegistrationClaim(thaiCid: string, displayName: string) {
+export async function findUserByGoogleSub(googleSub: string): Promise<UserRecord | null> {
+  const rows = await selectRows<UserRecord>(
+    `SELECT id, thaid_cid, google_sub, full_name, email, username, password_hash, role, is_active
+     FROM users WHERE google_sub = ? LIMIT 1`,
+    [googleSub]
+  );
+  return rows[0] ?? null;
+}
+
+export async function findUserByEmail(email: string): Promise<UserRecord | null> {
+  const rows = await selectRows<UserRecord>(
+    `SELECT id, thaid_cid, google_sub, full_name, email, username, password_hash, role, is_active
+     FROM users WHERE LOWER(email) = LOWER(?) LIMIT 1`,
+    [email]
+  );
+  return rows[0] ?? null;
+}
+
+async function setPendingRegistrationClaim(claim: RegistrationClaim) {
   const cookieStore = await cookies();
-  const token = encodeClaim({
-    cid: thaiCid,
-    displayName,
-    issuedAt: Date.now(),
-  });
+  const token = encodeClaim(claim);
 
   cookieStore.set(REGISTRATION_COOKIE_NAME, token, {
     httpOnly: true,
@@ -178,6 +264,25 @@ export async function setPendingRegistrationClaim(thaiCid: string, displayName: 
     secure: process.env.NODE_ENV === "production",
     path: "/",
     maxAge: 10 * 60,
+  });
+}
+
+export async function setPendingThaiDRegistrationClaim(thaiCid: string, displayName: string) {
+  await setPendingRegistrationClaim({
+    provider: "thaid",
+    cid: thaiCid,
+    displayName,
+    issuedAt: Date.now(),
+  });
+}
+
+export async function setPendingGoogleRegistrationClaim(googleSub: string, email: string, displayName: string) {
+  await setPendingRegistrationClaim({
+    provider: "google",
+    googleSub,
+    email,
+    displayName,
+    issuedAt: Date.now(),
   });
 }
 
@@ -210,15 +315,16 @@ export async function clearPendingRegistrationClaim() {
 export async function createUserFromThaiD(input: {
   thaiCid: string;
   fullName: string;
+  officerPosition: string;
   email?: string;
   facilityId?: number | null;
 }) {
   let result;
   try {
     result = await executeStatement(
-      `INSERT INTO users (thaid_cid, full_name, email, role, facility_id, is_active)
-       VALUES (?, ?, ?, 'officer', ?, 0)`,
-      [input.thaiCid, input.fullName, input.email || null, input.facilityId ?? null]
+      `INSERT INTO users (thaid_cid, full_name, officer_position, email, role, facility_id, is_active)
+       VALUES (?, ?, ?, ?, 'officer', ?, 0)`,
+      [input.thaiCid, input.fullName, input.officerPosition, input.email || null, input.facilityId ?? null]
     );
   } catch (error) {
     const msg = error instanceof Error ? error.message : "";
@@ -244,6 +350,51 @@ export async function createUserFromThaiD(input: {
   );
 
   return createdRows[0] ?? null;
+}
+
+export async function createUserFromGoogle(input: {
+  googleSub: string;
+  fullName: string;
+  officerPosition: string;
+  email: string;
+  facilityId: number;
+}) {
+  const result = await executeStatement(
+    `INSERT INTO users (google_sub, full_name, officer_position, email, role, facility_id, is_active)
+     VALUES (?, ?, ?, ?, 'officer', ?, 0)`,
+    [input.googleSub, input.fullName, input.officerPosition, input.email, input.facilityId]
+  );
+
+  const createdRows = await selectRows<SessionUserRow>(
+    `SELECT id, thaid_cid, full_name, email, role, facility_id
+     FROM users WHERE id = ? LIMIT 1`,
+    [result.insertId]
+  );
+  return createdRows[0] ?? null;
+}
+
+export async function createOfficerFromPassword(input: {
+  fullName: string;
+  officerPosition: string;
+  email: string;
+  username: string;
+  password: string;
+  facilityId: number;
+}) {
+  const result = await executeStatement(
+    `INSERT INTO users (full_name, officer_position, email, username, password_hash, role, facility_id, is_active)
+     VALUES (?, ?, ?, ?, ?, 'officer', ?, 0)`,
+    [input.fullName, input.officerPosition, input.email, input.username, hashPassword(input.password), input.facilityId]
+  );
+
+  return result.insertId;
+}
+
+export async function linkGoogleIdentity(userId: number, googleSub: string) {
+  await executeStatement(
+    `UPDATE users SET google_sub = ? WHERE id = ? AND (google_sub IS NULL OR google_sub = ?)`,
+    [googleSub, userId, googleSub]
+  );
 }
 
 export async function createSession(userId: number) {

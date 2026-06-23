@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
+import { AppIcon } from "@/app/_components/ui/icon";
 import { getCurrentUser } from "@/lib/auth";
 import { getInspectionById, getInspectionItems } from "@/lib/inspection";
 import { canManageFacility } from "@/lib/permissions";
@@ -54,8 +55,8 @@ export default async function InspectionDetailPage({
               ผู้ตรวจ: {inspection.inspectedBy} · วันที่: {inspection.inspectedAt}
             </p>
             {inspection.note && (
-              <p className="text-sm mt-2 p-2 rounded-lg bg-indigo-50" style={{ color: "var(--foreground)" }}>
-                📝 {inspection.note}
+              <p className="mt-2 flex items-start gap-2 rounded-lg bg-[var(--primary-soft)] p-2 text-sm" style={{ color: "var(--foreground)" }}>
+                <AppIcon name="file-text" className="mt-0.5 h-4 w-4 shrink-0 text-[var(--primary)]" /> {inspection.note}
               </p>
             )}
           </div>
@@ -66,7 +67,7 @@ export default async function InspectionDetailPage({
               <div
                 className="relative w-20 h-20 rounded-full flex items-center justify-center"
                 style={{
-                  background: `conic-gradient(var(--accent) ${pct * 3.6}deg, #e0e7ff ${pct * 3.6}deg)`,
+                  background: `conic-gradient(var(--accent) ${pct * 3.6}deg, var(--primary-soft) ${pct * 3.6}deg)`,
                 }}
               >
                 <div className="w-14 h-14 rounded-full bg-white flex items-center justify-center">
@@ -76,7 +77,7 @@ export default async function InspectionDetailPage({
               <span className="text-xs mt-1" style={{ color: "var(--muted)" }}>อัตราพบ</span>
             </div>
             <div className="space-y-1">
-              <div className="text-sm"><span className="font-bold text-indigo-600">{inspection.foundItems}</span> <span style={{ color: "var(--muted)" }}>พบ</span></div>
+              <div className="text-sm"><span className="font-bold text-[var(--primary)]">{inspection.foundItems}</span> <span style={{ color: "var(--muted)" }}>พบ</span></div>
               <div className="text-sm"><span className="font-bold text-red-500">{inspection.totalItems - inspection.foundItems}</span> <span style={{ color: "var(--muted)" }}>ไม่พบ</span></div>
               <div className="text-sm"><span className="font-bold" style={{ color: "var(--foreground)" }}>{inspection.totalItems}</span> <span style={{ color: "var(--muted)" }}>ทั้งหมด</span></div>
             </div>
@@ -87,7 +88,9 @@ export default async function InspectionDetailPage({
       {/* Missing items alert */}
       {missing.length > 0 && (
         <div className="glass-panel rounded-2xl p-5">
-          <h2 className="text-base font-bold text-red-600 mb-3">⚠ รายการที่ไม่พบ ({missing.length})</h2>
+          <h2 className="mb-3 flex items-center gap-2 text-base font-bold text-red-600">
+            <AppIcon name="activity" className="h-4 w-4" /> รายการที่ไม่พบ ({missing.length})
+          </h2>
           <div className="space-y-2">
             {missing.map((item) => (
               <div

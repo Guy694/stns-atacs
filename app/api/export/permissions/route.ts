@@ -1,16 +1,30 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 import { getCurrentUser } from "@/lib/auth";
 import { hasPermission, getRolePermissionMatrix, PERMISSION_DEFINITIONS } from "@/lib/role-permissions";
+import { readRequestIp, recordSecurityEvent } from "@/lib/security";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const user = await getCurrentUser();
   if (!user) {
+    await recordSecurityEvent({
+      eventType: "api_unauthorized",
+      ipAddress: readRequestIp(req.headers),
+      path: req.nextUrl.pathname,
+      detail: "พยายาม export permissions โดยไม่มี session",
+    });
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const allow = user.role === "admin" || (await hasPermission(user.role, "permissions.manage"));
   if (!allow) {
+    await recordSecurityEvent({
+      eventType: "api_forbidden",
+      ipAddress: readRequestIp(req.headers),
+      identity: user.fullName,
+      path: req.nextUrl.pathname,
+      detail: "ไม่มีสิทธิ์ export permissions",
+    });
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

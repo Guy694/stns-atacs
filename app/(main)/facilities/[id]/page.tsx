@@ -1,8 +1,11 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
+import { AppIcon } from "@/app/_components/ui/icon";
+import { StatusBadge } from "@/app/_components/ui/status-badge";
 import { getCurrentUser } from "@/lib/auth";
 import { getFacilityById, listAssets, listAllFacilitiesForSelect } from "@/lib/assets";
+import { formatThaiDate } from "@/lib/date-format";
 import { AssetFormModal } from "@/app/(main)/assets/_components/asset-form-modal";
 import { DeleteAssetButton } from "@/app/(main)/assets/_components/delete-asset-button";
 import { FacilityEditForm } from "./_components/facility-edit-form";
@@ -14,11 +17,11 @@ const STATUS_LABELS: Record<string, string> = {
   Inactive: "ไม่ใช้งาน",
   Broken: "ชำรุด",
 };
-const STATUS_STYLE: Record<string, string> = {
-  Active: "bg-emerald-100 text-emerald-700",
-  Inactive: "bg-stone-100 text-stone-500",
-  Broken: "bg-rose-100 text-rose-700",
-};
+const STATUS_TONE = {
+  Active: "success",
+  Inactive: "warning",
+  Broken: "danger",
+} as const;
 
 export default async function FacilityDetailPage({ params }: Props) {
   const user = await getCurrentUser();
@@ -99,17 +102,14 @@ export default async function FacilityDetailPage({ params }: Props) {
       {/* MA Alert */}
       {expiringSoon.length > 0 && (
         <div className="glass-panel rounded-2xl p-5">
-          <p className="text-sm font-semibold text-amber-700">⚠ MA ใกล้หมดอายุ ({expiringSoon.length} รายการ)</p>
+          <p className="flex items-center gap-2 text-sm font-semibold text-amber-700">
+            <AppIcon name="activity" className="h-4 w-4" /> MA ใกล้หมดอายุ ({expiringSoon.length} รายการ)
+          </p>
           <div className="mt-3 flex flex-wrap gap-2">
             {expiringSoon.map((a) => (
-              <span
-                key={a.id}
-                className={`rounded-full px-3 py-1 text-xs font-medium ${
-                  a.daysLeft <= 7 ? "bg-rose-100 text-rose-700" : a.daysLeft <= 20 ? "bg-amber-100 text-amber-700" : "bg-yellow-50 text-yellow-700"
-                }`}
-              >
+              <StatusBadge key={a.id} tone={a.daysLeft <= 7 ? "danger" : a.daysLeft <= 20 ? "warning" : "neutral"}>
                 {a.assetName} ({a.daysLeft <= 0 ? "หมดแล้ว" : `${a.daysLeft} วัน`})
-              </span>
+              </StatusBadge>
             ))}
           </div>
         </div>
@@ -160,9 +160,9 @@ export default async function FacilityDetailPage({ params }: Props) {
                       <p className="text-xs text-[var(--muted)]">{asset.assetGroup}</p>
                     </td>
                     <td className="px-4 py-3">
-                      <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_STYLE[asset.currentStatus] ?? ""}`}>
+                      <StatusBadge tone={STATUS_TONE[asset.currentStatus as keyof typeof STATUS_TONE] ?? "neutral"}>
                         {STATUS_LABELS[asset.currentStatus] ?? asset.currentStatus}
-                      </span>
+                      </StatusBadge>
                     </td>
                     {canManage && (
                       <td className="px-4 py-3 font-mono text-xs">
@@ -173,7 +173,7 @@ export default async function FacilityDetailPage({ params }: Props) {
                     {canManage && (
                       <td className="px-4 py-3 font-mono text-xs text-[var(--muted)]">{asset.serialNumber || "–"}</td>
                     )}
-                    <td className="px-4 py-3 font-mono text-xs text-[var(--muted)]">{asset.maintenanceEndDate || "–"}</td>
+                    <td className="px-4 py-3 text-xs text-[var(--muted)]">{formatThaiDate(asset.maintenanceEndDate)}</td>
                     {canManage && (
                       <td className="px-4 py-3 text-right">
                         <div className="inline-flex gap-2">

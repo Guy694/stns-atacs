@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { hasPermission } from "@/lib/role-permissions";
 import { selectRows } from "@/lib/mysql";
 import type { RowDataPacket } from "mysql2/promise";
+import { readRequestIp, recordSecurityEvent } from "@/lib/security";
 
 type AuditExportRow = RowDataPacket & {
   id: number;
@@ -26,11 +27,24 @@ function escapeCsv(value: string | null | undefined) {
 export async function GET(req: NextRequest) {
   const user = await getCurrentUser();
   if (!user) {
+    await recordSecurityEvent({
+      eventType: "api_unauthorized",
+      ipAddress: readRequestIp(req.headers),
+      path: req.nextUrl.pathname,
+      detail: "พยายาม export audit log โดยไม่มี session",
+    });
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const canExportAudit = user.role === "admin" || (await hasPermission(user.role, "audit.export"));
   if (!canExportAudit) {
+    await recordSecurityEvent({
+      eventType: "api_forbidden",
+      ipAddress: readRequestIp(req.headers),
+      identity: user.fullName,
+      path: req.nextUrl.pathname,
+      detail: "ไม่มีสิทธิ์ export audit log",
+    });
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

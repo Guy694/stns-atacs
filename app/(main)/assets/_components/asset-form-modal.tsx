@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useRef, useState } from "react";
+import { useActionState, useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { createAssetAction, updateAssetAction } from "@/app/(main)/assets/actions";
@@ -21,8 +21,154 @@ type Props = {
 
 const INITIAL: string | null = null;
 
+function formatFacilityOption(facility: FacilityOption) {
+  const name = facility.facility_name?.trim() || `หน่วยงาน #${facility.id}`;
+  return `${name}${facility.district_name ? ` · อ.${facility.district_name}` : ""}`;
+}
+
+function FacilityCombobox({
+  facilities,
+  defaultFacilityId,
+}: {
+  facilities: FacilityOption[];
+  defaultFacilityId?: number | null;
+}) {
+  const inputId = useId();
+  const listboxId = useId();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const defaultFacility = facilities.find((facility) => facility.id === defaultFacilityId);
+  const [selectedId, setSelectedId] = useState(defaultFacility?.id.toString() ?? "");
+  const [query, setQuery] = useState(defaultFacility ? formatFacilityOption(defaultFacility) : "");
+  const [open, setOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(0);
+
+  const filteredFacilities = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    if (!normalizedQuery) return facilities;
+
+    return facilities.filter((facility) => {
+      const label = formatFacilityOption(facility).toLowerCase();
+      return (
+        label.includes(normalizedQuery) ||
+        facility.id.toString().includes(normalizedQuery) ||
+        (facility.facility_name ?? "").toLowerCase().includes(normalizedQuery) ||
+        (facility.district_name ?? "").toLowerCase().includes(normalizedQuery)
+      );
+    });
+  }, [facilities, query]);
+
+  const activeOptionIndex = Math.min(activeIndex, Math.max(filteredFacilities.length - 1, 0));
+  const activeFacility = filteredFacilities[activeOptionIndex];
+
+  useEffect(() => {
+    if (!inputRef.current) return;
+    if (!selectedId && query.trim()) {
+      inputRef.current.setCustomValidity("กรุณาเลือกหน่วยงานจากรายการ");
+    } else {
+      inputRef.current.setCustomValidity("");
+    }
+  }, [query, selectedId]);
+
+  function selectFacility(facility: FacilityOption) {
+    setSelectedId(facility.id.toString());
+    setQuery(formatFacilityOption(facility));
+    setActiveIndex(0);
+    setOpen(false);
+  }
+
+  return (
+    <div className="mt-1">
+      <input type="hidden" name="facilityId" value={selectedId} />
+      <input
+        ref={inputRef}
+        id={inputId}
+        type="text"
+        role="combobox"
+        aria-autocomplete="list"
+        aria-controls={listboxId}
+        aria-expanded={open}
+        aria-activedescendant={open && activeFacility ? `${listboxId}-${activeFacility.id}` : undefined}
+        value={query}
+        required
+        placeholder="พิมพ์ชื่อหน่วยงานหรืออำเภอเพื่อค้นหา"
+        autoComplete="off"
+        onFocus={() => setOpen(true)}
+        onBlur={() => window.setTimeout(() => setOpen(false), 120)}
+        onChange={(event) => {
+          setQuery(event.target.value);
+          setSelectedId("");
+          setActiveIndex(0);
+          setOpen(true);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "ArrowDown") {
+            event.preventDefault();
+            setOpen(true);
+            setActiveIndex((index) => Math.min(index + 1, Math.max(filteredFacilities.length - 1, 0)));
+          }
+          if (event.key === "ArrowUp") {
+            event.preventDefault();
+            setOpen(true);
+            setActiveIndex((index) => Math.max(index - 1, 0));
+          }
+          if (event.key === "Enter" && open && activeFacility) {
+            event.preventDefault();
+            selectFacility(activeFacility);
+          }
+          if (event.key === "Escape") {
+            setOpen(false);
+          }
+        }}
+        className="w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+      />
+
+      {open && (
+        <div id={listboxId} role="listbox" className="mt-2 max-h-60 overflow-y-auto rounded-xl border border-black/10 bg-white shadow-sm">
+          {filteredFacilities.length === 0 ? (
+            <p className="px-4 py-5 text-center text-sm text-[var(--muted)]">ไม่พบหน่วยงานที่ตรงกับคำค้น</p>
+          ) : (
+            filteredFacilities.map((facility, index) => {
+              const selected = selectedId === facility.id.toString();
+              const active = index === activeOptionIndex;
+
+              return (
+                <button
+                  key={facility.id}
+                  id={`${listboxId}-${facility.id}`}
+                  type="button"
+                  role="option"
+                  aria-selected={selected}
+                  onMouseEnter={() => setActiveIndex(index)}
+                  onMouseDown={(event) => {
+                    event.preventDefault();
+                    selectFacility(facility);
+                  }}
+                  className={`flex w-full items-start justify-between gap-3 border-b border-black/6 px-4 py-3 text-left text-sm transition last:border-0 ${
+                    active ? "bg-[var(--accent)]/8" : "hover:bg-[var(--accent)]/5"
+                  }`}
+                >
+                  <span className="min-w-0">
+                    <span className="block truncate font-medium text-[var(--foreground)]">
+                      {facility.facility_name?.trim() || `หน่วยงาน #${facility.id}`}
+                    </span>
+                    {facility.district_name && (
+                      <span className="mt-0.5 block text-xs text-[var(--muted)]">อ.{facility.district_name}</span>
+                    )}
+                  </span>
+                  {selected && <span className="shrink-0 text-xs font-medium text-[var(--accent)]">เลือกอยู่</span>}
+                </button>
+              );
+            })
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function AssetFormModal({ facilities, deviceTypes = [], fixedFacilityId, mode, asset, children }: Props) {
   const [open, setOpen] = useState(false);
+  const titleId = useId();
   const mounted = typeof document !== "undefined";
   const formRef = useRef<HTMLFormElement>(null);
   const today = new Date().toISOString().slice(0, 10);
@@ -51,10 +197,22 @@ export function AssetFormModal({ facilities, deviceTypes = [], fixedFacilityId, 
         createPortal(
           <div className="fixed inset-0 z-50 flex items-center justify-center">
             <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setOpen(false)} />
-            <div className="relative z-10 max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-[var(--surface-strong)] p-6 shadow-2xl sm:p-8">
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby={titleId}
+              className="relative z-10 max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-[var(--surface-strong)] p-6 shadow-2xl sm:p-8"
+            >
               <div className="flex items-center justify-between">
-                <h2 className="section-title text-xl font-semibold">{title}</h2>
-                <button onClick={() => setOpen(false)} className="text-[var(--muted)] hover:text-[var(--foreground)]">✕</button>
+                <h2 id={titleId} className="section-title text-xl font-semibold">{title}</h2>
+                <button
+                  type="button"
+                  onClick={() => setOpen(false)}
+                  aria-label="ปิดหน้าต่างทรัพย์สิน"
+                  className="min-h-11 min-w-11 rounded-xl text-[var(--muted)] hover:bg-stone-100 hover:text-[var(--foreground)]"
+                >
+                  ✕
+                </button>
               </div>
 
               {error && (
@@ -75,31 +233,18 @@ export function AssetFormModal({ facilities, deviceTypes = [], fixedFacilityId, 
                     </div>
                   </>
                 ) : (
-                  <select
-                    name="facilityId"
-                    defaultValue={asset?.facilityId?.toString() ?? ""}
-                    required
-                    className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
-                  >
-                    <option value="">-- เลือกหน่วยงาน --</option>
-                    {facilities.map((f) => (
-                      <option key={f.id} value={f.id}>
-                        {f.facility_name} {f.district_name ? `· อ.${f.district_name}` : ""}
-                      </option>
-                    ))}
-                  </select>
+                  <FacilityCombobox facilities={facilities} defaultFacilityId={asset?.facilityId} />
                 )}
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
                 {/* เลขทะเบียน */}
                 <div>
-                  <label className="block text-sm font-medium">เลขทะเบียนทรัพย์สิน <span className="text-rose-500">*</span></label>
+                  <label className="block text-sm font-medium">เลขทะเบียนทรัพย์สิน</label>
                   <input
                     name="assetRegistrationNo"
                     defaultValue={asset?.assetRegistrationNo ?? ""}
-                    required
-                    placeholder="เช่น SAT-HW-0001"
+                    placeholder="เช่น SAT-HW-0001 หรือเว้นว่าง"
                     className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
                   />
                 </div>
@@ -216,12 +361,12 @@ export function AssetFormModal({ facilities, deviceTypes = [], fixedFacilityId, 
                 {/* MA Start */}
                 <div>
                   <label className="block text-sm font-medium">วันเริ่มสัญญา</label>
-                  <input
-                    type="date"
-                    name="maintenanceStartDate"
-                    defaultValue={""}
-                    className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
-                  />
+                    <input
+                      type="date"
+                      name="maintenanceStartDate"
+                      defaultValue={asset?.maintenanceStartDate ?? ""}
+                      className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+                    />
                 </div>
                 {/* MA End */}
                 <div>

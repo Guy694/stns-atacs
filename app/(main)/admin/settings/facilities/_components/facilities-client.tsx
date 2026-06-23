@@ -1,6 +1,8 @@
 "use client";
 
 import { useActionState, useRef, useState, useTransition } from "react";
+
+import { StatusBadge, activeTone } from "@/app/_components/ui/status-badge";
 import { createFacilityAction, toggleFacilityActiveAction, updateFacilityAction } from "../actions";
 import type { FacilityAdminRow } from "@/lib/assets";
 
@@ -116,14 +118,14 @@ function FacilityRow({ f }: { f: FacilityAdminRow }) {
         <td className="px-4 py-3 text-xs">{f.district_name}</td>
         <td className="px-4 py-3 text-center text-xs font-medium">{f.asset_count}</td>
         <td className="px-4 py-3">
-          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${f.is_active ? "bg-emerald-100 text-emerald-700" : "bg-stone-100 text-stone-500"}`}>
+          <StatusBadge tone={activeTone(!!f.is_active)}>
             {f.is_active ? "ใช้งาน" : "ปิด"}
-          </span>
+          </StatusBadge>
         </td>
         <td className="px-4 py-3 text-right">
           <div className="inline-flex gap-2">
             <button onClick={() => setEditOpen(true)}
-              className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-700 hover:bg-indigo-100">
+              className="rounded-lg border border-[var(--primary-soft-strong)] bg-[var(--primary-soft)] px-3 py-1 text-xs font-medium text-[var(--primary-text)] hover:bg-[var(--primary-soft-strong)]">
               แก้ไข
             </button>
             <button

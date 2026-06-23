@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 
 import { getCurrentUser } from "@/lib/auth";
+import { formatThaiDateTime } from "@/lib/date-format";
 import { selectRows } from "@/lib/mysql";
 import type { RowDataPacket } from "mysql2/promise";
 import { listAllFacilitiesForSelect } from "@/lib/assets";
@@ -10,6 +11,7 @@ import { FacilityForm } from "./_components/facility-form";
 
 type UserDetailRow = RowDataPacket & {
   full_name: string;
+  officer_position: string | null;
   email: string | null;
   username: string | null;
   thaid_cid: string | null;
@@ -21,7 +23,7 @@ type UserDetailRow = RowDataPacket & {
 
 function formatDate(v: Date | string | null) {
   if (!v) return "–";
-  return (v instanceof Date ? v.toISOString() : String(v)).slice(0, 16).replace("T", " ");
+  return formatThaiDateTime(v);
 }
 
 export default async function ProfilePage() {
@@ -32,7 +34,7 @@ export default async function ProfilePage() {
 
   try {
     const rows = await selectRows<UserDetailRow>(
-      "SELECT full_name, email, username, thaid_cid, role, created_at, last_login_at, password_hash FROM users WHERE id = ? LIMIT 1",
+      "SELECT full_name, officer_position, email, username, thaid_cid, role, created_at, last_login_at, password_hash FROM users WHERE id = ? LIMIT 1",
       [user.id]
     );
     detail = rows[0] ?? null;
@@ -63,6 +65,7 @@ export default async function ProfilePage() {
             </div>
             <div>
               <p className="text-xl font-semibold">{user.fullName}</p>
+              {detail?.officer_position && <p className="mt-0.5 text-sm text-white/75">{detail.officer_position}</p>}
               <div className="mt-1 flex items-center gap-2">
                 <span className="rounded-full border border-white/20 bg-white/10 px-2.5 py-0.5 text-xs">{user.role}</span>
                 {hasThaiD && <span className="rounded-full border border-white/20 bg-white/10 px-2.5 py-0.5 text-xs">ThaiD</span>}

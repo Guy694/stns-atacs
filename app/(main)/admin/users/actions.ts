@@ -23,6 +23,7 @@ type UserRow = RowDataPacket & {
   id: number;
   thaid_cid: string | null;
   full_name: string;
+  officer_position: string | null;
   email: string | null;
   username: string | null;
   role: "admin" | "officer" | "viewer";
@@ -35,6 +36,7 @@ type UserRowWithoutFacility = RowDataPacket & {
   id: number;
   thaid_cid: string | null;
   full_name: string;
+  officer_position: string | null;
   email: string | null;
   username: string | null;
   role: "admin" | "officer" | "viewer";
@@ -60,12 +62,12 @@ export async function listUsersAction() {
   await requireAdmin();
   try {
     return await selectRows<UserRow>(
-      `SELECT id, thaid_cid, full_name, email, username, role, facility_id, is_active, last_login_at
+      `SELECT id, thaid_cid, full_name, officer_position, email, username, role, facility_id, is_active, last_login_at
        FROM users ORDER BY role DESC, full_name ASC`
     );
   } catch {
     const rows = await selectRows<UserRowWithoutFacility>(
-      `SELECT id, thaid_cid, full_name, email, username, role, is_active, last_login_at
+      `SELECT id, thaid_cid, full_name, NULL AS officer_position, email, username, role, is_active, last_login_at
        FROM users ORDER BY role DESC, full_name ASC`
     );
     return rows.map((row) => ({ ...row, facility_id: null }));
@@ -76,6 +78,7 @@ export async function createUserAction(_prev: string | null, fd: FormData): Prom
   const actor = await requireAdmin();
 
   const fullName = (fd.get("fullName") as string | null)?.trim() ?? "";
+  const officerPosition = (fd.get("officerPosition") as string | null)?.trim() || null;
   const email = (fd.get("email") as string | null)?.trim() || null;
   const username = (fd.get("username") as string | null)?.trim() || null;
   const password = (fd.get("password") as string | null)?.trim() || null;
@@ -89,6 +92,15 @@ export async function createUserAction(_prev: string | null, fd: FormData): Prom
   if (username && !password) return "กรุณากรอกรหัสผ่านสำหรับ username";
   if (!["admin", "officer", "viewer"].includes(role)) return "Role ไม่ถูกต้อง";
   if (role === "officer" && (!facilityId || isNaN(facilityId))) return "กรุณาเลือกหน่วยงานสำหรับเจ้าหน้าที่";
+  if (role === "officer" && !officerPosition) return "กรุณากรอกตำแหน่งเจ้าหน้าที่";
+
+  if (username) {
+    const existing = await selectRows<RowDataPacket & { id: number }>(
+      "SELECT id FROM users WHERE username = ? LIMIT 1",
+      [username]
+    );
+    if (existing.length > 0) return "username นี้ถูกใช้งานแล้ว";
+  }
 
   let passwordHash: string | null = null;
   if (username && password) {
@@ -100,9 +112,9 @@ export async function createUserAction(_prev: string | null, fd: FormData): Prom
     let createdUserId: number | null = null;
     try {
       await executeStatement(
-        `INSERT INTO users (thaid_cid, full_name, email, username, password_hash, role, facility_id, is_active)
-         VALUES (?, ?, ?, ?, ?, ?, ?, 1)`,
-        [thaidCid, fullName, email, username, passwordHash, role, role === "officer" ? facilityId : null]
+        `INSERT INTO users (thaid_cid, full_name, officer_position, email, username, password_hash, role, facility_id, is_active)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+        [thaidCid, fullName, role === "officer" ? officerPosition : null, email, username, passwordHash, role, role === "officer" ? facilityId : null]
       );
       const createdRows = await selectRows<RowDataPacket & { id: number }>(
         `SELECT id FROM users WHERE (username = ? AND ? IS NOT NULL) OR (thaid_cid = ? AND ? IS NOT NULL)
@@ -150,6 +162,7 @@ export async function updateUserProfileAction(_prev: string | null, fd: FormData
 
   const userId = Number(fd.get("userId"));
   const fullName = (fd.get("fullName") as string | null)?.trim() ?? "";
+  const officerPosition = (fd.get("officerPosition") as string | null)?.trim() || null;
   const email = (fd.get("email") as string | null)?.trim() || null;
   const username = (fd.get("username") as string | null)?.trim() || null;
   const thaidCid = (fd.get("thaidCid") as string | null)?.trim() || null;
@@ -162,15 +175,24 @@ export async function updateUserProfileAction(_prev: string | null, fd: FormData
   if (!thaidCid && !username) return "ต้องมีอย่างน้อย ThaiD หรือ username";
   if (!["admin", "officer", "viewer"].includes(role)) return "Role ไม่ถูกต้อง";
   if (role === "officer" && (!facilityId || Number.isNaN(facilityId))) return "กรุณาเลือกหน่วยงานสำหรับเจ้าหน้าที่";
+  if (role === "officer" && !officerPosition) return "กรุณากรอกตำแหน่งเจ้าหน้าที่";
+
+  if (username) {
+    const existing = await selectRows<RowDataPacket & { id: number }>(
+      "SELECT id FROM users WHERE username = ? AND id <> ? LIMIT 1",
+      [username, userId]
+    );
+    if (existing.length > 0) return "username นี้ถูกใช้งานแล้ว";
+  }
 
   try {
     const before = await getUserAuditRow(userId);
     try {
       await executeStatement(
         `UPDATE users
-         SET full_name = ?, email = ?, username = ?, thaid_cid = ?, role = ?, facility_id = ?
+         SET full_name = ?, officer_position = ?, email = ?, username = ?, thaid_cid = ?, role = ?, facility_id = ?
          WHERE id = ?`,
-        [fullName, email, username, thaidCid, role, role === "officer" ? facilityId : null, userId]
+        [fullName, role === "officer" ? officerPosition : null, email, username, thaidCid, role, role === "officer" ? facilityId : null, userId]
       );
     } catch (error) {
       const msg = error instanceof Error ? error.message : "";
@@ -208,6 +230,7 @@ export async function updateUserProfileAction(_prev: string | null, fd: FormData
 
 export async function toggleUserActiveAction(userId: number, currentActive: boolean): Promise<void> {
   const actor = await requireAdmin();
+  if (Number(actor.id) === userId) return;
   const target = await getUserAuditRow(userId);
   await executeStatement("UPDATE users SET is_active = ? WHERE id = ?", [currentActive ? 0 : 1, userId]);
   await writeAuditLog({
@@ -219,25 +242,50 @@ export async function toggleUserActiveAction(userId: number, currentActive: bool
     summary: `${currentActive ? "ปิดใช้งาน" : "เปิดใช้งาน"} ผู้ใช้ ${target?.full_name ?? `#${userId}`}`,
   });
   revalidatePath("/admin/users");
+  revalidatePath("/", "layout");
 }
 
 export async function approveUserAction(userId: number): Promise<void> {
+  await approveUsersAction([userId]);
+}
+
+export async function approveUsersAction(userIds: number[]): Promise<void> {
   const actor = await requireAdmin();
-  const target = await getUserAuditRow(userId);
-  await executeStatement("UPDATE users SET is_active = 1 WHERE id = ? AND is_active = 0", [userId]);
+  const uniqueIds = [...new Set(userIds.filter((id) => Number.isInteger(id) && id > 0))].slice(0, 100);
+  if (uniqueIds.length === 0) return;
+
+  const placeholders = uniqueIds.map(() => "?").join(", ");
+  const targets = await selectRows<UserAuditRow>(
+    `SELECT id, full_name, role FROM users
+     WHERE id IN (${placeholders}) AND is_active = 0 AND last_login_at IS NULL`,
+    uniqueIds
+  );
+  if (targets.length === 0) return;
+
+  const targetIds = targets.map((target) => target.id);
+  const targetPlaceholders = targetIds.map(() => "?").join(", ");
+  await executeStatement(
+    `UPDATE users SET is_active = 1 WHERE id IN (${targetPlaceholders}) AND is_active = 0 AND last_login_at IS NULL`,
+    targetIds
+  );
   await writeAuditLog({
     userId: actor.id,
     userName: actor.fullName,
     action: "update",
     entity: "users",
-    entityId: userId,
-    summary: `อนุมัติผู้ใช้ ${target?.full_name ?? `#${userId}`}`,
+    entityId: targets.length === 1 ? targets[0].id : null,
+    summary:
+      targets.length === 1
+        ? `อนุมัติผู้ใช้ ${targets[0].full_name}`
+        : `อนุมัติผู้ลงทะเบียน ${targets.length} รายการ: ${targets.map((target) => target.full_name).join(", ")}`,
   });
   revalidatePath("/admin/users");
+  revalidatePath("/", "layout");
 }
 
 export async function updateUserRoleAction(userId: number, newRole: "admin" | "officer" | "viewer"): Promise<void> {
   const actor = await requireAdmin();
+  if (Number(actor.id) === userId) return;
   const before = await getUserAuditRow(userId);
   await executeStatement("UPDATE users SET role = ? WHERE id = ?", [newRole, userId]);
   await writeAuditLog({

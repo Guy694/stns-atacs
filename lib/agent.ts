@@ -104,6 +104,8 @@ export type AgentDevice = {
   lastReportedAt: string | null;
 };
 
+export type OfflineAgentDevice = Pick<AgentDevice, "id" | "facilityName" | "agentUuid" | "hostname" | "lastSeenAt">;
+
 export type AgentReportPayload = {
   fingerprint: string;
   hostname?: string | null;
@@ -385,6 +387,7 @@ export async function enrollAgentDevice(input: {
     facilityId: enrollment.facility_id,
     facilityName: enrollment.facility_name,
     deviceId,
+    wasExisting: Boolean(existing[0]),
   };
 }
 
@@ -408,6 +411,7 @@ export async function reportAgentInventory(input: {
 
   const payload = input.payload;
   const fingerprint = normalizeFingerprint(payload.fingerprint);
+  const reportedStatus = payload.status?.trim() || "online";
   if (!fingerprint) {
     throw new Error("INVALID_FINGERPRINT");
   }
@@ -455,7 +459,7 @@ export async function reportAgentInventory(input: {
       payload.diskTotalGb ?? null,
       payload.locationDetail?.trim() || null,
       payload.agentVersion?.trim() || null,
-      payload.status?.trim() || "online",
+      reportedStatus,
       lastReportedAt,
       JSON.stringify(payload.raw ?? payload),
       deviceRow.id,
@@ -507,13 +511,17 @@ export async function reportAgentInventory(input: {
 
   await executeStatement(
     `UPDATE agent_devices SET linked_asset_id = ?, status = ?, last_seen_at = NOW(), last_reported_at = ? WHERE id = ?`,
-    [linkedAssetId, payload.status?.trim() || "online", lastReportedAt, deviceRow.id]
+    [linkedAssetId, reportedStatus, lastReportedAt, deviceRow.id]
   );
 
   return {
     deviceId: deviceRow.id,
     linkedAssetId,
     surveyId,
+    recovered: deviceRow.status === "offline" && reportedStatus !== "offline",
+    hostname: payload.hostname?.trim() || deviceRow.hostname,
+    facilityName: deviceRow.facility_name,
+    agentUuid: deviceRow.agent_uuid,
   };
 }
 
@@ -530,10 +538,51 @@ export async function heartbeatAgent(input: { agentId: string; agentKey: string;
     throw new Error("INVALID_AGENT_CREDENTIALS");
   }
 
+  const reportedStatus = input.status?.trim() || "online";
   await executeStatement(
     `UPDATE agent_devices SET status = ?, last_seen_at = NOW() WHERE id = ?`,
-    [input.status?.trim() || "online", device.id]
+    [reportedStatus, device.id]
   );
 
-  return { deviceId: device.id };
+  return {
+    deviceId: device.id,
+    recovered: device.status === "offline" && reportedStatus !== "offline",
+    hostname: device.hostname,
+    facilityName: device.facility_name,
+    agentUuid: device.agent_uuid,
+  };
+}
+
+export async function findOfflineAgentDevices(thresholdMinutes: number): Promise<OfflineAgentDevice[]> {
+  const safeMinutes = Math.max(5, Math.floor(thresholdMinutes));
+  const rows = await selectRows<DeviceRow>(
+    `SELECT ad.*, hf.name AS facility_name,
+            a.asset_registration_no AS linked_asset_registration_no,
+            a.asset_name AS linked_asset_name
+     FROM agent_devices ad
+     JOIN health_facilities hf ON hf.id = ad.facility_id
+     LEFT JOIN information_assets a ON a.id = ad.linked_asset_id
+     WHERE ad.is_active = 1
+       AND (ad.last_seen_at IS NULL OR ad.last_seen_at < DATE_SUB(NOW(), INTERVAL ? MINUTE))
+     ORDER BY ad.last_seen_at ASC, ad.id ASC`,
+    [safeMinutes]
+  );
+
+  if (rows.length > 0) {
+    await executeStatement(
+      `UPDATE agent_devices
+       SET status = 'offline'
+       WHERE is_active = 1
+         AND (last_seen_at IS NULL OR last_seen_at < DATE_SUB(NOW(), INTERVAL ? MINUTE))`,
+      [safeMinutes]
+    );
+  }
+
+  return rows.map((row) => ({
+    id: row.id,
+    facilityName: row.facility_name,
+    agentUuid: row.agent_uuid,
+    hostname: row.hostname,
+    lastSeenAt: toDateTime(row.last_seen_at),
+  }));
 }

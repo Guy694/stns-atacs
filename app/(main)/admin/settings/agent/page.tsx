@@ -1,16 +1,18 @@
 import { redirect } from "next/navigation";
 
+import { StatusBadge, activeTone } from "@/app/_components/ui/status-badge";
 import { AgentDeviceLinkCell } from "@/app/(main)/admin/settings/agent/_components/agent-device-link-cell";
 import { AgentEnrollmentPanel } from "@/app/(main)/admin/settings/agent/_components/agent-enrollment-panel";
 import { revokeAgentEnrollmentAction } from "@/app/(main)/admin/settings/agent/actions";
 import { listAgentDevices, listAgentEnrollments } from "@/lib/agent";
 import { getCurrentUser } from "@/lib/auth";
 import { listAllFacilitiesForSelect, listAssetsForFacilityIds } from "@/lib/assets";
+import { formatThaiDateTime } from "@/lib/date-format";
 import { hasPermission } from "@/lib/role-permissions";
 
 function formatDate(value: string | null) {
   if (!value) return "-";
-  return value.replace("T", " ").slice(0, 16);
+  return formatThaiDateTime(value);
 }
 
 export default async function AgentSettingsPage() {
@@ -79,9 +81,9 @@ export default async function AgentSettingsPage() {
                         <td className="px-4 py-3 font-medium">{enrollment.facilityName}</td>
                         <td className="px-4 py-3 text-[var(--muted)]">{enrollment.enrollmentName}</td>
                         <td className="px-4 py-3">
-                          <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${enrollment.isActive ? "bg-emerald-100 text-emerald-700" : "bg-stone-100 text-stone-600"}`}>
+                          <StatusBadge tone={activeTone(enrollment.isActive)}>
                             {enrollment.isActive ? "ใช้งานได้" : "ปิดใช้งาน"}
-                          </span>
+                          </StatusBadge>
                         </td>
                         <td className="px-4 py-3 font-mono text-xs text-[var(--muted)]">{formatDate(enrollment.lastUsedAt)}</td>
                         <td className="px-4 py-3 text-right">
@@ -145,9 +147,9 @@ export default async function AgentSettingsPage() {
                           assets={assetOptions}
                         />
                         <td className="px-4 py-3">
-                          <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${device.status === "online" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
-                            {device.status}
-                          </span>
+	                          <StatusBadge tone={device.status === "online" ? "success" : "warning"}>
+	                            {device.status}
+	                          </StatusBadge>
                           <p className="mt-1 font-mono text-xs text-[var(--muted)]">{formatDate(device.lastSeenAt)}</p>
                         </td>
                       </tr>

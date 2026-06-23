@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 
 import { linkAgentDeviceAction } from "@/app/(main)/admin/settings/agent/actions";
 import type { AssetSelectOption } from "@/lib/assets";
@@ -25,7 +25,6 @@ export function AgentDeviceLinkCell({
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [pending, startTransition] = useTransition();
-  const formRef = useRef<HTMLFormElement>(null);
 
   const facilityAssets = assets.filter((a) => a.facilityId === facilityId);
   const filtered = search.trim()

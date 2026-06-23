@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+import { recordAssetStatusHistory } from "@/lib/asset-status-history";
 import { getCurrentUser } from "@/lib/auth";
 import { getAssetById, getSurveyById, updateAsset } from "@/lib/assets";
 import { writeAuditLog } from "@/lib/audit";
@@ -42,6 +43,14 @@ export async function transferAssetAction(_prev: string | null, fd: FormData): P
       usageDescription: transferNote,
       updatedBy: user.fullName,
       lastUpdatedAt: new Date().toISOString().slice(0, 10),
+    });
+    await recordAssetStatusHistory({
+      assetId,
+      fromStatus: asset.currentStatus,
+      toStatus: asset.currentStatus,
+      note: transferNote,
+      changedByUserId: user.id,
+      changedBy: user.fullName,
     });
 
     revalidatePath("/assets");

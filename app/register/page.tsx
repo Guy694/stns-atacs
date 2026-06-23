@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 
 import { TopNavigation } from "@/app/_components/top-navigation";
-import { registerFromThaiDAction } from "@/app/auth/actions";
+import { registerFirstTimeAction } from "@/app/auth/actions";
 import { listAllFacilitiesForSelect } from "@/lib/assets";
 import { getCurrentUser, getPendingRegistrationClaim } from "@/lib/auth";
 
@@ -25,7 +25,7 @@ export default async function RegisterPage({ searchParams }: RegisterPageProps) 
 
   const claim = await getPendingRegistrationClaim();
   if (!claim) {
-    redirect("/login?error=กรุณาเข้าสู่ระบบผ่าน ThaiD ก่อนการสมัครสมาชิก");
+    redirect("/login?error=กรุณาเข้าสู่ระบบด้วย ThaiD หรือ Google ก่อนการสมัครสมาชิก");
   }
 
   const params = await searchParams;
@@ -41,7 +41,7 @@ export default async function RegisterPage({ searchParams }: RegisterPageProps) 
         <p className="text-sm uppercase tracking-[0.24em] text-[var(--muted)]">First-time Registration</p>
         <h1 className="section-title mt-3 text-4xl font-semibold">สมัครสมาชิก ATACS</h1>
         <p className="mt-4 text-sm leading-7 text-[var(--muted)]">
-          ยืนยันตัวตนผ่าน ThaiD แล้ว กรุณากรอกข้อมูลเพื่อลงทะเบียนใช้งานครั้งแรก
+          ยืนยันตัวตนผ่าน {claim.provider === "google" ? "Google" : "ThaiD"} แล้ว กรุณากรอกข้อมูลให้ครบเพื่อลงทะเบียนใช้งานครั้งแรก
         </p>
 
         {notice ? (
@@ -54,21 +54,36 @@ export default async function RegisterPage({ searchParams }: RegisterPageProps) 
           <div className="mt-5 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>
         ) : null}
 
-        <form action={registerFromThaiDAction} className="mt-6 space-y-4">
-          <div className="space-y-2">
-            <label htmlFor="thaidCid" className="block text-sm font-medium">
-              เลขบัตรประชาชน (ThaiD)
-            </label>
-            <input
-              id="thaidCid"
-              name="thaidCid"
-              type="text"
-              value={claim.cid}
-              readOnly
-              required
-              className="w-full rounded-2xl border border-black/10 bg-stone-100 px-4 py-3 text-[var(--muted)] outline-none"
-            />
-          </div>
+        <form action={registerFirstTimeAction} className="mt-6 space-y-4">
+          {claim.provider === "thaid" ? (
+            <div className="space-y-2">
+              <label htmlFor="thaidCid" className="block text-sm font-medium">
+                เลขบัตรประชาชน (ThaiD)
+              </label>
+              <input
+                id="thaidCid"
+                name="thaidCid"
+                type="text"
+                value={claim.cid}
+                readOnly
+                required
+                className="w-full rounded-2xl border border-black/10 bg-stone-100 px-4 py-3 text-[var(--muted)] outline-none"
+              />
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <label htmlFor="googleEmail" className="block text-sm font-medium">
+                อีเมล Google
+              </label>
+              <input
+                id="googleEmail"
+                type="email"
+                value={claim.email}
+                readOnly
+                className="w-full rounded-2xl border border-black/10 bg-stone-100 px-4 py-3 text-[var(--muted)] outline-none"
+              />
+            </div>
+          )}
 
           <div className="space-y-2">
             <label htmlFor="fullName" className="block text-sm font-medium">
@@ -85,17 +100,36 @@ export default async function RegisterPage({ searchParams }: RegisterPageProps) 
           </div>
 
           <div className="space-y-2">
-            <label htmlFor="email" className="block text-sm font-medium">
-              อีเมล (ไม่บังคับ)
+            <label htmlFor="officerPosition" className="block text-sm font-medium">
+              ตำแหน่งเจ้าหน้าที่ <span className="text-rose-500">*</span>
             </label>
             <input
-              id="email"
-              name="email"
-              type="email"
+              id="officerPosition"
+              name="officerPosition"
+              type="text"
+              required
+              minLength={2}
+              maxLength={150}
               className="w-full rounded-2xl border border-black/10 bg-white/90 px-4 py-3 outline-none transition focus:border-[var(--accent)]"
-              placeholder="name@example.go.th"
+              placeholder="เช่น นักวิชาการคอมพิวเตอร์"
             />
           </div>
+
+          {claim.provider === "thaid" ? (
+            <div className="space-y-2">
+              <label htmlFor="email" className="block text-sm font-medium">
+                อีเมล
+              </label>
+              <input
+                id="email"
+                name="email"
+                type="email"
+                required
+                className="w-full rounded-2xl border border-black/10 bg-white/90 px-4 py-3 outline-none transition focus:border-[var(--accent)]"
+                placeholder="name@example.go.th"
+              />
+            </div>
+          ) : null}
 
           <div className="space-y-2">
             <label htmlFor="facilityId" className="block text-sm font-medium">
