@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 import { StatusBadge } from "@/app/_components/ui/status-badge";
 import { getCurrentUser } from "@/lib/auth";
@@ -76,11 +77,15 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
   const user = await getCurrentUser();
   if (!user) return null;
 
+  if (user.role === "officer") {
+    if (user.facilityId) redirect(`/facilities/${user.facilityId}`);
+    redirect("/profile");
+  }
+
   const canViewAssets = await hasPermission(user.role, "assets.view");
   if (!canViewAssets) return null;
 
   const isAdmin = user.role === "admin";
-  const isOfficerWithFacility = user.role === "officer" && !!user.facilityId;
 
   const params = await searchParams;
   const search = readParam(params, "search");
@@ -91,7 +96,7 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
   const maExpiringDays = Number(readParam(params, "maDays")) || undefined;
   const sort = readParam(params, "sort") as "updated_desc" | "updated_asc" | "name_asc" | "name_desc" | "ma_soon";
   const requestedFacilityFilter = Number(readParam(params, "facility")) || undefined;
-  const facilityFilter = isOfficerWithFacility ? Number(user.facilityId) : requestedFacilityFilter;
+  const facilityFilter = requestedFacilityFilter;
   const requestedPage = readPositiveIntParam(params, "page", 1);
   const perPage = normalizePerPage(readPositiveIntParam(params, "perPage", 25));
   const assetFilter: AssetListFilter = {
@@ -124,7 +129,7 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
     deviceType: deviceTypeFilter || undefined,
     district: districtFilter || undefined,
     maDays: maExpiringDays,
-    facility: !isOfficerWithFacility ? requestedFacilityFilter : undefined,
+    facility: requestedFacilityFilter,
     sort: sort || undefined,
     perPage: perPage === 25 ? undefined : perPage,
   };
@@ -134,14 +139,9 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
     ...new Set(facilitiesForSelect.map((facility) => facility.district_name).filter((district): district is string => Boolean(district))),
   ].sort();
 
-  const facilitiesForForm = isOfficerWithFacility
-    ? facilitiesForSelect.filter((f) => f.id === Number(user.facilityId))
-    : facilitiesForSelect;
-  const officerFacilityName = isOfficerWithFacility
-    ? facilitiesForSelect.find((f) => f.id === Number(user.facilityId))?.facility_name ?? "หน่วยงานของฉัน"
-    : null;
+  const facilitiesForForm = facilitiesForSelect;
   const canCreateAssetByPolicy = await hasPermission(user.role, "assets.create");
-  const canCreateAsset = canCreateAssetByPolicy && (isAdmin || isOfficerWithFacility);
+  const canCreateAsset = canCreateAssetByPolicy && isAdmin;
   const canViewNetworkByPolicy = await hasPermission(user.role, "assets.network.view");
   const canUpdateAssetByPolicy = await hasPermission(user.role, "assets.update");
 
@@ -165,18 +165,12 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
               <span> · แสดง {pageStart.toLocaleString("th-TH")}-{pageEnd.toLocaleString("th-TH")}</span>
             )}
           </p>
-          {officerFacilityName && (
-            <p className="mt-2 inline-flex items-center rounded-full bg-sky-100 px-3 py-1 text-xs font-medium text-sky-700">
-              Officer Scope: {officerFacilityName}
-            </p>
-          )}
         </div>
         {canCreateAsset && (
           <div className="flex gap-2">
             {isAdmin && <ImportExcelModal facilities={facilities} />}
             <AssetFormModal
               facilities={facilitiesForForm}
-              fixedFacilityId={isOfficerWithFacility ? Number(user.facilityId) : undefined}
               deviceTypes={deviceTypes}
               updaterName={user.fullName}
               mode="create"
@@ -262,24 +256,20 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
           <option value="60">MA ภายใน 60 วัน</option>
           <option value="90">MA ภายใน 90 วัน</option>
         </select>
-        {!isOfficerWithFacility && (
-          <>
-            <label htmlFor="asset-facility-filter" className="sr-only">กรองหน่วยงาน</label>
-            <select
-              id="asset-facility-filter"
-              name="facility"
-              defaultValue={facilityFilter ?? ""}
-              className="rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
-            >
-              <option value="">ทุกหน่วยงาน</option>
-              {facilitiesForSelect.map((f) => (
-                <option key={f.id} value={f.id}>
-                  {f.facility_name} {f.district_name ? `· อ.${f.district_name}` : ""}
-                </option>
-              ))}
-            </select>
-          </>
-        )}
+        <label htmlFor="asset-facility-filter" className="sr-only">กรองหน่วยงาน</label>
+        <select
+          id="asset-facility-filter"
+          name="facility"
+          defaultValue={facilityFilter ?? ""}
+          className="rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+        >
+          <option value="">ทุกหน่วยงาน</option>
+          {facilitiesForSelect.map((f) => (
+            <option key={f.id} value={f.id}>
+              {f.facility_name} {f.district_name ? `· อ.${f.district_name}` : ""}
+            </option>
+          ))}
+        </select>
         <label htmlFor="asset-sort" className="sr-only">เรียงลำดับทรัพย์สิน</label>
         <select
           id="asset-sort"
@@ -378,7 +368,6 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
                         <div className="inline-flex gap-2">
                           <AssetFormModal
                             facilities={facilitiesForForm}
-                            fixedFacilityId={isOfficerWithFacility ? Number(user.facilityId) : undefined}
                             deviceTypes={deviceTypes}
                             updaterName={user.fullName}
                             mode="edit"

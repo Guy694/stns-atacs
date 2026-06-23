@@ -22,7 +22,7 @@ export default async function MenuSettingsPage({ searchParams }: MenuSettingsPag
   const user = await getCurrentUser();
   if (!user) redirect("/login");
   const canManage = user.role === "admin" || (await hasPermission(user.role, "permissions.manage"));
-  if (!canManage) redirect("/");
+  if (!canManage) redirect("/dashboard");
 
   const [params, menuVisibility] = await Promise.all([searchParams, getMenuVisibility()]);
   const notice = readQueryValue(params.notice);

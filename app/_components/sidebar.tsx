@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { AppIcon, type IconName } from "@/app/_components/ui/icon";
 import { APP_MENU_GROUPS, APP_MENU_ITEMS, type AppMenuGroupKey } from "@/lib/menu";
@@ -71,8 +71,29 @@ export function Sidebar({ user, grantedPermissions, pendingRegistrationCount, me
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
 
+  useEffect(() => {
+    if (!mobileOpen) return;
+
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setMobileOpen(false);
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [mobileOpen]);
+
   const items = APP_MENU_ITEMS.filter((item) => {
     if (!menuVisibility[item.key]) return false;
+    if (user.role === "officer" && item.key === "assets") return false;
     if (item.adminOnly && user.role !== "admin") return false;
     if (item.officerOnly && user.role !== "officer") return false;
     if (item.hideForViewer && user.role === "viewer") return false;
@@ -133,16 +154,20 @@ export function Sidebar({ user, grantedPermissions, pendingRegistrationCount, me
           );
         })()}
 
-        <div className="my-3 h-px bg-white/10" />
+        {user.role !== "officer" && (
+          <>
+            <div className="my-3 h-px bg-white/10" />
 
-        <Link
-          href="/public"
-          onClick={() => setMobileOpen(false)}
-          className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-white/40 transition hover:bg-white/10 hover:text-white/70"
-        >
-          <AppIcon name="globe" className="w-4 shrink-0" />
-          หน้าข้อมูลสาธารณะ
-        </Link>
+            <Link
+              href="/"
+              onClick={() => setMobileOpen(false)}
+              className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-white/40 transition hover:bg-white/10 hover:text-white/70"
+            >
+              <AppIcon name="globe" className="w-4 shrink-0" />
+              หน้าข้อมูลสาธารณะ
+            </Link>
+          </>
+        )}
       </nav>
     </div>
   );
@@ -152,7 +177,7 @@ export function Sidebar({ user, grantedPermissions, pendingRegistrationCount, me
       {/* Mobile toggle button */}
       <button
         onClick={() => setMobileOpen(true)}
-        className="fixed left-4 top-4 z-40 flex h-11 w-11 items-center justify-center rounded-xl sidebar-gradient text-white shadow-md lg:hidden"
+        className="fixed left-3 top-3 z-40 flex h-11 w-11 items-center justify-center rounded-xl sidebar-gradient text-white shadow-md ring-1 ring-white/20 lg:hidden"
         aria-label="เปิดเมนู"
       >
         <AppIcon name="menu" />
@@ -168,14 +193,14 @@ export function Sidebar({ user, grantedPermissions, pendingRegistrationCount, me
 
       {/* Mobile drawer */}
       <div
-        className={`fixed inset-y-0 left-0 z-50 w-64 sidebar-gradient transition-transform duration-300 lg:hidden ${
+        className={`fixed inset-y-0 left-0 z-50 w-[82vw] max-w-80 sidebar-gradient transition-transform duration-300 lg:hidden ${
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
         <button
           onClick={() => setMobileOpen(false)}
           aria-label="ปิดเมนู"
-          className="absolute right-3 top-3 flex h-11 w-11 items-center justify-center rounded-xl text-white/70 hover:bg-white/10 hover:text-white"
+          className="absolute right-3 top-3 flex h-10 w-10 items-center justify-center rounded-xl text-white/70 hover:bg-white/10 hover:text-white"
         >
           <AppIcon name="close" />
         </button>

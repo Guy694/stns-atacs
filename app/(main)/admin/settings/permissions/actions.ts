@@ -16,7 +16,7 @@ async function requirePermissionManager() {
   }
 
   const canManagePermissions = await hasPermission(user.role, "permissions.manage");
-  if (!canManagePermissions) redirect("/");
+  if (!canManagePermissions) redirect("/dashboard");
 
   return user;
 }

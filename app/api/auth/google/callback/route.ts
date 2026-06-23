@@ -35,16 +35,16 @@ function redirectWithDeletedState(url: URL) {
 }
 
 function safeNextPath(value: string | undefined) {
-  if (!value) return "/";
-  if (!value.startsWith("/") || value.startsWith("//")) return "/";
-  if (value.includes("\\")) return "/";
+  if (!value) return "/dashboard";
+  if (!value.startsWith("/") || value.startsWith("//")) return "/dashboard";
+  if (value.includes("\\")) return "/dashboard";
   return value;
 }
 
-function loginUrl(req: NextRequest, message: string, nextPath = "/") {
+function loginUrl(req: NextRequest, message: string, nextPath = "/dashboard") {
   const url = new URL("/login", req.url);
   url.searchParams.set("error", message);
-  if (nextPath !== "/") url.searchParams.set("next", nextPath);
+  if (nextPath !== "/dashboard") url.searchParams.set("next", nextPath);
   return url;
 }
 

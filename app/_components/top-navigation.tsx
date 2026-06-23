@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { LogoutConfirmForm } from "@/app/_components/logout-confirm-form";
+import { AppIcon } from "@/app/_components/ui/icon";
 
 type TopNavigationProps = {
   current: "public" | "internal" | "assets" | "admin" | "profile" | "login" | "register";
@@ -23,12 +24,12 @@ export function TopNavigation({ current, user }: TopNavigationProps) {
     <div className="glass-panel rounded-[1.6rem] px-4 py-3 sm:px-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap items-center gap-2">
-          <Link href="/public" className={navItemClass(current === "public")}>
+          <Link href="/" className={navItemClass(current === "public")}>
             Public Dashboard
           </Link>
           {user ? (
             <>
-              <Link href="/" className={navItemClass(current === "internal")}>
+              <Link href="/dashboard" className={navItemClass(current === "internal")}>
                 Dashboard
               </Link>
               <Link href="/assets" className={navItemClass(current === "assets")}>
@@ -64,7 +65,12 @@ export function TopNavigation({ current, user }: TopNavigationProps) {
               >
                 โปรไฟล์
               </Link>
-              <LogoutConfirmForm buttonClassName="rounded-full border border-black/12 bg-white/75 px-4 py-2 text-xs font-semibold text-[var(--accent-strong)] transition hover:bg-white" />
+              <LogoutConfirmForm
+                buttonClassName="inline-flex min-h-11 min-w-11 items-center justify-center rounded-full border border-black/12 bg-white/75 text-[var(--accent-strong)] transition hover:bg-white"
+                ariaLabel="ออกจากระบบ"
+                title="ออกจากระบบ"
+                buttonContent={<AppIcon name="logout" className="h-4 w-4" />}
+              />
             </>
           ) : (
             <div className="rounded-full border border-black/10 bg-white/70 px-3 py-2 text-xs text-[var(--muted)]">

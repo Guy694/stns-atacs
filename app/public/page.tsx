@@ -131,7 +131,7 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
   function filterHref(changes: Record<string, string>) {
     const next = { district: districtFilter, group: groupFilter, view, q, ...changes };
     const parts = Object.entries(next).filter(([, v]) => v).map(([k, v]) => `${k}=${encodeURIComponent(v)}`);
-    return `/public${parts.length ? "?" + parts.join("&") : ""}`;
+    return `/${parts.length ? "?" + parts.join("&") : ""}`;
   }
 
   function tabClass(v: string) {
@@ -156,7 +156,7 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
               ทะเบียนทรัพย์สิน<br className="hidden sm:block" />สารสนเทศ จ.สตูล
             </h1>
             <p className="mt-3 max-w-lg text-sm leading-7 text-white">
-              ข้อมูลสรุประดับจังหวัดและอำเภอ — ไม่เปิดเผย IP, Serial, ผู้รับผิดชอบ และตำแหน่งติดตั้ง
+              ข้อมูลสรุประดับจังหวัดและอำเภอ
             </p>
           </div>
           {/* Active ring */}
@@ -202,7 +202,7 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
         {districtFilter && (
           <div className="relative mt-3 flex items-center gap-2 text-xs text-white/60">
             <span>กรองข้อมูล: อำเภอ {districtFilter}</span>
-            <Link href="/public" className="rounded-full bg-white/10 px-2 py-0.5 hover:bg-white/20">✕ ล้างตัวกรอง</Link>
+            <Link href="/" className="rounded-full bg-white/10 px-2 py-0.5 hover:bg-white/20">✕ ล้างตัวกรอง</Link>
           </div>
         )}
       </section>
@@ -215,7 +215,7 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
             <p className="mt-0.5 text-sm font-semibold">ค้นหาจากเลขครุภัณฑ์ / ชื่ออุปกรณ์</p>
           </div>
         </div>
-        <form method="GET" action="/public" className="mt-3 flex gap-3">
+        <form method="GET" action="/" className="mt-3 flex gap-3">
           <input type="hidden" name="district" value={districtFilter} />
           <input type="hidden" name="group" value={groupFilter} />
           <input type="hidden" name="view" value={view} />
@@ -272,7 +272,7 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
       {/* ── Filter + Tabs ───────────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-center gap-3">
         {/* District filter */}
-        <form method="GET" action="/public" className="flex items-center gap-2">
+        <form method="GET" action="/" className="flex items-center gap-2">
           <input type="hidden" name="view" value={view} />
           <input type="hidden" name="group" value={groupFilter} />
           <input type="hidden" name="q" value={q} />

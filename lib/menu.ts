@@ -25,7 +25,7 @@ export const APP_MENU_GROUPS: Array<{ key: AppMenuGroupKey; label: string }> = [
 export const APP_MENU_ITEMS: AppMenuItem[] = [
   {
     key: "dashboard",
-    href: "/",
+    href: "/dashboard",
     label: "ภาพรวม",
     description: "หน้า dashboard หลักของระบบ",
     icon: "activity",

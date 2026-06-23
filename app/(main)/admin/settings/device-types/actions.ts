@@ -11,7 +11,7 @@ async function requireAdmin() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
   const allowManageDeviceTypes = user.role === "admin" || (await hasPermission(user.role, "device-types.manage"));
-  if (!allowManageDeviceTypes) redirect("/");
+  if (!allowManageDeviceTypes) redirect("/dashboard");
 }
 
 const REVALIDATE = () => revalidatePath("/admin/settings/device-types");

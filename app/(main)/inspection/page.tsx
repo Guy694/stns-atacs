@@ -17,7 +17,7 @@ export default async function InspectionPage({
   const user = await getCurrentUser();
   if (!user) redirect("/login");
   const canViewInspection = await hasPermission(user.role, "inspection.view");
-  if (!canViewInspection) redirect("/");
+  if (!canViewInspection) redirect("/dashboard");
   const canMutate = user.role !== "viewer" && (await hasPermission(user.role, "inspection.create"));
 
   const params = await searchParams;

@@ -54,6 +54,9 @@ export default async function AssetDetailPage({ params }: Props) {
     listAssetStatusHistory(numId),
   ]);
   if (!asset) notFound();
+  if (user.role === "officer" && user.facilityId !== asset.facilityId) {
+    redirect(user.facilityId ? `/facilities/${user.facilityId}` : "/profile");
+  }
   const requestHeaders = await headers();
   const host = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host") ?? "";
   const protocol = requestHeaders.get("x-forwarded-proto") ?? (host.includes("localhost") ? "http" : "https");
@@ -81,9 +84,13 @@ export default async function AssetDetailPage({ params }: Props) {
 
       {/* Breadcrumb */}
       <nav className="flex items-center gap-2 text-xs text-[var(--muted)]">
-        <Link href="/" className="hover:text-[var(--foreground)]">หน้าหลัก</Link>
+        <Link href="/dashboard" className="hover:text-[var(--foreground)]">หน้าหลัก</Link>
         <span>/</span>
-        <Link href="/assets" className="hover:text-[var(--foreground)]">ทรัพย์สินทั้งหมด</Link>
+        {user.role === "officer" ? (
+          <Link href={`/facilities/${asset.facilityId}`} className="hover:text-[var(--foreground)]">หน่วยงานของฉัน</Link>
+        ) : (
+          <Link href="/assets" className="hover:text-[var(--foreground)]">ทรัพย์สินทั้งหมด</Link>
+        )}
         <span>/</span>
         <span className="text-[var(--foreground)]">{asset.assetRegistrationNo}</span>
       </nav>

@@ -29,7 +29,7 @@ export default async function AdminPermissionsPage() {
   if (!user) redirect("/login");
 
   const allowManageByPolicy = user.role === "admin" || (await hasPermission(user.role, "permissions.manage"));
-  if (!allowManageByPolicy) redirect("/");
+  if (!allowManageByPolicy) redirect("/dashboard");
 
   const matrix = await getRolePermissionMatrix();
   const users = await selectRows<UserPermissionRow>(

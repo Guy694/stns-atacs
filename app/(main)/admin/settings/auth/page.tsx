@@ -17,7 +17,7 @@ function readQueryValue(value: string | string[] | undefined) {
 export default async function AuthSettingsPage({ searchParams }: AuthSettingsPageProps) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
-  if (user.role !== "admin") redirect("/");
+  if (user.role !== "admin") redirect("/dashboard");
 
   const params = await searchParams;
   const notice = readQueryValue(params.notice);

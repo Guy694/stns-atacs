@@ -18,8 +18,8 @@ function readQueryValue(value: string | string[] | undefined) {
 }
 
 function safeNextPath(value: string) {
-  if (!value.startsWith("/") || value.startsWith("//")) return "/";
-  if (value.includes("\\")) return "/";
+  if (!value || !value.startsWith("/") || value.startsWith("//")) return "/dashboard";
+  if (value.includes("\\")) return "/dashboard";
   return value;
 }
 
@@ -66,13 +66,13 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
               <p className="text-emerald-100 text-xs">Asset Tracking and Control System</p>
             </div>
           </div>
-          <h2 className="text-white text-3xl font-bold leading-snug">
+          <h2 className="text-white text-6xl font-bold leading-snug">
             ระบบทะเบียน<br />ทรัพย์สินสารสนเทศ<br />จังหวัดสตูล
           </h2>
           <p className="text-emerald-100 mt-4 text-sm leading-7">
-            บริหารจัดการทรัพย์สิน IT ของหน่วยบริการสาธารณสุข
-            ในจังหวัดสตูลอย่างเป็นระบบ ครบวงจร
+            สำนักงานสาธารณสุขจังหวัดสตูล
           </p>
+     
         </div>
 
         {/* Stats strip */}
@@ -92,7 +92,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
 
         {/* Bottom link */}
         <div className="relative z-10">
-          <Link href="/public" className="inline-flex items-center gap-2 text-emerald-100 hover:text-white transition text-sm">
+          <Link href="/" className="inline-flex items-center gap-2 text-emerald-100 hover:text-white transition text-sm">
             <span>←</span> ดู Public Dashboard
           </Link>
         </div>
@@ -411,7 +411,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
 
           {/* Footer */}
           <div className="mt-6 text-center text-sm" style={{ color: "var(--muted)" }}>
-            <Link href="/public" className="font-semibold hover:underline" style={{ color: "var(--accent)" }}>
+            <Link href="/" className="font-semibold hover:underline" style={{ color: "var(--accent)" }}>
               ← กลับหน้า Public Dashboard
             </Link>
           </div>

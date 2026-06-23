@@ -14,7 +14,7 @@ async function requireAdmin() {
   if (!user) redirect("/login");
 
   const canManageUsers = user.role === "admin" || (await hasPermission(user.role, "users.manage"));
-  if (!canManageUsers) redirect("/");
+  if (!canManageUsers) redirect("/dashboard");
 
   return user;
 }

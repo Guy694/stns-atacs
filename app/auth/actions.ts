@@ -29,9 +29,9 @@ function toQuery(message: string) {
 }
 
 function safeNextPath(value: FormDataEntryValue | string | null | undefined) {
-  if (typeof value !== "string") return "/";
-  if (!value.startsWith("/") || value.startsWith("//")) return "/";
-  if (value.includes("\\")) return "/";
+  if (typeof value !== "string" || !value) return "/dashboard";
+  if (!value.startsWith("/") || value.startsWith("//")) return "/dashboard";
+  if (value.includes("\\")) return "/dashboard";
   return value;
 }
 

@@ -20,7 +20,7 @@ export default async function AdminSettingsPage() {
     || (await hasPermission(user.role, "permissions.manage"))
     || (await hasPermission(user.role, "facilities.manage"))
     || (await hasPermission(user.role, "device-types.manage"));
-  if (!allowed) redirect("/");
+  if (!allowed) redirect("/dashboard");
 
   const settingSections: Section[] = [
     {

@@ -20,7 +20,7 @@ function readQueryValue(value: string | string[] | undefined) {
 export default async function RegisterPage({ searchParams }: RegisterPageProps) {
   const user = await getCurrentUser();
   if (user) {
-    redirect("/");
+    redirect("/dashboard");
   }
 
   const claim = await getPendingRegistrationClaim();

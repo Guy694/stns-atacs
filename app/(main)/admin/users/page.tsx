@@ -37,7 +37,7 @@ export default async function AdminUsersPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
   const canManageUsers = user.role === "admin" || (await hasPermission(user.role, "users.manage"));
-  if (!canManageUsers) redirect("/");
+  if (!canManageUsers) redirect("/dashboard");
 
   const facilities = await listAllFacilitiesForSelect();
   let users: UserRow[] = [];

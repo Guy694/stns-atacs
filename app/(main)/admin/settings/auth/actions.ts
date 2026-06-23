@@ -11,7 +11,7 @@ const THAI_D_ENABLED_KEY = "auth.thaid.enabled";
 async function requireAdmin() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
-  if (user.role !== "admin") redirect("/");
+  if (user.role !== "admin") redirect("/dashboard");
   return user;
 }
 

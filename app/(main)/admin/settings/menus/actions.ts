@@ -16,7 +16,7 @@ async function requireMenuManager() {
   if (user.role === "admin") return user;
   if (await hasPermission(user.role, "permissions.manage")) return user;
 
-  redirect("/");
+  redirect("/dashboard");
 }
 
 export async function updateMenuVisibilityAction(formData: FormData) {

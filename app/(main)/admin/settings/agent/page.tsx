@@ -19,7 +19,7 @@ export default async function AgentSettingsPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
   const allowAgentManage = user.role === "admin" || (await hasPermission(user.role, "agent.manage"));
-  if (!allowAgentManage) redirect("/");
+  if (!allowAgentManage) redirect("/dashboard");
 
   const facilities = await listAllFacilitiesForSelect();
 

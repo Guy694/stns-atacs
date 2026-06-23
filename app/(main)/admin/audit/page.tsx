@@ -38,7 +38,7 @@ export default async function AuditLogPage({ searchParams }: AuditPageProps) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
   const canViewAudit = user.role === "admin" || (await hasPermission(user.role, "audit.view"));
-  if (!canViewAudit) redirect("/");
+  if (!canViewAudit) redirect("/dashboard");
   const canExportAudit = user.role === "admin" || (await hasPermission(user.role, "audit.export"));
 
   const params = await searchParams;

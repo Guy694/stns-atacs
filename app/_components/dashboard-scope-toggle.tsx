@@ -41,20 +41,21 @@ export function DashboardScopeToggle({ hasOwnFacility, currentScope }: Dashboard
   }
 
   return (
-    <div className="flex overflow-hidden rounded-xl border border-black/10 bg-white/70 p-0.5 text-sm font-medium shadow-sm">
+    <div className="flex shrink-0 overflow-hidden rounded-xl border border-black/10 bg-white/70 p-0.5 text-sm font-medium shadow-sm">
       <button
         type="button"
         onClick={() => updateScope("mine")}
         className={`rounded-lg px-4 py-1.5 transition ${currentScope === "mine" ? "bg-[var(--accent-strong)] text-white shadow" : "text-[var(--muted)] hover:text-[var(--foreground)]"}`}
       >
-        หน่วยงานของฉัน
+        <span className="sm:hidden">ของฉัน</span>
+        <span className="hidden sm:inline">หน่วยงานของฉัน</span>
       </button>
       <button
         type="button"
         onClick={() => updateScope("all")}
         className={`rounded-lg px-4 py-1.5 transition ${currentScope === "all" ? "bg-[var(--accent-strong)] text-white shadow" : "text-[var(--muted)] hover:text-[var(--foreground)]"}`}
       >
-        ทั้งหมด
+        ทุกหน่วยงาน
       </button>
     </div>
   );

@@ -11,7 +11,7 @@ export default async function AdminFacilitiesPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
   const allowManageFacilities = user.role === "admin" || (await hasPermission(user.role, "facilities.manage"));
-  if (!allowManageFacilities) redirect("/");
+  if (!allowManageFacilities) redirect("/dashboard");
 
   const facilities = await listFacilitiesAdmin();
 

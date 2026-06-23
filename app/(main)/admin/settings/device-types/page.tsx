@@ -11,7 +11,7 @@ export default async function AdminDeviceTypesPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
   const allowManageDeviceTypes = user.role === "admin" || (await hasPermission(user.role, "device-types.manage"));
-  if (!allowManageDeviceTypes) redirect("/");
+  if (!allowManageDeviceTypes) redirect("/dashboard");
 
   const items = await listDeviceTypes();
 

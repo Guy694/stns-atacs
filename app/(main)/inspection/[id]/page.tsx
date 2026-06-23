@@ -14,7 +14,7 @@ export default async function InspectionDetailPage({
 }) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
-  if (!(await hasPermission(user.role, "inspection.view"))) redirect("/");
+  if (!(await hasPermission(user.role, "inspection.view"))) redirect("/dashboard");
 
   const { id } = await params;
   const [inspection, items] = await Promise.all([
