@@ -6,6 +6,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { countAssets, listAssets, listAllFacilitiesForSelect, listFacilities, type AssetListFilter } from "@/lib/assets";
 import { formatThaiDate } from "@/lib/date-format";
 import { listDeviceTypes } from "@/lib/device-types";
+import { listFacilityWorkGroups } from "@/lib/facility-work-groups";
 import { canManageAsset, canSeeSensitiveAssetNetwork } from "@/lib/permissions";
 import { hasPermission } from "@/lib/role-permissions";
 import { AssetFormModal } from "./_components/asset-form-modal";
@@ -92,6 +93,7 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
   const statusFilter = readParam(params, "status");
   const districtFilter = readParam(params, "district");
   const groupFilter = readParam(params, "group");
+  const workGroupFilter = Number(readParam(params, "workGroup")) || undefined;
   const deviceTypeFilter = readParam(params, "deviceType");
   const maExpiringDays = Number(readParam(params, "maDays")) || undefined;
   const sort = readParam(params, "sort") as "updated_desc" | "updated_asc" | "name_asc" | "name_desc" | "ma_soon";
@@ -103,6 +105,7 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
     search: search || undefined,
     status: statusFilter || undefined,
     facilityId: facilityFilter,
+    workGroupId: workGroupFilter,
     district: districtFilter || undefined,
     assetGroup: groupFilter === "Hardware" || groupFilter === "Software" ? groupFilter : undefined,
     deviceType: deviceTypeFilter || undefined,
@@ -110,11 +113,12 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
     sort: ["updated_desc", "updated_asc", "name_asc", "name_desc", "ma_soon"].includes(sort) ? sort : undefined,
   };
 
-  const [totalAssets, facilitiesForSelect, facilities, deviceTypes] = await Promise.all([
+  const [totalAssets, facilitiesForSelect, facilities, deviceTypes, workGroups] = await Promise.all([
     countAssets(assetFilter),
     listAllFacilitiesForSelect(),
     listFacilities(),
     listDeviceTypes(),
+    listFacilityWorkGroups(),
   ]);
   const totalPages = Math.max(1, Math.ceil(totalAssets / perPage));
   const currentPage = Math.min(requestedPage, totalPages);
@@ -126,6 +130,7 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
     search: search || undefined,
     status: statusFilter || undefined,
     group: groupFilter || undefined,
+    workGroup: workGroupFilter,
     deviceType: deviceTypeFilter || undefined,
     district: districtFilter || undefined,
     maDays: maExpiringDays,
@@ -138,6 +143,9 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
   const districtOptions = [
     ...new Set(facilitiesForSelect.map((facility) => facility.district_name).filter((district): district is string => Boolean(district))),
   ].sort();
+  const facilityWorkGroups = requestedFacilityFilter
+    ? workGroups.filter((workGroup) => workGroup.facilityId === requestedFacilityFilter)
+    : workGroups;
 
   const facilitiesForForm = facilitiesForSelect;
   const canCreateAssetByPolicy = await hasPermission(user.role, "assets.create");
@@ -230,6 +238,24 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
             </option>
           ))}
         </select>
+        {facilityWorkGroups.length > 0 && (
+          <>
+            <label htmlFor="asset-work-group-filter" className="sr-only">กรองกลุ่มงาน</label>
+            <select
+              id="asset-work-group-filter"
+              name="workGroup"
+              defaultValue={workGroupFilter ?? ""}
+              className="rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+            >
+              <option value="">ทุกกลุ่มงาน</option>
+              {facilityWorkGroups.map((workGroup) => (
+                <option key={workGroup.id} value={workGroup.id}>
+                  {workGroup.workGroupName} · {workGroup.facilityName}
+                </option>
+              ))}
+            </select>
+          </>
+        )}
         <label htmlFor="asset-district-filter" className="sr-only">กรองอำเภอ</label>
         <select
           id="asset-district-filter"
@@ -302,7 +328,7 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
         >
           ค้นหา
         </button>
-        {(search || statusFilter || requestedFacilityFilter || districtFilter || groupFilter || deviceTypeFilter || maExpiringDays || sort || perPage !== 25) && (
+        {(search || statusFilter || requestedFacilityFilter || districtFilter || groupFilter || workGroupFilter || deviceTypeFilter || maExpiringDays || sort || perPage !== 25) && (
           <Link href="/assets" className="rounded-xl border border-black/10 bg-white/80 px-4 py-2 text-sm text-[var(--muted)] hover:bg-white">
             ล้างตัวกรอง
           </Link>

@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 
 import { StatusBadge, activeTone } from "@/app/_components/ui/status-badge";
 import { AgentDeviceLinkCell } from "@/app/(main)/admin/settings/agent/_components/agent-device-link-cell";
@@ -8,6 +9,7 @@ import { listAgentDevices, listAgentEnrollments } from "@/lib/agent";
 import { getCurrentUser } from "@/lib/auth";
 import { listAllFacilitiesForSelect, listAssetsForFacilityIds } from "@/lib/assets";
 import { formatThaiDateTime } from "@/lib/date-format";
+import { listFacilityWorkGroups } from "@/lib/facility-work-groups";
 import { hasPermission } from "@/lib/role-permissions";
 
 function formatDate(value: string | null) {
@@ -26,22 +28,31 @@ export default async function AgentSettingsPage() {
   let enrollments = [] as Awaited<ReturnType<typeof listAgentEnrollments>>;
   let devices = [] as Awaited<ReturnType<typeof listAgentDevices>>;
   let assetOptions: Awaited<ReturnType<typeof listAssetsForFacilityIds>> = [];
+  let workGroups: Awaited<ReturnType<typeof listFacilityWorkGroups>> = [];
   let dbError: string | null = null;
 
   try {
-    [enrollments, devices] = await Promise.all([listAgentEnrollments(), listAgentDevices()]);
+    [enrollments, devices, workGroups] = await Promise.all([listAgentEnrollments(), listAgentDevices(), listFacilityWorkGroups()]);
     const facilityIds = [...new Set(devices.map((d) => d.facilityId))];
     assetOptions = await listAssetsForFacilityIds(facilityIds);
   } catch {
-    dbError = "ยังไม่พบตาราง agent_enrollments / agent_devices กรุณารัน database/agent_inventory.sql ก่อน";
+    dbError = "ยังไม่พบโครงสร้าง Agent หรือกลุ่มงาน กรุณารัน database/agent_inventory.sql และ database/add_facility_work_groups.sql ก่อน";
   }
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6">
-      <div>
-        <p className="text-xs font-medium uppercase tracking-[0.22em] text-[var(--muted)]">Admin · Agent Enrollment</p>
-        <h1 className="section-title mt-1 text-3xl font-semibold">ATACS Agent</h1>
-        <p className="mt-1 text-sm text-[var(--muted)]">สร้าง token ให้หน่วยงานติดตั้ง agent และติดตามเครื่องที่รายงาน inventory เข้ามาอัตโนมัติ</p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="text-xs font-medium uppercase tracking-[0.22em] text-[var(--muted)]">Admin · Agent Enrollment</p>
+          <h1 className="section-title mt-1 text-3xl font-semibold">ATACS Agent</h1>
+          <p className="mt-1 text-sm text-[var(--muted)]">สร้าง token ให้หน่วยงานติดตั้ง agent และติดตามเครื่องที่รายงาน inventory เข้ามาอัตโนมัติ</p>
+        </div>
+        <Link
+          href="/admin/settings/work-groups"
+          className="inline-flex items-center justify-center rounded-xl border border-black/10 bg-white/80 px-4 py-2 text-sm font-semibold text-[var(--foreground)] transition hover:bg-white"
+        >
+          จัดการกลุ่มงาน
+        </Link>
       </div>
 
       {dbError ? (
@@ -55,7 +66,9 @@ export default async function AgentSettingsPage() {
               id: facility.id,
               facility_name: facility.facility_name,
               district_name: facility.district_name,
+              typecode: facility.typecode,
             }))}
+            workGroups={workGroups}
           />
 
           <div className="grid gap-6 xl:grid-cols-[1.05fr_1.4fr]">
@@ -70,6 +83,7 @@ export default async function AgentSettingsPage() {
                     <tr className="border-b border-black/6 bg-stone-50/60 text-xs text-[var(--muted)]">
                       <th className="px-4 py-3 text-left font-medium">หน่วยงาน</th>
                       <th className="px-4 py-3 text-left font-medium">ชื่อกำกับ</th>
+                      <th className="px-4 py-3 text-left font-medium">กลุ่มงาน</th>
                       <th className="px-4 py-3 text-left font-medium">สถานะ</th>
                       <th className="px-4 py-3 text-left font-medium">ใช้ล่าสุด</th>
                       <th className="px-4 py-3 text-right font-medium">จัดการ</th>
@@ -80,6 +94,7 @@ export default async function AgentSettingsPage() {
                       <tr key={enrollment.id} className="transition hover:bg-white/50">
                         <td className="px-4 py-3 font-medium">{enrollment.facilityName}</td>
                         <td className="px-4 py-3 text-[var(--muted)]">{enrollment.enrollmentName}</td>
+                        <td className="px-4 py-3 text-[var(--muted)]">{enrollment.workGroupName ?? "-"}</td>
                         <td className="px-4 py-3">
                           <StatusBadge tone={activeTone(enrollment.isActive)}>
                             {enrollment.isActive ? "ใช้งานได้" : "ปิดใช้งาน"}
@@ -102,7 +117,7 @@ export default async function AgentSettingsPage() {
                     ))}
                     {enrollments.length === 0 && (
                       <tr>
-                        <td colSpan={5} className="px-4 py-10 text-center text-[var(--muted)]">ยังไม่มี enrollment token</td>
+                        <td colSpan={6} className="px-4 py-10 text-center text-[var(--muted)]">ยังไม่มี enrollment token</td>
                       </tr>
                     )}
                   </tbody>

@@ -1,39 +1,41 @@
 import Link from "next/link";
 
 import { ExpiringMaintenanceTable, type ExpiringMaintenanceRow } from "@/app/(main)/_components/expiring-maintenance-table";
-import { DashboardScopeToggle } from "@/app/_components/dashboard-scope-toggle";
 import { StatusBadge } from "@/app/_components/ui/status-badge";
+import { assetStatusLabel } from "@/lib/asset-status";
 import { getDashboardData } from "@/lib/atacs";
 import { getCurrentUser } from "@/lib/auth";
+import {
+  buildDashboardAccessScope,
+  matchesDashboardFacilityGroup,
+  type DashboardFacilityGroup,
+} from "@/lib/dashboard-access";
 import { formatThaiDateTime } from "@/lib/date-format";
+import { getFacilityById } from "@/lib/assets";
 
 type HomeProps = { searchParams: Promise<Record<string, string | undefined>> };
-
-type DashboardFacilityGroup = "province" | "primary" | "hospital";
 
 const DISTRICT_CHART_COLORS = ["#047857", "#0e7490", "#b45309", "#dc2626", "#0f766e", "#475569", "#2563eb"];
 const FACILITY_GROUP_OPTIONS: Array<{ value: DashboardFacilityGroup; label: string; description: string }> = [
   { value: "province", label: "สสจ", description: "สำนักงานสาธารณสุขจังหวัด" },
-  { value: "primary", label: "สสอ + รพ.สต", description: "สำนักงานสาธารณสุขอำเภอและหน่วยปฐมภูมิ" },
+  { value: "primary-office", label: "สสอ", description: "สำนักงานสาธารณสุขอำเภอ" },
+  { value: "primary-unit", label: "รพ.สต", description: "โรงพยาบาลส่งเสริมสุขภาพตำบลและหน่วยปฐมภูมิ" },
   { value: "hospital", label: "โรงพยาบาล", description: "รพ.ทั่วไปและรพ.ชุมชน" },
+];
+const DHO_FACILITY_GROUP_OPTIONS: Array<{ value: DashboardFacilityGroup; label: string; description: string }> = [
+  { value: "primary-unit", label: "รพ.สต ในสังกัด", description: "รพ.สต/ศสช/สอน ในอำเภอเดียวกัน" },
+  { value: "primary-office", label: "สสอ", description: "สำนักงานสาธารณสุขอำเภอของคุณ" },
 ];
 
 function normalizeQueryValue(value?: string) {
   return value?.trim() ?? "";
 }
 
-function isDashboardFacilityGroup(value: string): value is DashboardFacilityGroup {
-  return FACILITY_GROUP_OPTIONS.some((option) => option.value === value);
-}
-
-function inferFacilityGroup(facilityTypeCode?: string, facilityName?: string): DashboardFacilityGroup | "other" {
-  const text = `${facilityTypeCode ?? ""} ${facilityName ?? ""}`.replace(/\s+/g, "");
-
-  if (text.includes("สสจ")) return "province";
-  if (text.includes("สสอ") || text.includes("รพ.สต") || text.includes("ศสช") || text.includes("สอน.")) return "primary";
-  if (text.includes("รพ.") || text.includes("โรงพยาบาล")) return "hospital";
-
-  return "other";
+function isDashboardFacilityGroup(
+  value: string,
+  options: Array<{ value: DashboardFacilityGroup }>
+): value is DashboardFacilityGroup {
+  return options.some((option) => option.value === value);
 }
 
 function uniqueSorted(values: string[]) {
@@ -55,43 +57,48 @@ export default async function Home({ searchParams }: HomeProps) {
   const referenceDate = new Date();
   const renderedAt = formatThaiDateTime(referenceDate);
 
-  // Officers can toggle: 'mine' (default) or 'all'
-  const hasOwnFacility = isOfficer && !!currentUser.facilityId;
-  const missingFacilityAssignment = isOfficer && !currentUser.facilityId;
-  const scopeParam = params.scope ?? "mine";
-  const showingOwn = hasOwnFacility && scopeParam !== "all";
-  const activeScope: "mine" | "all" = showingOwn ? "mine" : "all";
+  const ownFacility = currentUser.facilityId ? await getFacilityById(Number(currentUser.facilityId)) : null;
+  const dashboardScope = buildDashboardAccessScope(
+    currentUser,
+    allFacilitySurveys,
+    ownFacility
+      ? {
+          id: ownFacility.id,
+          name: ownFacility.name,
+          typecode: ownFacility.typecode,
+          districtName: ownFacility.district_name,
+        }
+      : null
+  );
+  const missingFacilityAssignment = dashboardScope.missingFacilityAssignment;
+  const groupOptions = dashboardScope.officerScopeKind === "district-primary" ? DHO_FACILITY_GROUP_OPTIONS : FACILITY_GROUP_OPTIONS;
   const selectedGroupParam = normalizeQueryValue(params.group);
-  const selectedGroup: DashboardFacilityGroup | "" = isDashboardFacilityGroup(selectedGroupParam) ? selectedGroupParam : "";
+  const selectedGroup: DashboardFacilityGroup | "" = isDashboardFacilityGroup(selectedGroupParam, groupOptions) ? selectedGroupParam : "";
   const selectedDistrict = normalizeQueryValue(params.district);
   const selectedFacilityId = (() => {
     const value = Number(params.facility);
     return Number.isInteger(value) && value > 0 ? value : null;
   })();
 
-  const scopedFacilitySurveys = showingOwn
-    ? allFacilitySurveys.filter((s) => s.facilityId === Number(currentUser.facilityId))
-    : allFacilitySurveys;
+  const scopedFacilitySurveys = dashboardScope.surveys;
   const facilityOptions = scopedFacilitySurveys
-    .filter((survey) => !selectedGroup || inferFacilityGroup(survey.facilityTypeCode, survey.facilityName) === selectedGroup)
+    .filter((survey) => matchesDashboardFacilityGroup(survey.facilityTypeCode, survey.facilityName, selectedGroup))
     .filter((survey) => !selectedDistrict || survey.districtName === selectedDistrict)
     .sort((a, b) => a.districtName.localeCompare(b.districtName, "th") || a.facilityName.localeCompare(b.facilityName, "th"));
   const facilitySurveys = scopedFacilitySurveys
-    .filter((survey) => !selectedGroup || inferFacilityGroup(survey.facilityTypeCode, survey.facilityName) === selectedGroup)
+    .filter((survey) => matchesDashboardFacilityGroup(survey.facilityTypeCode, survey.facilityName, selectedGroup))
     .filter((survey) => !selectedDistrict || survey.districtName === selectedDistrict)
     .filter((survey) => !selectedFacilityId || survey.facilityId === selectedFacilityId);
   const districtOptions = uniqueSorted(scopedFacilitySurveys.map((survey) => survey.districtName));
   const activeFilterCount = [selectedGroup, selectedDistrict, selectedFacilityId].filter(Boolean).length;
   const selectedGroupLabel = selectedGroup
-    ? FACILITY_GROUP_OPTIONS.find((option) => option.value === selectedGroup)?.label
+    ? groupOptions.find((option) => option.value === selectedGroup)?.label
     : "";
   const selectedFacilityName = selectedFacilityId
     ? scopedFacilitySurveys.find((survey) => survey.facilityId === selectedFacilityId)?.facilityName
     : "";
 
-  const scopeFacilityName = showingOwn
-    ? (scopedFacilitySurveys[0]?.facilityName ?? "หน่วยงานของฉัน")
-    : null;
+  const scopeFacilityName = isOfficer ? dashboardScope.scopeFacilityName : null;
   const hasScopedData = scopedFacilitySurveys.length > 0;
   const hasFilteredData = facilitySurveys.length > 0;
 
@@ -207,8 +214,8 @@ export default async function Home({ searchParams }: HomeProps) {
     rate >= 85 ? "bg-emerald-500" : rate >= 70 ? "bg-amber-400" : "bg-rose-500";
 
   const assetQuickParams = new URLSearchParams();
-  if (showingOwn && currentUser.facilityId) {
-    assetQuickParams.set("facility", String(currentUser.facilityId));
+  if (dashboardScope.lockedFacilityId) {
+    assetQuickParams.set("facility", String(dashboardScope.lockedFacilityId));
   } else if (selectedFacilityId) {
     assetQuickParams.set("facility", String(selectedFacilityId));
   } else if (selectedDistrict) {
@@ -309,7 +316,6 @@ export default async function Home({ searchParams }: HomeProps) {
             </h1>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <DashboardScopeToggle hasOwnFacility={hasOwnFacility} currentScope={activeScope} />
             <div className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-white/80 px-3 py-1.5 text-xs text-[var(--muted)]">
               <span
                 className={`h-2 w-2 rounded-full ${dataSource === "database" ? "bg-emerald-500" : "bg-amber-400"}`}
@@ -330,26 +336,31 @@ export default async function Home({ searchParams }: HomeProps) {
 
         {missingFacilityAssignment && (
           <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-            บัญชี Officer นี้ยังไม่ถูกผูกกับหน่วยงาน จึงยังไม่สามารถใช้มุมมอง &quot;หน่วยงานของฉัน&quot; ได้ กรุณาให้ผู้ดูแลระบบกำหนดหน่วยงานก่อน
+            บัญชี Officer นี้ยังไม่ถูกผูกกับหน่วยงาน จึงยังไม่สามารถใช้มุมมอง &quot;รายการทรัพย์สิน&quot; ได้ กรุณาให้ผู้ดูแลระบบกำหนดหน่วยงานก่อน
           </div>
         )}
 
-        <form method="GET" className="glass-panel rounded-2xl p-4">
-          {hasOwnFacility && <input type="hidden" name="scope" value={activeScope} />}
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-end">
-            <div className="min-w-0 flex-1">
+        <form method="GET" className="glass-panel rounded-2xl p-4" aria-label="ตัวกรองข้อมูลภาพรวม">
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex flex-wrap items-center gap-2">
                 <p className="text-sm font-semibold text-[var(--foreground)]">ฟิลเตอร์ข้อมูลภาพรวม</p>
                 {activeFilterCount > 0 && (
                   <StatusBadge tone="primary">{activeFilterCount} เงื่อนไข</StatusBadge>
                 )}
               </div>
-              <p className="mt-1 text-xs text-[var(--muted)]">
-                กรองตามกลุ่มหน่วยงาน อำเภอ และหน่วยงาน เพื่อให้ KPI และตารางแจ้งเตือนคำนวณจากชุดข้อมูลที่ต้องการ
-              </p>
+
+              {activeFilterCount > 0 && (
+                <Link
+                  href="/dashboard"
+                  className="rounded-lg border border-black/10 bg-white/80 px-3 py-1.5 text-xs font-medium text-[var(--muted)] transition hover:bg-white"
+                >
+                  ล้างตัวกรอง
+                </Link>
+              )}
             </div>
 
-            <div className="grid min-w-0 flex-[2] gap-3 sm:grid-cols-3">
+            <div className="grid min-w-0 gap-3 md:grid-cols-[1fr_1fr_1.35fr_auto] md:items-end">
               <label className="min-w-0">
                 <span className="text-xs font-medium text-[var(--muted)]">กลุ่ม</span>
                 <select
@@ -357,8 +368,8 @@ export default async function Home({ searchParams }: HomeProps) {
                   defaultValue={selectedGroup}
                   className="mt-1 w-full rounded-xl border border-black/10 bg-white/85 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
                 >
-                  <option value="">ทุกกลุ่ม</option>
-                  {FACILITY_GROUP_OPTIONS.map((option) => (
+                  <option value="">{dashboardScope.officerScopeKind === "district-primary" ? "ทั้งหมดในสังกัด" : "ทุกกลุ่ม"}</option>
+                  {groupOptions.map((option) => (
                     <option key={option.value} value={option.value}>
                       {option.label}
                     </option>
@@ -397,23 +408,13 @@ export default async function Home({ searchParams }: HomeProps) {
                   ))}
                 </select>
               </label>
-            </div>
 
-            <div className="flex shrink-0 flex-wrap gap-2">
               <button
                 type="submit"
-                className="rounded-xl bg-[var(--accent-strong)] px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
+                className="rounded-xl bg-[var(--accent-strong)] px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90 md:mb-0"
               >
                 กรองข้อมูล
               </button>
-              {activeFilterCount > 0 && (
-                <Link
-                  href={hasOwnFacility ? `/dashboard?scope=${activeScope}` : "/dashboard"}
-                  className="rounded-xl border border-black/10 bg-white/80 px-4 py-2 text-sm font-medium text-[var(--muted)] transition hover:bg-white"
-                >
-                  ล้าง
-                </Link>
-              )}
             </div>
           </div>
 
@@ -468,24 +469,21 @@ export default async function Home({ searchParams }: HomeProps) {
           </div>
         </div>
 
-        {showingOwn && hasOwnFacility && !hasScopedData && (
+        {isOfficer && !missingFacilityAssignment && !hasScopedData && (
           <div className="glass-panel rounded-2xl p-8 text-center">
             <p className="text-lg font-semibold text-[var(--foreground)]">ยังไม่พบข้อมูลสำรวจของหน่วยงานนี้</p>
             <p className="mt-2 text-sm text-[var(--muted)]">
-              คุณสามารถเพิ่มข้อมูลทรัพย์สินของหน่วยงานตนเอง หรือสลับไปดูภาพรวมทั้งหมดได้
+              คุณสามารถเพิ่มข้อมูลทรัพย์สินของหน่วยงานที่อยู่ในสิทธิ์การดูแลได้
             </p>
             <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
               <Link href="/assets" className="rounded-xl bg-[var(--accent-strong)] px-5 py-2.5 text-sm font-semibold text-white transition hover:opacity-90">
                 ไปหน้าทรัพย์สิน
               </Link>
-              <Link href="/dashboard?scope=all" className="rounded-xl border border-black/10 bg-white/80 px-5 py-2.5 text-sm font-medium text-[var(--foreground)] transition hover:bg-white">
-                ดูภาพรวมทั้งหมด
-              </Link>
             </div>
           </div>
         )}
 
-        {(!showingOwn || hasScopedData) && (
+        {(!isOfficer || hasScopedData) && (
           !hasFilteredData ? (
             <div className="glass-panel rounded-2xl p-8 text-center">
               <p className="text-lg font-semibold text-[var(--foreground)]">ไม่พบข้อมูลตามตัวกรองที่เลือก</p>
@@ -494,7 +492,7 @@ export default async function Home({ searchParams }: HomeProps) {
               </p>
               <div className="mt-5">
                 <Link
-                  href={hasOwnFacility ? `/dashboard?scope=${activeScope}` : "/dashboard"}
+                  href="/dashboard"
                   className="inline-flex rounded-xl border border-black/10 bg-white/80 px-5 py-2.5 text-sm font-medium text-[var(--foreground)] transition hover:bg-white"
                 >
                   ล้างตัวกรอง
@@ -559,9 +557,9 @@ export default async function Home({ searchParams }: HomeProps) {
             <div className="mt-5 space-y-4">
               {(
                 [
-	                  { label: "Active", count: activeAssets, bar: "bg-emerald-500", bg: "bg-emerald-50", tone: "success" as const },
-	                  { label: "Inactive", count: inactiveAssets, bar: "bg-amber-400", bg: "bg-amber-50", tone: "warning" as const },
-	                  { label: "Broken", count: brokenAssets, bar: "bg-rose-500", bg: "bg-rose-50", tone: "danger" as const },
+	                  { label: assetStatusLabel("Active"), count: activeAssets, bar: "bg-emerald-500", bg: "bg-emerald-50", tone: "success" as const },
+	                  { label: assetStatusLabel("Inactive"), count: inactiveAssets, bar: "bg-amber-400", bg: "bg-amber-50", tone: "warning" as const },
+	                  { label: assetStatusLabel("Broken"), count: brokenAssets, bar: "bg-rose-500", bg: "bg-rose-50", tone: "danger" as const },
 	                ] as const
 	              ).map(({ label, count, bar, tone }) => (
                 <div key={label}>
@@ -580,31 +578,7 @@ export default async function Home({ searchParams }: HomeProps) {
             </div>
 
             {/* Public IP panel */}
-            {canViewPublicIpPanel && (
-              <div className="mt-6 rounded-xl border border-dashed border-black/10 bg-white/60 p-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">
-                  Public IP — {isAdmin ? "Admin (เต็ม)" : "Officer (Masked)"}
-                </p>
-                <div className="mt-3 grid gap-1.5 font-mono text-xs sm:grid-cols-2">
-                  {allAssets.filter((a) => a.publicIp).length === 0 ? (
-                    <p className="col-span-2 text-[var(--muted)]">ไม่มีข้อมูล Public IP</p>
-                  ) : (
-                    allAssets
-                      .filter((a) => a.publicIp)
-                      .map((a) => (
-                        <div
-                          key={a.id}
-                          className="flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-1.5 text-[var(--accent-strong)]"
-                        >
-                          <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--accent)]" />
-                          <span className="truncate">{a.assetName}:</span>
-                          <span className="shrink-0">{isAdmin ? a.publicIp : maskPublicIp(a.publicIp)}</span>
-                        </div>
-                      ))
-                  )}
-                </div>
-              </div>
-            )}
+         
           </div>
 
           {/* Asset Distribution */}
@@ -683,7 +657,7 @@ export default async function Home({ searchParams }: HomeProps) {
                       />
                     </div>
                     <p className="mt-1.5 text-xs text-[var(--muted)]">
-                      สำรวจครบถ้วน {rate}% · Active {summary.activeAssets} จาก {summary.assets} รายการ
+                      สำรวจครบถ้วน {rate}% · พร้อมใช้งาน {summary.activeAssets} จาก {summary.assets} รายการ
                     </p>
                   </div>
                 );

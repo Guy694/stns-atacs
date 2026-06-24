@@ -48,7 +48,7 @@ export function DashboardScopeToggle({ hasOwnFacility, currentScope }: Dashboard
         className={`rounded-lg px-4 py-1.5 transition ${currentScope === "mine" ? "bg-[var(--accent-strong)] text-white shadow" : "text-[var(--muted)] hover:text-[var(--foreground)]"}`}
       >
         <span className="sm:hidden">ของฉัน</span>
-        <span className="hidden sm:inline">หน่วยงานของฉัน</span>
+        <span className="hidden sm:inline">รายการทรัพย์สิน</span>
       </button>
       <button
         type="button"

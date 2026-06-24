@@ -423,9 +423,9 @@ export function AssetFormModal({ facilities, deviceTypes = [], fixedFacilityId, 
                   defaultValue={asset?.currentStatus ?? "Active"}
                   className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
                 >
-                  <option value="Active">พร้อมใช้งาน (Active)</option>
-                  <option value="Inactive">ไม่ใช้งาน (Inactive)</option>
-                  <option value="Broken">ชำรุด (Broken)</option>
+                  <option value="Active">พร้อมใช้งาน</option>
+                  <option value="Inactive">ไม่ใช้งาน</option>
+                  <option value="Broken">ชำรุด</option>
                 </select>
               </div>
 

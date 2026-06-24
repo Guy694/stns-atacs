@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 
 import { AppIcon } from "@/app/_components/ui/icon";
 import { StatusBadge } from "@/app/_components/ui/status-badge";
+import { assetStatusLabel, assetStatusTone } from "@/lib/asset-status";
 import { getCurrentUser } from "@/lib/auth";
 import { getAssetById, listAssets, listSurveys } from "@/lib/assets";
 import { canManageAsset, canMutateAssets } from "@/lib/permissions";
@@ -17,12 +18,6 @@ function readParam(p: Record<string, string | string[] | undefined>, key: string
   const v = p[key];
   return Array.isArray(v) ? v[0] : (v ?? "");
 }
-
-const STATUS_TONE = {
-  Active: "success",
-  Inactive: "warning",
-  Broken: "danger",
-} as const;
 
 export default async function TransferPage({ searchParams }: Props) {
   const user = await getCurrentUser();
@@ -138,8 +133,8 @@ export default async function TransferPage({ searchParams }: Props) {
                   <p className="mt-0.5 text-xs text-[var(--muted)]">{asset.facilityName} · อ.{asset.districtName}</p>
                 </div>
                 <div className="ml-4 flex items-center gap-3">
-                  <StatusBadge tone={STATUS_TONE[asset.currentStatus as keyof typeof STATUS_TONE] ?? "neutral"}>
-                    {asset.currentStatus}
+                  <StatusBadge tone={assetStatusTone(asset.currentStatus)}>
+                    {assetStatusLabel(asset.currentStatus)}
                   </StatusBadge>
                   {canMutate ? (
                     <Link

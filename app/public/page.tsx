@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { StatusBadge } from "@/app/_components/ui/status-badge";
 import { TopNavigation } from "@/app/_components/top-navigation";
+import { assetStatusLabel, assetStatusTone } from "@/lib/asset-status";
 import { listAssets } from "@/lib/assets";
 
 type Props = {
@@ -12,17 +13,6 @@ function sp(params: Record<string, string | string[] | undefined>, key: string) 
   const v = params[key];
   return (Array.isArray(v) ? v[0] : v ?? "").trim();
 }
-
-const STATUS_LABEL: Record<string, string> = {
-  Active: "ใช้งานอยู่",
-  Inactive: "ไม่ใช้งาน",
-  Broken: "ชำรุด",
-};
-const STATUS_TONE = {
-  Active: "success",
-  Inactive: "warning",
-  Broken: "danger",
-} as const;
 
 function PctBar({ value, max, color }: { value: number; max: number; color: string }) {
   const w = max > 0 ? Math.round((value / max) * 100) : 0;
@@ -159,7 +149,7 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
               ข้อมูลสรุประดับจังหวัดและอำเภอ
             </p>
           </div>
-          {/* Active ring */}
+          {/* Status ring */}
           <div className="flex shrink-0 flex-col items-center gap-2">
             <div className="relative flex h-32 w-32 items-center justify-center">
               <svg viewBox="0 0 120 120" className="absolute inset-0 -rotate-90">
@@ -170,7 +160,7 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
               </svg>
               <div className="z-10 text-center">
                 <p className="text-3xl font-semibold">{activeRate}%</p>
-                <p className="text-[11px] text-white">Active</p>
+                <p className="text-[11px] text-white">พร้อมใช้งาน</p>
               </div>
             </div>
             <p className="text-xs text-white">{active} / {total} รายการ</p>
@@ -253,8 +243,8 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
 	                          <td className="py-2.5 pr-4"><StatusBadge tone="primary">{a.deviceType || a.assetGroup}</StatusBadge></td>
 	                          <td className="py-2.5 pr-4 text-[var(--muted)]">{a.facilityName}</td>
 	                          <td className="py-2.5 text-center">
-	                            <StatusBadge tone={STATUS_TONE[a.currentStatus as keyof typeof STATUS_TONE] ?? "neutral"}>
-	                              {STATUS_LABEL[a.currentStatus] ?? a.currentStatus}
+	                            <StatusBadge tone={assetStatusTone(a.currentStatus)}>
+	                              {assetStatusLabel(a.currentStatus)}
 	                            </StatusBadge>
 	                          </td>
                         </tr>
@@ -321,15 +311,15 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
                   <div className="h-full w-full rounded-full" style={{ background: donutGradient }} />
                   <div className="absolute inset-0 m-auto flex h-[100px] w-[100px] flex-col items-center justify-center rounded-full bg-white shadow-sm">
                     <p className="text-2xl font-bold text-[var(--primary-text)]">{activeRate}%</p>
-                    <p className="text-[10px] text-[var(--muted)]">Active</p>
+                    <p className="text-[10px] text-[var(--muted)]">พร้อมใช้งาน</p>
                   </div>
                 </div>
                 {/* Legend */}
                 <div className="flex flex-col gap-4 text-sm">
                   {[
-                    { label: "พร้อมใช้งาน", count: active, color: "bg-emerald-500", pct: Math.round((active / safeTotal) * 100) },
-                    { label: "ชำรุด", count: broken, color: "bg-rose-500", pct: Math.round((broken / safeTotal) * 100) },
-                    { label: "ไม่ใช้งาน", count: inactive, color: "bg-amber-400", pct: Math.round((inactive / safeTotal) * 100) },
+                    { label: assetStatusLabel("Active"), count: active, color: "bg-emerald-500", pct: Math.round((active / safeTotal) * 100) },
+                    { label: assetStatusLabel("Broken"), count: broken, color: "bg-rose-500", pct: Math.round((broken / safeTotal) * 100) },
+                    { label: assetStatusLabel("Inactive"), count: inactive, color: "bg-amber-400", pct: Math.round((inactive / safeTotal) * 100) },
                   ].map((s) => (
                     <div key={s.label} className="flex items-center gap-2.5">
                       <span className={`h-3 w-3 shrink-0 rounded-full ${s.color}`} />
@@ -371,9 +361,9 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
               {/* status quick bars */}
               <div className="mt-4 space-y-3 border-t border-black/6 pt-4">
                 {[
-	                  { label: "พร้อมใช้งาน", value: active, color: "bg-emerald-500", tone: "success" as const },
-	                  { label: "ชำรุด", value: broken, color: "bg-rose-500", tone: "danger" as const },
-	                  { label: "ไม่ใช้งาน", value: inactive, color: "bg-amber-400", tone: "warning" as const },
+	                  { label: assetStatusLabel("Active"), value: active, color: "bg-emerald-500", tone: "success" as const },
+	                  { label: assetStatusLabel("Broken"), value: broken, color: "bg-rose-500", tone: "danger" as const },
+	                  { label: assetStatusLabel("Inactive"), value: inactive, color: "bg-amber-400", tone: "warning" as const },
                 ].map((s) => (
                   <div key={s.label}>
                     <div className="flex items-center justify-between text-xs">

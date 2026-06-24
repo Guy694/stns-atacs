@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { assetStatusLabel } from "@/lib/asset-status";
 import { getCurrentUser } from "@/lib/auth";
 import { listAssets } from "@/lib/assets";
 import { hasPermission } from "@/lib/role-permissions";
@@ -38,7 +39,11 @@ export async function GET(req: NextRequest) {
   }
 
   const { searchParams } = req.nextUrl;
-  const facilityId = searchParams.get("facilityId") ? Number(searchParams.get("facilityId")) : undefined;
+  const requestedFacilityId = searchParams.get("facilityId") ? Number(searchParams.get("facilityId")) : undefined;
+  const facilityId = user.role === "admin" ? requestedFacilityId : Number(user.facilityId ?? 0) || undefined;
+  if (user.role !== "admin" && !facilityId) {
+    return NextResponse.json({ error: "No facility scope" }, { status: 403 });
+  }
   const status = searchParams.get("status") ?? undefined;
   const search = searchParams.get("q") ?? undefined;
 
@@ -68,12 +73,6 @@ export async function GET(req: NextRequest) {
     "อัปเดตโดย",
   ];
 
-  const statusLabel: Record<string, string> = {
-    Active: "ใช้งานอยู่",
-    Inactive: "ไม่ใช้งาน",
-    Broken: "ชำรุด",
-  };
-
   const rows = assets.map((a, i) => [
     i + 1,
     a.assetRegistrationNo,
@@ -82,7 +81,7 @@ export async function GET(req: NextRequest) {
     a.deviceType || a.assetGroup,
     a.facilityName,
     a.districtName,
-    statusLabel[a.currentStatus] ?? a.currentStatus,
+    assetStatusLabel(a.currentStatus),
     a.manufacturerBrand,
     a.operatingSystem,
     a.maintenanceEndDate,

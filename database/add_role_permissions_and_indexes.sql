@@ -28,6 +28,7 @@ VALUES
   ('admin', 'users.manage', 1, 'migration'),
   ('admin', 'facilities.manage', 1, 'migration'),
   ('admin', 'device-types.manage', 1, 'migration'),
+  ('admin', 'work-groups.manage', 1, 'migration'),
   ('admin', 'permissions.manage', 1, 'migration'),
   ('admin', 'agent.manage', 1, 'migration'),
 
@@ -46,6 +47,7 @@ VALUES
   ('officer', 'users.manage', 0, 'migration'),
   ('officer', 'facilities.manage', 0, 'migration'),
   ('officer', 'device-types.manage', 0, 'migration'),
+  ('officer', 'work-groups.manage', 1, 'migration'),
   ('officer', 'permissions.manage', 0, 'migration'),
   ('officer', 'agent.manage', 1, 'migration'),
 
@@ -64,6 +66,7 @@ VALUES
   ('viewer', 'users.manage', 0, 'migration'),
   ('viewer', 'facilities.manage', 0, 'migration'),
   ('viewer', 'device-types.manage', 0, 'migration'),
+  ('viewer', 'work-groups.manage', 0, 'migration'),
   ('viewer', 'permissions.manage', 0, 'migration'),
   ('viewer', 'agent.manage', 0, 'migration')
 ON DUPLICATE KEY UPDATE

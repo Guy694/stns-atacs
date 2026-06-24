@@ -5,6 +5,7 @@ import { notFound, redirect } from "next/navigation";
 
 import { AppIcon } from "@/app/_components/ui/icon";
 import { StatusBadge } from "@/app/_components/ui/status-badge";
+import { assetStatusLabel, assetStatusTone } from "@/lib/asset-status";
 import { getCurrentUser } from "@/lib/auth";
 import { getAssetById, listAllFacilitiesForSelect } from "@/lib/assets";
 import { AssetFormModal } from "@/app/(main)/assets/_components/asset-form-modal";
@@ -16,20 +17,6 @@ import { formatThaiDate, formatThaiDateTime } from "@/lib/date-format";
 import { hasPermission } from "@/lib/role-permissions";
 
 type Props = { params: Promise<{ id: string }> };
-
-function statusLabel(status: string) {
-  if (status === "Active") return "ใช้งานอยู่";
-  if (status === "Broken") return "ชำรุด";
-  if (status === "Disposed") return "จำหน่ายแล้ว";
-  if (status === "Lost") return "สูญหาย";
-  return "ไม่ใช้งาน";
-}
-
-function statusTone(status: string): "success" | "danger" | "warning" {
-  if (status === "Active") return "success";
-  if (status === "Broken") return "danger";
-  return "warning";
-}
 
 function Field({ label, value }: { label: string; value?: string | null }) {
   return (
@@ -87,7 +74,7 @@ export default async function AssetDetailPage({ params }: Props) {
         <Link href="/dashboard" className="hover:text-[var(--foreground)]">หน้าหลัก</Link>
         <span>/</span>
         {user.role === "officer" ? (
-          <Link href={`/facilities/${asset.facilityId}`} className="hover:text-[var(--foreground)]">หน่วยงานของฉัน</Link>
+          <Link href={`/facilities/${asset.facilityId}`} className="hover:text-[var(--foreground)]">รายการทรัพย์สิน</Link>
         ) : (
           <Link href="/assets" className="hover:text-[var(--foreground)]">ทรัพย์สินทั้งหมด</Link>
         )}
@@ -99,8 +86,8 @@ export default async function AssetDetailPage({ params }: Props) {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <div className="flex flex-wrap items-center gap-2">
-            <StatusBadge tone={statusTone(asset.currentStatus)}>
-              {statusLabel(asset.currentStatus)}
+            <StatusBadge tone={assetStatusTone(asset.currentStatus)}>
+              {assetStatusLabel(asset.currentStatus)}
             </StatusBadge>
             <StatusBadge tone="primary">
               {asset.assetGroup}
@@ -204,13 +191,13 @@ export default async function AssetDetailPage({ params }: Props) {
                         <td className="px-4 py-3 text-xs text-[var(--muted)]">{formatThaiDateTime(entry.changedAt)}</td>
                         <td className="px-4 py-3">
                           {entry.fromStatus ? (
-                            <StatusBadge tone={statusTone(entry.fromStatus)}>{statusLabel(entry.fromStatus)}</StatusBadge>
+                            <StatusBadge tone={assetStatusTone(entry.fromStatus)}>{assetStatusLabel(entry.fromStatus)}</StatusBadge>
                           ) : (
                             <span className="text-xs text-[var(--muted)]">เริ่มต้น</span>
                           )}
                         </td>
                         <td className="px-4 py-3">
-                          <StatusBadge tone={statusTone(entry.toStatus)}>{statusLabel(entry.toStatus)}</StatusBadge>
+                          <StatusBadge tone={assetStatusTone(entry.toStatus)}>{assetStatusLabel(entry.toStatus)}</StatusBadge>
                         </td>
                         <td className="px-4 py-3 text-[var(--foreground)]">{entry.changedBy || "system"}</td>
                         <td className="max-w-md px-4 py-3 text-xs leading-5 text-[var(--muted)]">{entry.note || "-"}</td>
@@ -291,8 +278,8 @@ export default async function AssetDetailPage({ params }: Props) {
             <div className="mt-3 space-y-3">
               <div className="flex items-center justify-between text-sm">
                 <span className="text-[var(--muted)]">สถานะ</span>
-                <StatusBadge tone={statusTone(asset.currentStatus)}>
-                  {statusLabel(asset.currentStatus)}
+                <StatusBadge tone={assetStatusTone(asset.currentStatus)}>
+                  {assetStatusLabel(asset.currentStatus)}
                 </StatusBadge>
               </div>
               <div className="flex items-center justify-between text-sm">

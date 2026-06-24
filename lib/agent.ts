@@ -11,6 +11,8 @@ type EnrollmentRow = RowDataPacket & {
   id: number;
   facility_id: number;
   facility_name: string;
+  work_group_id: number | null;
+  work_group_name: string | null;
   enrollment_name: string | null;
   token_hash: string;
   is_active: number;
@@ -63,6 +65,8 @@ export type AgentEnrollment = {
   id: number;
   facilityId: number;
   facilityName: string;
+  workGroupId: number | null;
+  workGroupName: string | null;
   enrollmentName: string;
   isActive: boolean;
   expiresAt: string | null;
@@ -150,6 +154,8 @@ function toEnrollment(row: EnrollmentRow): AgentEnrollment {
     id: row.id,
     facilityId: row.facility_id,
     facilityName: row.facility_name,
+    workGroupId: row.work_group_id,
+    workGroupName: row.work_group_name,
     enrollmentName: row.enrollment_name ?? "ไม่มีชื่อกำกับ",
     isActive: row.is_active === 1,
     expiresAt: toDateTime(row.expires_at),
@@ -243,9 +249,10 @@ async function findAssetCandidate(facilityId: number, serialNumber?: string | nu
 
 export async function listAgentEnrollments(): Promise<AgentEnrollment[]> {
   const rows = await selectRows<EnrollmentRow>(
-    `SELECT ae.*, hf.name AS facility_name
+    `SELECT ae.*, hf.name AS facility_name, fwg.work_group_name
      FROM agent_enrollments ae
      JOIN health_facilities hf ON hf.id = ae.facility_id
+     LEFT JOIN facility_work_groups fwg ON fwg.id = ae.work_group_id
      ORDER BY ae.created_at DESC, ae.id DESC`
   );
   return rows.map(toEnrollment);
@@ -266,6 +273,7 @@ export async function listAgentDevices(): Promise<AgentDevice[]> {
 
 export async function createAgentEnrollment(input: {
   facilityId: number;
+  workGroupId?: number | null;
   enrollmentName?: string | null;
   expiresAt?: string | null;
   createdByUserId?: number | null;
@@ -276,9 +284,9 @@ export async function createAgentEnrollment(input: {
   const expiresAt = input.expiresAt?.trim() || null;
 
   await executeStatement(
-    `INSERT INTO agent_enrollments (facility_id, enrollment_name, token_hash, expires_at, created_by_user_id, is_active)
-     VALUES (?, ?, ?, ?, ?, 1)`,
-    [input.facilityId, enrollmentName, tokenHash, expiresAt || null, input.createdByUserId ?? null]
+    `INSERT INTO agent_enrollments (facility_id, work_group_id, enrollment_name, token_hash, expires_at, created_by_user_id, is_active)
+     VALUES (?, ?, ?, ?, ?, ?, 1)`,
+    [input.facilityId, input.workGroupId ?? null, enrollmentName, tokenHash, expiresAt || null, input.createdByUserId ?? null]
   );
 
   return plainToken;
@@ -291,9 +299,10 @@ export async function revokeAgentEnrollment(id: number) {
 async function getEnrollmentByToken(token: string) {
   const tokenHash = hashSecret(token.trim());
   const rows = await selectRows<EnrollmentRow>(
-    `SELECT ae.*, hf.name AS facility_name
+    `SELECT ae.*, hf.name AS facility_name, fwg.work_group_name
      FROM agent_enrollments ae
      JOIN health_facilities hf ON hf.id = ae.facility_id
+     LEFT JOIN facility_work_groups fwg ON fwg.id = ae.work_group_id
      WHERE ae.token_hash = ?
        AND ae.is_active = 1
        AND (ae.expires_at IS NULL OR ae.expires_at > NOW())
@@ -386,6 +395,8 @@ export async function enrollAgentDevice(input: {
     agentKey: deviceSecret,
     facilityId: enrollment.facility_id,
     facilityName: enrollment.facility_name,
+    workGroupId: enrollment.work_group_id,
+    workGroupName: enrollment.work_group_name,
     deviceId,
     wasExisting: Boolean(existing[0]),
   };

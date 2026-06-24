@@ -1,24 +1,24 @@
 import { redirect } from "next/navigation";
 
 import { getCurrentUser } from "@/lib/auth";
-import { selectRows } from "@/lib/mysql";
-import type { RowDataPacket } from "mysql2/promise";
+import { getFacilityAgentContext, listFacilityWorkGroups } from "@/lib/facility-work-groups";
 import { AgentDownloadPanel } from "./_components/agent-download-panel";
-
-type FacilityRow = RowDataPacket & { name: string };
 
 export default async function AgentDownloadPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
   let facilityName = "–";
+  let requiresWorkGroup = false;
+  let workGroups: Awaited<ReturnType<typeof listFacilityWorkGroups>> = [];
   if (user.facilityId) {
     try {
-      const rows = await selectRows<FacilityRow>(
-        "SELECT name FROM health_facilities WHERE id = ? LIMIT 1",
-        [user.facilityId]
-      );
-      if (rows[0]) facilityName = rows[0].name;
+      const facility = await getFacilityAgentContext(user.facilityId);
+      if (facility) {
+        facilityName = facility.name;
+        requiresWorkGroup = facility.requiresWorkGroup;
+      }
+      workGroups = await listFacilityWorkGroups(user.facilityId);
     } catch {
       // ignore
     }
@@ -41,7 +41,7 @@ export default async function AgentDownloadPage() {
           <p className="mt-1 text-sm text-[var(--muted)]">กรุณาติดต่อผู้ดูแลระบบเพื่อกำหนดหน่วยงานที่สังกัดก่อน</p>
         </div>
       ) : (
-        <AgentDownloadPanel facilityName={facilityName} />
+        <AgentDownloadPanel facilityName={facilityName} requiresWorkGroup={requiresWorkGroup} workGroups={workGroups} />
       )}
     </div>
   );

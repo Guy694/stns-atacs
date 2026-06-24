@@ -5,6 +5,7 @@ import Link from "next/link";
 
 import { StatusBadge } from "@/app/_components/ui/status-badge";
 import { disposalAssetAction } from "@/app/(main)/disposal/actions";
+import { assetStatusLabel, assetStatusTone } from "@/lib/asset-status";
 import type { AssetWithFacility } from "@/lib/assets";
 
 type Props = { asset: AssetWithFacility };
@@ -69,8 +70,8 @@ export function DisposalForm({ asset }: Props) {
           </div>
           <div>
             <span className="text-[var(--muted)]">สถานะปัจจุบัน: </span>
-            <StatusBadge tone={asset.currentStatus === "Active" ? "success" : asset.currentStatus === "Broken" ? "danger" : "warning"}>
-              {asset.currentStatus}
+            <StatusBadge tone={assetStatusTone(asset.currentStatus)}>
+              {assetStatusLabel(asset.currentStatus)}
             </StatusBadge>
           </div>
         </div>

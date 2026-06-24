@@ -6,16 +6,24 @@ import {
   createAgentEnrollmentAction,
 } from "@/app/(main)/admin/settings/agent/actions";
 import { agentEnrollmentInitialState } from "@/app/(main)/admin/settings/agent/types";
-import { buildWindowsAgentInstallCommand } from "@/lib/agent-install";
+import { buildLinuxAgentInstallCommand, buildWindowsAgentInstallCommand } from "@/lib/agent-install";
 
 type FacilityOption = {
   id: number;
   facility_name: string;
   district_name: string | null;
+  typecode: string;
+};
+
+type WorkGroupOption = {
+  id: number;
+  facilityId: number;
+  workGroupName: string;
 };
 
 type AgentEnrollmentPanelProps = {
   facilities: FacilityOption[];
+  workGroups: WorkGroupOption[];
 };
 
 function CopyButton({ text, label = "คัดลอก" }: { text: string; label?: string }) {
@@ -37,12 +45,24 @@ function CopyButton({ text, label = "คัดลอก" }: { text: string; labe
   );
 }
 
-export function AgentEnrollmentPanel({ facilities }: AgentEnrollmentPanelProps) {
+function requiresWorkGroup(typecode: string | null | undefined) {
+  const code = (typecode ?? "").trim();
+  if (code === "สสจ." || code === "สสจ") return true;
+  if (code === "สสอ." || code === "สสอ") return true;
+  if (code === "รพ.สต." || code === "รพ.สต") return false;
+  return code.startsWith("รพ.");
+}
+
+export function AgentEnrollmentPanel({ facilities, workGroups }: AgentEnrollmentPanelProps) {
   const [selectedFacilityId, setSelectedFacilityId] = useState("");
   const [facilityLabel, setFacilityLabel] = useState("");
   const [state, formAction, pending] = useActionState(createAgentEnrollmentAction, agentEnrollmentInitialState);
   const facilitiesRef = useRef(facilities);
   const windowsInstallCommand = state.createdToken ? buildWindowsAgentInstallCommand(state.createdToken) : "";
+  const linuxInstallCommand = state.createdToken ? buildLinuxAgentInstallCommand(state.createdToken) : "";
+  const selectedFacility = facilities.find((item) => String(item.id) === selectedFacilityId);
+  const selectedRequiresWorkGroup = requiresWorkGroup(selectedFacility?.typecode);
+  const selectedWorkGroups = workGroups.filter((group) => String(group.facilityId) === selectedFacilityId);
 
   useEffect(() => {
     facilitiesRef.current = facilities;
@@ -86,12 +106,26 @@ export function AgentEnrollmentPanel({ facilities }: AgentEnrollmentPanelProps) 
         </div>
 
         <div>
-          <label className="block text-sm font-medium">ชื่อกำกับ token</label>
+          <label className="block text-sm font-medium">ชื่อกลุ่มงาน</label>
           <input
-            name="enrollmentName"
-            placeholder="เช่น เครื่องห้อง OPD / ติดตั้งรอบที่ 1"
-            className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+            name="workGroupName"
+            list="admin-facility-work-groups"
+            required={selectedRequiresWorkGroup}
+            disabled={!selectedFacilityId || !selectedRequiresWorkGroup}
+            maxLength={150}
+            placeholder={selectedRequiresWorkGroup ? "เช่น กลุ่มงานไอที / OPD / งานการเงิน" : "รพ.สต. ไม่ต้องระบุ"}
+            className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)] disabled:bg-stone-100 disabled:text-[var(--muted)]"
           />
+          <datalist id="admin-facility-work-groups">
+            {selectedWorkGroups.map((group) => (
+              <option key={group.id} value={group.workGroupName} />
+            ))}
+          </datalist>
+          <p className="mt-1 text-xs text-[var(--muted)]">
+            {selectedRequiresWorkGroup
+              ? "ใช้ระบุกลุ่มงานของหน่วยงานที่นำ token ไปติดตั้ง agent"
+              : "หน่วยงานประเภท รพ.สต. สร้าง token โดยใช้ชื่อหน่วยงานได้เลย"}
+          </p>
         </div>
 
         <div>
@@ -128,13 +162,25 @@ export function AgentEnrollmentPanel({ facilities }: AgentEnrollmentPanelProps) 
           <div className="mt-3 rounded-xl border border-emerald-200 bg-white/80 px-4 py-3">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
-                <p className="text-sm font-semibold text-emerald-950">คำสั่งเดียวสำหรับ PowerShell</p>
+                <p className="text-sm font-semibold text-emerald-950">คำสั่งเดียวสำหรับ Windows PowerShell</p>
                 <p className="mt-1 text-xs text-emerald-800">ให้ผู้ติดตั้งเปิด PowerShell แบบ Run as Administrator แล้ววางคำสั่งนี้ได้ทันที</p>
               </div>
               <CopyButton text={windowsInstallCommand} label="คัดลอกคำสั่ง" />
             </div>
             <div className="mt-3 overflow-x-auto rounded-lg bg-stone-950 px-3 py-2 font-mono text-[11px] leading-5 text-emerald-200">
               {windowsInstallCommand}
+            </div>
+          </div>
+          <div className="mt-3 rounded-xl border border-sky-200 bg-white/80 px-4 py-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-sky-950">คำสั่งเดียวสำหรับ Linux Terminal</p>
+                <p className="mt-1 text-xs text-sky-800">ให้ผู้ติดตั้งวางใน Terminal เครื่องปลายทาง ระบบจะดาวน์โหลดและติดตั้งผ่าน sudo</p>
+              </div>
+              <CopyButton text={linuxInstallCommand} label="คัดลอกคำสั่ง" />
+            </div>
+            <div className="mt-3 overflow-x-auto rounded-lg bg-stone-950 px-3 py-2 font-mono text-[11px] leading-5 text-sky-100">
+              {linuxInstallCommand}
             </div>
           </div>
         </div>

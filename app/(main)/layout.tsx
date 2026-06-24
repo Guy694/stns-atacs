@@ -5,6 +5,7 @@ import { Sidebar } from "@/app/_components/sidebar";
 import { IdleLogoutGuard } from "@/app/_components/idle-logout-guard";
 import { getMenuVisibility } from "@/lib/app-settings";
 import { getCurrentUser } from "@/lib/auth";
+import { getFacilityAgentContext } from "@/lib/facility-work-groups";
 import { selectRows } from "@/lib/mysql";
 import { listGrantedPermissions } from "@/lib/role-permissions";
 import type { RowDataPacket } from "mysql2/promise";
@@ -12,11 +13,19 @@ import type { RowDataPacket } from "mysql2/promise";
 export default async function MainLayout({ children }: { children: React.ReactNode }) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
-  const [grantedPermissions, menuVisibility] = await Promise.all([
+  const [initialGrantedPermissions, menuVisibility] = await Promise.all([
     listGrantedPermissions(user.role),
     getMenuVisibility(),
   ]);
+  let grantedPermissions = initialGrantedPermissions;
   let pendingRegistrationCount = 0;
+
+  if (user.role === "officer" && grantedPermissions.includes("work-groups.manage")) {
+    const facility = user.facilityId ? await getFacilityAgentContext(Number(user.facilityId)) : null;
+    if (!facility?.requiresWorkGroup) {
+      grantedPermissions = grantedPermissions.filter((permission) => permission !== "work-groups.manage");
+    }
+  }
 
   if (grantedPermissions.includes("users.manage")) {
     try {

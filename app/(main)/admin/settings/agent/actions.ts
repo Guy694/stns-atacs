@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 
 import { createAgentEnrollment, linkAgentDeviceToAsset, revokeAgentEnrollment } from "@/lib/agent";
 import { getCurrentUser } from "@/lib/auth";
+import { findOrCreateFacilityWorkGroup, getFacilityAgentContext, normalizeWorkGroupName } from "@/lib/facility-work-groups";
 import { hasPermission } from "@/lib/role-permissions";
 import type { AgentEnrollmentActionState } from "./types";
 import { agentEnrollmentInitialState } from "./types";
@@ -26,17 +27,43 @@ export async function createAgentEnrollmentAction(
   const user = await requireAdmin();
 
   const facilityId = Number(formData.get("facilityId"));
-  const facilityName = (formData.get("facilityLabel") as string | null)?.trim() ?? "";
-  const enrollmentName = (formData.get("enrollmentName") as string | null)?.trim() ?? "";
+  const workGroupName = normalizeWorkGroupName((formData.get("workGroupName") as string | null) ?? "");
   const expiresAt = (formData.get("expiresAt") as string | null)?.trim() ?? "";
 
   if (!facilityId || Number.isNaN(facilityId)) {
     return { ...agentEnrollmentInitialState, error: "กรุณาเลือกหน่วยงาน" };
   }
 
+  const facility = await getFacilityAgentContext(facilityId);
+  if (!facility) {
+    return { ...agentEnrollmentInitialState, error: "ไม่พบข้อมูลหน่วยงานที่เลือก" };
+  }
+
+  if (facility.requiresWorkGroup && workGroupName.length < 2) {
+    return { ...agentEnrollmentInitialState, error: "หน่วยงานประเภทโรงพยาบาล / สสจ / สสอ ต้องระบุชื่อกลุ่มงาน" };
+  }
+  if (workGroupName.length > 150) {
+    return { ...agentEnrollmentInitialState, error: "ชื่อกลุ่มงานต้องไม่เกิน 150 ตัวอักษร" };
+  }
+
+  let workGroupId: number | null = null;
+  try {
+    if (facility.requiresWorkGroup) {
+      workGroupId = await findOrCreateFacilityWorkGroup(facility.id, workGroupName);
+      if (!workGroupId) return { ...agentEnrollmentInitialState, error: "ไม่สามารถบันทึกชื่อกลุ่มงานได้" };
+    }
+  } catch {
+    return { ...agentEnrollmentInitialState, error: "ยังไม่พบตาราง facility_work_groups กรุณารัน database/add_facility_work_groups.sql ก่อน" };
+  }
+
+  const enrollmentName = facility.requiresWorkGroup
+    ? `${facility.name} · ${workGroupName}`
+    : facility.name;
+
   try {
     const createdToken = await createAgentEnrollment({
-      facilityId,
+      facilityId: facility.id,
+      workGroupId,
       enrollmentName,
       expiresAt,
       createdByUserId: Number(user.id),
@@ -45,13 +72,16 @@ export async function createAgentEnrollmentAction(
     return {
       error: null,
       createdToken,
-      facilityName: facilityName || null,
-      enrollmentName: enrollmentName || null,
+      facilityName: facility.name,
+      enrollmentName,
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
     if (message.includes("agent_enrollments")) {
       return { ...agentEnrollmentInitialState, error: "ยังไม่พบตาราง agent_enrollments กรุณารัน database/agent_inventory.sql ก่อน" };
+    }
+    if (message.includes("facility_work_groups") || message.includes("work_group_id")) {
+      return { ...agentEnrollmentInitialState, error: "ยังไม่พบโครงสร้างกลุ่มงาน กรุณารัน database/add_facility_work_groups.sql ก่อน" };
     }
     return { ...agentEnrollmentInitialState, error: "ไม่สามารถสร้าง enrollment token ได้" };
   }

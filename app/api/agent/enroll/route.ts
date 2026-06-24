@@ -43,6 +43,7 @@ export async function POST(req: NextRequest) {
       details: {
         เครื่อง: body.hostname ?? `Device #${result.deviceId}`,
         หน่วยงาน: result.facilityName,
+        กลุ่มงาน: result.workGroupName ?? "-",
         "Agent ID": result.agentId,
         เวอร์ชัน: body.agentVersion,
       },
@@ -54,6 +55,8 @@ export async function POST(req: NextRequest) {
       agentKey: result.agentKey,
       facilityId: result.facilityId,
       facilityName: result.facilityName,
+      workGroupId: result.workGroupId,
+      workGroupName: result.workGroupName,
       deviceId: result.deviceId,
     });
   } catch (error) {

@@ -136,6 +136,7 @@ export type AssetInput = {
 
 export type AssetListFilter = {
   facilityId?: number;
+  workGroupId?: number;
   status?: string;
   search?: string;
   district?: string;
@@ -169,6 +170,18 @@ function buildAssetFilter(filter?: AssetListFilter) {
   if (filter?.facilityId) {
     conditions.push("s.facility_id = ?");
     values.push(filter.facilityId);
+  }
+  if (filter?.workGroupId) {
+    conditions.push(
+      `EXISTS (
+        SELECT 1
+        FROM agent_devices ad_wg
+        JOIN agent_enrollments ae_wg ON ae_wg.id = ad_wg.enrollment_id
+        WHERE ad_wg.linked_asset_id = a.id
+          AND ae_wg.work_group_id = ?
+      )`
+    );
+    values.push(filter.workGroupId);
   }
   if (filter?.status) {
     conditions.push("a.current_status = ?");
@@ -236,6 +249,7 @@ function filterFallbackAssets(filter?: AssetListFilter) {
   );
 
   if (filter?.facilityId) assets = assets.filter((asset) => asset.facilityId === filter.facilityId);
+  if (filter?.workGroupId) assets = [];
   if (filter?.status) assets = assets.filter((asset) => asset.currentStatus === filter.status);
   if (filter?.district) assets = assets.filter((asset) => asset.districtName === filter.district);
   if (filter?.assetGroup) assets = assets.filter((asset) => asset.assetGroup === filter.assetGroup);

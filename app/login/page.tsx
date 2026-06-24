@@ -91,11 +91,11 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
         </div>
 
         {/* Bottom link */}
-        <div className="relative z-10">
+        {/* <div className="relative z-10">
           <Link href="/" className="inline-flex items-center gap-2 text-emerald-100 hover:text-white transition text-sm">
             <span>←</span> ดู Public Dashboard
           </Link>
-        </div>
+        </div> */}
       </div>
 
       {/* ── Right panel (form) ──────────────────────────────────────── */}
@@ -121,7 +121,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
             <p className="mt-2 text-sm" style={{ color: "var(--muted)" }}>
               {isOfficerRegistration
                 ? "กรอกข้อมูลให้ครบถ้วน จากนั้นรอผู้ดูแลระบบอนุมัติการเข้าใช้งาน"
-                : "ยินดีต้อนรับกลับ — กรอก Username และรหัสผ่านเพื่อเข้าใช้งาน"}
+                : ""}
             </p>
           </div>
 
@@ -395,9 +395,9 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
                   </>
                 ) : null}
 
-                <p className="text-xs text-center" style={{ color: "var(--muted)" }}>
+                {/* <p className="text-xs text-center" style={{ color: "var(--muted)" }}>
                   หากอีเมล Google ยังไม่มีในระบบ ระบบจะพาไปลงทะเบียนและรอแอดมินอนุมัติ
-                </p>
+                </p> */}
 
                 <Link
                   href={`/login?register=1${nextPath !== "/" ? `&next=${encodeURIComponent(nextPath)}` : ""}`}

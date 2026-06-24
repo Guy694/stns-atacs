@@ -91,7 +91,7 @@ export function Sidebar({ user, grantedPermissions, pendingRegistrationCount, me
     };
   }, [mobileOpen]);
 
-  const items = APP_MENU_ITEMS.filter((item) => {
+  const baseItems = APP_MENU_ITEMS.filter((item) => {
     if (!menuVisibility[item.key]) return false;
     if (user.role === "officer" && item.key === "assets") return false;
     if (item.adminOnly && user.role !== "admin") return false;
@@ -100,6 +100,22 @@ export function Sidebar({ user, grantedPermissions, pendingRegistrationCount, me
     if (item.permissionKey && !grantedPermissions.includes(item.permissionKey)) return false;
     return true;
   });
+  const items: NavItem[] =
+    user.role === "officer"
+      ? baseItems.flatMap((item) => {
+          if (item.key !== "dashboard") return [item];
+          return [
+            item,
+            {
+              key: "officer-assets",
+              href: user.facilityId ? `/facilities/${user.facilityId}` : "/profile",
+              label: "รายการทรัพย์สิน",
+              icon: "package",
+              group: "overview",
+            },
+          ];
+        })
+      : baseItems;
 
   const sidebarContent = (
     <div className="flex h-full flex-col">
@@ -132,27 +148,6 @@ export function Sidebar({ user, grantedPermissions, pendingRegistrationCount, me
             </div>
           );
         })}
-
-        {user.role === "officer" && (() => {
-          const href = user.facilityId ? `/facilities/${user.facilityId}` : "/profile";
-          const isActive = user.facilityId
-            ? pathname === `/facilities/${user.facilityId}`
-            : pathname === "/profile";
-          return (
-            <Link
-              href={href}
-              onClick={() => setMobileOpen(false)}
-              className={`mt-1 flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all ${
-                isActive
-                  ? "bg-white/20 text-white shadow-sm ring-1 ring-white/25"
-                  : "text-white/75 hover:bg-white/10 hover:text-white"
-              }`}
-            >
-              <AppIcon name="home" className="w-4 shrink-0" />
-              หน่วยงานของฉัน
-            </Link>
-          );
-        })()}
 
         {user.role !== "officer" && (
           <>

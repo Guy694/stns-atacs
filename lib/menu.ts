@@ -1,6 +1,6 @@
 import type { IconName } from "@/app/_components/ui/icon";
 
-export type AppMenuGroupKey = "overview" | "assets" | "system";
+export type AppMenuGroupKey = "overview" | "assets" | "system" | "reports";
 
 export type AppMenuItem = {
   key: string;
@@ -17,9 +17,10 @@ export type AppMenuItem = {
 };
 
 export const APP_MENU_GROUPS: Array<{ key: AppMenuGroupKey; label: string }> = [
-  { key: "overview", label: "ภาพรวมและรายงาน" },
+  { key: "overview", label: "เมนูหลัก" },
   { key: "assets", label: "งานทรัพย์สิน" },
   { key: "system", label: "ระบบและความปลอดภัย" },
+  { key: "reports", label: "รายงาน" },
 ];
 
 export const APP_MENU_ITEMS: AppMenuItem[] = [
@@ -33,13 +34,13 @@ export const APP_MENU_ITEMS: AppMenuItem[] = [
     exact: true,
   },
   {
-    key: "reports",
-    href: "/reports",
-    label: "รายงาน",
-    description: "รายงานสรุปและรายการ MA ใกล้หมดอายุ",
-    icon: "file-text",
+    key: "assets",
+    href: "/assets",
+    label: "รายการทรัพย์สิน",
+    description: "ค้นหา เพิ่ม แก้ไข และจัดการทะเบียนทรัพย์สิน",
+    icon: "package",
     group: "overview",
-    permissionKey: "reports.view",
+    permissionKey: "assets.view",
   },
   {
     key: "map",
@@ -48,15 +49,6 @@ export const APP_MENU_ITEMS: AppMenuItem[] = [
     description: "แสดงตำแหน่งหน่วยงานและทรัพย์สินบนแผนที่",
     icon: "map",
     group: "overview",
-  },
-  {
-    key: "assets",
-    href: "/assets",
-    label: "ทรัพย์สินทั้งหมด",
-    description: "ค้นหา เพิ่ม แก้ไข และจัดการทะเบียนทรัพย์สิน",
-    icon: "package",
-    group: "assets",
-    permissionKey: "assets.view",
   },
   {
     key: "inspection",
@@ -98,6 +90,15 @@ export const APP_MENU_ITEMS: AppMenuItem[] = [
     permissionKey: "agent.manage",
   },
   {
+    key: "work-groups",
+    href: "/admin/settings/work-groups",
+    label: "กลุ่มงาน",
+    description: "สร้างและจัดการกลุ่มงานของหน่วยงานสำหรับ ATACS Agent",
+    icon: "building",
+    group: "system",
+    permissionKey: "work-groups.manage",
+  },
+  {
     key: "admin-users",
     href: "/admin/users",
     label: "ผู้ใช้งาน",
@@ -123,6 +124,15 @@ export const APP_MENU_ITEMS: AppMenuItem[] = [
     icon: "audit",
     group: "system",
     permissionKey: "audit.view",
+  },
+  {
+    key: "reports",
+    href: "/reports",
+    label: "รายงาน",
+    description: "รายงานสรุปและรายการ MA ใกล้หมดอายุ",
+    icon: "file-text",
+    group: "reports",
+    permissionKey: "reports.view",
   },
 ];
 

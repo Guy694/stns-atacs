@@ -18,6 +18,7 @@ export const PERMISSION_DEFINITIONS = [
   { key: "users.manage", label: "จัดการผู้ใช้งาน", area: "Administration" },
   { key: "facilities.manage", label: "จัดการหน่วยงาน", area: "Administration" },
   { key: "device-types.manage", label: "จัดการประเภทอุปกรณ์", area: "Administration" },
+  { key: "work-groups.manage", label: "จัดการกลุ่มงาน", area: "Administration" },
   { key: "permissions.manage", label: "จัดการ Permission Matrix", area: "Administration" },
   { key: "agent.manage", label: "จัดการ Agent", area: "Administration" },
 ] as const;

@@ -4,6 +4,7 @@ import { useEffect, useId, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { StatusBadge } from "@/app/_components/ui/status-badge";
+import { assetStatusLabel, assetStatusTone } from "@/lib/asset-status";
 import { formatThaiDate, formatThaiDateTime } from "@/lib/date-format";
 
 export type ExpiringMaintenanceRow = {
@@ -41,12 +42,6 @@ function urgencyTone(days: number): "danger" | "warning" | "neutral" {
   if (days <= 7) return "danger";
   if (days <= 20) return "warning";
   return "neutral";
-}
-
-function statusTone(status: string): "success" | "danger" | "warning" {
-  if (status === "Active") return "success";
-  if (status === "Broken") return "danger";
-  return "warning";
 }
 
 function DetailField({ label, value }: { label: string; value?: string | number }) {
@@ -155,7 +150,7 @@ export function ExpiringMaintenanceTable({
                     </td>
                     <td className="px-4 py-3 text-xs text-[var(--foreground)]">{formatThaiDate(row.maintenanceEndDate)}</td>
                     <td className="px-4 py-3">
-                      <StatusBadge tone={statusTone(row.currentStatus)}>{row.currentStatus}</StatusBadge>
+                      <StatusBadge tone={assetStatusTone(row.currentStatus)}>{assetStatusLabel(row.currentStatus)}</StatusBadge>
                     </td>
                     <td className="px-4 py-3 text-right">
                       <button
@@ -215,7 +210,7 @@ export function ExpiringMaintenanceTable({
                 <DetailField label="เลขทะเบียนทรัพย์สิน" value={selectedRow.assetRegistrationNo} />
                 <DetailField label="วันสิ้นสุดสัญญา MA" value={formatThaiDate(selectedRow.maintenanceEndDate)} />
                 <DetailField label="ประเภทอุปกรณ์" value={`${selectedRow.deviceType} · ${selectedRow.assetGroup}`} />
-                <DetailField label="สถานะปัจจุบัน" value={selectedRow.currentStatus} />
+                <DetailField label="สถานะปัจจุบัน" value={assetStatusLabel(selectedRow.currentStatus)} />
                 <DetailField label="ยี่ห้อ / รุ่น" value={selectedRow.manufacturerBrand} />
                 <DetailField label="ระบบปฏิบัติการ" value={selectedRow.operatingSystem} />
                 <DetailField label="สถานที่ติดตั้ง" value={selectedRow.locationDetail} />

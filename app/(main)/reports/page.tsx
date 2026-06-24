@@ -3,9 +3,11 @@ import { redirect } from "next/navigation";
 
 import { AppIcon } from "@/app/_components/ui/icon";
 import { StatusBadge } from "@/app/_components/ui/status-badge";
+import { assetStatusLabel, assetStatusTone } from "@/lib/asset-status";
 import { getCurrentUser } from "@/lib/auth";
 import { formatThaiDate } from "@/lib/date-format";
-import { listAssets } from "@/lib/assets";
+import { getFacilityById, listAssets } from "@/lib/assets";
+import { hasPermission } from "@/lib/role-permissions";
 
 type Props = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -15,17 +17,6 @@ function readParam(p: Record<string, string | string[] | undefined>, key: string
   const v = p[key];
   return Array.isArray(v) ? v[0] : (v ?? "");
 }
-
-const STATUS_LABEL: Record<string, string> = {
-  Active: "ใช้งานอยู่",
-  Inactive: "ไม่ใช้งาน",
-  Broken: "ชำรุด",
-};
-const STATUS_TONE = {
-  Active: "success",
-  Inactive: "warning",
-  Broken: "danger",
-} as const;
 
 const VIEWS = [
   { key: "summary", label: "ภาพรวม" },
@@ -42,12 +33,21 @@ const TODAY = new Date();
 export default async function ReportsPage({ searchParams }: Props) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
+  if (!(await hasPermission(user.role, "reports.view"))) redirect("/dashboard");
+  if (user.role !== "admin" && !user.facilityId) redirect("/profile");
+
   const canMutate = user.role !== "viewer";
 
   const params = await searchParams;
   const view = (readParam(params, "view") || "summary") as View;
 
-  const assets = await listAssets();
+  const scopedFacilityId = user.role === "admin" ? undefined : Number(user.facilityId);
+  const [assets, scopedFacility] = await Promise.all([
+    listAssets({ facilityId: scopedFacilityId }),
+    scopedFacilityId ? getFacilityById(scopedFacilityId) : Promise.resolve(null),
+  ]);
+  const reportScopeLabel = scopedFacility?.name ?? (scopedFacilityId ? "หน่วยงานของคุณ" : "ทุกหน่วยงาน");
+  const exportHref = scopedFacilityId ? `/api/export/assets?facilityId=${scopedFacilityId}` : "/api/export/assets";
   const total = assets.length;
   const active = assets.filter((a) => a.currentStatus === "Active").length;
   const broken = assets.filter((a) => a.currentStatus === "Broken").length;
@@ -119,11 +119,12 @@ export default async function ReportsPage({ searchParams }: Props) {
         <div>
           <p className="text-xs font-medium uppercase tracking-[0.22em] text-[var(--muted)]">ATACS · รายงาน</p>
           <h1 className="section-title mt-1 text-3xl font-semibold">รายงาน</h1>
+          <p className="mt-1 text-sm text-[var(--muted)]">แสดงข้อมูล: {reportScopeLabel}</p>
         </div>
         <div className="flex items-center gap-3">
           <span className="text-xs text-[var(--muted)]">ข้อมูล ณ วันที่ {formatThaiDate(TODAY)}</span>
           <a
-            href="/api/export/assets"
+            href={exportHref}
             className="inline-flex items-center gap-2 rounded-xl border border-[var(--primary-soft-strong)] bg-[var(--primary-soft)] px-4 py-2 text-sm font-medium text-[var(--primary-text)] transition hover:bg-[var(--primary-soft-strong)]"
           >
             <AppIcon name="download" className="h-4 w-4" /> Export CSV
@@ -165,9 +166,9 @@ export default async function ReportsPage({ searchParams }: Props) {
           <div className="border-b border-black/6 px-5 py-3 font-semibold">สรุปภาพรวมทรัพย์สิน</div>
           <div className="p-5 space-y-4">
             {[
-              { label: "พร้อมใช้งาน (Active)", count: active, bar: "bg-emerald-500", tone: "success" as const },
-              { label: "ไม่ใช้งาน (Inactive)", count: inactive, bar: "bg-amber-400", tone: "warning" as const },
-              { label: "ชำรุด (Broken)", count: broken, bar: "bg-rose-500", tone: "danger" as const },
+              { label: assetStatusLabel("Active"), count: active, bar: "bg-emerald-500", tone: "success" as const },
+              { label: assetStatusLabel("Inactive"), count: inactive, bar: "bg-amber-400", tone: "warning" as const },
+              { label: assetStatusLabel("Broken"), count: broken, bar: "bg-rose-500", tone: "danger" as const },
             ].map(({ label, count, bar, tone }) => (
               <div key={label}>
                 <div className="flex items-center justify-between text-sm">
@@ -196,10 +197,10 @@ export default async function ReportsPage({ searchParams }: Props) {
                   <th className="px-4 py-2.5 text-left font-medium">หน่วยงาน</th>
                   <th className="px-4 py-2.5 text-left font-medium">อำเภอ</th>
                   <th className="px-4 py-2.5 text-center font-medium">รวม</th>
-                  <th className="px-4 py-2.5 text-center font-medium">Active</th>
-                  <th className="px-4 py-2.5 text-center font-medium">Broken</th>
-                  <th className="px-4 py-2.5 text-center font-medium">Inactive</th>
-                  <th className="px-4 py-2.5 text-center font-medium">อัตรา Active</th>
+                  <th className="px-4 py-2.5 text-center font-medium">พร้อมใช้งาน</th>
+                  <th className="px-4 py-2.5 text-center font-medium">ชำรุด</th>
+                  <th className="px-4 py-2.5 text-center font-medium">ไม่ใช้งาน</th>
+                  <th className="px-4 py-2.5 text-center font-medium">อัตราพร้อมใช้งาน</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-black/4">
@@ -245,8 +246,8 @@ export default async function ReportsPage({ searchParams }: Props) {
                 <tr className="border-b border-black/6 bg-slate-50/60 text-xs text-[var(--muted)]">
                   <th className="px-4 py-2.5 text-left font-medium">ประเภทอุปกรณ์</th>
                   <th className="px-4 py-2.5 text-center font-medium">รวม</th>
-                  <th className="px-4 py-2.5 text-center font-medium">Active</th>
-                  <th className="px-4 py-2.5 text-center font-medium">Broken</th>
+                  <th className="px-4 py-2.5 text-center font-medium">พร้อมใช้งาน</th>
+                  <th className="px-4 py-2.5 text-center font-medium">ชำรุด</th>
                   <th className="px-4 py-2.5 text-left font-medium">สัดส่วน</th>
                 </tr>
               </thead>
@@ -356,8 +357,8 @@ export default async function ReportsPage({ searchParams }: Props) {
                         <StatusBadge tone="neutral">{a.deviceType || a.assetGroup}</StatusBadge>
                       </td>
                       <td className="px-4 py-3 text-center">
-                        <StatusBadge tone={STATUS_TONE[a.currentStatus as keyof typeof STATUS_TONE] ?? "neutral"}>
-                          {STATUS_LABEL[a.currentStatus] ?? a.currentStatus}
+                        <StatusBadge tone={assetStatusTone(a.currentStatus)}>
+                          {assetStatusLabel(a.currentStatus)}
                         </StatusBadge>
                       </td>
                       <td className="px-4 py-3 text-xs text-[var(--muted)]">{formatThaiDate(a.updatedAt)}</td>

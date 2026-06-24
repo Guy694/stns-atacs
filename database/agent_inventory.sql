@@ -7,9 +7,27 @@ SET time_zone = "+00:00";
 /*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
 /*!40101 SET NAMES utf8mb4 */;
 
+CREATE TABLE IF NOT EXISTS `facility_work_groups` (
+  `id` INT NOT NULL AUTO_INCREMENT,
+  `facility_id` INT NOT NULL COMMENT 'อ้างอิงหน่วยงานจาก health_facilities',
+  `work_group_name` VARCHAR(150) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT 'ชื่อกลุ่มงาน เช่น กลุ่มงานไอที, OPD, งานการเงิน',
+  `is_active` TINYINT(1) NOT NULL DEFAULT 1,
+  `sort_order` INT NOT NULL DEFAULT 0,
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_facility_work_groups_facility_name` (`facility_id`, `work_group_name`),
+  KEY `idx_facility_work_groups_active` (`is_active`),
+  CONSTRAINT `fk_facility_work_groups_facility`
+    FOREIGN KEY (`facility_id`) REFERENCES `health_facilities` (`id`)
+    ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+  COMMENT='กลุ่มงานของหน่วยงานสำหรับระบุในการติดตั้ง ATACS Agent';
+
 CREATE TABLE `agent_enrollments` (
   `id` int NOT NULL AUTO_INCREMENT,
   `facility_id` int NOT NULL COMMENT 'ผูก enrollment token กับหน่วยงานเดียวเสมอ',
+  `work_group_id` int DEFAULT NULL COMMENT 'กลุ่มงานของหน่วยงานที่ใช้สร้าง enrollment token',
   `enrollment_name` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'ชื่อกำกับชุด token เช่น OPD Ward A',
   `token_hash` char(64) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL COMMENT 'SHA-256 ของ enrollment token',
   `is_active` tinyint(1) NOT NULL DEFAULT '1',
@@ -20,8 +38,10 @@ CREATE TABLE `agent_enrollments` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_agent_enrollments_token_hash` (`token_hash`),
   KEY `idx_agent_enrollments_facility_id` (`facility_id`),
+  KEY `idx_agent_enrollments_work_group_id` (`work_group_id`),
   KEY `idx_agent_enrollments_active` (`is_active`),
   CONSTRAINT `fk_agent_enrollments_facility` FOREIGN KEY (`facility_id`) REFERENCES `health_facilities` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE,
+  CONSTRAINT `fk_agent_enrollments_work_group` FOREIGN KEY (`work_group_id`) REFERENCES `facility_work_groups` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `fk_agent_enrollments_created_by_user` FOREIGN KEY (`created_by_user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='Enrollment token สำหรับติดตั้ง ATACS Agent ตามหน่วยงาน';
 

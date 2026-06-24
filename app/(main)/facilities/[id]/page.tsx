@@ -6,6 +6,7 @@ import { StatusBadge } from "@/app/_components/ui/status-badge";
 import { getCurrentUser } from "@/lib/auth";
 import { getFacilityById, listAssets, listAllFacilitiesForSelect } from "@/lib/assets";
 import { formatThaiDate } from "@/lib/date-format";
+import { listFacilityWorkGroups } from "@/lib/facility-work-groups";
 import { AssetFormModal } from "@/app/(main)/assets/_components/asset-form-modal";
 import { DeleteAssetButton } from "@/app/(main)/assets/_components/delete-asset-button";
 
@@ -96,16 +97,18 @@ export default async function FacilityDetailPage({ params, searchParams }: Props
   const search = readParam(query, "search");
   const statusFilter = readParam(query, "status");
   const groupFilter = readParam(query, "group");
+  const workGroupFilter = Number(readParam(query, "workGroup")) || undefined;
   const deviceTypeFilter = readParam(query, "deviceType");
   const maDaysFilter = readParam(query, "maDays");
   const maExpiringDays = Number(maDaysFilter) || undefined;
   const sort = readParam(query, "sort") as "updated_desc" | "updated_asc" | "name_asc" | "name_desc" | "ma_soon";
   const normalizedSort = ["updated_desc", "updated_asc", "name_asc", "name_desc", "ma_soon"].includes(sort) ? sort : undefined;
 
-  const [allAssets, assets, facilitiesForSelect] = await Promise.all([
+  const [allAssets, assets, facilitiesForSelect, workGroups] = await Promise.all([
     listAssets({ facilityId }),
     listAssets({
       facilityId,
+      workGroupId: workGroupFilter,
       search: search || undefined,
       status: statusFilter || undefined,
       assetGroup: groupFilter === "Hardware" || groupFilter === "Software" ? groupFilter : undefined,
@@ -114,6 +117,7 @@ export default async function FacilityDetailPage({ params, searchParams }: Props
       sort: normalizedSort,
     }),
     listAllFacilitiesForSelect(),
+    listFacilityWorkGroups(facilityId),
   ]);
 
   const currentFacility = await getFacilityById(facilityId);
@@ -132,7 +136,7 @@ export default async function FacilityDetailPage({ params, searchParams }: Props
   const deviceTypeOptions = [...new Set(allAssets.map((asset) => asset.deviceType).filter(Boolean))].sort((a, b) =>
     a.localeCompare(b, "th")
   );
-  const hasActiveFilters = Boolean(search || statusFilter || groupFilter || deviceTypeFilter || maExpiringDays || normalizedSort);
+  const hasActiveFilters = Boolean(search || statusFilter || groupFilter || workGroupFilter || deviceTypeFilter || maExpiringDays || normalizedSort);
 
   const expiringSoon = allAssets
     .filter((a) => a.maintenanceEndDate)
@@ -148,7 +152,7 @@ export default async function FacilityDetailPage({ params, searchParams }: Props
       {/* Breadcrumb */}
       <div className="flex items-center gap-2 text-sm text-[var(--muted)]">
         {user.role === "officer" ? (
-          <span>หน่วยงานของฉัน</span>
+          <span>รายการทรัพย์สิน</span>
         ) : (
           <Link href="/assets" className="hover:text-[var(--accent)]">ทะเบียนทรัพย์สิน</Link>
         )}
@@ -261,6 +265,23 @@ export default async function FacilityDetailPage({ params, searchParams }: Props
               ))}
             </select>
           </label>
+          {workGroups.length > 0 && (
+            <label>
+              <span className="sr-only">กลุ่มงาน</span>
+              <select
+                name="workGroup"
+                defaultValue={workGroupFilter ?? ""}
+                className="min-h-11 w-full rounded-xl border border-black/10 bg-white/85 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+              >
+                <option value="">ทุกกลุ่มงาน</option>
+                {workGroups.map((workGroup) => (
+                  <option key={workGroup.id} value={workGroup.id}>
+                    {workGroup.workGroupName}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <label>
             <span className="sr-only">MA ใกล้หมดอายุ</span>
             <select
