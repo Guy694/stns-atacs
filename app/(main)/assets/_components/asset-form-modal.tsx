@@ -293,7 +293,7 @@ export function AssetFormModal({ facilities, deviceTypes = [], fixedFacilityId, 
               <div className="grid gap-4 sm:grid-cols-2">
                 {/* OS */}
                 <div>
-                  <label className="block text-sm font-medium">Operating System</label>
+                  <label className="block text-sm font-medium">ระบบปฏิบัติการ</label>
                   <input
                     name="operatingSystem"
                     defaultValue={asset?.operatingSystem ?? ""}
@@ -312,18 +312,6 @@ export function AssetFormModal({ facilities, deviceTypes = [], fixedFacilityId, 
                     className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 font-mono text-sm outline-none focus:border-[var(--accent)]"
                   />
                 </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium">Public IP</label>
-                <input
-                  name="publicIp"
-                  defaultValue={asset?.publicIp ?? ""}
-                  placeholder="เช่น 1.2.3.4"
-                  pattern="^(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)(\\.(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)){3}$"
-                  title="กรอกเป็น IPv4 เช่น 1.2.3.4"
-                  className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 font-mono text-sm outline-none focus:border-[var(--accent)]"
-                />
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
