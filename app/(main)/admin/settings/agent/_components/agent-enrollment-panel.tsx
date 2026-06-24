@@ -6,7 +6,7 @@ import {
   createAgentEnrollmentAction,
 } from "@/app/(main)/admin/settings/agent/actions";
 import { agentEnrollmentInitialState } from "@/app/(main)/admin/settings/agent/types";
-import { AGENT_INSTALL_API_BASE_URL } from "@/lib/agent-install";
+import { buildWindowsAgentInstallCommand } from "@/lib/agent-install";
 
 type FacilityOption = {
   id: number;
@@ -18,11 +18,31 @@ type AgentEnrollmentPanelProps = {
   facilities: FacilityOption[];
 };
 
+function CopyButton({ text, label = "คัดลอก" }: { text: string; label?: string }) {
+  const [copied, setCopied] = useState(false);
+
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        navigator.clipboard.writeText(text).then(() => {
+          setCopied(true);
+          setTimeout(() => setCopied(false), 2000);
+        });
+      }}
+      className="shrink-0 rounded-lg border border-black/10 bg-white/80 px-3 py-1.5 text-xs font-semibold text-[var(--foreground)] transition hover:bg-white"
+    >
+      {copied ? "คัดลอกแล้ว" : label}
+    </button>
+  );
+}
+
 export function AgentEnrollmentPanel({ facilities }: AgentEnrollmentPanelProps) {
   const [selectedFacilityId, setSelectedFacilityId] = useState("");
   const [facilityLabel, setFacilityLabel] = useState("");
   const [state, formAction, pending] = useActionState(createAgentEnrollmentAction, agentEnrollmentInitialState);
   const facilitiesRef = useRef(facilities);
+  const windowsInstallCommand = state.createdToken ? buildWindowsAgentInstallCommand(state.createdToken) : "";
 
   useEffect(() => {
     facilitiesRef.current = facilities;
@@ -105,11 +125,16 @@ export function AgentEnrollmentPanel({ facilities }: AgentEnrollmentPanelProps) 
           <div className="mt-3 rounded-xl bg-white px-4 py-3 font-mono text-xs text-[var(--foreground)] shadow-sm">
             {state.createdToken}
           </div>
-          <div className="mt-3 rounded-xl border border-black/8 bg-white/70 px-4 py-3 text-xs text-[var(--muted)]">
-            ติดตั้งฝั่งเครื่องตัวอย่าง:
-            <div className="mt-2 overflow-x-auto rounded-lg bg-stone-950 px-3 py-2 font-mono text-[11px] text-emerald-200">
-              <div>Windows: powershell -ExecutionPolicy Bypass -File .\install-atacs-agent.ps1 -ApiBaseUrl {AGENT_INSTALL_API_BASE_URL} -EnrollmentToken {state.createdToken}</div>
-              <div className="mt-1">Linux: sudo bash ./install-atacs-agent.sh --api-base-url {AGENT_INSTALL_API_BASE_URL} --enrollment-token {state.createdToken}</div>
+          <div className="mt-3 rounded-xl border border-emerald-200 bg-white/80 px-4 py-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-emerald-950">คำสั่งเดียวสำหรับ PowerShell</p>
+                <p className="mt-1 text-xs text-emerald-800">ให้ผู้ติดตั้งเปิด PowerShell แบบ Run as Administrator แล้ววางคำสั่งนี้ได้ทันที</p>
+              </div>
+              <CopyButton text={windowsInstallCommand} label="คัดลอกคำสั่ง" />
+            </div>
+            <div className="mt-3 overflow-x-auto rounded-lg bg-stone-950 px-3 py-2 font-mono text-[11px] leading-5 text-emerald-200">
+              {windowsInstallCommand}
             </div>
           </div>
         </div>

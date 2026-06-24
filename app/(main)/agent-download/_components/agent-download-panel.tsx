@@ -3,7 +3,7 @@
 import { useActionState, useState } from "react";
 
 import { createOfficerDownloadTokenAction } from "@/app/(main)/agent-download/actions";
-import { AGENT_INSTALL_API_BASE_URL } from "@/lib/agent-install";
+import { buildWindowsAgentInstallCommand } from "@/lib/agent-install";
 
 type AgentDownloadPanelProps = {
   facilityName: string;
@@ -11,9 +11,7 @@ type AgentDownloadPanelProps = {
 
 const INITIAL = { token: null as string | null, error: null as string | null };
 
-const SCRIPT_BASE = "/agent";
-
-function CopyButton({ text }: { text: string }) {
+function CopyButton({ text, label = "คัดลอก" }: { text: string; label?: string }) {
   const [copied, setCopied] = useState(false);
   return (
     <button
@@ -24,9 +22,9 @@ function CopyButton({ text }: { text: string }) {
           setTimeout(() => setCopied(false), 2000);
         });
       }}
-      className="shrink-0 rounded-lg border border-black/10 bg-white/70 px-3 py-1 text-xs font-medium text-[var(--muted)] transition hover:bg-white"
+      className="shrink-0 rounded-lg border border-black/10 bg-white/80 px-3 py-1.5 text-xs font-semibold text-[var(--foreground)] transition hover:bg-white disabled:opacity-50"
     >
-      {copied ? "✓ คัดลอก" : "คัดลอก"}
+      {copied ? "คัดลอกแล้ว" : label}
     </button>
   );
 }
@@ -39,12 +37,7 @@ export function AgentDownloadPanel({ facilityName }: AgentDownloadPanelProps) {
 
   const token = state.token;
 
-  const winCmd = token
-    ? `powershell -ExecutionPolicy Bypass -File .\\install-atacs-agent.ps1 -ApiBaseUrl "${AGENT_INSTALL_API_BASE_URL}" -EnrollmentToken "${token}"`
-    : "";
-  const linuxCmd = token
-    ? `sudo bash ./install-atacs-agent.sh --api-base-url "${AGENT_INSTALL_API_BASE_URL}" --enrollment-token "${token}"`
-    : "";
+  const winCmd = token ? buildWindowsAgentInstallCommand(token) : "";
 
   return (
     <div className="flex flex-col gap-5">
@@ -87,42 +80,20 @@ export function AgentDownloadPanel({ facilityName }: AgentDownloadPanelProps) {
             <p className="mt-2 text-xs text-[var(--muted)]">Token นี้มีอายุ 7 วัน — ใช้ได้สำหรับหน่วยงาน{facilityName}เท่านั้น</p>
           </div>
 
-          {/* Windows */}
-          <div className="glass-panel rounded-2xl p-5">
-            <div className="flex items-center justify-between mb-3">
-              <p className="font-semibold">🖥 Windows</p>
-              <div className="flex gap-2">
-                <a href={`${SCRIPT_BASE}/windows/atacs-agent.ps1`} download="atacs-agent.ps1" className="rounded-lg border border-black/10 bg-white/70 px-3 py-1 text-xs font-medium text-[var(--muted)] hover:bg-white">atacs-agent.ps1</a>
-                <a href={`${SCRIPT_BASE}/windows/install-atacs-agent.ps1`} download="install-atacs-agent.ps1" className="rounded-lg border border-black/10 bg-white/70 px-3 py-1 text-xs font-medium text-[var(--muted)] hover:bg-white">installer.ps1</a>
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="font-semibold text-emerald-950">ติดตั้งบน Windows ด้วยคำสั่งเดียว</p>
+                <p className="mt-1 text-sm text-emerald-800">
+                  เปิด PowerShell แบบ Run as Administrator แล้ววางคำสั่งนี้ ระบบจะดาวน์โหลด agent และติดตั้งให้อัตโนมัติ
+                </p>
               </div>
+              <CopyButton text={winCmd} label="คัดลอกคำสั่ง" />
             </div>
-            <div className="relative">
-              <div className="overflow-x-auto rounded-xl bg-stone-950 px-4 py-3 font-mono text-[11px] text-emerald-200 pr-20">
+            <div className="mt-4 overflow-x-auto rounded-xl bg-stone-950 px-4 py-3 font-mono text-[11px] leading-5 text-emerald-200">
                 {winCmd}
-              </div>
-              <div className="absolute right-2 top-2">
-                <CopyButton text={winCmd} />
-              </div>
             </div>
-          </div>
-
-          {/* Linux */}
-          <div className="glass-panel rounded-2xl p-5">
-            <div className="flex items-center justify-between mb-3">
-              <p className="font-semibold">🐧 Linux</p>
-              <div className="flex gap-2">
-                <a href={`${SCRIPT_BASE}/linux/atacs-agent.py`} download="atacs-agent.py" className="rounded-lg border border-black/10 bg-white/70 px-3 py-1 text-xs font-medium text-[var(--muted)] hover:bg-white">atacs-agent.py</a>
-                <a href={`${SCRIPT_BASE}/linux/install-atacs-agent.sh`} download="install-atacs-agent.sh" className="rounded-lg border border-black/10 bg-white/70 px-3 py-1 text-xs font-medium text-[var(--muted)] hover:bg-white">installer.sh</a>
-              </div>
-            </div>
-            <div className="relative">
-              <div className="overflow-x-auto rounded-xl bg-stone-950 px-4 py-3 font-mono text-[11px] text-emerald-200 pr-20">
-                {linuxCmd}
-              </div>
-              <div className="absolute right-2 top-2">
-                <CopyButton text={linuxCmd} />
-              </div>
-            </div>
+            <p className="mt-2 text-xs text-emerald-800">ไม่ต้องดาวน์โหลดไฟล์เอง คำสั่งนี้รวม token และ URL ระบบไว้แล้ว</p>
           </div>
 
           <div className="glass-panel rounded-2xl px-5 py-4 text-center">
