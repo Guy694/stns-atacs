@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS `asset_device_types` (
   `updated_at`   TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_asset_device_types_name_category` (`name`, `category`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
   COMMENT='ประเภทอุปกรณ์/ซอฟต์แวร์สารสนเทศ';
 
 -- ข้อมูลเริ่มต้น

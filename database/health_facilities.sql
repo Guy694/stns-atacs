@@ -29,18 +29,18 @@ SET time_zone = "+00:00";
 
 CREATE TABLE `health_facilities` (
   `id` int NOT NULL,
-  `name` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT 'ชื่อสถานพยาบาล',
-  `typecode` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT 'ประเภท เช่น รพ.ทั่วไป, รพ.ชุมชน, รพ.สต., ศสช., สสจ, สสอ., สอน.',
-  `changwat` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT 'สตูล' COMMENT 'จังหวัด',
-  `address` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT 'ที่อยู่',
-  `tambon` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT 'ตำบล',
+  `name` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT 'ชื่อสถานพยาบาล',
+  `typecode` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT 'ประเภท เช่น รพ.ทั่วไป, รพ.ชุมชน, รพ.สต., ศสช., สสจ, สสอ., สอน.',
+  `changwat` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT 'สตูล' COMMENT 'จังหวัด',
+  `address` text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT 'ที่อยู่',
+  `tambon` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT 'ตำบล',
   `lat` decimal(10,6) NOT NULL COMMENT 'ละติจูด',
   `lon` decimal(10,6) NOT NULL COMMENT 'ลองจิจูด',
-  `district_name` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'ชื่ออำเภอที่ตั้ง',
+  `district_name` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'ชื่ออำเภอที่ตั้ง',
   `is_active` tinyint(1) DEFAULT '1' COMMENT 'สถานะการใช้งาน',
   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='ข้อมูลสถานพยาบาลในจังหวัดสตูล';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='ข้อมูลสถานพยาบาลในจังหวัดสตูล';
 
 --
 -- Dumping data for table `health_facilities`

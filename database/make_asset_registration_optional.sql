@@ -4,7 +4,7 @@
 
 ALTER TABLE `information_assets`
   MODIFY COLUMN `asset_registration_no` VARCHAR(100)
-    CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+    CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci
     NULL DEFAULT NULL
     COMMENT 'เลขทะเบียนทรัพย์สินสารสนเทศ';
 

@@ -7,5 +7,5 @@ CREATE TABLE IF NOT EXISTS `telegram_alert_events` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_telegram_alert_events_event_key` (`event_key`),
   KEY `idx_telegram_alert_events_created_at` (`created_at`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
   COMMENT='Event keys used to prevent duplicate Telegram alerts';

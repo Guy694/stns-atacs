@@ -35,31 +35,31 @@ CREATE TABLE `agent_devices` (
   `agent_uuid` char(36) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL,
   `agent_key_hash` char(64) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL COMMENT 'SHA-256 ของ device secret หลัง enroll สำเร็จ',
   `device_fingerprint` char(64) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL,
-  `hostname` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `serial_number` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `bios_serial` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `device_type` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `manufacturer_brand` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `manufacturer_model` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `operating_system` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `operating_system_version` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `private_ip` varchar(45) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `mac_address` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `current_user` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `cpu_model` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `hostname` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `serial_number` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `bios_serial` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `device_type` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `manufacturer_brand` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `manufacturer_model` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `operating_system` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `operating_system_version` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `private_ip` varchar(45) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `mac_address` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `current_user` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `cpu_model` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
   `ram_mb` int DEFAULT NULL,
   `disk_total_gb` int DEFAULT NULL,
-  `location_detail` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `agent_version` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `status` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'online',
+  `location_detail` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `agent_version` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `status` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'online',
   `is_active` tinyint(1) NOT NULL DEFAULT '1',
   `first_seen_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `last_seen_at` datetime DEFAULT NULL,
   `last_reported_at` datetime DEFAULT NULL,
-  `raw_payload_json` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
+  `raw_payload_json` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,
   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='ข้อมูล inventory ที่รายงานจาก ATACS Agent';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='ข้อมูล inventory ที่รายงานจาก ATACS Agent';
 
 -- --------------------------------------------------------
 
@@ -70,14 +70,14 @@ CREATE TABLE `agent_devices` (
 CREATE TABLE `agent_enrollments` (
   `id` int NOT NULL,
   `facility_id` int NOT NULL COMMENT 'ผูก enrollment token กับหน่วยงานเดียวเสมอ',
-  `enrollment_name` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'ชื่อกำกับชุด token เช่น OPD Ward A',
+  `enrollment_name` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'ชื่อกำกับชุด token เช่น OPD Ward A',
   `token_hash` char(64) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL COMMENT 'SHA-256 ของ enrollment token',
   `is_active` tinyint(1) NOT NULL DEFAULT '1',
   `expires_at` datetime DEFAULT NULL,
   `created_by_user_id` bigint UNSIGNED DEFAULT NULL,
   `last_used_at` datetime DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Enrollment token สำหรับติดตั้ง ATACS Agent ตามหน่วยงาน';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='Enrollment token สำหรับติดตั้ง ATACS Agent ตามหน่วยงาน';
 
 --
 -- Dumping data for table `agent_enrollments`
@@ -100,13 +100,13 @@ INSERT INTO `agent_enrollments` (`id`, `facility_id`, `enrollment_name`, `token_
 
 CREATE TABLE `asset_device_types` (
   `id` int NOT NULL,
-  `name` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT 'ชื่อประเภท เช่น Server, Firewall, Switch',
-  `category` enum('Hardware','Software') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'Hardware',
+  `name` varchar(100) COLLATE utf8mb4_general_ci NOT NULL COMMENT 'ชื่อประเภท เช่น Server, Firewall, Switch',
+  `category` enum('Hardware','Software') COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'Hardware',
   `is_active` tinyint(1) NOT NULL DEFAULT '1',
   `sort_order` int NOT NULL DEFAULT '0',
   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='ประเภทอุปกรณ์/ซอฟต์แวร์สารสนเทศ';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='ประเภทอุปกรณ์/ซอฟต์แวร์สารสนเทศ';
 
 --
 -- Dumping data for table `asset_device_types`
@@ -148,7 +148,7 @@ CREATE TABLE `asset_inspections` (
   `inspected_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `note` text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Dumping data for table `asset_inspections`
@@ -170,7 +170,7 @@ CREATE TABLE `asset_inspection_items` (
   `found` tinyint(1) NOT NULL DEFAULT '1' COMMENT '1=พบ, 0=ไม่พบ',
   `condition_note` varchar(255) DEFAULT NULL,
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
 
@@ -187,7 +187,7 @@ CREATE TABLE `audit_logs` (
   `entity_id` int DEFAULT NULL,
   `summary` text COMMENT 'คำอธิบายการเปลี่ยนแปลง',
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Dumping data for table `audit_logs`
@@ -207,10 +207,10 @@ INSERT INTO `audit_logs` (`id`, `user_id`, `user_name`, `action`, `entity`, `ent
 CREATE TABLE `auth_sessions` (
   `id` bigint UNSIGNED NOT NULL,
   `user_id` bigint UNSIGNED NOT NULL,
-  `session_token_hash` char(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `session_token_hash` char(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
   `expires_at` datetime NOT NULL,
   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='session login ของผู้ใช้งาน';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='session login ของผู้ใช้งาน';
 
 --
 -- Dumping data for table `auth_sessions`
@@ -227,18 +227,18 @@ INSERT INTO `auth_sessions` (`id`, `user_id`, `session_token_hash`, `expires_at`
 
 CREATE TABLE `health_facilities` (
   `id` int NOT NULL,
-  `name` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT 'ชื่อสถานพยาบาล',
-  `typecode` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT 'ประเภท เช่น รพ.ทั่วไป, รพ.ชุมชน, รพ.สต., ศสช., สสจ, สสอ., สอน.',
-  `changwat` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT 'สตูล' COMMENT 'จังหวัด',
-  `address` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT 'ที่อยู่',
-  `tambon` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT 'ตำบล',
+  `name` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT 'ชื่อสถานพยาบาล',
+  `typecode` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT 'ประเภท เช่น รพ.ทั่วไป, รพ.ชุมชน, รพ.สต., ศสช., สสจ, สสอ., สอน.',
+  `changwat` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT 'สตูล' COMMENT 'จังหวัด',
+  `address` text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT 'ที่อยู่',
+  `tambon` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT 'ตำบล',
   `lat` decimal(10,6) NOT NULL COMMENT 'ละติจูด',
   `lon` decimal(10,6) NOT NULL COMMENT 'ลองจิจูด',
-  `district_name` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'ชื่ออำเภอที่ตั้ง',
+  `district_name` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'ชื่ออำเภอที่ตั้ง',
   `is_active` tinyint(1) DEFAULT '1' COMMENT 'สถานะการใช้งาน',
   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='ข้อมูลสถานพยาบาลในจังหวัดสตูล';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='ข้อมูลสถานพยาบาลในจังหวัดสตูล';
 
 --
 -- Dumping data for table `health_facilities`
@@ -329,34 +329,34 @@ CREATE TABLE `information_assets` (
   `id` int NOT NULL,
   `survey_id` int NOT NULL COMMENT 'อ้างอิงหัวแบบสำรวจจาก information_asset_surveys',
   `row_no` int DEFAULT NULL COMMENT 'ลำดับจากแบบฟอร์ม',
-  `asset_registration_no` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT 'เลขทะเบียนทรัพย์สินสารสนเทศ',
-  `asset_name` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT 'ชื่อของอุปกรณ์ หรือ เซิร์ฟเวอร์',
-  `usage_description` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci COMMENT 'คำอธิบายการใช้งานอุปกรณ์',
-  `owner_name` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'ผู้รับผิดชอบหรือผู้ดูแลจัดการ',
-  `asset_category` enum('Hardware','Software') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'Hardware' COMMENT 'Primary asset category (Hardware/Software)',
-  `asset_group` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'กลุ่ม เช่น Hardware, System, Network, Storage',
-  `device_type` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'ประเภทอุปกรณ์ เช่น Firewall, Windows, Linux หรืออื่นๆ',
-  `operating_system` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'Operating System (ระบบปฏิบัติการ)',
-  `operating_system_version` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'Operating System Version (เวอร์ชันของระบบปฏิบัติการ)',
-  `private_ip` varchar(45) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'Private IP',
-  `public_ip` varchar(45) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'Public IP',
-  `location_detail` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'ที่ตั้ง (Location)',
+  `asset_registration_no` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT 'เลขทะเบียนทรัพย์สินสารสนเทศ',
+  `asset_name` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT 'ชื่อของอุปกรณ์ หรือ เซิร์ฟเวอร์',
+  `usage_description` text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci COMMENT 'คำอธิบายการใช้งานอุปกรณ์',
+  `owner_name` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'ผู้รับผิดชอบหรือผู้ดูแลจัดการ',
+  `asset_category` enum('Hardware','Software') COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'Hardware' COMMENT 'Primary asset category (Hardware/Software)',
+  `asset_group` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'กลุ่ม เช่น Hardware, System, Network, Storage',
+  `device_type` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'ประเภทอุปกรณ์ เช่น Firewall, Windows, Linux หรืออื่นๆ',
+  `operating_system` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'Operating System (ระบบปฏิบัติการ)',
+  `operating_system_version` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'Operating System Version (เวอร์ชันของระบบปฏิบัติการ)',
+  `private_ip` varchar(45) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'Private IP',
+  `public_ip` varchar(45) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'Public IP',
+  `location_detail` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'ที่ตั้ง (Location)',
   `installed_at` date DEFAULT NULL COMMENT 'วันติดตั้ง',
   `last_updated_at` date DEFAULT NULL COMMENT 'วันที่ Update ตามแบบฟอร์ม',
-  `current_status` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'สถานะปัจจุบัน เช่น ใช้งานได้, ชำรุด, Inactive',
-  `updated_by` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'ชื่อผู้ Update',
-  `manufacturer_brand` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'ยี่ห้อ',
-  `manufacturer_model` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'รุ่น',
-  `manufacturer_specification` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci COMMENT 'Specification',
-  `serial_number` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'Serial number',
+  `current_status` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'สถานะปัจจุบัน เช่น ใช้งานได้, ชำรุด, Inactive',
+  `updated_by` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'ชื่อผู้ Update',
+  `manufacturer_brand` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'ยี่ห้อ',
+  `manufacturer_model` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'รุ่น',
+  `manufacturer_specification` text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci COMMENT 'Specification',
+  `serial_number` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'Serial number',
   `purchase_price` decimal(15,2) DEFAULT NULL COMMENT 'ราคาที่ซื้อ (บาท)',
   `purchase_date` date DEFAULT NULL COMMENT 'วันที่ซื้อ/ได้รับมอบ',
-  `purchase_order_no` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'เลขที่สัญญา/ใบสั่งซื้อ/PO',
+  `purchase_order_no` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'เลขที่สัญญา/ใบสั่งซื้อ/PO',
   `maintenance_start_date` date DEFAULT NULL COMMENT 'วันที่เริ่มสัญญา',
   `maintenance_end_date` date DEFAULT NULL COMMENT 'วันสิ้นสุดสัญญา',
   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='รายการทรัพย์สินสารสนเทศจากแบบสำรวจของหน่วยบริการ';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='รายการทรัพย์สินสารสนเทศจากแบบสำรวจของหน่วยบริการ';
 
 --
 -- Dumping data for table `information_assets`
@@ -395,13 +395,13 @@ INSERT INTO `information_assets` (`id`, `survey_id`, `row_no`, `asset_registrati
 CREATE TABLE `information_asset_surveys` (
   `id` int NOT NULL,
   `facility_id` int NOT NULL COMMENT 'อ้างอิงหน่วยงานจากตาราง health_facilities',
-  `survey_title` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'ชื่อหัวตาราง เช่น ทะเบียนทรัพย์สินด้านสารสนเทศ-อ.เมืองสตูล',
+  `survey_title` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'ชื่อหัวตาราง เช่น ทะเบียนทรัพย์สินด้านสารสนเทศ-อ.เมืองสตูล',
   `personnel_count` int DEFAULT NULL COMMENT 'จำนวนบุคลากรของหน่วยงานผู้กรอก',
   `survey_date` date DEFAULT NULL COMMENT 'วันที่สำรวจ',
-  `notes` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci COMMENT 'หมายเหตุเพิ่มเติมระดับแบบสำรวจ',
+  `notes` text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci COMMENT 'หมายเหตุเพิ่มเติมระดับแบบสำรวจ',
   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='ข้อมูลหัวแบบสำรวจทะเบียนทรัพย์สินสารสนเทศของแต่ละหน่วยบริการ';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='ข้อมูลหัวแบบสำรวจทะเบียนทรัพย์สินสารสนเทศของแต่ละหน่วยบริการ';
 
 --
 -- Dumping data for table `information_asset_surveys`
@@ -425,12 +425,12 @@ INSERT INTO `information_asset_surveys` (`id`, `facility_id`, `survey_title`, `p
 
 CREATE TABLE `users` (
   `id` bigint UNSIGNED NOT NULL,
-  `thaid_cid` varchar(13) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'เลขบัตรประชาชนจากการยืนยันตัวตนผ่าน ThaiD (NULL = user ประเภท username/password เท่านั้น)',
-  `full_name` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-  `email` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `username` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'ชื่อผู้ใช้สำหรับ login แบบ username/password (ไม่บังคับ)',
-  `password_hash` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'password hash (scrypt) สำหรับ login แบบ username/password — NULL หมายถึงยังไม่ได้ตั้งรหัสผ่าน',
-  `role` enum('admin','officer','viewer') CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'officer' COMMENT 'บทบาทผู้ใช้ (admin=ผู้ดูแล, officer=เจ้าหน้าที่, viewer=ผู้ดูเท่านั้น)',
+  `thaid_cid` varchar(13) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'เลขบัตรประชาชนจากการยืนยันตัวตนผ่าน ThaiD (NULL = user ประเภท username/password เท่านั้น)',
+  `full_name` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+  `email` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `username` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'ชื่อผู้ใช้สำหรับ login แบบ username/password (ไม่บังคับ)',
+  `password_hash` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'password hash (scrypt) สำหรับ login แบบ username/password — NULL หมายถึงยังไม่ได้ตั้งรหัสผ่าน',
+  `role` enum('admin','officer','viewer') CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'officer' COMMENT 'บทบาทผู้ใช้ (admin=ผู้ดูแล, officer=เจ้าหน้าที่, viewer=ผู้ดูเท่านั้น)',
   `facility_id` int DEFAULT NULL COMMENT 'หน่วยงานที่สังกัด — ใช้สำหรับ officer / pending user',
   `is_active` tinyint(1) NOT NULL DEFAULT '1',
   `last_login_at` datetime DEFAULT NULL,
