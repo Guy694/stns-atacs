@@ -73,10 +73,8 @@ function nowPlusDays(days: number) {
   return date;
 }
 
-function nowPlusMinutes(minutes: number) {
-  const date = new Date();
-  date.setMinutes(date.getMinutes() + minutes);
-  return date;
+function getSessionIdleTimeoutMinutes() {
+  return Number.isFinite(SESSION_IDLE_TIMEOUT_MINUTES) ? Math.max(1, Math.floor(SESSION_IDLE_TIMEOUT_MINUTES)) : 15;
 }
 
 function signClaimPayload(payloadBase64: string) {
@@ -408,15 +406,15 @@ export async function linkGoogleIdentity(userId: number, googleSub: string) {
 export async function createSession(userId: number) {
   const sessionToken = `${crypto.randomUUID()}-${crypto.randomBytes(16).toString("hex")}`;
   const sessionTokenHash = sha256(sessionToken);
-  const idleExpiresAt = nowPlusMinutes(SESSION_IDLE_TIMEOUT_MINUTES);
   const cookieExpiresAt = nowPlusDays(SESSION_TTL_DAYS);
+  const idleTimeoutMinutes = getSessionIdleTimeoutMinutes();
 
   await executeStatement(
     `
       INSERT INTO auth_sessions (user_id, session_token_hash, expires_at)
-      VALUES (?, ?, ?)
+      VALUES (?, ?, DATE_ADD(NOW(), INTERVAL ? MINUTE))
     `,
-    [userId, sessionTokenHash, idleExpiresAt]
+    [userId, sessionTokenHash, idleTimeoutMinutes]
   );
 
   await executeStatement(
@@ -519,10 +517,10 @@ export async function getCurrentUser() {
     await executeStatement(
       `
         UPDATE auth_sessions
-        SET expires_at = ?
+        SET expires_at = DATE_ADD(NOW(), INTERVAL ? MINUTE)
         WHERE session_token_hash = ?
       `,
-      [nowPlusMinutes(SESSION_IDLE_TIMEOUT_MINUTES), tokenHash]
+      [getSessionIdleTimeoutMinutes(), tokenHash]
     );
   } catch {
     // Ignore refresh errors and continue using current session data.
