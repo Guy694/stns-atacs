@@ -3,6 +3,7 @@
 import { useActionState, useState } from "react";
 
 import { createOfficerDownloadTokenAction } from "@/app/(main)/agent-download/actions";
+import { AGENT_INSTALL_API_BASE_URL } from "@/lib/agent-install";
 
 type AgentDownloadPanelProps = {
   facilityName: string;
@@ -36,14 +37,13 @@ export function AgentDownloadPanel({ facilityName }: AgentDownloadPanelProps) {
     INITIAL
   );
 
-  const apiBaseUrl = typeof window !== "undefined" ? window.location.origin : "https://YOUR-ATACS";
   const token = state.token;
 
   const winCmd = token
-    ? `powershell -ExecutionPolicy Bypass -File .\\install-atacs-agent.ps1 -ApiBaseUrl "${apiBaseUrl}" -EnrollmentToken "${token}"`
+    ? `powershell -ExecutionPolicy Bypass -File .\\install-atacs-agent.ps1 -ApiBaseUrl "${AGENT_INSTALL_API_BASE_URL}" -EnrollmentToken "${token}"`
     : "";
   const linuxCmd = token
-    ? `sudo bash ./install-atacs-agent.sh --api-base-url "${apiBaseUrl}" --enrollment-token "${token}"`
+    ? `sudo bash ./install-atacs-agent.sh --api-base-url "${AGENT_INSTALL_API_BASE_URL}" --enrollment-token "${token}"`
     : "";
 
   return (

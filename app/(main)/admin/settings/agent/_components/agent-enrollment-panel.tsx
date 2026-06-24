@@ -6,6 +6,7 @@ import {
   createAgentEnrollmentAction,
 } from "@/app/(main)/admin/settings/agent/actions";
 import { agentEnrollmentInitialState } from "@/app/(main)/admin/settings/agent/types";
+import { AGENT_INSTALL_API_BASE_URL } from "@/lib/agent-install";
 
 type FacilityOption = {
   id: number;
@@ -107,8 +108,8 @@ export function AgentEnrollmentPanel({ facilities }: AgentEnrollmentPanelProps) 
           <div className="mt-3 rounded-xl border border-black/8 bg-white/70 px-4 py-3 text-xs text-[var(--muted)]">
             ติดตั้งฝั่งเครื่องตัวอย่าง:
             <div className="mt-2 overflow-x-auto rounded-lg bg-stone-950 px-3 py-2 font-mono text-[11px] text-emerald-200">
-              <div>Windows: powershell -ExecutionPolicy Bypass -File .\install-atacs-agent.ps1 -ApiBaseUrl https://YOUR-ATACS -EnrollmentToken {state.createdToken}</div>
-              <div className="mt-1">Linux: sudo bash ./install-atacs-agent.sh --api-base-url https://YOUR-ATACS --enrollment-token {state.createdToken}</div>
+              <div>Windows: powershell -ExecutionPolicy Bypass -File .\install-atacs-agent.ps1 -ApiBaseUrl {AGENT_INSTALL_API_BASE_URL} -EnrollmentToken {state.createdToken}</div>
+              <div className="mt-1">Linux: sudo bash ./install-atacs-agent.sh --api-base-url {AGENT_INSTALL_API_BASE_URL} --enrollment-token {state.createdToken}</div>
             </div>
           </div>
         </div>
