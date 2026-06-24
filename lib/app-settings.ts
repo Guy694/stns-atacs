@@ -28,25 +28,35 @@ async function ensureSettingsTable() {
 }
 
 export async function getAppSetting(key: string): Promise<string | null> {
-  await ensureSettingsTable();
+  try {
+    await ensureSettingsTable();
 
-  const rows = await selectRows<SettingRow>(
-    "SELECT setting_key, setting_value FROM app_settings WHERE setting_key = ? LIMIT 1",
-    [key]
-  );
+    const rows = await selectRows<SettingRow>(
+      "SELECT setting_key, setting_value FROM app_settings WHERE setting_key = ? LIMIT 1",
+      [key]
+    );
 
-  return rows[0]?.setting_value ?? null;
+    return rows[0]?.setting_value ?? null;
+  } catch (error) {
+    console.error("Unable to read app setting", error);
+    return null;
+  }
 }
 
 export async function listAppSettingsByPrefix(prefix: string): Promise<Record<string, string>> {
-  await ensureSettingsTable();
+  try {
+    await ensureSettingsTable();
 
-  const rows = await selectRows<SettingRow>(
-    "SELECT setting_key, setting_value FROM app_settings WHERE setting_key LIKE ?",
-    [`${prefix}%`]
-  );
+    const rows = await selectRows<SettingRow>(
+      "SELECT setting_key, setting_value FROM app_settings WHERE setting_key LIKE ?",
+      [`${prefix}%`]
+    );
 
-  return Object.fromEntries(rows.map((row) => [row.setting_key, row.setting_value]));
+    return Object.fromEntries(rows.map((row) => [row.setting_key, row.setting_value]));
+  } catch (error) {
+    console.error("Unable to list app settings", error);
+    return {};
+  }
 }
 
 export async function setAppSetting(key: string, value: string) {

@@ -55,6 +55,14 @@ async function recordLoginSecurityEvent(eventType: string, identity: string, det
   return context;
 }
 
+function loginSystemErrorRedirect(nextPath: string) {
+  redirect(
+    `/login?tab=password&next=${encodeURIComponent(nextPath)}&error=${toQuery(
+      "ระบบเข้าสู่ระบบยังตั้งค่าฐานข้อมูลบน production ไม่ครบ กรุณาตรวจสอบ auth_sessions และ migration สำหรับ password login"
+    )}`
+  );
+}
+
 function maskThaiCid(cid: string) {
   return cid.length === 13 ? `${cid.slice(0, 3)}******${cid.slice(-4)}` : "invalid";
 }
@@ -265,7 +273,13 @@ export async function loginWithPasswordAction(formData: FormData) {
     redirect(`/login?tab=password&next=${encodeURIComponent(nextPath)}&error=${toQuery(inputError)}`);
   }
 
-  const user = await findUserByUsername(username);
+  let user;
+  try {
+    user = await findUserByUsername(username);
+  } catch (error) {
+    console.error("Password login lookup failed", error);
+    loginSystemErrorRedirect(nextPath);
+  }
 
   if (!user || !user.password_hash || !verifyPassword(password, user.password_hash)) {
     const context = await recordLoginSecurityEvent("login_failed_password", username, "Username/Password ไม่ถูกต้อง");
@@ -290,7 +304,13 @@ export async function loginWithPasswordAction(formData: FormData) {
     redirect(`/login?tab=password&next=${encodeURIComponent(nextPath)}&error=${toQuery("บัญชีผู้ใช้ถูกระงับการใช้งาน")}`);
   }
 
-  await createSession(user.id);
+  try {
+    await createSession(user.id);
+  } catch (error) {
+    console.error("Password login session creation failed", error);
+    loginSystemErrorRedirect(nextPath);
+  }
+
   await notifyTelegramSafe({
     category: "security",
     title: "เข้าสู่ระบบสำเร็จ",
