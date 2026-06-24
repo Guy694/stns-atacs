@@ -485,29 +485,33 @@ export async function getCurrentUser() {
       `,
       [tokenHash]
     );
-  } catch {
-    rows = await selectRows<SessionUserRow>(
-      `
-        SELECT
-          u.id,
-          u.thaid_cid,
-          u.full_name,
-          u.email,
-          u.role,
-          s.expires_at AS session_expires_at
-        FROM auth_sessions s
-        INNER JOIN users u ON u.id = s.user_id
-        WHERE s.session_token_hash = ?
-          AND s.expires_at > NOW()
-          AND u.is_active = 1
-        LIMIT 1
-      `,
-      [tokenHash]
-    );
+  } catch (error) {
+    try {
+      rows = await selectRows<SessionUserRow>(
+        `
+          SELECT
+            u.id,
+            u.thaid_cid,
+            u.full_name,
+            u.email,
+            u.role,
+            s.expires_at AS session_expires_at
+          FROM auth_sessions s
+          INNER JOIN users u ON u.id = s.user_id
+          WHERE s.session_token_hash = ?
+            AND s.expires_at > NOW()
+            AND u.is_active = 1
+          LIMIT 1
+        `,
+        [tokenHash]
+      );
+    } catch (fallbackError) {
+      console.error("Session lookup failed", fallbackError instanceof Error ? fallbackError.message : error);
+      return null;
+    }
   }
 
   if (!rows[0]) {
-    cookieStore.delete(SESSION_COOKIE_NAME);
     return null;
   }
 
