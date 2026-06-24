@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 
 import { MainNavbar } from "@/app/_components/main-navbar";
 import { Sidebar } from "@/app/_components/sidebar";
+import { IdleLogoutGuard } from "@/app/_components/idle-logout-guard";
 import { getMenuVisibility } from "@/lib/app-settings";
 import { getCurrentUser } from "@/lib/auth";
 import { selectRows } from "@/lib/mysql";
@@ -30,6 +31,7 @@ export default async function MainLayout({ children }: { children: React.ReactNo
 
   return (
     <div className="flex min-h-screen">
+      <IdleLogoutGuard />
       <Sidebar
         user={user}
         grantedPermissions={grantedPermissions}

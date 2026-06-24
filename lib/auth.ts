@@ -10,6 +10,7 @@ import { executeStatement, selectRows } from "@/lib/mysql";
 const SESSION_COOKIE_NAME = "atacs_session";
 const REGISTRATION_COOKIE_NAME = "atacs_registration_claim";
 const SESSION_TTL_DAYS = Number(process.env.AUTH_SESSION_DAYS ?? 7);
+const SESSION_IDLE_TIMEOUT_MINUTES = Number(process.env.AUTH_IDLE_TIMEOUT_MINUTES ?? 15);
 
 type UserRecord = RowDataPacket & {
   id: number;
@@ -30,6 +31,7 @@ type SessionUserRow = RowDataPacket & {
   email: string | null;
   role: "admin" | "officer" | "viewer";
   facility_id: number | null;
+  session_expires_at: Date;
 };
 
 type ThaiDRegistrationClaim = {
@@ -68,6 +70,12 @@ function isValidThaiCid(value: string) {
 function nowPlusDays(days: number) {
   const date = new Date();
   date.setDate(date.getDate() + days);
+  return date;
+}
+
+function nowPlusMinutes(minutes: number) {
+  const date = new Date();
+  date.setMinutes(date.getMinutes() + minutes);
   return date;
 }
 
@@ -400,14 +408,15 @@ export async function linkGoogleIdentity(userId: number, googleSub: string) {
 export async function createSession(userId: number) {
   const sessionToken = `${crypto.randomUUID()}-${crypto.randomBytes(16).toString("hex")}`;
   const sessionTokenHash = sha256(sessionToken);
-  const expiresAt = nowPlusDays(SESSION_TTL_DAYS);
+  const idleExpiresAt = nowPlusMinutes(SESSION_IDLE_TIMEOUT_MINUTES);
+  const cookieExpiresAt = nowPlusDays(SESSION_TTL_DAYS);
 
   await executeStatement(
     `
       INSERT INTO auth_sessions (user_id, session_token_hash, expires_at)
       VALUES (?, ?, ?)
     `,
-    [userId, sessionTokenHash, expiresAt]
+    [userId, sessionTokenHash, idleExpiresAt]
   );
 
   await executeStatement(
@@ -425,7 +434,7 @@ export async function createSession(userId: number) {
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
     path: "/",
-    expires: expiresAt,
+    expires: cookieExpiresAt,
   });
 }
 
@@ -465,7 +474,8 @@ export async function getCurrentUser() {
           u.full_name,
           u.email,
           u.role,
-          u.facility_id
+          u.facility_id,
+          s.expires_at AS session_expires_at
         FROM auth_sessions s
         INNER JOIN users u ON u.id = s.user_id
         WHERE s.session_token_hash = ?
@@ -483,7 +493,8 @@ export async function getCurrentUser() {
           u.thaid_cid,
           u.full_name,
           u.email,
-          u.role
+          u.role,
+          s.expires_at AS session_expires_at
         FROM auth_sessions s
         INNER JOIN users u ON u.id = s.user_id
         WHERE s.session_token_hash = ?
@@ -498,6 +509,19 @@ export async function getCurrentUser() {
   if (!rows[0]) {
     cookieStore.delete(SESSION_COOKIE_NAME);
     return null;
+  }
+
+  try {
+    await executeStatement(
+      `
+        UPDATE auth_sessions
+        SET expires_at = ?
+        WHERE session_token_hash = ?
+      `,
+      [nowPlusMinutes(SESSION_IDLE_TIMEOUT_MINUTES), tokenHash]
+    );
+  } catch {
+    // Ignore refresh errors and continue using current session data.
   }
 
   return {
