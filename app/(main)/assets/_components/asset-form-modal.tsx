@@ -172,6 +172,18 @@ export function AssetFormModal({ facilities, deviceTypes = [], fixedFacilityId, 
   const mounted = typeof document !== "undefined";
   const formRef = useRef<HTMLFormElement>(null);
   const today = new Date().toISOString().slice(0, 10);
+  const selectedDeviceType = asset?.deviceType?.trim() ?? "";
+  const hasSelectedDeviceType = Boolean(
+    selectedDeviceType && !deviceTypes.some((t) => t.name === selectedDeviceType)
+  );
+  const hardwareDeviceTypes = useMemo(
+    () => deviceTypes.filter((t) => t.category === "Hardware"),
+    [deviceTypes]
+  );
+  const softwareDeviceTypes = useMemo(
+    () => deviceTypes.filter((t) => t.category === "Software"),
+    [deviceTypes]
+  );
 
   const action = mode === "create" ? createAssetAction : updateAssetAction;
   const [error, formAction, pending] = useActionState(
@@ -277,16 +289,24 @@ export function AssetFormModal({ facilities, deviceTypes = [], fixedFacilityId, 
                 {/* ประเภทอุปกรณ์ */}
                 <div>
                   <label className="block text-sm font-medium">ประเภทอุปกรณ์</label>
-                  <input
+                  <select
                     name="deviceType"
-                    list="device-type-list"
-                    defaultValue={asset?.deviceType ?? ""}
-                    placeholder="เช่น Firewall, Server, Switch"
+                    defaultValue={selectedDeviceType}
                     className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
-                  />
-                  <datalist id="device-type-list">
-                    {deviceTypes.map((t) => <option key={t.name} value={t.name} />)}
-                  </datalist>
+                  >
+                    <option value="">เลือกประเภทอุปกรณ์</option>
+                    {hasSelectedDeviceType && <option value={selectedDeviceType}>{selectedDeviceType} (ค่าปัจจุบัน)</option>}
+                    {hardwareDeviceTypes.length > 0 && (
+                      <optgroup label="ฮาร์ดแวร์">
+                        {hardwareDeviceTypes.map((t) => <option key={t.name} value={t.name}>{t.name}</option>)}
+                      </optgroup>
+                    )}
+                    {softwareDeviceTypes.length > 0 && (
+                      <optgroup label="ซอฟต์แวร์">
+                        {softwareDeviceTypes.map((t) => <option key={t.name} value={t.name}>{t.name}</option>)}
+                      </optgroup>
+                    )}
+                  </select>
                 </div>
               </div>
 

@@ -54,7 +54,7 @@ export default async function AdminSettingsPage() {
     },
     {
       title: "จัดการประเภทอุปกรณ์",
-      desc: "Server, Notebook, Firewall, Switch … — สำหรับ dropdown ในฟอร์ม",
+      desc: "เครื่องแม่ข่าย, เครื่องพิมพ์, สแกนเนอร์, สวิตช์เครือข่าย ... สำหรับ dropdown ในฟอร์ม",
       icon: "layers",
       href: "/admin/settings/device-types",
       permissionKey: "device-types.manage",

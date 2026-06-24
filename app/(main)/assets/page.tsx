@@ -5,7 +5,7 @@ import { StatusBadge } from "@/app/_components/ui/status-badge";
 import { getCurrentUser } from "@/lib/auth";
 import { countAssets, listAssets, listAllFacilitiesForSelect, listFacilities, type AssetListFilter } from "@/lib/assets";
 import { formatThaiDate } from "@/lib/date-format";
-import { listDeviceTypes } from "@/lib/device-types";
+import { listActiveDeviceTypes } from "@/lib/device-types";
 import { listFacilityWorkGroups } from "@/lib/facility-work-groups";
 import { canManageAsset, canSeeSensitiveAssetNetwork } from "@/lib/permissions";
 import { hasPermission } from "@/lib/role-permissions";
@@ -117,7 +117,7 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
     countAssets(assetFilter),
     listAllFacilitiesForSelect(),
     listFacilities(),
-    listDeviceTypes(),
+    listActiveDeviceTypes(),
     listFacilityWorkGroups(),
   ]);
   const totalPages = Math.max(1, Math.ceil(totalAssets / perPage));
