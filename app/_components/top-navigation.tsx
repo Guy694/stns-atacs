@@ -14,8 +14,8 @@ type TopNavigationProps = {
 
 function navItemClass(isActive: boolean) {
   return [
-    "rounded-full px-4 py-2 text-sm font-medium transition text-white",
-    isActive ? "bg-[var(--accent-strong)] text-white" : "bg-white/70 text-[var(--accent-strong)] hover:bg-white",
+    "text-white rounded-full px-4 py-2 text-sm font-medium transition ",
+    isActive ? "text-white bg-[var(--accent-strong)]" : "bg-white/70 text-[var(--accent-strong)] hover:bg-white",
   ].join(" ");
 }
 
@@ -23,8 +23,8 @@ export function TopNavigation({ current, user }: TopNavigationProps) {
   return (
     <div className="glass-panel rounded-[1.6rem] px-4 py-3 sm:px-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-wrap items-center gap-2">
-          <Link href="/" className={navItemClass(current === "public")}>
+        <div className=" flex flex-wrap items-center gap-2">
+          <Link href="/" className= {navItemClass(current === "public")}>
             Public Dashboard
           </Link>
           {user ? (

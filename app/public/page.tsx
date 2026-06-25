@@ -198,7 +198,7 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
       </section>
 
       {/* ── Search ─────────────────────────────────────────────────────────── */}
-      <section className="glass-panel rounded-2xl p-5 sm:p-6">
+      {/* <section className="glass-panel rounded-2xl p-5 sm:p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-xs font-medium uppercase tracking-[0.22em] text-[var(--muted)]">ค้นหาสาธารณะ</p>
@@ -257,7 +257,7 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
           </div>
         )}
         {q.length > 0 && q.length < 2 && <p className="mt-3 text-xs text-[var(--muted)]">กรุณาป้อนอย่างน้อย 2 ตัวอักษร</p>}
-      </section>
+      </section> */}
 
       {/* ── Filter + Tabs ───────────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-center gap-3">
