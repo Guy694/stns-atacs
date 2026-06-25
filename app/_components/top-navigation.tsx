@@ -25,12 +25,12 @@ export function TopNavigation({ current, user }: TopNavigationProps) {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className=" flex flex-wrap items-center gap-2">
           <Link href="/" className= {navItemClass(current === "public")}>
-            Public Dashboard
+            แดชบอร์ดสรุปภาพรวม
           </Link>
           {user ? (
             <>
               <Link href="/dashboard" className={navItemClass(current === "internal")}>
-                Dashboard
+                แดชบอร์ด
               </Link>
               <Link href="/assets" className={navItemClass(current === "assets")}>
                 ทะเบียนทรัพย์สิน
@@ -43,7 +43,7 @@ export function TopNavigation({ current, user }: TopNavigationProps) {
             </>
           ) : (
             <Link href="/login" className={navItemClass(current === "login" || current === "register")}>
-              Login / Register
+              เข้าสู่ระบบ / ลงทะเบียน
             </Link>
           )}
         </div>

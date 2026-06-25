@@ -335,8 +335,8 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
 
             {/* HW/SW + status bars */}
             <div className="glass-panel rounded-2xl p-6">
-              <p className="text-xs font-medium uppercase tracking-[0.22em] text-[var(--muted)]">สัดส่วน Hardware / Software</p>
-              <h2 className="section-title mt-1 text-xl font-semibold">Asset Mix</h2>
+              <p className="text-xs font-medium uppercase tracking-[0.22em] text-[var(--muted)]">สัดส่วน ฮาร์ดแวร์ / ซอฟต์แวร์</p>
+              <h2 className="section-title mt-1 text-xl font-semibold">สัดส่วน ฮาร์ดแวร์ / ซอฟต์แวร์</h2>
               {/* stacked bar */}
               <div className="mt-5 flex h-8 overflow-hidden rounded-xl text-xs font-semibold text-white">
                 <div className="flex items-center justify-center bg-[var(--primary)]" style={{ width: `${Math.round((hw / safeTotal) * 100)}%` }}>
