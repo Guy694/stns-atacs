@@ -382,9 +382,7 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
                   <input
                     name="privateIp"
                     defaultValue={asset?.privateIp ?? ""}
-                    placeholder="10.x.x.x"
-                    pattern="^(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)(\\.(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)){3}$"
-                    title="กรอกเป็น IPv4 เช่น 10.0.0.1"
+                    placeholder="เช่น 10.0.0.1 หรือ 10.0.0.1/24"
                     className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 font-mono text-sm outline-none focus:border-[var(--accent)]"
                   />
                 </div>

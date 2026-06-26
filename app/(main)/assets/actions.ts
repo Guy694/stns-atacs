@@ -38,10 +38,6 @@ function parseDateOnly(value?: string) {
 }
 
 async function validateAssetBusinessRules(input: AssetFormInput, assetId?: number) {
-  if (input.privateIp && !IPV4_REGEX.test(input.privateIp)) {
-    throw new Error("Private IP ไม่ถูกต้อง");
-  }
-
   if (input.publicIp && !IPV4_REGEX.test(input.publicIp)) {
     throw new Error("Public IP ไม่ถูกต้อง");
   }
