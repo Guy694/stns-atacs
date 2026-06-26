@@ -8,10 +8,12 @@ import type { AssetWithFacility } from "@/lib/assets";
 
 type FacilityOption = { id: number; facility_name: string | null; district_name: string | null };
 type DeviceTypeOption = { name: string; category: string };
+type WorkGroupOption = { id: number; facilityId: number; facilityName: string; workGroupName: string };
 
 type Props = {
   facilities: FacilityOption[];
   deviceTypes?: DeviceTypeOption[];
+  workGroups?: WorkGroupOption[];
   fixedFacilityId?: number;
   updaterName: string;
   mode: "create" | "edit";
@@ -29,9 +31,11 @@ function formatFacilityOption(facility: FacilityOption) {
 function FacilityCombobox({
   facilities,
   defaultFacilityId,
+  onSelectedFacilityIdChange,
 }: {
   facilities: FacilityOption[];
   defaultFacilityId?: number | null;
+  onSelectedFacilityIdChange?: (facilityId: number | null) => void;
 }) {
   const inputId = useId();
   const listboxId = useId();
@@ -68,6 +72,10 @@ function FacilityCombobox({
       inputRef.current.setCustomValidity("");
     }
   }, [query, selectedId]);
+
+  useEffect(() => {
+    onSelectedFacilityIdChange?.(selectedId ? Number(selectedId) : null);
+  }, [onSelectedFacilityIdChange, selectedId]);
 
   function selectFacility(facility: FacilityOption) {
     setSelectedId(facility.id.toString());
@@ -166,8 +174,10 @@ function FacilityCombobox({
   );
 }
 
-export function AssetFormModal({ facilities, deviceTypes = [], fixedFacilityId, mode, asset, children }: Props) {
+export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], fixedFacilityId, mode, asset, children }: Props) {
   const [open, setOpen] = useState(false);
+  const [selectedFacilityId, setSelectedFacilityId] = useState<number | null>(fixedFacilityId ?? asset?.facilityId ?? null);
+  const [selectedWorkGroupId, setSelectedWorkGroupId] = useState(asset?.workGroupId?.toString() ?? "");
   const titleId = useId();
   const mounted = typeof document !== "undefined";
   const formRef = useRef<HTMLFormElement>(null);
@@ -184,6 +194,19 @@ export function AssetFormModal({ facilities, deviceTypes = [], fixedFacilityId, 
     () => deviceTypes.filter((t) => t.category === "Software"),
     [deviceTypes]
   );
+  const selectedWorkGroups = useMemo(
+    () => (selectedFacilityId ? workGroups.filter((group) => group.facilityId === selectedFacilityId) : []),
+    [selectedFacilityId, workGroups]
+  );
+  const selectedWorkGroupValue = selectedWorkGroups.some((group) => String(group.id) === selectedWorkGroupId)
+    ? selectedWorkGroupId
+    : "";
+
+  function openModal() {
+    setSelectedFacilityId(fixedFacilityId ?? asset?.facilityId ?? null);
+    setSelectedWorkGroupId(asset?.workGroupId?.toString() ?? "");
+    setOpen(true);
+  }
 
   const action = mode === "create" ? createAssetAction : updateAssetAction;
   const [error, formAction, pending] = useActionState(
@@ -192,6 +215,7 @@ export function AssetFormModal({ facilities, deviceTypes = [], fixedFacilityId, 
       if (!result) {
         setOpen(false);
         formRef.current?.reset();
+        setSelectedWorkGroupId("");
       }
       return result;
     },
@@ -202,7 +226,7 @@ export function AssetFormModal({ facilities, deviceTypes = [], fixedFacilityId, 
 
   return (
     <>
-      <span onClick={() => setOpen(true)} className="cursor-pointer">{children}</span>
+      <span onClick={openModal} className="cursor-pointer">{children}</span>
 
       {mounted &&
         open &&
@@ -245,9 +269,41 @@ export function AssetFormModal({ facilities, deviceTypes = [], fixedFacilityId, 
                     </div>
                   </>
                 ) : (
-                  <FacilityCombobox facilities={facilities} defaultFacilityId={asset?.facilityId} />
+                  <FacilityCombobox
+                    facilities={facilities}
+                    defaultFacilityId={asset?.facilityId}
+                    onSelectedFacilityIdChange={(facilityId) => {
+                      setSelectedFacilityId(facilityId);
+                      setSelectedWorkGroupId("");
+                    }}
+                  />
                 )}
               </div>
+
+              {selectedWorkGroups.length > 0 && (
+                <div>
+                  <label className="block text-sm font-medium">
+                    กลุ่มงาน <span className="text-rose-500">*</span>
+                  </label>
+                  <select
+                    name="workGroupId"
+                    value={selectedWorkGroupValue}
+                    onChange={(event) => setSelectedWorkGroupId(event.target.value)}
+                    required
+                    className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+                  >
+                    <option value="">เลือกกลุ่มงาน</option>
+                    {selectedWorkGroups.map((group) => (
+                      <option key={group.id} value={group.id}>
+                        {group.workGroupName}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-xs text-[var(--muted)]">
+                    ดึงจากรายการกลุ่มงานของหน่วยงานที่สร้างไว้
+                  </p>
+                </div>
+              )}
 
               <div className="grid gap-4 sm:grid-cols-2">
                 {/* เลขทะเบียน */}

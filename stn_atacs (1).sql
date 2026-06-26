@@ -328,6 +328,7 @@ INSERT INTO `health_facilities` (`id`, `name`, `typecode`, `changwat`, `address`
 CREATE TABLE `information_assets` (
   `id` int NOT NULL,
   `survey_id` int NOT NULL COMMENT 'อ้างอิงหัวแบบสำรวจจาก information_asset_surveys',
+  `work_group_id` int DEFAULT NULL COMMENT 'กลุ่มงานเจ้าของทรัพย์สิน',
   `row_no` int DEFAULT NULL COMMENT 'ลำดับจากแบบฟอร์ม',
   `asset_registration_no` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT 'เลขทะเบียนทรัพย์สินสารสนเทศ',
   `asset_name` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT 'ชื่อของอุปกรณ์ หรือ เซิร์ฟเวอร์',
@@ -527,6 +528,7 @@ ALTER TABLE `health_facilities`
 ALTER TABLE `information_assets`
   ADD PRIMARY KEY (`id`),
   ADD UNIQUE KEY `uk_information_assets_survey_asset_registration_no` (`survey_id`,`asset_registration_no`),
+  ADD KEY `idx_information_assets_work_group_id` (`work_group_id`),
   ADD KEY `idx_information_assets_row_no` (`row_no`),
   ADD KEY `idx_information_assets_asset_group` (`asset_group`),
   ADD KEY `idx_information_assets_device_type` (`device_type`),

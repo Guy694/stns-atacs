@@ -10,6 +10,8 @@ import { executeStatement, selectRows } from "@/lib/mysql";
 type AssetRow = RowDataPacket & {
   id: number;
   survey_id: number;
+  work_group_id: number | null;
+  work_group_name: string | null;
   facility_id: number;
   facility_name: string | null;
   district_name: string | null;
@@ -75,6 +77,8 @@ function rowToAsset(row: AssetRow) {
   return {
     id: row.id,
     surveyId: row.survey_id,
+    workGroupId: row.work_group_id ?? null,
+    workGroupName: row.work_group_name ?? null,
     facilityId: row.facility_id,
     facilityName: row.facility_name ?? "",
     districtName: row.district_name ?? "",
@@ -107,6 +111,7 @@ export type AssetWithFacility = ReturnType<typeof rowToAsset>;
 
 export type AssetInput = {
   surveyId: number;
+  workGroupId?: number | null;
   assetRegistrationNo: string | null;
   assetName: string;
   usageDescription?: string;
@@ -152,6 +157,7 @@ const ASSET_FROM_SQL = `
   FROM information_assets a
   JOIN information_asset_surveys s ON s.id = a.survey_id
   JOIN health_facilities hf        ON hf.id = s.facility_id
+  LEFT JOIN facility_work_groups fwg ON fwg.id = a.work_group_id
 `;
 
 const ASSET_JOIN_SQL = `
@@ -159,7 +165,8 @@ const ASSET_JOIN_SQL = `
     a.*,
     s.facility_id,
     hf.name          AS facility_name,
-    hf.district_name
+    hf.district_name,
+    fwg.work_group_name
   ${ASSET_FROM_SQL}
 `;
 
@@ -173,15 +180,15 @@ function buildAssetFilter(filter?: AssetListFilter) {
   }
   if (filter?.workGroupId) {
     conditions.push(
-      `EXISTS (
+      `(a.work_group_id = ? OR EXISTS (
         SELECT 1
         FROM agent_devices ad_wg
         JOIN agent_enrollments ae_wg ON ae_wg.id = ad_wg.enrollment_id
         WHERE ad_wg.linked_asset_id = a.id
           AND ae_wg.work_group_id = ?
-      )`
+      ))`
     );
-    values.push(filter.workGroupId);
+    values.push(filter.workGroupId, filter.workGroupId);
   }
   if (filter?.status) {
     conditions.push("a.current_status = ?");
@@ -237,6 +244,8 @@ function filterFallbackAssets(filter?: AssetListFilter) {
     s.assets.map((a) => ({
       ...a,
       surveyId: 0,
+      workGroupId: null,
+      workGroupName: null,
       facilityId: s.facilityId,
       facilityName: s.facilityName,
       districtName: s.districtName,
@@ -361,12 +370,12 @@ export async function createAsset(input: AssetInput) {
   return executeStatement(
     `INSERT INTO information_assets
       (survey_id, row_no, asset_registration_no, asset_name, usage_description, owner_name,
-       asset_category, device_type, operating_system, operating_system_version,
+       work_group_id, asset_category, device_type, operating_system, operating_system_version,
        private_ip, public_ip, location_detail, current_status, updated_by,
        manufacturer_brand, manufacturer_model, manufacturer_specification,
        serial_number, purchase_price, purchase_date, purchase_order_no,
        maintenance_start_date, maintenance_end_date, installed_at, last_updated_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,  
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [
       input.surveyId,
       input.rowNo ?? null,
@@ -374,6 +383,7 @@ export async function createAsset(input: AssetInput) {
       input.assetName,
       input.usageDescription ?? null,
       input.ownerName ?? null,
+      input.workGroupId ?? null,
       input.assetCategory,
       input.deviceType ?? null,
       input.operatingSystem ?? null,
@@ -405,6 +415,7 @@ export async function updateAsset(id: number, input: Partial<AssetInput>) {
 
   const fieldMap: Record<string, unknown> = {
     survey_id: input.surveyId,
+    work_group_id: input.workGroupId,
     asset_registration_no: input.assetRegistrationNo,
     asset_name: input.assetName,
     usage_description: input.usageDescription,

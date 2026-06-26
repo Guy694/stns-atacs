@@ -9,9 +9,10 @@ import { assetStatusLabel, assetStatusTone } from "@/lib/asset-status";
 import { getCurrentUser } from "@/lib/auth";
 import { getAssetById, listAllFacilitiesForSelect } from "@/lib/assets";
 import { canAccessFacility } from "@/lib/facility-scope";
+import { listFacilityWorkGroups } from "@/lib/facility-work-groups";
 import { AssetFormModal } from "@/app/(main)/assets/_components/asset-form-modal";
 import { DeleteAssetButton } from "@/app/(main)/assets/_components/delete-asset-button";
-import { PrintButton } from "@/app/(main)/assets/_components/print-button";
+import { QrDownloadButton } from "@/app/(main)/assets/_components/print-button";
 import { listAssetStatusHistory } from "@/lib/asset-status-history";
 import { canManageAsset, canSeeSensitiveAssetNetwork } from "@/lib/permissions";
 import { formatThaiDate, formatThaiDateTime } from "@/lib/date-format";
@@ -28,6 +29,14 @@ function Field({ label, value }: { label: string; value?: string | null }) {
   );
 }
 
+function sanitizeDownloadName(value: string) {
+  return value
+    .trim()
+    .replace(/[\\/:*?"<>|\u0000-\u001f]/g, "-")
+    .replace(/\s+/g, " ")
+    .slice(0, 100);
+}
+
 export default async function AssetDetailPage({ params }: Props) {
   const { id } = await params;
   const numId = Number(id);
@@ -36,10 +45,11 @@ export default async function AssetDetailPage({ params }: Props) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
-  const [asset, facilitiesForSelect, statusHistory] = await Promise.all([
+  const [asset, facilitiesForSelect, statusHistory, workGroups] = await Promise.all([
     getAssetById(numId),
     listAllFacilitiesForSelect(),
     listAssetStatusHistory(numId),
+    listFacilityWorkGroups(),
   ]);
   if (!asset) notFound();
   if (!canAccessFacility(user, asset.facilityId)) {
@@ -104,6 +114,7 @@ export default async function AssetDetailPage({ params }: Props) {
           <div className="flex shrink-0 flex-wrap gap-2">
             <AssetFormModal
               facilities={user.role === "admin" ? facilitiesForSelect : facilitiesForSelect.filter((facility) => facility.id === asset.facilityId)}
+              workGroups={user.role === "admin" ? workGroups : workGroups.filter((group) => group.facilityId === asset.facilityId)}
               updaterName={user.fullName}
               mode="edit"
               asset={asset}
@@ -263,19 +274,21 @@ export default async function AssetDetailPage({ params }: Props) {
           {/* QR Code */}
           <div className="glass-panel rounded-2xl p-5 text-center print:shadow-none">
             <p className="text-xs font-medium uppercase tracking-[0.2em] text-[var(--muted)]">QR Code ทรัพย์สิน</p>
-            <div className="mx-auto mt-3 flex h-36 w-36 items-center justify-center overflow-hidden rounded-xl border border-[var(--primary-soft-strong)] bg-white shadow-sm">
+            <div className="mx-auto mt-3 flex w-56 max-w-full items-center justify-center overflow-hidden rounded-xl border border-[var(--primary-soft-strong)] bg-white shadow-sm">
               <Image
                 src={`/api/qr/asset/${asset.id}`}
                 alt={`QR Code: ${asset.assetRegistrationNo || asset.assetName}`}
-                width={144}
-                height={144}
+                width={220}
+                height={244}
                 unoptimized
-                className="h-full w-full object-contain"
+                className="h-auto w-full object-contain"
               />
             </div>
-            <p className="mt-2 font-mono text-xs text-[var(--muted)]">{asset.assetRegistrationNo}</p>
             <p className="mt-1 break-all text-[11px] text-[var(--muted)]">{assetScanUrl}</p>
-            <PrintButton />
+            <QrDownloadButton
+              downloadUrl={`/api/qr/asset/${asset.id}`}
+              filename={`${sanitizeDownloadName(`${asset.assetRegistrationNo || `asset-${asset.id}`} ${asset.assetName}`)}.svg`}
+            />
           </div>
 
           {/* สถานะ + ข้อมูลย่อ */}

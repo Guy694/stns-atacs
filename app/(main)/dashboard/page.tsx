@@ -7,6 +7,7 @@ import { getDashboardData } from "@/lib/atacs";
 import { getCurrentUser } from "@/lib/auth";
 import {
   buildDashboardAccessScope,
+  inferDashboardFacilityGroup,
   matchesDashboardFacilityGroup,
   type DashboardFacilityGroup,
 } from "@/lib/dashboard-access";
@@ -71,9 +72,7 @@ export default async function Home({ searchParams }: HomeProps) {
       : null
   );
   const missingFacilityAssignment = dashboardScope.missingFacilityAssignment;
-  const groupOptions = dashboardScope.officerScopeKind === "district-primary" ? DHO_FACILITY_GROUP_OPTIONS : FACILITY_GROUP_OPTIONS;
   const selectedGroupParam = normalizeQueryValue(params.group);
-  const selectedGroup: DashboardFacilityGroup | "" = isDashboardFacilityGroup(selectedGroupParam, groupOptions) ? selectedGroupParam : "";
   const selectedDistrict = normalizeQueryValue(params.district);
   const selectedFacilityId = (() => {
     const value = Number(params.facility);
@@ -81,6 +80,18 @@ export default async function Home({ searchParams }: HomeProps) {
   })();
 
   const scopedFacilitySurveys = dashboardScope.surveys;
+  const baseGroupOptions = dashboardScope.officerScopeKind === "district-primary" ? DHO_FACILITY_GROUP_OPTIONS : FACILITY_GROUP_OPTIONS;
+  const availableGroups = new Set(
+    scopedFacilitySurveys.map((survey) => inferDashboardFacilityGroup(survey.facilityTypeCode, survey.facilityName))
+  );
+  const groupOptions = isAdmin
+    ? baseGroupOptions
+    : baseGroupOptions.filter((option) =>
+        option.value === "primary"
+          ? availableGroups.has("primary-office") || availableGroups.has("primary-unit")
+          : availableGroups.has(option.value)
+      );
+  const selectedGroup: DashboardFacilityGroup | "" = isDashboardFacilityGroup(selectedGroupParam, groupOptions) ? selectedGroupParam : "";
   const facilityOptions = scopedFacilitySurveys
     .filter((survey) => matchesDashboardFacilityGroup(survey.facilityTypeCode, survey.facilityName, selectedGroup))
     .filter((survey) => !selectedDistrict || survey.districtName === selectedDistrict)

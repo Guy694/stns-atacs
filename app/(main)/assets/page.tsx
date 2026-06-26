@@ -180,6 +180,7 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
             <AssetFormModal
               facilities={facilitiesForForm}
               deviceTypes={deviceTypes}
+              workGroups={workGroups}
               updaterName={user.fullName}
               mode="create"
             >
@@ -395,6 +396,7 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
                           <AssetFormModal
                             facilities={facilitiesForForm}
                             deviceTypes={deviceTypes}
+                            workGroups={workGroups}
                             updaterName={user.fullName}
                             mode="edit"
                             asset={asset}

@@ -6,6 +6,7 @@ import { AgentDeviceLinkCell } from "@/app/(main)/admin/settings/agent/_componen
 import { AgentEnrollmentPanel } from "@/app/(main)/admin/settings/agent/_components/agent-enrollment-panel";
 import { revokeAgentEnrollmentAction } from "@/app/(main)/admin/settings/agent/actions";
 import { listAgentDevices, listAgentEnrollments } from "@/lib/agent";
+import { getPrimaryAgentInstallKey } from "@/lib/agent-install-key";
 import { getCurrentUser } from "@/lib/auth";
 import { listAllFacilitiesForSelect, listAssetsForFacilityIds } from "@/lib/assets";
 import { formatThaiDateTime } from "@/lib/date-format";
@@ -28,6 +29,7 @@ export default async function AgentSettingsPage() {
   if (facilityScopeId === null) redirect("/profile");
   const scopedFilter = facilityScopeId ? { facilityId: facilityScopeId } : undefined;
   const facilities = await listAllFacilitiesForSelect(scopedFilter);
+  const staticInstallKey = getPrimaryAgentInstallKey();
 
   let enrollments = [] as Awaited<ReturnType<typeof listAgentEnrollments>>;
   let devices = [] as Awaited<ReturnType<typeof listAgentDevices>>;
@@ -77,6 +79,7 @@ export default async function AgentSettingsPage() {
               typecode: facility.typecode,
             }))}
             workGroups={workGroups}
+            staticInstallKey={staticInstallKey}
           />
 
           <div className="grid gap-6 xl:grid-cols-[1.05fr_1.4fr]">

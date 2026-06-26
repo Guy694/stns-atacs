@@ -1,5 +1,4 @@
-import QRCode from "qrcode";
-
+import { createAssetQrSvg } from "@/lib/asset-qr";
 import { getAssetById } from "@/lib/assets";
 
 type AssetQrRouteContext = {
@@ -19,16 +18,7 @@ export async function GET(request: Request, { params }: AssetQrRouteContext) {
     return new Response("Asset not found", { status: 404 });
   }
 
-  const scanUrl = new URL(`/scan/assets/${asset.id}`, request.url).toString();
-  const svg = await QRCode.toString(scanUrl, {
-    type: "svg",
-    width: 144,
-    margin: 1,
-    color: {
-      dark: "#14532d",
-      light: "#ffffff",
-    },
-  });
+  const svg = await createAssetQrSvg(asset, request.url);
 
   return new Response(svg, {
     headers: {

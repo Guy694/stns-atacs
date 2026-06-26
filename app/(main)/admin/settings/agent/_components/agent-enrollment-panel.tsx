@@ -7,7 +7,6 @@ import {
 } from "@/app/(main)/admin/settings/agent/actions";
 import { agentEnrollmentInitialState } from "@/app/(main)/admin/settings/agent/types";
 import {
-  AGENT_INSTALL_KEY_PLACEHOLDER,
   buildLinuxAgentInstallCommand,
   buildLinuxStaticAgentInstallCommand,
   buildWindowsAgentInstallCommand,
@@ -30,6 +29,7 @@ type WorkGroupOption = {
 type AgentEnrollmentPanelProps = {
   facilities: FacilityOption[];
   workGroups: WorkGroupOption[];
+  staticInstallKey: string | null;
 };
 
 function CopyButton({ text, label = "คัดลอก" }: { text: string; label?: string }) {
@@ -59,7 +59,7 @@ function requiresWorkGroup(typecode: string | null | undefined) {
   return code.startsWith("รพ.");
 }
 
-export function AgentEnrollmentPanel({ facilities, workGroups }: AgentEnrollmentPanelProps) {
+export function AgentEnrollmentPanel({ facilities, workGroups, staticInstallKey }: AgentEnrollmentPanelProps) {
   const [selectedFacilityId, setSelectedFacilityId] = useState("");
   const [facilityLabel, setFacilityLabel] = useState("");
   const [workGroupName, setWorkGroupName] = useState("");
@@ -72,10 +72,10 @@ export function AgentEnrollmentPanel({ facilities, workGroups }: AgentEnrollment
   const selectedWorkGroups = workGroups.filter((group) => String(group.facilityId) === selectedFacilityId);
   const staticWorkGroup = selectedRequiresWorkGroup ? workGroupName.trim() || "<WORK_GROUP_NAME>" : "";
   const staticWindowsCommand = selectedFacility
-    ? buildWindowsStaticAgentInstallCommand({ facilityId: selectedFacility.id, workGroupName: staticWorkGroup })
+    ? buildWindowsStaticAgentInstallCommand({ facilityId: selectedFacility.id, workGroupName: staticWorkGroup, installKey: staticInstallKey ?? undefined })
     : "";
   const staticLinuxCommand = selectedFacility
-    ? buildLinuxStaticAgentInstallCommand({ facilityId: selectedFacility.id, workGroupName: staticWorkGroup })
+    ? buildLinuxStaticAgentInstallCommand({ facilityId: selectedFacility.id, workGroupName: staticWorkGroup, installKey: staticInstallKey ?? undefined })
     : "";
 
   useEffect(() => {
@@ -201,7 +201,9 @@ export function AgentEnrollmentPanel({ facilities, workGroups }: AgentEnrollment
             </div>
           </div>
           <p className="mt-3 text-xs text-sky-800">
-            ก่อนใช้งานจริงให้แทน {AGENT_INSTALL_KEY_PLACEHOLDER} ด้วยค่า ATACS_AGENT_INSTALL_KEY ที่ตั้งไว้บน server
+            {staticInstallKey
+              ? "คำสั่งนี้ใส่ INSTALL_KEY จาก server ให้แล้ว ใช้คัดลอกไปติดตั้งได้ทันที"
+              : "ยังไม่ได้ตั้งค่า ATACS_AGENT_INSTALL_KEY บน server คำสั่งจะแสดง <INSTALL_KEY> ไว้ให้แทนค่าภายหลัง"}
           </p>
         </div>
       )}

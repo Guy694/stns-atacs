@@ -30,12 +30,18 @@ export function inferDashboardFacilityGroup(
   facilityTypeCode?: string,
   facilityName?: string
 ): DashboardFacilityGroup | "other" {
-  const text = `${facilityTypeCode ?? ""} ${facilityName ?? ""}`.replace(/\s+/g, "");
+  const typeText = (facilityTypeCode ?? "").replace(/\s+/g, "");
+  const nameText = (facilityName ?? "").replace(/\s+/g, "");
+  const text = `${typeText}${nameText}`;
 
   if (text.includes("สสจ")) return "province";
   if (text.includes("สสอ")) return "primary-office";
-  if (text.includes("รพ.สต") || text.includes("ศสช") || text.includes("สอน.")) return "primary-unit";
-  if ((text.includes("รพ.") || text.includes("โรงพยาบาล")) && !text.includes("รพ.สต")) return "hospital";
+  if (typeText.includes("รพ.สต") || /^รพ\.สต(?:\.|$)/.test(nameText) || text.includes("ศสช") || text.includes("สอน.")) {
+    return "primary-unit";
+  }
+  if (typeText.includes("รพ.ทั่วไป") || typeText.includes("รพ.ชุมชน") || nameText.startsWith("รพ.") || nameText.includes("โรงพยาบาล")) {
+    return "hospital";
+  }
 
   return "other";
 }

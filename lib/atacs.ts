@@ -21,6 +21,13 @@ type SurveyRow = RowDataPacket & {
   survey_updated_at: Date | string;
 };
 
+type FacilityRow = RowDataPacket & {
+  facility_id: number;
+  facility_name: string | null;
+  facility_typecode: string | null;
+  district_name: string | null;
+};
+
 type AssetRow = RowDataPacket & {
   id: number;
   survey_id: number;
@@ -180,6 +187,19 @@ export async function getDashboardData(): Promise<DashboardData> {
       `
     );
 
+    const facilities = await selectRows<FacilityRow>(
+      `
+        SELECT
+          id AS facility_id,
+          name AS facility_name,
+          typecode AS facility_typecode,
+          district_name
+        FROM health_facilities
+        WHERE is_active = 1
+        ORDER BY district_name, typecode DESC, name
+      `
+    );
+
     if (surveys.length === 0) {
       return {
         facilitySurveys: fallbackFacilitySurveys,
@@ -262,12 +282,27 @@ export async function getDashboardData(): Promise<DashboardData> {
         completionRate: calculateCompletionRate(surveyBase),
       };
     });
+    const surveyedFacilityIds = new Set(facilitySurveys.map((survey) => survey.facilityId));
+    const facilitiesWithoutSurvey = facilities
+      .filter((facility) => !surveyedFacilityIds.has(facility.facility_id))
+      .map((facility) => ({
+        facilityId: facility.facility_id,
+        facilityName: facility.facility_name ?? `Facility ${facility.facility_id}`,
+        facilityTypeCode: facility.facility_typecode ?? "",
+        districtName: facility.district_name ?? "ไม่ระบุอำเภอ",
+        surveyDate: "-",
+        personnelCount: 0,
+        completionRate: 0,
+        lastUpdatedBy: "system",
+        assets: [],
+      }));
+    const mergedFacilitySurveys = [...facilitySurveys, ...facilitiesWithoutSurvey];
 
     return {
-      facilitySurveys,
-      districtCoverage: buildDistrictCoverage(facilitySurveys),
+      facilitySurveys: mergedFacilitySurveys,
+      districtCoverage: buildDistrictCoverage(mergedFacilitySurveys),
       dataSource: "database",
-      connectionMessage: `สถานะฐานข้อมูล:เชื่อมต่อ (${facilitySurveys.length} สำรวจ, ${assets.length} ทรัพย์สิน)`,
+      connectionMessage: `สถานะฐานข้อมูล:เชื่อมต่อ (${surveys.length} สำรวจ, ${mergedFacilitySurveys.length} หน่วยงาน, ${assets.length} ทรัพย์สิน)`,
       allowPublicOfficerBoard,
     };
   } catch (error) {

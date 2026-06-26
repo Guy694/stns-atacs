@@ -78,6 +78,17 @@ async function validateAssetBusinessRules(input: AssetFormInput, assetId?: numbe
     }
   }
 
+  const activeWorkGroups = await selectRows<RowDataPacket & { id: number }>(
+    "SELECT id FROM facility_work_groups WHERE facility_id = ? AND is_active = 1",
+    [input.facilityId]
+  );
+  if (activeWorkGroups.length > 0 && !input.workGroupId) {
+    throw new Error("กรุณาเลือกกลุ่มงานของทรัพย์สิน");
+  }
+  if (input.workGroupId && !activeWorkGroups.some((workGroup) => Number(workGroup.id) === Number(input.workGroupId))) {
+    throw new Error("กลุ่มงานไม่อยู่ในหน่วยงานที่เลือก");
+  }
+
   const serial = input.serialNumber?.trim();
   if (serial) {
     const duplicateSerialRows = await selectRows<RowDataPacket & { id: number }>(
@@ -109,9 +120,17 @@ async function buildInput(fd: FormData, updaterName: string): Promise<AssetFormI
 
   const assetCategory = readStr(fd, "assetCategory") as "Hardware" | "Software";
   if (!["Hardware", "Software"].includes(assetCategory)) throw new Error("หมวดทรัพย์สินไม่ถูกต้อง");
+  const workGroupIdRaw = readOptional(fd, "workGroupId");
+  let parsedWorkGroupId: number | null = null;
+  if (workGroupIdRaw) {
+    const value = Number(workGroupIdRaw);
+    if (!Number.isInteger(value) || value <= 0) throw new Error("กลุ่มงานไม่ถูกต้อง");
+    parsedWorkGroupId = value;
+  }
 
   return {
     surveyId,
+    workGroupId: parsedWorkGroupId,
     assetRegistrationNo,
     assetName,
     assetCategory,

@@ -13,6 +13,10 @@ function readInstallKeys() {
     .filter(Boolean);
 }
 
+export function getPrimaryAgentInstallKey() {
+  return readInstallKeys()[0] ?? null;
+}
+
 export function isAgentInstallKeyConfigured() {
   return readInstallKeys().length > 0;
 }

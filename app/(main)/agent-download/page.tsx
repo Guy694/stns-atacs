@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 
+import { getPrimaryAgentInstallKey } from "@/lib/agent-install-key";
 import { getCurrentUser } from "@/lib/auth";
 import { getFacilityAgentContext, listFacilityWorkGroups } from "@/lib/facility-work-groups";
 import { AgentDownloadPanel } from "./_components/agent-download-panel";
@@ -7,6 +8,7 @@ import { AgentDownloadPanel } from "./_components/agent-download-panel";
 export default async function AgentDownloadPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
+  const staticInstallKey = getPrimaryAgentInstallKey();
 
   let facilityName = "–";
   let requiresWorkGroup = false;
@@ -46,6 +48,7 @@ export default async function AgentDownloadPage() {
           facilityName={facilityName}
           requiresWorkGroup={requiresWorkGroup}
           workGroups={workGroups}
+          staticInstallKey={staticInstallKey}
         />
       )}
     </div>

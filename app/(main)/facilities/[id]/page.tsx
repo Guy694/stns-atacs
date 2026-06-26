@@ -10,6 +10,7 @@ import { canAccessFacility } from "@/lib/facility-scope";
 import { listFacilityWorkGroups } from "@/lib/facility-work-groups";
 import { AssetFormModal } from "@/app/(main)/assets/_components/asset-form-modal";
 import { DeleteAssetButton } from "@/app/(main)/assets/_components/delete-asset-button";
+import { FacilityAssetQrActions } from "@/app/(main)/facilities/[id]/_components/facility-asset-qr-actions";
 
 type Props = {
   params: Promise<{ id: string }>;
@@ -41,42 +42,7 @@ function buildFacilityHref(facilityId: number, params: Record<string, string | n
   return queryString ? `/facilities/${facilityId}?${queryString}` : `/facilities/${facilityId}`;
 }
 
-function FacilityInfoCard({
-  facility,
-  totalAssets,
-}: {
-  facility: NonNullable<Awaited<ReturnType<typeof getFacilityById>>>;
-  totalAssets: number;
-}) {
-  const items = [
-    { label: "ชื่อหน่วยงาน", value: facility.name },
-    { label: "ประเภท", value: facility.typecode },
-    { label: "อำเภอ", value: facility.district_name },
-    { label: "ตำบล", value: facility.tambon },
-    { label: "พิกัด", value: facility.lat != null && facility.lon != null ? `${facility.lat}, ${facility.lon}` : "" },
-    { label: "จำนวนทรัพย์สิน", value: `${totalAssets.toLocaleString("th-TH")} รายการ` },
-  ];
 
-  return (
-    <div className="glass-panel rounded-2xl p-5">
-      <div className="flex flex-col gap-1 border-b border-black/6 pb-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="text-xs font-medium uppercase tracking-[0.18em] text-[var(--muted)]">ข้อมูลหน่วยงาน</p>
-          <h2 className="mt-1 text-lg font-semibold text-[var(--foreground)]">รายละเอียดหน่วยงาน</h2>
-        </div>
-        <StatusBadge tone="neutral">อ่านข้อมูลเท่านั้น</StatusBadge>
-      </div>
-      <dl className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {items.map((item) => (
-          <div key={item.label} className="min-w-0 rounded-xl border border-black/6 bg-white/70 px-4 py-3">
-            <dt className="text-xs text-[var(--muted)]">{item.label}</dt>
-            <dd className="mt-1 break-words text-sm font-semibold text-[var(--foreground)]">{item.value || "–"}</dd>
-          </div>
-        ))}
-      </dl>
-    </div>
-  );
-}
 
 export default async function FacilityDetailPage({ params, searchParams }: Props) {
   const user = await getCurrentUser();
@@ -171,8 +137,8 @@ export default async function FacilityDetailPage({ params, searchParams }: Props
           {[
             { label: "ทรัพย์สินรวม", value: totalAssets },
             { label: "พร้อมใช้งาน", value: activeCount, green: true },
-            { label: "Hardware", value: hardwareCount },
-            { label: "Software", value: softwareCount },
+            { label: "ฮาร์ดแวร์", value: hardwareCount },
+            { label: "ซอฟต์แวร์", value: softwareCount },
           ].map((kpi) => (
             <div key={kpi.label} className="px-5 py-4">
               <p className="text-xs text-[var(--muted)]">{kpi.label}</p>
@@ -182,7 +148,7 @@ export default async function FacilityDetailPage({ params, searchParams }: Props
         </div>
       </div>
 
-      <FacilityInfoCard facility={currentFacility} totalAssets={totalAssets} />
+  
 
       {/* MA Alert */}
       {expiringSoon.length > 0 && (
@@ -209,13 +175,23 @@ export default async function FacilityDetailPage({ params, searchParams }: Props
               แสดง {assets.length.toLocaleString("th-TH")} จาก {totalAssets.toLocaleString("th-TH")} รายการ
             </p>
           </div>
-          {canManageAssets && (
-            <AssetFormModal facilities={facilitiesForSelect} fixedFacilityId={facilityId} updaterName={user.fullName} mode="create">
-              <button className="inline-flex min-h-11 items-center gap-1.5 rounded-xl bg-[var(--accent-strong)] px-4 py-2 text-xs font-semibold text-white hover:opacity-90">
-                + เพิ่มทรัพย์สิน
-              </button>
-            </AssetFormModal>
-          )}
+          <div className="flex flex-wrap gap-2">
+            <FacilityAssetQrActions
+              facilityName={facilityName}
+              assets={allAssets.map((asset) => ({
+                id: asset.id,
+                assetRegistrationNo: asset.assetRegistrationNo,
+                assetName: asset.assetName,
+              }))}
+            />
+            {canManageAssets && (
+              <AssetFormModal facilities={facilitiesForSelect} workGroups={workGroups} fixedFacilityId={facilityId} updaterName={user.fullName} mode="create">
+                <button className="inline-flex min-h-11 items-center gap-1.5 rounded-xl bg-[var(--accent-strong)] px-4 py-2 text-xs font-semibold text-white hover:opacity-90">
+                  + เพิ่มทรัพย์สิน
+                </button>
+              </AssetFormModal>
+            )}
+          </div>
         </div>
 
         <form method="GET" className="grid gap-3 border-b border-black/6 bg-[var(--neutral-bg)]/60 px-5 py-4 sm:grid-cols-2 lg:grid-cols-6">
@@ -249,8 +225,8 @@ export default async function FacilityDetailPage({ params, searchParams }: Props
               className="min-h-11 w-full rounded-xl border border-black/10 bg-white/85 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
             >
               <option value="">ทุกหมวด</option>
-              <option value="Hardware">Hardware</option>
-              <option value="Software">Software</option>
+              <option value="Hardware">ฮาร์ดแวร์</option>
+              <option value="Software">ซอฟต์แวร์</option>
             </select>
           </label>
           <label>
@@ -341,7 +317,14 @@ export default async function FacilityDetailPage({ params, searchParams }: Props
               <tbody className="divide-y divide-black/4">
                 {assets.map((asset) => (
                   <tr key={asset.id} className="transition hover:bg-white/50">
-                    <td className="px-4 py-3 font-mono text-xs text-[var(--accent)]">{asset.assetRegistrationNo}</td>
+                    <td className="px-4 py-3">
+                      <Link
+                        href={`/assets/${asset.id}`}
+                        className="font-mono text-xs font-semibold text-[var(--accent-strong)] underline-offset-4 hover:underline"
+                      >
+                        {asset.assetRegistrationNo || `#${asset.id}`}
+                      </Link>
+                    </td>
                     <td className="px-4 py-3">
                       <p className="font-medium">{asset.assetName}</p>
                       {asset.usageDescription && (
@@ -370,7 +353,7 @@ export default async function FacilityDetailPage({ params, searchParams }: Props
                     {canManageAssets && (
                       <td className="px-4 py-3 text-right">
                         <div className="inline-flex gap-2">
-                          <AssetFormModal facilities={facilitiesForSelect} fixedFacilityId={facilityId} updaterName={user.fullName} mode="edit" asset={asset}>
+                          <AssetFormModal facilities={facilitiesForSelect} workGroups={workGroups} fixedFacilityId={facilityId} updaterName={user.fullName} mode="edit" asset={asset}>
                             <button className="inline-flex min-h-11 items-center rounded-lg border border-black/10 bg-white/80 px-3 py-2 text-xs font-medium text-[var(--accent-strong)] hover:bg-white">
                               แก้ไข
                             </button>
