@@ -2,8 +2,9 @@ import Link from "next/link";
 
 import { StatusBadge } from "@/app/_components/ui/status-badge";
 import { TopNavigation } from "@/app/_components/top-navigation";
+import { districtCoverage } from "@/app/atacs-data";
 import { assetStatusLabel, assetStatusTone } from "@/lib/asset-status";
-import { listAssets } from "@/lib/assets";
+import { listAllFacilitiesForSelect, listAssets } from "@/lib/assets";
 
 type Props = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -23,6 +24,10 @@ function PctBar({ value, max, color }: { value: number; max: number; color: stri
   );
 }
 
+function uniqueSorted(values: string[]) {
+  return [...new Set(values.filter(Boolean))].sort((a, b) => a.localeCompare(b, "th"));
+}
+
 export default async function PublicDashboardPage({ searchParams }: Props) {
   const params = await searchParams;
   const q = sp(params, "q");
@@ -32,7 +37,7 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
   const view = requestedView === "facilities" ? "facilities" : "overview";
 
   // ── Load all assets (server-only, no IP/serial exposed to client) ────────
-  const allAssets = await listAssets();
+  const [allAssets, allFacilities] = await Promise.all([listAssets(), listAllFacilitiesForSelect()]);
 
   // ── Search results (public-safe fields only) ─────────────────────────────
   let searchResults: { assetName: string; assetRegistrationNo: string; deviceType: string; assetGroup: string; facilityName: string; districtName: string; currentStatus: string }[] = [];
@@ -50,7 +55,23 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
   }
 
   // ── District list for filter ─────────────────────────────────────────────
-  const allDistricts = [...new Set(allAssets.map((a) => a.districtName))].sort();
+  const seededDistricts = districtCoverage.map((district) => district.district);
+  const seededDistrictSet = new Set(seededDistricts);
+  const extraDistricts = uniqueSorted([
+    ...allFacilities.map((facility) => facility.district_name ?? ""),
+    ...allAssets.map((asset) => asset.districtName),
+    districtFilter,
+  ]).filter((district) => !seededDistrictSet.has(district));
+  const allDistricts = [...seededDistricts, ...extraDistricts];
+  const facilityCountByDistrict = allFacilities.reduce<Record<string, number>>((acc, facility) => {
+    const district = facility.district_name ?? "";
+    if (!district) return acc;
+    acc[district] = (acc[district] ?? 0) + 1;
+    return acc;
+  }, {});
+  const seededFacilityCountByDistrict = Object.fromEntries(
+    districtCoverage.map((district) => [district.district, district.facilities])
+  ) as Record<string, number>;
 
   // ── Apply filters ────────────────────────────────────────────────────────
   let filtered = allAssets;
@@ -64,13 +85,12 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
   const hw = filtered.filter((a) => a.assetGroup === "Hardware").length;
   const sw = filtered.filter((a) => a.assetGroup === "Software").length;
   const facilityCount = new Set(filtered.map((a) => a.facilityId)).size;
-  const districtCount = new Set(filtered.map((a) => a.districtName)).size;
+  const districtCount = districtFilter ? (allDistricts.includes(districtFilter) ? 1 : 0) : allDistricts.length;
   const safeTotal = Math.max(total, 1);
   const activeRate = Math.round((active / safeTotal) * 100);
 
   // ── By district aggregation ──────────────────────────────────────────────
-  const byDistrict = Object.values(
-    filtered.reduce<Record<string, { name: string; total: number; active: number; broken: number; inactive: number; facilities: Set<number> }>>(
+  const districtStats = filtered.reduce<Record<string, { name: string; total: number; active: number; broken: number; inactive: number; facilities: Set<number> }>>(
       (acc, a) => {
         if (!acc[a.districtName]) acc[a.districtName] = { name: a.districtName, total: 0, active: 0, broken: 0, inactive: 0, facilities: new Set() };
         acc[a.districtName].total++;
@@ -80,8 +100,14 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
         if (a.currentStatus === "Inactive") acc[a.districtName].inactive++;
         return acc;
       }, {}
-    )
-  ).map((d) => ({ ...d, facilityCount: d.facilities.size })).sort((a, b) => b.total - a.total);
+    );
+  const byDistrict = allDistricts.map((district) => {
+    const stats = districtStats[district] ?? { name: district, total: 0, active: 0, broken: 0, inactive: 0, facilities: new Set<number>() };
+    return {
+      ...stats,
+      facilityCount: facilityCountByDistrict[district] ?? seededFacilityCountByDistrict[district] ?? stats.facilities.size,
+    };
+  });
 
   // ── By facility aggregation ──────────────────────────────────────────────
   const byFacility = Object.values(
@@ -111,7 +137,7 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
   ).map(([type, c]) => ({ type, ...c })).sort((a, b) => b.total - a.total);
 
   const maxType = byType[0]?.total ?? 1;
-  const maxDistrict = byDistrict[0]?.total ?? 1;
+  const maxDistrict = Math.max(...byDistrict.map((district) => district.total), 1);
 
   // CSS conic-gradient for status donut
   const activePct = (active / safeTotal) * 100;

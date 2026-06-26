@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS asset_inspections (
   inspected_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   note            TEXT NULL,
   created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- ── Per-asset inspection items ─────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS asset_inspection_items (
@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS asset_inspection_items (
   created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (inspection_id) REFERENCES asset_inspections(id) ON DELETE CASCADE,
   FOREIGN KEY (asset_id)      REFERENCES information_assets(id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- ── Audit log ─────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS audit_logs (
@@ -31,4 +31,4 @@ CREATE TABLE IF NOT EXISTS audit_logs (
   entity_id   INT          NULL,
   summary     TEXT         NULL COMMENT 'คำอธิบายการเปลี่ยนแปลง',
   created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
