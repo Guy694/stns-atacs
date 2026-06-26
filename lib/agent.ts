@@ -46,6 +46,8 @@ type DeviceRow = RowDataPacket & {
   cpu_model: string | null;
   ram_mb: number | null;
   disk_total_gb: number | null;
+  disk_free_gb: number | null;
+  disk_used_gb: number | null;
   location_detail: string | null;
   agent_version: string | null;
   status: string | null;
@@ -100,6 +102,8 @@ export type AgentDevice = {
   cpuModel: string | null;
   ramMb: number | null;
   diskTotalGb: number | null;
+  diskFreeGb: number | null;
+  diskUsedGb: number | null;
   locationDetail: string | null;
   agentVersion: string | null;
   status: string;
@@ -127,6 +131,8 @@ export type AgentReportPayload = {
   cpuModel?: string | null;
   ramMb?: number | null;
   diskTotalGb?: number | null;
+  diskFreeGb?: number | null;
+  diskUsedGb?: number | null;
   locationDetail?: string | null;
   agentVersion?: string | null;
   status?: string | null;
@@ -191,6 +197,8 @@ function toDevice(row: DeviceRow): AgentDevice {
     cpuModel: row.cpu_model,
     ramMb: row.ram_mb,
     diskTotalGb: row.disk_total_gb,
+    diskFreeGb: row.disk_free_gb,
+    diskUsedGb: row.disk_used_gb,
     locationDetail: row.location_detail,
     agentVersion: row.agent_version,
     status: row.status ?? "online",
@@ -570,6 +578,8 @@ export async function reportAgentInventory(input: {
          cpu_model = ?,
          ram_mb = ?,
          disk_total_gb = ?,
+         disk_free_gb = ?,
+         disk_used_gb = ?,
          location_detail = ?,
          agent_version = ?,
          status = ?,
@@ -593,6 +603,8 @@ export async function reportAgentInventory(input: {
       payload.cpuModel?.trim() || null,
       payload.ramMb ?? null,
       payload.diskTotalGb ?? null,
+      payload.diskFreeGb ?? null,
+      payload.diskUsedGb ?? null,
       payload.locationDetail?.trim() || null,
       payload.agentVersion?.trim() || null,
       reportedStatus,
@@ -626,7 +638,9 @@ export async function reportAgentInventory(input: {
     manufacturerSpecification: [
       payload.cpuModel?.trim(),
       payload.ramMb ? `RAM ${payload.ramMb} MB` : null,
-      payload.diskTotalGb ? `Disk ${payload.diskTotalGb} GB` : null,
+      payload.diskTotalGb != null ? `Disk total ${payload.diskTotalGb} GB` : null,
+      payload.diskUsedGb != null ? `Disk used ${payload.diskUsedGb} GB` : null,
+      payload.diskFreeGb != null ? `Disk free ${payload.diskFreeGb} GB` : null,
       payload.macAddress?.trim() ? `MAC ${payload.macAddress.trim()}` : null,
     ]
       .filter(Boolean)

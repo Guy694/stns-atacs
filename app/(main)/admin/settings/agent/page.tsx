@@ -19,6 +19,16 @@ function formatDate(value: string | null) {
   return formatThaiDateTime(value);
 }
 
+function formatDiskUsage(device: { diskTotalGb: number | null; diskUsedGb: number | null; diskFreeGb: number | null }) {
+  const parts = [
+    device.diskTotalGb != null ? `Total ${device.diskTotalGb.toLocaleString("th-TH")} GB` : null,
+    device.diskUsedGb != null ? `Used ${device.diskUsedGb.toLocaleString("th-TH")} GB` : null,
+    device.diskFreeGb != null ? `Free ${device.diskFreeGb.toLocaleString("th-TH")} GB` : null,
+  ].filter(Boolean);
+
+  return parts.length ? parts.join(" · ") : "-";
+}
+
 export default async function AgentSettingsPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
@@ -163,6 +173,7 @@ export default async function AgentSettingsPage() {
                         <td className="px-4 py-3">
                           <p>{device.operatingSystem ?? "-"}</p>
                           <p className="font-mono text-xs text-[var(--muted)]">{device.privateIp ?? "-"}</p>
+                          <p className="mt-1 text-xs text-[var(--muted)]">{formatDiskUsage(device)}</p>
                         </td>
                         <AgentDeviceLinkCell
                           deviceId={device.id}

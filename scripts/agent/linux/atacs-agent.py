@@ -22,7 +22,7 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
-AGENT_VERSION = "1.0.0"
+AGENT_VERSION = "1.0.1"
 DEFAULT_CONFIG_PATH = "/var/lib/atacs-agent/agent-config.json"
 
 
@@ -150,12 +150,16 @@ def get_ram_mb() -> int | None:
     return None
 
 
-def get_disk_total_gb() -> int | None:
+def get_disk_usage_gb() -> dict[str, int | None]:
     try:
         usage = shutil.disk_usage("/")
     except OSError:
-        return None
-    return round(usage.total / (1024**3))
+        return {"total": None, "free": None, "used": None}
+    return {
+        "total": round(usage.total / (1024**3)),
+        "free": round(usage.free / (1024**3)),
+        "used": round(usage.used / (1024**3)),
+    }
 
 
 def get_device_type() -> str:
@@ -202,6 +206,7 @@ def get_inventory_payload() -> dict[str, Any]:
     os_name = get_os_name()
     cpu_model = get_cpu_model()
     current_user = get_current_user()
+    disk_usage = get_disk_usage_gb()
 
     return {
         "fingerprint": get_fingerprint(),
@@ -218,7 +223,9 @@ def get_inventory_payload() -> dict[str, Any]:
         "currentUser": current_user,
         "cpuModel": cpu_model,
         "ramMb": get_ram_mb(),
-        "diskTotalGb": get_disk_total_gb(),
+        "diskTotalGb": disk_usage["total"],
+        "diskFreeGb": disk_usage["free"],
+        "diskUsedGb": disk_usage["used"],
         "locationDetail": hostname,
         "agentVersion": AGENT_VERSION,
         "status": "online",

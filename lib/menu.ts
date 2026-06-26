@@ -1,6 +1,6 @@
 import type { IconName } from "@/app/_components/ui/icon";
 
-export type AppMenuGroupKey = "overview" | "assets" | "system" | "reports";
+export type AppMenuGroupKey = "overview" | "assets" | "system" | "reports" | "manuals";
 
 export type AppMenuItem = {
   key: string;
@@ -21,6 +21,7 @@ export const APP_MENU_GROUPS: Array<{ key: AppMenuGroupKey; label: string }> = [
   { key: "assets", label: "งานทรัพย์สิน" },
   { key: "system", label: "ระบบและความปลอดภัย" },
   { key: "reports", label: "รายงาน" },
+  { key: "manuals", label: "คู่มือ" },
 ];
 
 export const APP_MENU_ITEMS: AppMenuItem[] = [
@@ -133,6 +134,15 @@ export const APP_MENU_ITEMS: AppMenuItem[] = [
     icon: "file-text",
     group: "reports",
     permissionKey: "reports.view",
+  },
+  {
+    key: "manuals",
+    href: "/manuals",
+    label: "คู่มือ",
+    description: "คู่มือการใช้งานระบบ",
+    icon: "file-text",
+    group: "manuals",
+    permissionKey: "manuals.view",
   },
 ];
 

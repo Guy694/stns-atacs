@@ -10,7 +10,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$script:AgentVersion = "1.0.0"
+$script:AgentVersion = "1.0.1"
 
 function Enable-TlsForLegacyPowerShell {
     try {
@@ -113,7 +113,10 @@ function Get-InventoryPayload {
     $bios = Get-CimInstance Win32_BIOS
     $os = Get-CimInstance Win32_OperatingSystem
     $cpu = Get-CimInstance Win32_Processor | Select-Object -First 1
-    $diskBytes = (Get-CimInstance Win32_LogicalDisk -Filter "DriveType=3" | Measure-Object -Property Size -Sum).Sum
+    $logicalDisks = Get-CimInstance Win32_LogicalDisk -Filter "DriveType=3"
+    $diskBytes = ($logicalDisks | Measure-Object -Property Size -Sum).Sum
+    $diskFreeBytes = ($logicalDisks | Measure-Object -Property FreeSpace -Sum).Sum
+    $diskUsedBytes = if ($null -ne $diskBytes -and $null -ne $diskFreeBytes) { $diskBytes - $diskFreeBytes } else { $null }
 
     return @{
         fingerprint = Get-Fingerprint
@@ -130,7 +133,9 @@ function Get-InventoryPayload {
         currentUser = $cs.UserName
         cpuModel = $cpu.Name
         ramMb = [int][math]::Round($cs.TotalPhysicalMemory / 1MB)
-        diskTotalGb = if ($diskBytes) { [int][math]::Round($diskBytes / 1GB) } else { $null }
+        diskTotalGb = if ($null -ne $diskBytes) { [int][math]::Round($diskBytes / 1GB) } else { $null }
+        diskFreeGb = if ($null -ne $diskFreeBytes) { [int][math]::Round($diskFreeBytes / 1GB) } else { $null }
+        diskUsedGb = if ($null -ne $diskUsedBytes) { [int][math]::Round($diskUsedBytes / 1GB) } else { $null }
         locationDetail = $env:COMPUTERNAME
         agentVersion = $script:AgentVersion
         status = "online"
