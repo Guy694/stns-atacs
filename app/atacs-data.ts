@@ -33,6 +33,13 @@ export type FacilitySurvey = {
   assets: AssetRecord[];
 };
 
+export type DistrictCoverage = {
+  district: string;
+  facilities: number;
+  surveyed: number;
+  completion: number;
+};
+
 export const facilitySurveys: FacilitySurvey[] = [];
 
-export const districtCoverage = [];
+export const districtCoverage: DistrictCoverage[] = [];
