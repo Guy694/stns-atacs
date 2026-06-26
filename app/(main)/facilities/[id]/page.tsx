@@ -6,6 +6,7 @@ import { StatusBadge } from "@/app/_components/ui/status-badge";
 import { getCurrentUser } from "@/lib/auth";
 import { getFacilityById, listAssets, listAllFacilitiesForSelect } from "@/lib/assets";
 import { formatThaiDate } from "@/lib/date-format";
+import { listActiveDeviceTypes } from "@/lib/device-types";
 import { canAccessFacility } from "@/lib/facility-scope";
 import { listFacilityWorkGroups } from "@/lib/facility-work-groups";
 import { AssetFormModal } from "@/app/(main)/assets/_components/asset-form-modal";
@@ -71,7 +72,7 @@ export default async function FacilityDetailPage({ params, searchParams }: Props
   const sort = readParam(query, "sort") as "updated_desc" | "updated_asc" | "name_asc" | "name_desc" | "ma_soon";
   const normalizedSort = ["updated_desc", "updated_asc", "name_asc", "name_desc", "ma_soon"].includes(sort) ? sort : undefined;
 
-  const [allAssets, assets, facilitiesForSelect, workGroups] = await Promise.all([
+  const [allAssets, assets, facilitiesForSelect, workGroups, deviceTypes] = await Promise.all([
     listAssets({ facilityId }),
     listAssets({
       facilityId,
@@ -85,6 +86,7 @@ export default async function FacilityDetailPage({ params, searchParams }: Props
     }),
     listAllFacilitiesForSelect(user.role === "admin" ? undefined : { facilityId }),
     listFacilityWorkGroups(facilityId),
+    listActiveDeviceTypes(),
   ]);
 
   const currentFacility = await getFacilityById(facilityId);
@@ -185,7 +187,14 @@ export default async function FacilityDetailPage({ params, searchParams }: Props
               }))}
             />
             {canManageAssets && (
-              <AssetFormModal facilities={facilitiesForSelect} workGroups={workGroups} fixedFacilityId={facilityId} updaterName={user.fullName} mode="create">
+              <AssetFormModal
+                facilities={facilitiesForSelect}
+                deviceTypes={deviceTypes}
+                workGroups={workGroups}
+                fixedFacilityId={facilityId}
+                updaterName={user.fullName}
+                mode="create"
+              >
                 <button className="inline-flex min-h-11 items-center gap-1.5 rounded-xl bg-[var(--accent-strong)] px-4 py-2 text-xs font-semibold text-white hover:opacity-90">
                   + เพิ่มทรัพย์สิน
                 </button>
@@ -353,7 +362,15 @@ export default async function FacilityDetailPage({ params, searchParams }: Props
                     {canManageAssets && (
                       <td className="px-4 py-3 text-right">
                         <div className="inline-flex gap-2">
-                          <AssetFormModal facilities={facilitiesForSelect} workGroups={workGroups} fixedFacilityId={facilityId} updaterName={user.fullName} mode="edit" asset={asset}>
+                          <AssetFormModal
+                            facilities={facilitiesForSelect}
+                            deviceTypes={deviceTypes}
+                            workGroups={workGroups}
+                            fixedFacilityId={facilityId}
+                            updaterName={user.fullName}
+                            mode="edit"
+                            asset={asset}
+                          >
                             <button className="inline-flex min-h-11 items-center rounded-lg border border-black/10 bg-white/80 px-3 py-2 text-xs font-medium text-[var(--accent-strong)] hover:bg-white">
                               แก้ไข
                             </button>

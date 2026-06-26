@@ -10,6 +10,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { getAssetById, listAllFacilitiesForSelect } from "@/lib/assets";
 import { canAccessFacility } from "@/lib/facility-scope";
 import { listFacilityWorkGroups } from "@/lib/facility-work-groups";
+import { listActiveDeviceTypes } from "@/lib/device-types";
 import { AssetFormModal } from "@/app/(main)/assets/_components/asset-form-modal";
 import { DeleteAssetButton } from "@/app/(main)/assets/_components/delete-asset-button";
 import { QrDownloadButton } from "@/app/(main)/assets/_components/print-button";
@@ -45,11 +46,12 @@ export default async function AssetDetailPage({ params }: Props) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
-  const [asset, facilitiesForSelect, statusHistory, workGroups] = await Promise.all([
+  const [asset, facilitiesForSelect, statusHistory, workGroups, deviceTypes] = await Promise.all([
     getAssetById(numId),
     listAllFacilitiesForSelect(),
     listAssetStatusHistory(numId),
     listFacilityWorkGroups(),
+    listActiveDeviceTypes(),
   ]);
   if (!asset) notFound();
   if (!canAccessFacility(user, asset.facilityId)) {
@@ -114,6 +116,7 @@ export default async function AssetDetailPage({ params }: Props) {
           <div className="flex shrink-0 flex-wrap gap-2">
             <AssetFormModal
               facilities={user.role === "admin" ? facilitiesForSelect : facilitiesForSelect.filter((facility) => facility.id === asset.facilityId)}
+              deviceTypes={deviceTypes}
               workGroups={user.role === "admin" ? workGroups : workGroups.filter((group) => group.facilityId === asset.facilityId)}
               updaterName={user.fullName}
               mode="edit"
