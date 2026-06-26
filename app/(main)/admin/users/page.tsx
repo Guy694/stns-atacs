@@ -1,9 +1,9 @@
 import { redirect } from "next/navigation";
 
 import { getCurrentUser } from "@/lib/auth";
+import { decryptThaiCidFromStorage } from "@/lib/auth";
 import { listAllFacilitiesForSelect } from "@/lib/assets";
 import { selectRows } from "@/lib/mysql";
-import { hasPermission } from "@/lib/role-permissions";
 import type { RowDataPacket } from "mysql2/promise";
 import { CreateUserModal } from "./_components/create-user-modal";
 import { UsersManagementClient } from "./_components/users-management-client";
@@ -36,25 +36,25 @@ type UserRowWithoutFacility = RowDataPacket & {
 export default async function AdminUsersPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
-  const canManageUsers = user.role === "admin" || (await hasPermission(user.role, "users.manage"));
-  if (!canManageUsers) redirect("/dashboard");
+  if (user.role !== "admin") redirect("/dashboard");
 
   const facilities = await listAllFacilitiesForSelect();
   let users: UserRow[] = [];
   let dbError = false;
 
   try {
-    users = await selectRows<UserRow>(
-      `SELECT id, thaid_cid, full_name, officer_position, email, username, role, facility_id, is_active, last_login_at
-       FROM users ORDER BY role DESC, full_name ASC`
+    const rows = await selectRows<UserRow>(
+      `SELECT id, thaid_cid, TRIM(CONCAT(first_name, ' ', last_name)) AS full_name, officer_position, email, username, role, facility_id, is_active, last_login_at
+       FROM users ORDER BY role DESC, first_name ASC, last_name ASC`
     );
+    users = rows.map((row) => ({ ...row, thaid_cid: decryptThaiCidFromStorage(row.thaid_cid) }));
   } catch {
     try {
       const fallback = await selectRows<UserRowWithoutFacility>(
-        `SELECT id, thaid_cid, full_name, NULL AS officer_position, email, username, role, is_active, last_login_at
-         FROM users ORDER BY role DESC, full_name ASC`
+        `SELECT id, thaid_cid, TRIM(CONCAT(first_name, ' ', last_name)) AS full_name, NULL AS officer_position, email, username, role, is_active, last_login_at
+         FROM users ORDER BY role DESC, first_name ASC, last_name ASC`
       );
-      users = fallback.map((row) => ({ ...row, facility_id: null }));
+      users = fallback.map((row) => ({ ...row, thaid_cid: decryptThaiCidFromStorage(row.thaid_cid), facility_id: null }));
     } catch {
       dbError = true;
     }

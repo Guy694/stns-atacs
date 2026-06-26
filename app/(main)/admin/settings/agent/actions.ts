@@ -3,8 +3,16 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-import { createAgentEnrollment, linkAgentDeviceToAsset, revokeAgentEnrollment } from "@/lib/agent";
+import {
+  createAgentEnrollment,
+  getAgentDeviceFacilityId,
+  getAgentEnrollmentFacilityId,
+  linkAgentDeviceToAsset,
+  revokeAgentEnrollment,
+} from "@/lib/agent";
 import { getCurrentUser } from "@/lib/auth";
+import { getAssetById } from "@/lib/assets";
+import { canAccessFacility } from "@/lib/facility-scope";
 import { findOrCreateFacilityWorkGroup, getFacilityAgentContext, normalizeWorkGroupName } from "@/lib/facility-work-groups";
 import { hasPermission } from "@/lib/role-permissions";
 import type { AgentEnrollmentActionState } from "./types";
@@ -37,6 +45,9 @@ export async function createAgentEnrollmentAction(
   const facility = await getFacilityAgentContext(facilityId);
   if (!facility) {
     return { ...agentEnrollmentInitialState, error: "ไม่พบข้อมูลหน่วยงานที่เลือก" };
+  }
+  if (!canAccessFacility(user, facility.id)) {
+    return { ...agentEnrollmentInitialState, error: "คุณไม่มีสิทธิ์สร้าง token ให้หน่วยงานนี้" };
   }
 
   if (facility.requiresWorkGroup && workGroupName.length < 2) {
@@ -88,18 +99,27 @@ export async function createAgentEnrollmentAction(
 }
 
 export async function revokeAgentEnrollmentAction(formData: FormData) {
-  await requireAdmin();
+  const user = await requireAdmin();
   const id = Number(formData.get("enrollmentId"));
   if (!id || Number.isNaN(id)) return;
+  const facilityId = await getAgentEnrollmentFacilityId(id);
+  if (!canAccessFacility(user, facilityId)) return;
   await revokeAgentEnrollment(id);
   revalidatePath("/admin/settings/agent");
 }
 
 export async function linkAgentDeviceAction(formData: FormData) {
-  await requireAdmin();
+  const user = await requireAdmin();
   const deviceId = Number(formData.get("deviceId"));
   const assetId = formData.get("assetId");
   if (!deviceId || Number.isNaN(deviceId)) return;
-  await linkAgentDeviceToAsset(deviceId, assetId ? Number(assetId) : null);
+  const deviceFacilityId = await getAgentDeviceFacilityId(deviceId);
+  if (!canAccessFacility(user, deviceFacilityId)) return;
+  const parsedAssetId = assetId ? Number(assetId) : null;
+  if (parsedAssetId) {
+    const asset = await getAssetById(parsedAssetId);
+    if (!asset || !canAccessFacility(user, asset.facilityId) || asset.facilityId !== deviceFacilityId) return;
+  }
+  await linkAgentDeviceToAsset(deviceId, parsedAssetId);
   revalidatePath("/admin/settings/agent");
 }

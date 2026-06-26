@@ -34,7 +34,7 @@ export default async function ProfilePage() {
 
   try {
     const rows = await selectRows<UserDetailRow>(
-      "SELECT full_name, officer_position, email, username, thaid_cid, role, created_at, last_login_at, password_hash FROM users WHERE id = ? LIMIT 1",
+      "SELECT TRIM(CONCAT(first_name, ' ', last_name)) AS full_name, officer_position, email, username, thaid_cid, role, created_at, last_login_at, password_hash FROM users WHERE id = ? LIMIT 1",
       [user.id]
     );
     detail = rows[0] ?? null;
@@ -49,7 +49,7 @@ export default async function ProfilePage() {
   let facilities: FacilityOption[] = [];
   if (user.role === "officer") {
     try {
-      facilities = await listAllFacilitiesForSelect();
+      facilities = await listAllFacilitiesForSelect(user.facilityId ? { facilityId: Number(user.facilityId) } : undefined);
     } catch { /* ignore */ }
   }
 

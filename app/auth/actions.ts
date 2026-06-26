@@ -12,6 +12,7 @@ import {
   destroySession,
   findUserByThaiCid,
   findUserByUsername,
+  getUserDisplayName,
   getPendingRegistrationClaim,
   normalizeDisplayName,
   normalizeThaiCid,
@@ -89,7 +90,7 @@ export async function loginWithThaiDAction(formData: FormData) {
       await notifyTelegramSafe({
         category: "security",
         title: "บัญชีที่ยังไม่ได้รับอนุมัติพยายามเข้าสู่ระบบ",
-        details: { ผู้ใช้: user.full_name, วิธี: "ThaiD", ...context },
+        details: { ผู้ใช้: getUserDisplayName(user), วิธี: "ThaiD", ...context },
       });
       redirect("/pending-approval");
     }
@@ -98,7 +99,7 @@ export async function loginWithThaiDAction(formData: FormData) {
     await notifyTelegramSafe({
       category: "security",
       title: "เข้าสู่ระบบสำเร็จ",
-      details: { ผู้ใช้: user.full_name, วิธี: "ThaiD", ...(await requestDetails()) },
+      details: { ผู้ใช้: getUserDisplayName(user), วิธี: "ThaiD", ...(await requestDetails()) },
     });
     redirect("/");
   }
@@ -114,13 +115,18 @@ export async function registerFirstTimeAction(formData: FormData) {
     redirect(`/login?error=${toQuery("เซสชันยืนยันตัวตนหมดอายุ กรุณาเข้าสู่ระบบใหม่")}`);
   }
 
-  const fullName = normalizeDisplayName(String(formData.get("fullName") ?? ""));
+  const firstName = normalizeDisplayName(String(formData.get("firstName") ?? ""));
+  const lastName = normalizeDisplayName(String(formData.get("lastName") ?? ""));
+  const fullName = normalizeDisplayName(`${firstName} ${lastName}`);
   const officerPosition = normalizeDisplayName(String(formData.get("officerPosition") ?? ""));
   const facilityIdRaw = String(formData.get("facilityId") ?? "").trim();
   const facilityId = facilityIdRaw ? Number(facilityIdRaw) : null;
 
-  if (!fullName) {
-    redirect(`/register?error=${toQuery("กรุณาระบุชื่อ-นามสกุล")}`);
+  if (!firstName) {
+    redirect(`/register?error=${toQuery("กรุณาระบุชื่อ")}`);
+  }
+  if (!lastName) {
+    redirect(`/register?error=${toQuery("กรุณาระบุนามสกุล")}`);
   }
   if (officerPosition.length < 2 || officerPosition.length > 150) {
     redirect(`/register?error=${toQuery("กรุณาระบุตำแหน่งเจ้าหน้าที่ให้ครบถ้วน")}`);
@@ -149,7 +155,7 @@ export async function registerFirstTimeAction(formData: FormData) {
     }
 
     try {
-      await createUserFromThaiD({ thaiCid, fullName, officerPosition, email, facilityId });
+      await createUserFromThaiD({ thaiCid, firstName, lastName, officerPosition, email, facilityId });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "";
       if (errorMessage.includes("Duplicate") || errorMessage.includes("duplicate")) {
@@ -169,7 +175,8 @@ export async function registerFirstTimeAction(formData: FormData) {
   try {
     await createUserFromGoogle({
       googleSub: claim.googleSub,
-      fullName,
+      firstName,
+      lastName,
       officerPosition,
       email: claim.email,
       facilityId,
@@ -191,7 +198,9 @@ export async function registerFirstTimeAction(formData: FormData) {
 }
 
 export async function registerOfficerWithPasswordAction(formData: FormData) {
-  const fullName = normalizeDisplayName(String(formData.get("fullName") ?? ""));
+  const firstName = normalizeDisplayName(String(formData.get("firstName") ?? ""));
+  const lastName = normalizeDisplayName(String(formData.get("lastName") ?? ""));
+  const fullName = normalizeDisplayName(`${firstName} ${lastName}`);
   const officerPosition = normalizeDisplayName(String(formData.get("officerPosition") ?? ""));
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const username = String(formData.get("username") ?? "").trim().toLowerCase();
@@ -201,7 +210,8 @@ export async function registerOfficerWithPasswordAction(formData: FormData) {
   const facilityId = facilityIdRaw ? Number(facilityIdRaw) : null;
 
   const inputError = validateOfficerRegistrationInput({
-    fullName,
+    firstName,
+    lastName,
     officerPosition,
     email,
     username,
@@ -220,7 +230,8 @@ export async function registerOfficerWithPasswordAction(formData: FormData) {
 
   try {
     await createOfficerFromPassword({
-      fullName,
+      firstName,
+      lastName,
       officerPosition,
       email,
       username,
@@ -296,7 +307,7 @@ export async function loginWithPasswordAction(formData: FormData) {
     await notifyTelegramSafe({
       category: "security",
       title: "บัญชีที่ยังไม่ได้รับอนุมัติพยายามเข้าสู่ระบบ",
-      details: { ผู้ใช้: user.full_name, Username: username, ...context },
+      details: { ผู้ใช้: getUserDisplayName(user), Username: username, ...context },
     });
     redirect("/pending-approval");
   }
@@ -314,7 +325,7 @@ export async function loginWithPasswordAction(formData: FormData) {
   await notifyTelegramSafe({
     category: "security",
     title: "เข้าสู่ระบบสำเร็จ",
-    details: { ผู้ใช้: user.full_name, Username: username, วิธี: "Username/Password", ...(await requestDetails()) },
+    details: { ผู้ใช้: getUserDisplayName(user), Username: username, วิธี: "Username/Password", ...(await requestDetails()) },
   });
   redirect(nextPath);
 }

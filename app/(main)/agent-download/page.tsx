@@ -41,7 +41,12 @@ export default async function AgentDownloadPage() {
           <p className="mt-1 text-sm text-[var(--muted)]">กรุณาติดต่อผู้ดูแลระบบเพื่อกำหนดหน่วยงานที่สังกัดก่อน</p>
         </div>
       ) : (
-        <AgentDownloadPanel facilityName={facilityName} requiresWorkGroup={requiresWorkGroup} workGroups={workGroups} />
+        <AgentDownloadPanel
+          facilityId={user.facilityId}
+          facilityName={facilityName}
+          requiresWorkGroup={requiresWorkGroup}
+          workGroups={workGroups}
+        />
       )}
     </div>
   );

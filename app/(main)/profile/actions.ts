@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 
 import type { RowDataPacket } from "mysql2/promise";
 
-import { getCurrentUser, hashPassword, verifyPassword } from "@/lib/auth";
+import { getCurrentUser, hashPassword, splitDisplayName, verifyPassword } from "@/lib/auth";
 import { executeStatement, selectRows } from "@/lib/mysql";
 
 async function getUser() {
@@ -19,10 +19,12 @@ export async function updateProfileAction(_prev: string | null, fd: FormData): P
 
   const fullName = (fd.get("fullName") as string | null)?.trim() ?? "";
   const email = (fd.get("email") as string | null)?.trim() || null;
+  const { firstName, lastName } = splitDisplayName(fullName);
 
   if (!fullName) return "กรุณากรอกชื่อ-นามสกุล";
+  if (!firstName || !lastName) return "กรุณากรอกชื่อและนามสกุลให้ครบ";
 
-  await executeStatement("UPDATE users SET full_name = ?, email = ? WHERE id = ?", [fullName, email, user.id]);
+  await executeStatement("UPDATE users SET first_name = ?, last_name = ?, email = ? WHERE id = ?", [firstName, lastName, email, user.id]);
   revalidatePath("/profile");
   return null;
 }
@@ -34,6 +36,9 @@ export async function updateFacilityAction(_prev: string | null, fd: FormData): 
   const raw = (fd.get("facilityId") as string | null)?.trim() ?? "";
   const facilityId = raw ? parseInt(raw, 10) : null;
   if (!facilityId || isNaN(facilityId)) return "กรุณาเลือกหน่วยงาน";
+  if (user.facilityId && Number(user.facilityId) !== facilityId) {
+    return "คุณไม่มีสิทธิ์เปลี่ยนไปหน่วยงานอื่น กรุณาติดต่อผู้ดูแลระบบ";
+  }
 
   try {
     await executeStatement("UPDATE users SET facility_id = ? WHERE id = ?", [facilityId, user.id]);

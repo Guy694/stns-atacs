@@ -151,19 +151,33 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
                   แบบฟอร์มนี้สำหรับเจ้าหน้าที่หน่วยบริการ บัญชีจะยังเข้าใช้งานไม่ได้จนกว่าแอดมินอนุมัติ
                 </div>
                 <form action={registerOfficerWithPasswordAction} className="space-y-4">
-                  <div className="space-y-1.5">
-                    <label htmlFor="registerFullName" className="text-sm font-semibold">ชื่อ-นามสกุล</label>
-                    <input
-                      id="registerFullName"
-                      name="fullName"
-                      type="text"
-                      autoComplete="name"
-                      required
-                      minLength={3}
-                      className="w-full rounded-2xl border px-4 py-3 text-sm outline-none transition focus:border-[var(--accent)]"
-                      style={{ borderColor: "var(--line)" }}
-                      placeholder="ชื่อและนามสกุลจริง"
-                    />
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-1.5">
+                      <label htmlFor="registerFirstName" className="text-sm font-semibold">ชื่อ</label>
+                      <input
+                        id="registerFirstName"
+                        name="firstName"
+                        type="text"
+                        autoComplete="given-name"
+                        required
+                        className="w-full rounded-2xl border px-4 py-3 text-sm outline-none transition focus:border-[var(--accent)]"
+                        style={{ borderColor: "var(--line)" }}
+                        placeholder="ชื่อจริง"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label htmlFor="registerLastName" className="text-sm font-semibold">นามสกุล</label>
+                      <input
+                        id="registerLastName"
+                        name="lastName"
+                        type="text"
+                        autoComplete="family-name"
+                        required
+                        className="w-full rounded-2xl border px-4 py-3 text-sm outline-none transition focus:border-[var(--accent)]"
+                        style={{ borderColor: "var(--line)" }}
+                        placeholder="นามสกุล"
+                      />
+                    </div>
                   </div>
                   <div className="space-y-1.5">
                     <label htmlFor="registerEmail" className="text-sm font-semibold">อีเมล</label>

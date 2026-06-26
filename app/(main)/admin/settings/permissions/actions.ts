@@ -5,19 +5,13 @@ import { redirect } from "next/navigation";
 
 import { getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
-import { hasPermission, type AppRole, type PermissionKey, upsertRolePermission } from "@/lib/role-permissions";
+import { type AppRole, type PermissionKey, upsertRolePermission } from "@/lib/role-permissions";
 
 async function requirePermissionManager() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
-  if (user.role === "admin") {
-    return user;
-  }
-
-  const canManagePermissions = await hasPermission(user.role, "permissions.manage");
-  if (!canManagePermissions) redirect("/dashboard");
-
+  if (user.role !== "admin") redirect("/dashboard");
   return user;
 }
 

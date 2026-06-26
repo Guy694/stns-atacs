@@ -8,6 +8,7 @@ import { StatusBadge } from "@/app/_components/ui/status-badge";
 import { assetStatusLabel, assetStatusTone } from "@/lib/asset-status";
 import { getCurrentUser } from "@/lib/auth";
 import { getAssetById, listAllFacilitiesForSelect } from "@/lib/assets";
+import { canAccessFacility } from "@/lib/facility-scope";
 import { AssetFormModal } from "@/app/(main)/assets/_components/asset-form-modal";
 import { DeleteAssetButton } from "@/app/(main)/assets/_components/delete-asset-button";
 import { PrintButton } from "@/app/(main)/assets/_components/print-button";
@@ -41,7 +42,7 @@ export default async function AssetDetailPage({ params }: Props) {
     listAssetStatusHistory(numId),
   ]);
   if (!asset) notFound();
-  if (user.role === "officer" && user.facilityId !== asset.facilityId) {
+  if (!canAccessFacility(user, asset.facilityId)) {
     redirect(user.facilityId ? `/facilities/${user.facilityId}` : "/profile");
   }
   const requestHeaders = await headers();
@@ -101,7 +102,12 @@ export default async function AssetDetailPage({ params }: Props) {
         </div>
         {canMutateThisAsset && (
           <div className="flex shrink-0 flex-wrap gap-2">
-            <AssetFormModal facilities={facilitiesForSelect} updaterName={user.fullName} mode="edit" asset={asset}>
+            <AssetFormModal
+              facilities={user.role === "admin" ? facilitiesForSelect : facilitiesForSelect.filter((facility) => facility.id === asset.facilityId)}
+              updaterName={user.fullName}
+              mode="edit"
+              asset={asset}
+            >
               <span className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-[var(--primary-soft-strong)] bg-[var(--primary-soft)] px-4 py-2 text-sm font-medium text-[var(--primary-text)] transition hover:bg-[var(--primary-soft-strong)]">
                 แก้ไข
               </span>

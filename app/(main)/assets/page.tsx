@@ -78,7 +78,7 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
   const user = await getCurrentUser();
   if (!user) return null;
 
-  if (user.role === "officer") {
+  if (user.role !== "admin") {
     if (user.facilityId) redirect(`/facilities/${user.facilityId}`);
     redirect("/profile");
   }

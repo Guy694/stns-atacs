@@ -6,6 +6,7 @@ import { StatusBadge } from "@/app/_components/ui/status-badge";
 import { assetStatusLabel, assetStatusTone } from "@/lib/asset-status";
 import { getCurrentUser } from "@/lib/auth";
 import { getAssetById, listAssets, listSurveys } from "@/lib/assets";
+import { getFacilityScopeId } from "@/lib/facility-scope";
 import { canManageAsset, canMutateAssets } from "@/lib/permissions";
 import { hasPermission } from "@/lib/role-permissions";
 import { TransferForm } from "./_components/transfer-form";
@@ -25,7 +26,8 @@ export default async function TransferPage({ searchParams }: Props) {
   if (!canMutateAssets(user)) redirect("/assets");
   if (!(await hasPermission(user.role, "transfer.manage"))) redirect("/assets");
   const canMutate = true;
-  const facilityScopeId = user.role === "officer" ? Number(user.facilityId ?? 0) : undefined;
+  const facilityScopeId = getFacilityScopeId(user);
+  if (facilityScopeId === null) redirect("/profile");
 
   const params = await searchParams;
   const q = readParam(params, "q");
@@ -33,7 +35,10 @@ export default async function TransferPage({ searchParams }: Props) {
 
   // ── View: transfer form for a specific asset ───────────────────────────
   if (assetId) {
-    const [asset, surveys] = await Promise.all([getAssetById(assetId), listSurveys()]);
+    const [asset, surveys] = await Promise.all([
+      getAssetById(assetId),
+      listSurveys(facilityScopeId ? { facilityId: facilityScopeId } : undefined),
+    ]);
     if (!asset) {
       return (
         <div className="mx-auto max-w-2xl py-20 text-center text-[var(--muted)]">
@@ -52,9 +57,7 @@ export default async function TransferPage({ searchParams }: Props) {
       );
     }
 
-    const scopedSurveys = facilityScopeId
-      ? surveys.filter((survey) => survey.facility_id === facilityScopeId)
-      : surveys;
+    const scopedSurveys = surveys;
 
     if (!canMutate) {
       return (

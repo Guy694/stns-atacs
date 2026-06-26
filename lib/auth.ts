@@ -11,12 +11,15 @@ const SESSION_COOKIE_NAME = "atacs_session";
 const REGISTRATION_COOKIE_NAME = "atacs_registration_claim";
 const SESSION_TTL_DAYS = Number(process.env.AUTH_SESSION_DAYS ?? 7);
 const SESSION_IDLE_TIMEOUT_MINUTES = Number(process.env.AUTH_IDLE_TIMEOUT_MINUTES ?? 15);
+const THAI_CID_ENCRYPTION_PREFIX = "thcid:v1:";
 
 type UserRecord = RowDataPacket & {
   id: number;
   thaid_cid: string | null;
+  thaid_cid_hash?: string | null;
   google_sub: string | null;
-  full_name: string;
+  first_name: string;
+  last_name: string;
   email: string | null;
   username: string | null;
   password_hash: string | null;
@@ -26,8 +29,10 @@ type UserRecord = RowDataPacket & {
 
 type SessionUserRow = RowDataPacket & {
   id: number;
-  thaid_cid: string;
-  full_name: string;
+  thaid_cid: string | null;
+  thaid_cid_hash?: string | null;
+  first_name: string;
+  last_name: string;
   email: string | null;
   role: "admin" | "officer" | "viewer";
   facility_id: number | null;
@@ -79,6 +84,84 @@ function getSessionIdleTimeoutMinutes() {
 
 function signClaimPayload(payloadBase64: string) {
   return crypto.createHmac("sha256", getAuthSecret()).update(payloadBase64).digest("hex");
+}
+
+function readRequiredKeyEnv(name: string) {
+  const value = process.env[name]?.trim();
+  if (!value) {
+    throw new Error(`${name} is required`);
+  }
+
+  if (/^[0-9a-fA-F]{64}$/.test(value)) {
+    return Buffer.from(value, "hex");
+  }
+
+  try {
+    const decoded = Buffer.from(value, "base64");
+    if (decoded.length === 32) {
+      return decoded;
+    }
+  } catch {
+    // Ignore and fail below.
+  }
+
+  throw new Error(`${name} must be a 32-byte key in hex (64 chars) or base64`);
+}
+
+function getThaiCidEncryptionKey() {
+  return readRequiredKeyEnv("THAID_CID_ENCRYPTION_KEY");
+}
+
+function getThaiCidHashKey() {
+  const explicit = process.env.THAID_CID_HASH_KEY?.trim();
+  if (!explicit) {
+    return getThaiCidEncryptionKey();
+  }
+  return readRequiredKeyEnv("THAID_CID_HASH_KEY");
+}
+
+export function hashThaiCidForLookup(thaiCid: string) {
+  return crypto.createHmac("sha256", getThaiCidHashKey()).update(thaiCid, "utf8").digest("hex");
+}
+
+export function encryptThaiCidForStorage(thaiCid: string) {
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv("aes-256-gcm", getThaiCidEncryptionKey(), iv);
+  const ciphertext = Buffer.concat([cipher.update(thaiCid, "utf8"), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return `${THAI_CID_ENCRYPTION_PREFIX}${iv.toString("base64url")}.${tag.toString("base64url")}.${ciphertext.toString("base64url")}`;
+}
+
+export function decryptThaiCidFromStorage(storedThaiCid: string | null | undefined) {
+  if (!storedThaiCid) {
+    return null;
+  }
+
+  if (/^\d{13}$/.test(storedThaiCid)) {
+    return storedThaiCid;
+  }
+
+  if (!storedThaiCid.startsWith(THAI_CID_ENCRYPTION_PREFIX)) {
+    return null;
+  }
+
+  const payload = storedThaiCid.slice(THAI_CID_ENCRYPTION_PREFIX.length);
+  const [ivB64, tagB64, cipherB64] = payload.split(".");
+  if (!ivB64 || !tagB64 || !cipherB64) {
+    return null;
+  }
+
+  try {
+    const iv = Buffer.from(ivB64, "base64url");
+    const tag = Buffer.from(tagB64, "base64url");
+    const ciphertext = Buffer.from(cipherB64, "base64url");
+    const decipher = crypto.createDecipheriv("aes-256-gcm", getThaiCidEncryptionKey(), iv);
+    decipher.setAuthTag(tag);
+    const plain = Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString("utf8");
+    return /^\d{13}$/.test(plain) ? plain : null;
+  } catch {
+    return null;
+  }
 }
 
 function encodeClaim(claim: RegistrationClaim) {
@@ -157,6 +240,30 @@ export function normalizeDisplayName(value: string) {
   return value.trim().replace(/\s+/g, " ");
 }
 
+export function splitDisplayName(value: string) {
+  const normalized = normalizeDisplayName(value);
+  if (!normalized) {
+    return { firstName: "", lastName: "" };
+  }
+  const [firstName, ...lastNameParts] = normalized.split(" ");
+  return { firstName, lastName: lastNameParts.join(" ") };
+}
+
+export function composeDisplayName(firstName: string, lastName: string) {
+  return normalizeDisplayName(`${firstName} ${lastName}`);
+}
+
+export function getUserDisplayName(user: { first_name: string; last_name: string }) {
+  return composeDisplayName(user.first_name, user.last_name);
+}
+
+function hydrateUserRecord(row: UserRecord) {
+  return {
+    ...row,
+    thaid_cid: decryptThaiCidFromStorage(row.thaid_cid),
+  };
+}
+
 export function hashPassword(password: string): string {
   const salt = crypto.randomBytes(16).toString("hex");
   const hash = crypto.scryptSync(password, salt, 64).toString("hex");
@@ -189,7 +296,8 @@ export function validatePasswordLoginInput(username: string, password: string) {
 }
 
 export function validateOfficerRegistrationInput(input: {
-  fullName: string;
+  firstName: string;
+  lastName: string;
   officerPosition: string;
   email: string;
   username: string;
@@ -197,7 +305,9 @@ export function validateOfficerRegistrationInput(input: {
   confirmPassword: string;
   facilityId: number | null;
 }) {
-  if (input.fullName.length < 3) return "กรุณาระบุชื่อ-นามสกุลให้ครบถ้วน";
+  if (input.firstName.length < 1) return "กรุณาระบุชื่อ";
+  if (input.lastName.length < 1) return "กรุณาระบุนามสกุล";
+  if (`${input.firstName} ${input.lastName}`.trim().length < 3) return "กรุณาระบุชื่อ-นามสกุลให้ครบถ้วน";
   if (input.officerPosition.length < 2 || input.officerPosition.length > 150) {
     return "กรุณาระบุตำแหน่งเจ้าหน้าที่ให้ครบถ้วน";
   }
@@ -215,49 +325,62 @@ export function validateOfficerRegistrationInput(input: {
 }
 
 export async function findUserByThaiCid(thaiCid: string): Promise<UserRecord | null> {
+  const thaiCidHash = hashThaiCidForLookup(thaiCid);
   const rows = await selectRows<UserRecord>(
     `
-      SELECT id, thaid_cid, NULL AS google_sub, full_name, email, username, password_hash, role, is_active
+      SELECT id, thaid_cid, thaid_cid_hash, NULL AS google_sub, first_name, last_name, email, username, password_hash, role, is_active
       FROM users
-      WHERE thaid_cid = ?
+      WHERE thaid_cid_hash = ? OR thaid_cid = ?
       LIMIT 1
     `,
-    [thaiCid]
+    [thaiCidHash, thaiCid]
   );
 
   if (!rows[0]) {
     return null;
   }
 
-  return rows[0];
+  const row = rows[0];
+  const decryptedThaiCid = decryptThaiCidFromStorage(row.thaid_cid);
+  const isLegacyPlaintext = row.thaid_cid === thaiCid && !row.thaid_cid?.startsWith(THAI_CID_ENCRYPTION_PREFIX);
+
+  if (decryptedThaiCid === thaiCid && (isLegacyPlaintext || row.thaid_cid_hash !== thaiCidHash)) {
+    await executeStatement(
+      `UPDATE users SET thaid_cid = ?, thaid_cid_hash = ? WHERE id = ?`,
+      [encryptThaiCidForStorage(thaiCid), thaiCidHash, row.id]
+    );
+    return { ...row, thaid_cid: thaiCid, thaid_cid_hash: thaiCidHash };
+  }
+
+  return hydrateUserRecord(row);
 }
 
 export async function findUserByUsername(username: string): Promise<UserRecord | null> {
   const rows = await selectRows<UserRecord & RowDataPacket>(
-    `SELECT id, thaid_cid, NULL AS google_sub, full_name, email, username, password_hash, role, is_active
+    `SELECT id, thaid_cid, thaid_cid_hash, NULL AS google_sub, first_name, last_name, email, username, password_hash, role, is_active
      FROM users WHERE username = ? LIMIT 1`,
     [username]
   );
 
-  return rows[0] ?? null;
+  return rows[0] ? hydrateUserRecord(rows[0]) : null;
 }
 
 export async function findUserByGoogleSub(googleSub: string): Promise<UserRecord | null> {
   const rows = await selectRows<UserRecord>(
-    `SELECT id, thaid_cid, google_sub, full_name, email, username, password_hash, role, is_active
+    `SELECT id, thaid_cid, thaid_cid_hash, google_sub, first_name, last_name, email, username, password_hash, role, is_active
      FROM users WHERE google_sub = ? LIMIT 1`,
     [googleSub]
   );
-  return rows[0] ?? null;
+  return rows[0] ? hydrateUserRecord(rows[0]) : null;
 }
 
 export async function findUserByEmail(email: string): Promise<UserRecord | null> {
   const rows = await selectRows<UserRecord>(
-    `SELECT id, thaid_cid, google_sub, full_name, email, username, password_hash, role, is_active
+    `SELECT id, thaid_cid, thaid_cid_hash, google_sub, first_name, last_name, email, username, password_hash, role, is_active
      FROM users WHERE LOWER(email) = LOWER(?) LIMIT 1`,
     [email]
   );
-  return rows[0] ?? null;
+  return rows[0] ? hydrateUserRecord(rows[0]) : null;
 }
 
 async function setPendingRegistrationClaim(claim: RegistrationClaim) {
@@ -320,25 +443,28 @@ export async function clearPendingRegistrationClaim() {
 
 export async function createUserFromThaiD(input: {
   thaiCid: string;
-  fullName: string;
+  firstName: string;
+  lastName: string;
   officerPosition: string;
   email?: string;
   facilityId?: number | null;
 }) {
+  const encryptedThaiCid = encryptThaiCidForStorage(input.thaiCid);
+  const thaiCidHash = hashThaiCidForLookup(input.thaiCid);
   let result;
   try {
     result = await executeStatement(
-      `INSERT INTO users (thaid_cid, full_name, officer_position, email, role, facility_id, is_active)
-       VALUES (?, ?, ?, ?, 'officer', ?, 0)`,
-      [input.thaiCid, input.fullName, input.officerPosition, input.email || null, input.facilityId ?? null]
+      `INSERT INTO users (thaid_cid, thaid_cid_hash, first_name, last_name, officer_position, email, role, facility_id, is_active)
+       VALUES (?, ?, ?, ?, ?, ?, 'officer', ?, 0)`,
+      [encryptedThaiCid, thaiCidHash, input.firstName, input.lastName, input.officerPosition, input.email || null, input.facilityId ?? null]
     );
   } catch (error) {
     const msg = error instanceof Error ? error.message : "";
     if (msg.includes("Unknown column") && msg.includes("facility_id")) {
       result = await executeStatement(
-        `INSERT INTO users (thaid_cid, full_name, email, role, is_active)
-         VALUES (?, ?, ?, 'officer', 0)`,
-        [input.thaiCid, input.fullName, input.email || null]
+        `INSERT INTO users (thaid_cid, thaid_cid_hash, first_name, last_name, email, role, is_active)
+         VALUES (?, ?, ?, ?, ?, 'officer', 0)`,
+        [encryptedThaiCid, thaiCidHash, input.firstName, input.lastName, input.email || null]
       );
     } else {
       throw error;
@@ -347,7 +473,7 @@ export async function createUserFromThaiD(input: {
 
   const createdRows = await selectRows<SessionUserRow>(
     `
-      SELECT id, thaid_cid, full_name, email, role
+      SELECT id, thaid_cid, first_name, last_name, email, role
       FROM users
       WHERE id = ?
       LIMIT 1
@@ -355,24 +481,25 @@ export async function createUserFromThaiD(input: {
     [result.insertId]
   );
 
-  return createdRows[0] ?? null;
+  return createdRows[0] ? { ...createdRows[0], thaid_cid: decryptThaiCidFromStorage(createdRows[0].thaid_cid) } : null;
 }
 
 export async function createUserFromGoogle(input: {
   googleSub: string;
-  fullName: string;
+  firstName: string;
+  lastName: string;
   officerPosition: string;
   email: string;
   facilityId: number;
 }) {
   const result = await executeStatement(
-    `INSERT INTO users (google_sub, full_name, officer_position, email, role, facility_id, is_active)
-     VALUES (?, ?, ?, ?, 'officer', ?, 0)`,
-    [input.googleSub, input.fullName, input.officerPosition, input.email, input.facilityId]
+    `INSERT INTO users (google_sub, first_name, last_name, officer_position, email, role, facility_id, is_active)
+     VALUES (?, ?, ?, ?, ?, 'officer', ?, 0)`,
+    [input.googleSub, input.firstName, input.lastName, input.officerPosition, input.email, input.facilityId]
   );
 
   const createdRows = await selectRows<SessionUserRow>(
-    `SELECT id, thaid_cid, full_name, email, role, facility_id
+    `SELECT id, thaid_cid, first_name, last_name, email, role, facility_id
      FROM users WHERE id = ? LIMIT 1`,
     [result.insertId]
   );
@@ -380,7 +507,8 @@ export async function createUserFromGoogle(input: {
 }
 
 export async function createOfficerFromPassword(input: {
-  fullName: string;
+  firstName: string;
+  lastName: string;
   officerPosition: string;
   email: string;
   username: string;
@@ -388,9 +516,9 @@ export async function createOfficerFromPassword(input: {
   facilityId: number;
 }) {
   const result = await executeStatement(
-    `INSERT INTO users (full_name, officer_position, email, username, password_hash, role, facility_id, is_active)
-     VALUES (?, ?, ?, ?, ?, 'officer', ?, 0)`,
-    [input.fullName, input.officerPosition, input.email, input.username, hashPassword(input.password), input.facilityId]
+    `INSERT INTO users (first_name, last_name, officer_position, email, username, password_hash, role, facility_id, is_active)
+     VALUES (?, ?, ?, ?, ?, ?, 'officer', ?, 0)`,
+    [input.firstName, input.lastName, input.officerPosition, input.email, input.username, hashPassword(input.password), input.facilityId]
   );
 
   return result.insertId;
@@ -469,7 +597,9 @@ export async function getCurrentUser() {
         SELECT
           u.id,
           u.thaid_cid,
-          u.full_name,
+          u.thaid_cid_hash,
+          u.first_name,
+          u.last_name,
           u.email,
           u.role,
           u.facility_id,
@@ -490,7 +620,9 @@ export async function getCurrentUser() {
           SELECT
             u.id,
             u.thaid_cid,
-            u.full_name,
+            u.thaid_cid_hash,
+            u.first_name,
+            u.last_name,
             u.email,
             u.role,
             s.expires_at AS session_expires_at
@@ -528,8 +660,8 @@ export async function getCurrentUser() {
 
   return {
     id: rows[0].id,
-    thaiCid: rows[0].thaid_cid as string | null,
-    fullName: rows[0].full_name,
+    thaiCid: decryptThaiCidFromStorage(rows[0].thaid_cid),
+    fullName: composeDisplayName(rows[0].first_name, rows[0].last_name),
     email: rows[0].email,
     role: rows[0].role,
     facilityId: rows[0].facility_id ?? null,

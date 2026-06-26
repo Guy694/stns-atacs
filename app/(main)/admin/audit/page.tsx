@@ -4,7 +4,6 @@ import { StatusBadge } from "@/app/_components/ui/status-badge";
 import { getCurrentUser } from "@/lib/auth";
 import { listAuditLogs } from "@/lib/audit";
 import { formatThaiDateTime } from "@/lib/date-format";
-import { hasPermission } from "@/lib/role-permissions";
 import Link from "next/link";
 
 type AuditPageProps = {
@@ -37,9 +36,7 @@ const ACTION_TONE = {
 export default async function AuditLogPage({ searchParams }: AuditPageProps) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
-  const canViewAudit = user.role === "admin" || (await hasPermission(user.role, "audit.view"));
-  if (!canViewAudit) redirect("/dashboard");
-  const canExportAudit = user.role === "admin" || (await hasPermission(user.role, "audit.export"));
+  if (user.role !== "admin") redirect("/dashboard");
 
   const params = await searchParams;
   const actionFilter = readParam(params, "action") as "create" | "update" | "delete" | "transfer" | "dispose" | "inspect";
@@ -134,14 +131,12 @@ export default async function AuditLogPage({ searchParams }: AuditPageProps) {
         <button type="submit" className="rounded-xl bg-[var(--accent-strong)] px-5 py-2 text-sm font-semibold text-white transition hover:opacity-90">
           ค้นหา
         </button>
-        {canExportAudit && (
-          <a
-            href={`/api/export/audit?search=${encodeURIComponent(search)}&actor=${encodeURIComponent(actorFilter)}&entity=${encodeURIComponent(entityFilter)}&action=${encodeURIComponent(actionFilter)}&dateFrom=${encodeURIComponent(dateFrom)}&dateTo=${encodeURIComponent(dateTo)}`}
-            className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-100"
-          >
-            Export CSV
-          </a>
-        )}
+        <a
+          href={`/api/export/audit?search=${encodeURIComponent(search)}&actor=${encodeURIComponent(actorFilter)}&entity=${encodeURIComponent(entityFilter)}&action=${encodeURIComponent(actionFilter)}&dateFrom=${encodeURIComponent(dateFrom)}&dateTo=${encodeURIComponent(dateTo)}`}
+          className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-100"
+        >
+          Export CSV
+        </a>
         {(search || actorFilter || entityFilter || actionFilter || dateFrom || dateTo) && (
           <Link href="/admin/audit" className="rounded-xl border border-black/10 bg-white/80 px-4 py-2 text-sm text-[var(--muted)] hover:bg-white">
             ล้างตัวกรอง

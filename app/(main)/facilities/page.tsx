@@ -3,12 +3,15 @@ import Link from "next/link";
 import { StatusBadge } from "@/app/_components/ui/status-badge";
 import { getCurrentUser } from "@/lib/auth";
 import { listFacilities } from "@/lib/assets";
+import { getFacilityScopeId } from "@/lib/facility-scope";
 
 export default async function FacilitiesPage() {
   const user = await getCurrentUser();
   if (!user) return null;
 
-  const facilities = await listFacilities();
+  const facilityScopeId = getFacilityScopeId(user);
+  if (facilityScopeId === null) return null;
+  const facilities = await listFacilities({ facilityId: facilityScopeId });
 
   // Group by district
   const byDistrict = facilities.reduce<Record<string, typeof facilities>>((acc, f) => {

@@ -50,8 +50,8 @@ export default async function Home({ searchParams }: HomeProps) {
   const { facilitySurveys: allFacilitySurveys, districtCoverage, dataSource, connectionMessage, allowPublicOfficerBoard } =
     await getDashboardData();
   const isAdmin = currentUser.role === "admin";
-  const isOfficer = currentUser.role === "officer";
   const isViewer = currentUser.role === "viewer";
+  const isScopedUser = !isAdmin;
   const canViewExactInfrastructure = isAdmin;
   const canViewPublicIpPanel = isAdmin || allowPublicOfficerBoard;
   const referenceDate = new Date();
@@ -98,7 +98,7 @@ export default async function Home({ searchParams }: HomeProps) {
     ? scopedFacilitySurveys.find((survey) => survey.facilityId === selectedFacilityId)?.facilityName
     : "";
 
-  const scopeFacilityName = isOfficer ? dashboardScope.scopeFacilityName : null;
+  const scopeFacilityName = isScopedUser ? dashboardScope.scopeFacilityName : null;
   const hasScopedData = scopedFacilitySurveys.length > 0;
   const hasFilteredData = facilitySurveys.length > 0;
 
@@ -235,7 +235,7 @@ export default async function Home({ searchParams }: HomeProps) {
   const quickActions = [
     {
       href: assetQuickLink,
-      title: isOfficer ? "ทรัพย์สินของหน่วยงาน" : "ทรัพย์สินทั้งหมด",
+      title: isScopedUser ? "ทรัพย์สินของหน่วยงาน" : "ทรัพย์สินทั้งหมด",
       value: numberFormat.format(totalAssets),
       unit: "รายการ",
       detail: quickScopeLabel,
@@ -336,7 +336,7 @@ export default async function Home({ searchParams }: HomeProps) {
 
         {missingFacilityAssignment && (
           <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-            บัญชี Officer นี้ยังไม่ถูกผูกกับหน่วยงาน จึงยังไม่สามารถใช้มุมมอง &quot;รายการทรัพย์สิน&quot; ได้ กรุณาให้ผู้ดูแลระบบกำหนดหน่วยงานก่อน
+            บัญชีนี้ยังไม่ถูกผูกกับหน่วยงาน จึงยังไม่สามารถใช้มุมมอง &quot;รายการทรัพย์สิน&quot; ได้ กรุณาให้ผู้ดูแลระบบกำหนดหน่วยงานก่อน
           </div>
         )}
 
@@ -469,7 +469,7 @@ export default async function Home({ searchParams }: HomeProps) {
           </div>
         </div>
 
-        {isOfficer && !missingFacilityAssignment && !hasScopedData && (
+        {isScopedUser && !missingFacilityAssignment && !hasScopedData && (
           <div className="glass-panel rounded-2xl p-8 text-center">
             <p className="text-lg font-semibold text-[var(--foreground)]">ยังไม่พบข้อมูลสำรวจของหน่วยงานนี้</p>
             <p className="mt-2 text-sm text-[var(--muted)]">
@@ -483,7 +483,7 @@ export default async function Home({ searchParams }: HomeProps) {
           </div>
         )}
 
-        {(!isOfficer || hasScopedData) && (
+        {(!isScopedUser || hasScopedData) && (
           !hasFilteredData ? (
             <div className="glass-panel rounded-2xl p-8 text-center">
               <p className="text-lg font-semibold text-[var(--foreground)]">ไม่พบข้อมูลตามตัวกรองที่เลือก</p>

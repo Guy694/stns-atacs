@@ -5,6 +5,7 @@ import {
   createSession,
   findUserByEmail,
   findUserByGoogleSub,
+  getUserDisplayName,
   linkGoogleIdentity,
   normalizeDisplayName,
   setPendingGoogleRegistrationClaim,
@@ -150,7 +151,7 @@ export async function GET(req: NextRequest) {
         await notifyTelegramSafe({
           category: "security",
           title: "บัญชีที่ยังไม่ได้รับอนุมัติพยายามเข้าสู่ระบบ",
-          details: { ผู้ใช้: user.full_name, อีเมล: email, วิธี: "Google", ...context },
+          details: { ผู้ใช้: getUserDisplayName(user), อีเมล: email, วิธี: "Google", ...context },
         });
         return redirectWithDeletedState(new URL("/pending-approval", req.url));
       }
@@ -159,7 +160,7 @@ export async function GET(req: NextRequest) {
       await notifyTelegramSafe({
         category: "security",
         title: "เข้าสู่ระบบสำเร็จ",
-        details: { ผู้ใช้: user.full_name, อีเมล: email, วิธี: "Google", ...requestDetails(req) },
+        details: { ผู้ใช้: getUserDisplayName(user), อีเมล: email, วิธี: "Google", ...requestDetails(req) },
       });
       return redirectWithDeletedState(new URL(nextPath, req.url));
     }

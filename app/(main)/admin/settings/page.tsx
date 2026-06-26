@@ -34,6 +34,11 @@ export default async function AdminSettingsPage() {
       permissionChecks[3] = false;
     }
   }
+  if (user.role !== "admin") {
+    for (const permission of ["users.manage", "permissions.manage", "device-types.manage", "audit.view"] as const) {
+      permissionChecks[permissionEntries.indexOf(permission)] = false;
+    }
+  }
   const allowed = user.role === "admin" || permissionChecks.some(Boolean);
   if (!allowed) redirect("/dashboard");
 

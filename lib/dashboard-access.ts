@@ -56,7 +56,7 @@ export function buildDashboardAccessScope(
   allFacilitySurveys: FacilitySurvey[],
   ownFacility: DashboardFacilityContext | null
 ): DashboardAccessScope {
-  if (user.role !== "officer") {
+  if (user.role === "admin") {
     return {
       surveys: allFacilitySurveys,
       scopeFacilityName: null,
@@ -78,34 +78,6 @@ export function buildDashboardAccessScope(
 
   const ownSurvey = allFacilitySurveys.find((survey) => survey.facilityId === Number(user.facilityId));
   const facilityName = ownFacility?.name ?? ownSurvey?.facilityName ?? "รายการทรัพย์สิน";
-  const districtName = ownFacility?.districtName ?? ownSurvey?.districtName ?? null;
-  const facilityTypeCode = ownFacility?.typecode ?? ownSurvey?.facilityTypeCode ?? "";
-  const facilityGroup = inferDashboardFacilityGroup(facilityTypeCode, facilityName);
-
-  if (facilityGroup === "province") {
-    return {
-      surveys: allFacilitySurveys,
-      scopeFacilityName: facilityName,
-      missingFacilityAssignment: false,
-      officerScopeKind: "province",
-      lockedFacilityId: null,
-    };
-  }
-
-  if (facilityGroup === "primary-office" && districtName) {
-    return {
-      surveys: allFacilitySurveys.filter(
-        (survey) =>
-          survey.districtName === districtName &&
-          ["primary-office", "primary-unit"].includes(inferDashboardFacilityGroup(survey.facilityTypeCode, survey.facilityName))
-      ),
-      scopeFacilityName: `สสอ ${districtName}`,
-      missingFacilityAssignment: false,
-      officerScopeKind: "district-primary",
-      lockedFacilityId: null,
-    };
-  }
-
   return {
     surveys: allFacilitySurveys.filter((survey) => survey.facilityId === Number(user.facilityId)),
     scopeFacilityName: facilityName,

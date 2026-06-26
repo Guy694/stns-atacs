@@ -7,16 +7,13 @@ import { getMenuVisibility, setMenuVisibility } from "@/lib/app-settings";
 import { getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { APP_MENU_ITEMS } from "@/lib/menu";
-import { hasPermission } from "@/lib/role-permissions";
 
 async function requireMenuManager() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
-  if (user.role === "admin") return user;
-  if (await hasPermission(user.role, "permissions.manage")) return user;
-
-  redirect("/dashboard");
+  if (user.role !== "admin") redirect("/dashboard");
+  return user;
 }
 
 export async function updateMenuVisibilityAction(formData: FormData) {

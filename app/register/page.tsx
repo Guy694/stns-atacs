@@ -17,6 +17,19 @@ function readQueryValue(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
 
+function splitDisplayName(displayName: string) {
+  const normalized = displayName.trim().replace(/\s+/g, " ");
+  if (!normalized) {
+    return { firstName: "", lastName: "" };
+  }
+
+  const [firstName, ...rest] = normalized.split(" ");
+  return {
+    firstName,
+    lastName: rest.join(" "),
+  };
+}
+
 export default async function RegisterPage({ searchParams }: RegisterPageProps) {
   const user = await getCurrentUser();
   if (user) {
@@ -33,6 +46,7 @@ export default async function RegisterPage({ searchParams }: RegisterPageProps) 
   const notice = readQueryValue(params.notice);
 
   const facilities = await listAllFacilitiesForSelect();
+  const { firstName, lastName } = splitDisplayName(claim.displayName);
 
   return (
     <main className="mx-auto flex w-full max-w-xl flex-1 flex-col justify-center px-6 py-10 sm:px-8">
@@ -85,18 +99,35 @@ export default async function RegisterPage({ searchParams }: RegisterPageProps) 
             </div>
           )}
 
-          <div className="space-y-2">
-            <label htmlFor="fullName" className="block text-sm font-medium">
-              ชื่อ-นามสกุล
-            </label>
-            <input
-              id="fullName"
-              name="fullName"
-              type="text"
-              defaultValue={claim.displayName}
-              required
-              className="w-full rounded-2xl border border-black/10 bg-white/90 px-4 py-3 outline-none transition focus:border-[var(--accent)]"
-            />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <label htmlFor="firstName" className="block text-sm font-medium">
+                ชื่อ
+              </label>
+              <input
+                id="firstName"
+                name="firstName"
+                type="text"
+                autoComplete="given-name"
+                defaultValue={firstName}
+                required
+                className="w-full rounded-2xl border border-black/10 bg-white/90 px-4 py-3 outline-none transition focus:border-[var(--accent)]"
+              />
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="lastName" className="block text-sm font-medium">
+                นามสกุล
+              </label>
+              <input
+                id="lastName"
+                name="lastName"
+                type="text"
+                autoComplete="family-name"
+                defaultValue={lastName}
+                required
+                className="w-full rounded-2xl border border-black/10 bg-white/90 px-4 py-3 outline-none transition focus:border-[var(--accent)]"
+              />
+            </div>
           </div>
 
           <div className="space-y-2">

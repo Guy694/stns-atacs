@@ -425,8 +425,10 @@ INSERT INTO `information_asset_surveys` (`id`, `facility_id`, `survey_title`, `p
 
 CREATE TABLE `users` (
   `id` bigint UNSIGNED NOT NULL,
-  `thaid_cid` varchar(13) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'เลขบัตรประชาชนจากการยืนยันตัวตนผ่าน ThaiD (NULL = user ประเภท username/password เท่านั้น)',
-  `full_name` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+  `thaid_cid` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'เลขบัตรประชาชนจากการยืนยันตัวตนผ่าน ThaiD (เข้ารหัส) (NULL = user ประเภท username/password เท่านั้น)',
+  `thaid_cid_hash` char(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'ค่า HMAC-SHA256 ของเลข ThaiD สำหรับค้นหา/ตรวจซ้ำ',
+  `first_name` varchar(150) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+  `last_name` varchar(150) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
   `email` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
   `username` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'ชื่อผู้ใช้สำหรับ login แบบ username/password (ไม่บังคับ)',
   `password_hash` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'password hash (scrypt) สำหรับ login แบบ username/password — NULL หมายถึงยังไม่ได้ตั้งรหัสผ่าน',
@@ -442,11 +444,11 @@ CREATE TABLE `users` (
 -- Dumping data for table `users`
 --
 
-INSERT INTO `users` (`id`, `thaid_cid`, `full_name`, `email`, `username`, `password_hash`, `role`, `facility_id`, `is_active`, `last_login_at`, `created_at`, `updated_at`) VALUES
-(1, '3901900015481', 'อิรฟาน หลงเด็น', 'irfan.admin@satun.moph.go.th', 'atacs_admin', '55ca3bebaf56d29d31d5718057631b62:b39fb8201a2389080426264a200d14aab4c8dc094b6bd1dcd197f5a656eea81dafa59df556385378bd4ba97fa1b521e5f12cd15685c42b3cbade3037561a1844', 'admin', NULL, 1, '2026-05-21 03:01:45', '2026-05-11 08:32:17', '2026-05-21 03:01:45'),
-(2, '3900600012345', 'สุชาดา ทองมาก', 'suchada.officer@satun.moph.go.th', NULL, NULL, 'admin', NULL, 1, NULL, '2026-05-11 08:32:17', '2026-05-14 04:12:08'),
-(3, NULL, 'นครินทร์ ชายสิทธิ์', 'nakharin.officer@satun.moph.go.th', 'nakharin', 'c9b54be433958b0025f1d03178e2e2ef:443eba91e26d5a0c876fb3cba016c3ac0b9b83dd68b3c40b9cf40d677b17c904644308ddba0d5812d1005205f167313482db0e9e8f35246a5a0acffe891d13e7', 'officer', 44, 1, '2026-05-18 02:03:48', '2026-05-11 08:32:17', '2026-05-18 02:03:48'),
-(4, '1901900088812', 'ธนพล รัตนะ', NULL, 'thanaphon.r', '94cbceb103d5367034bafbfd2fdec98c:14a4933ce4bee252869c4883ce6bd178fbf7a3af6acbcd5e80292aea0a400a6dc1677aeaac4f7c3b1e214aca466a41a2e37b00ca14d6fe8741b161fb832f20e8', 'viewer', NULL, 1, '2026-05-14 04:21:53', '2026-05-11 08:32:17', '2026-05-14 07:59:07');
+INSERT INTO `users` (`id`, `thaid_cid`, `thaid_cid_hash`, `first_name`, `last_name`, `email`, `username`, `password_hash`, `role`, `facility_id`, `is_active`, `last_login_at`, `created_at`, `updated_at`) VALUES
+(1, '3901900015481', NULL, 'อิรฟาน', 'หลงเด็น', 'irfan.admin@satun.moph.go.th', 'atacs_admin', '55ca3bebaf56d29d31d5718057631b62:b39fb8201a2389080426264a200d14aab4c8dc094b6bd1dcd197f5a656eea81dafa59df556385378bd4ba97fa1b521e5f12cd15685c42b3cbade3037561a1844', 'admin', NULL, 1, '2026-05-21 03:01:45', '2026-05-11 08:32:17', '2026-05-21 03:01:45'),
+(2, '3900600012345', NULL, 'สุชาดา', 'ทองมาก', 'suchada.officer@satun.moph.go.th', NULL, NULL, 'admin', NULL, 1, NULL, '2026-05-11 08:32:17', '2026-05-14 04:12:08'),
+(3, NULL, 'นครินทร์', 'ชายสิทธิ์', 'nakharin.officer@satun.moph.go.th', 'nakharin', 'c9b54be433958b0025f1d03178e2e2ef:443eba91e26d5a0c876fb3cba016c3ac0b9b83dd68b3c40b9cf40d677b17c904644308ddba0d5812d1005205f167313482db0e9e8f35246a5a0acffe891d13e7', 'officer', 44, 1, '2026-05-18 02:03:48', '2026-05-11 08:32:17', '2026-05-18 02:03:48'),
+(4, '1901900088812', 'ธนพล', 'รัตนะ', NULL, 'thanaphon.r', '94cbceb103d5367034bafbfd2fdec98c:14a4933ce4bee252869c4883ce6bd178fbf7a3af6acbcd5e80292aea0a400a6dc1677aeaac4f7c3b1e214aca466a41a2e37b00ca14d6fe8741b161fb832f20e8', 'viewer', NULL, 1, '2026-05-14 04:21:53', '2026-05-11 08:32:17', '2026-05-14 07:59:07');
 
 --
 -- Indexes for dumped tables
@@ -545,7 +547,7 @@ ALTER TABLE `information_asset_surveys`
 --
 ALTER TABLE `users`
   ADD PRIMARY KEY (`id`),
-  ADD UNIQUE KEY `uk_users_thaid_cid` (`thaid_cid`),
+  ADD UNIQUE KEY `uk_users_thaid_cid_hash` (`thaid_cid_hash`),
   ADD UNIQUE KEY `uk_users_email` (`email`),
   ADD UNIQUE KEY `uk_users_username` (`username`),
   ADD KEY `idx_users_facility_id` (`facility_id`);

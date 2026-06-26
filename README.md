@@ -26,6 +26,22 @@ This project uses [`next/font`](https://nextjs.org/docs/app/building-your-applic
 
 Run `database/agent_inventory.sql` after the main auth schema so the agent tables exist before creating enrollment tokens. The script adds `agent_enrollments` and `agent_devices`, and `users.id` must already be `bigint unsigned`.
 
+### Reusable Agent Install Key
+
+Set `ATACS_AGENT_INSTALL_KEY` on the server to allow reusable install commands that specify `facilityId` and `workGroupName` instead of generating a new enrollment token from the UI every time. Multiple active keys can be comma-separated during key rotation.
+
+Example Windows static install command shape:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File install-atacs-agent.ps1 -ApiBaseUrl https://stns-atacs.vercel.app -InstallKey <INSTALL_KEY> -FacilityId 65 -WorkGroupName "กลุ่มงานไอที"
+```
+
+Example Linux static install command shape:
+
+```bash
+sudo bash install-atacs-agent.sh --api-base-url https://stns-atacs.vercel.app --install-key <INSTALL_KEY> --facility-id 65 --work-group-name "กลุ่มงานไอที"
+```
+
 ### Admin Flow
 
 1. Open `/admin/settings/agent`.

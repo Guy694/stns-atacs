@@ -3,7 +3,7 @@
 
 -- 1) ทำให้ thaid_cid เป็น NULL ได้ เพื่อรองรับ user ที่ใช้แค่ username/password
 ALTER TABLE `users`
-  MODIFY COLUMN `thaid_cid` VARCHAR(13) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT NULL
+  MODIFY COLUMN `thaid_cid` VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT NULL
     COMMENT 'เลขบัตรประชาชนจากการยืนยันตัวตนผ่าน ThaiD (NULL = user ประเภท username/password เท่านั้น)';
 
 -- 2) เพิ่มคอลัมน์ username และ password_hash

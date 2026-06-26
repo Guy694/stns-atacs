@@ -4,6 +4,7 @@ import {
   clearPendingRegistrationClaim,
   createSession,
   findUserByThaiCid,
+  getUserDisplayName,
   normalizeDisplayName,
   normalizeThaiCid,
   setPendingThaiDRegistrationClaim,
@@ -192,11 +193,11 @@ export async function GET(req: NextRequest) {
     const user = await findUserByThaiCid(thaiCid);
     if (user) {
       if (!user.is_active) {
-        const context = await recordThaiDSecurityEvent(req, "login_pending_account", "ThaiD", user.full_name);
+        const context = await recordThaiDSecurityEvent(req, "login_pending_account", "ThaiD", getUserDisplayName(user));
         await notifyTelegramSafe({
           category: "security",
           title: "บัญชีที่ยังไม่ได้รับอนุมัติพยายามเข้าสู่ระบบ",
-          details: { ผู้ใช้: user.full_name, วิธี: "ThaiD", ...context },
+          details: { ผู้ใช้: getUserDisplayName(user), วิธี: "ThaiD", ...context },
         });
         const response = NextResponse.redirect(new URL("/pending-approval", req.url));
         response.cookies.delete(STATE_COOKIE_NAME);
@@ -208,7 +209,7 @@ export async function GET(req: NextRequest) {
       await notifyTelegramSafe({
         category: "security",
         title: "เข้าสู่ระบบสำเร็จ",
-        details: { ผู้ใช้: user.full_name, วิธี: "ThaiD", ...requestDetails(req) },
+        details: { ผู้ใช้: getUserDisplayName(user), วิธี: "ThaiD", ...requestDetails(req) },
       });
 
       const response = NextResponse.redirect(new URL("/", req.url));

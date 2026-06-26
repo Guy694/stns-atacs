@@ -4,9 +4,16 @@ import Link from "next/link";
 import { useActionState, useState } from "react";
 
 import { createOfficerDownloadTokenAction } from "@/app/(main)/agent-download/actions";
-import { buildLinuxAgentInstallCommand, buildWindowsAgentInstallCommand } from "@/lib/agent-install";
+import {
+  AGENT_INSTALL_KEY_PLACEHOLDER,
+  buildLinuxAgentInstallCommand,
+  buildLinuxStaticAgentInstallCommand,
+  buildWindowsAgentInstallCommand,
+  buildWindowsStaticAgentInstallCommand,
+} from "@/lib/agent-install";
 
 type AgentDownloadPanelProps = {
+  facilityId: number;
   facilityName: string;
   requiresWorkGroup: boolean;
   workGroups: { id: number; workGroupName: string }[];
@@ -32,13 +39,17 @@ function CopyButton({ text, label = "คัดลอก" }: { text: string; labe
   );
 }
 
-export function AgentDownloadPanel({ facilityName, requiresWorkGroup, workGroups }: AgentDownloadPanelProps) {
+export function AgentDownloadPanel({ facilityId, facilityName, requiresWorkGroup, workGroups }: AgentDownloadPanelProps) {
   const [state, formAction, pending] = useActionState(
     createOfficerDownloadTokenAction,
     INITIAL
   );
+  const [staticWorkGroupName, setStaticWorkGroupName] = useState("");
 
   const token = state.token;
+  const staticWorkGroup = requiresWorkGroup ? staticWorkGroupName.trim() || "<WORK_GROUP_NAME>" : "";
+  const staticWinCmd = buildWindowsStaticAgentInstallCommand({ facilityId, workGroupName: staticWorkGroup });
+  const staticLinuxCmd = buildLinuxStaticAgentInstallCommand({ facilityId, workGroupName: staticWorkGroup });
 
   const winCmd = token ? buildWindowsAgentInstallCommand(token) : "";
   const linuxCmd = token ? buildLinuxAgentInstallCommand(token) : "";
@@ -70,6 +81,67 @@ export function AgentDownloadPanel({ facilityName, requiresWorkGroup, workGroups
           {state.error}
         </div>
       )}
+
+      <div className="rounded-2xl border border-sky-200 bg-sky-50 p-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <p className="font-semibold text-sky-950">คำสั่งติดตั้งแบบใช้ซ้ำ</p>
+            <p className="mt-1 text-sm text-sky-800">
+              ใช้กับรหัสติดตั้งกลางจากผู้ดูแลระบบ แก้เฉพาะชื่อกลุ่มงานก่อนนำไปติดตั้งเครื่องปลายทาง
+            </p>
+          </div>
+          <div className="rounded-lg border border-sky-200 bg-white px-3 py-1.5 font-mono text-xs text-sky-900">
+            facilityId={facilityId}
+          </div>
+        </div>
+
+        {requiresWorkGroup && (
+          <div className="mt-4">
+            <label htmlFor="staticWorkGroupName" className="block text-sm font-semibold text-sky-950">
+              ชื่อกลุ่มงานในคำสั่ง
+            </label>
+            <input
+              id="staticWorkGroupName"
+              value={staticWorkGroupName}
+              onChange={(event) => setStaticWorkGroupName(event.target.value)}
+              list="static-facility-work-groups"
+              maxLength={150}
+              placeholder="เช่น กลุ่มงานไอที / OPD / งานการเงิน"
+              className="mt-1 w-full rounded-xl border border-sky-200 bg-white px-3 py-2.5 text-sm text-sky-950 outline-none transition focus:border-[var(--accent)]"
+            />
+            <datalist id="static-facility-work-groups">
+              {workGroups.map((group) => (
+                <option key={group.id} value={group.workGroupName} />
+              ))}
+            </datalist>
+          </div>
+        )}
+
+        <div className="mt-4 grid gap-3">
+          <div className="rounded-xl border border-sky-200 bg-white/90 px-4 py-3">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm font-semibold text-sky-950">Windows PowerShell</p>
+              <CopyButton text={staticWinCmd} label="คัดลอกคำสั่ง" />
+            </div>
+            <div className="mt-3 overflow-x-auto rounded-lg bg-stone-950 px-3 py-2 font-mono text-[11px] leading-5 text-sky-100">
+              {staticWinCmd}
+            </div>
+          </div>
+          <div className="rounded-xl border border-sky-200 bg-white/90 px-4 py-3">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm font-semibold text-sky-950">Linux Terminal</p>
+              <CopyButton text={staticLinuxCmd} label="คัดลอกคำสั่ง" />
+            </div>
+            <div className="mt-3 overflow-x-auto rounded-lg bg-stone-950 px-3 py-2 font-mono text-[11px] leading-5 text-sky-100">
+              {staticLinuxCmd}
+            </div>
+          </div>
+        </div>
+
+        <p className="mt-3 text-xs text-sky-800">
+          ก่อนใช้งานจริงให้แทน {AGENT_INSTALL_KEY_PLACEHOLDER} ด้วยค่า ATACS_AGENT_INSTALL_KEY ที่ตั้งไว้บน server
+        </p>
+      </div>
 
       {!token ? (
         <div className="glass-panel rounded-2xl px-5 py-6 text-center">

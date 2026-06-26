@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { getCurrentUser } from "@/lib/auth";
-import { hasPermission } from "@/lib/role-permissions";
 import { selectRows } from "@/lib/mysql";
 import type { RowDataPacket } from "mysql2/promise";
 import { readRequestIp, recordSecurityEvent } from "@/lib/security";
@@ -36,8 +35,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const canExportAudit = user.role === "admin" || (await hasPermission(user.role, "audit.export"));
-  if (!canExportAudit) {
+  if (user.role !== "admin") {
     await recordSecurityEvent({
       eventType: "api_forbidden",
       ipAddress: readRequestIp(req.headers),

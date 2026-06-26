@@ -2,13 +2,24 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$ApiBaseUrl,
 
-    [Parameter(Mandatory = $true)]
     [string]$EnrollmentToken,
+
+    [int]$FacilityId,
+
+    [string]$WorkGroupName,
+
+    [string]$InstallKey,
 
     [string]$InstallRoot = "$env:ProgramData\ATACSAgent"
 )
 
 $ErrorActionPreference = "Stop"
+
+$hasToken = -not [string]::IsNullOrWhiteSpace($EnrollmentToken)
+$hasStaticInstall = -not [string]::IsNullOrWhiteSpace($InstallKey) -and $FacilityId -gt 0
+if (-not $hasToken -and -not $hasStaticInstall) {
+    throw "EnrollmentToken or InstallKey + FacilityId is required."
+}
 
 function Test-IsAdministrator {
     $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
@@ -38,7 +49,17 @@ if (-not (Test-Path $InstallRoot)) {
 Copy-Item -Path $agentScriptSource -Destination $agentScriptTarget -Force
 
 Write-Host "Running first enrollment and inventory report..."
-powershell.exe -ExecutionPolicy Bypass -File $agentScriptTarget -ApiBaseUrl $ApiBaseUrl -EnrollmentToken $EnrollmentToken -ConfigPath $configPath -RunOnce
+$enrollArgs = @("-ExecutionPolicy", "Bypass", "-File", $agentScriptTarget, "-ApiBaseUrl", $ApiBaseUrl, "-ConfigPath", $configPath, "-RunOnce")
+if ($hasToken) {
+    $enrollArgs += @("-EnrollmentToken", $EnrollmentToken)
+}
+else {
+    $enrollArgs += @("-FacilityId", $FacilityId, "-InstallKey", $InstallKey)
+    if (-not [string]::IsNullOrWhiteSpace($WorkGroupName)) {
+        $enrollArgs += @("-WorkGroupName", $WorkGroupName)
+    }
+}
+powershell.exe @enrollArgs
 
 $taskCommand = "powershell.exe"
 $taskArgs = "-ExecutionPolicy Bypass -File `"$agentScriptTarget`" -ConfigPath `"$configPath`" -RunOnce"

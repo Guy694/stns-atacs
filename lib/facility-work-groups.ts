@@ -114,11 +114,6 @@ function toWorkGroupFacilityOption(row: WorkGroupFacilityRow): WorkGroupFacility
   };
 }
 
-function isProvinceOffice(typecode: string | null | undefined) {
-  const code = (typecode ?? "").trim();
-  return code === "สสจ." || code === "สสจ";
-}
-
 export async function getFacilityAgentContext(facilityId: number) {
   const rows = await selectRows<FacilityAgentContextRow>(
     `SELECT id, name, typecode, district_name
@@ -155,10 +150,6 @@ export async function listManageableWorkGroupFacilitiesForUser(
   const ownFacility = await getFacilityAgentContext(Number(user.facilityId));
   if (!ownFacility?.requiresWorkGroup) {
     return [];
-  }
-
-  if (isProvinceOffice(ownFacility.typecode)) {
-    return listFacilitiesRequiringWorkGroups();
   }
 
   return [

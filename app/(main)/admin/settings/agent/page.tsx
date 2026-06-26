@@ -9,6 +9,7 @@ import { listAgentDevices, listAgentEnrollments } from "@/lib/agent";
 import { getCurrentUser } from "@/lib/auth";
 import { listAllFacilitiesForSelect, listAssetsForFacilityIds } from "@/lib/assets";
 import { formatThaiDateTime } from "@/lib/date-format";
+import { getFacilityScopeId } from "@/lib/facility-scope";
 import { listFacilityWorkGroups } from "@/lib/facility-work-groups";
 import { hasPermission } from "@/lib/role-permissions";
 
@@ -23,7 +24,10 @@ export default async function AgentSettingsPage() {
   const allowAgentManage = user.role === "admin" || (await hasPermission(user.role, "agent.manage"));
   if (!allowAgentManage) redirect("/dashboard");
 
-  const facilities = await listAllFacilitiesForSelect();
+  const facilityScopeId = getFacilityScopeId(user);
+  if (facilityScopeId === null) redirect("/profile");
+  const scopedFilter = facilityScopeId ? { facilityId: facilityScopeId } : undefined;
+  const facilities = await listAllFacilitiesForSelect(scopedFilter);
 
   let enrollments = [] as Awaited<ReturnType<typeof listAgentEnrollments>>;
   let devices = [] as Awaited<ReturnType<typeof listAgentDevices>>;
@@ -32,7 +36,11 @@ export default async function AgentSettingsPage() {
   let dbError: string | null = null;
 
   try {
-    [enrollments, devices, workGroups] = await Promise.all([listAgentEnrollments(), listAgentDevices(), listFacilityWorkGroups()]);
+    [enrollments, devices, workGroups] = await Promise.all([
+      listAgentEnrollments(scopedFilter),
+      listAgentDevices(scopedFilter),
+      listFacilityWorkGroups(facilityScopeId || undefined),
+    ]);
     const facilityIds = [...new Set(devices.map((d) => d.facilityId))];
     assetOptions = await listAssetsForFacilityIds(facilityIds);
   } catch {

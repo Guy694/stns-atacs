@@ -6,6 +6,7 @@ import { StatusBadge } from "@/app/_components/ui/status-badge";
 import { assetStatusLabel, assetStatusTone } from "@/lib/asset-status";
 import { getCurrentUser } from "@/lib/auth";
 import { getAssetById, listAssets } from "@/lib/assets";
+import { getFacilityScopeId } from "@/lib/facility-scope";
 import { canManageAsset, canMutateAssets } from "@/lib/permissions";
 import { hasPermission } from "@/lib/role-permissions";
 import { DisposalForm } from "./_components/disposal-form";
@@ -25,7 +26,8 @@ export default async function DisposalPage({ searchParams }: Props) {
   if (!canMutateAssets(user)) redirect("/assets");
   if (!(await hasPermission(user.role, "disposal.manage"))) redirect("/assets");
   const canMutate = true;
-  const facilityScopeId = user.role === "officer" ? Number(user.facilityId ?? 0) : undefined;
+  const facilityScopeId = getFacilityScopeId(user);
+  if (facilityScopeId === null) redirect("/profile");
 
   const params = await searchParams;
   const q = readParam(params, "q");

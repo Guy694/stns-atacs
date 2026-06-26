@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { getCurrentUser } from "@/lib/auth";
-import { hasPermission, getRolePermissionMatrix, PERMISSION_DEFINITIONS } from "@/lib/role-permissions";
+import { getRolePermissionMatrix, PERMISSION_DEFINITIONS } from "@/lib/role-permissions";
 import { readRequestIp, recordSecurityEvent } from "@/lib/security";
 
 export async function GET(req: NextRequest) {
@@ -16,8 +16,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const allow = user.role === "admin" || (await hasPermission(user.role, "permissions.manage"));
-  if (!allow) {
+  if (user.role !== "admin") {
     await recordSecurityEvent({
       eventType: "api_forbidden",
       ipAddress: readRequestIp(req.headers),

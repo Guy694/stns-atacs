@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { StatusBadge } from "@/app/_components/ui/status-badge";
 import { getCurrentUser } from "@/lib/auth";
 import { listFacilities } from "@/lib/assets";
+import { getFacilityScopeId } from "@/lib/facility-scope";
 import { MapClient } from "./_components/map-client";
 
 const TYPE_COLOR: Record<string, string> = {
@@ -18,7 +19,9 @@ export default async function MapPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
-  const facilities = await listFacilities();
+  const facilityScopeId = getFacilityScopeId(user);
+  if (facilityScopeId === null) redirect("/profile");
+  const facilities = await listFacilities({ facilityId: facilityScopeId });
   const withCoords = facilities.filter((f) => f.lat && f.lon);
 
   const byDistrict = withCoords.reduce<Record<string, number>>((acc, f) => {

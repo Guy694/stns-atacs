@@ -4,7 +4,7 @@ import { notFound, redirect } from "next/navigation";
 import { AppIcon } from "@/app/_components/ui/icon";
 import { getCurrentUser } from "@/lib/auth";
 import { getInspectionById, getInspectionItems } from "@/lib/inspection";
-import { canManageFacility } from "@/lib/permissions";
+import { canAccessFacility } from "@/lib/facility-scope";
 import { hasPermission } from "@/lib/role-permissions";
 
 export default async function InspectionDetailPage({
@@ -23,7 +23,7 @@ export default async function InspectionDetailPage({
   ]);
 
   if (!inspection) notFound();
-  if (user.role === "officer" && !canManageFacility(user, inspection.facilityId)) {
+  if (!canAccessFacility(user, inspection.facilityId)) {
     redirect("/inspection");
   }
 

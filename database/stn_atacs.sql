@@ -441,8 +441,10 @@ INSERT INTO `information_asset_surveys` (`id`, `facility_id`, `survey_title`, `p
 
 CREATE TABLE `users` (
   `id` bigint UNSIGNED NOT NULL,
-  `thaid_cid` varchar(13) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'เลขบัตรประชาชนจากการยืนยันตัวตนผ่าน ThaiD (NULL = user ประเภท username/password เท่านั้น)',
-  `full_name` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+  `thaid_cid` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'เลขบัตรประชาชนจากการยืนยันตัวตนผ่าน ThaiD (เข้ารหัส) (NULL = user ประเภท username/password เท่านั้น)',
+  `thaid_cid_hash` char(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'ค่า HMAC-SHA256 ของเลข ThaiD สำหรับค้นหา/ตรวจซ้ำ',
+  `first_name` varchar(150) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+  `last_name` varchar(150) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
   `officer_position` varchar(150) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'ตำแหน่งงานของเจ้าหน้าที่',
   `email` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
   `username` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'ชื่อผู้ใช้สำหรับ login แบบ username/password (ไม่บังคับ)',
@@ -458,11 +460,11 @@ CREATE TABLE `users` (
 -- Dumping data for table `users`
 --
 
-INSERT INTO `users` (`id`, `thaid_cid`, `full_name`, `email`, `username`, `password_hash`, `role`, `is_active`, `last_login_at`, `created_at`, `updated_at`) VALUES
-(1, '3901900015481', 'อิรฟาน หลงเด็น', 'irfan.admin@satun.moph.go.th', 'atacs_admin', 'de195e10198461c169bc3a488fd7b3e0:9adc7e636748aa8c6ffb5462e97b3b4d3cf45841b91156e966b43ce0057ae3067d912e27d36c597cb085e81e98be87cb057a0aa5866634719dc0a2bd11347255', 'admin', 1, '2026-05-11 08:47:56', '2026-05-11 08:32:17', '2026-05-11 08:47:56'),
-(2, '3900600012345', 'สุชาดา ทองมาก', 'suchada.officer@satun.moph.go.th', NULL, NULL, 'officer', 1, NULL, '2026-05-11 08:32:17', '2026-05-11 08:32:17'),
-(3, NULL, 'นครินทร์ ชายสิทธิ์', 'nakharin.officer@satun.moph.go.th', 'nakharin', 'd6299d396393d346b280ca7ce3c32ccc:a90a60d4287f66a88c9e5fb08b788b4b12dd3122fc08684320ecfbedd3392c4ff2d065a0f41a2b943168d085697adfefbff12ec931345857c8b8f3bdfa2c593c', 'officer', 1, NULL, '2026-05-11 08:32:17', '2026-05-11 08:32:17'),
-(4, '1901900088812', 'ธนพล รัตนะ', NULL, 'thanaphon.r', 'f66a5feeeab628babfdeb63449c656a2:f613edc5424966ad8f44e1cf3660dd46d4b2dc72c63eeb06433a5c564f2a2532066a923ce1e91e4c14fe0e9fd6d3db21ef2b1207016999f64b3089ed834dcd30', 'officer', 1, NULL, '2026-05-11 08:32:17', '2026-05-11 08:32:17');
+INSERT INTO `users` (`id`, `thaid_cid`, `thaid_cid_hash`, `first_name`, `last_name`, `email`, `username`, `password_hash`, `role`, `is_active`, `last_login_at`, `created_at`, `updated_at`) VALUES
+(1, '3901900015481', NULL, 'อิรฟาน', 'หลงเด็น', 'irfan.admin@satun.moph.go.th', 'atacs_admin', 'de195e10198461c169bc3a488fd7b3e0:9adc7e636748aa8c6ffb5462e97b3b4d3cf45841b91156e966b43ce0057ae3067d912e27d36c597cb085e81e98be87cb057a0aa5866634719dc0a2bd11347255', 'admin', 1, '2026-05-11 08:47:56', '2026-05-11 08:32:17', '2026-05-11 08:47:56'),
+(2, '3900600012345', NULL, 'สุชาดา', 'ทองมาก', 'suchada.officer@satun.moph.go.th', NULL, NULL, 'officer', 1, NULL, '2026-05-11 08:32:17', '2026-05-11 08:32:17'),
+(3, NULL, 'นครินทร์', 'ชายสิทธิ์', 'nakharin.officer@satun.moph.go.th', 'nakharin', 'd6299d396393d346b280ca7ce3c32ccc:a90a60d4287f66a88c9e5fb08b788b4b12dd3122fc08684320ecfbedd3392c4ff2d065a0f41a2b943168d085697adfefbff12ec931345857c8b8f3bdfa2c593c', 'officer', 1, NULL, '2026-05-11 08:32:17', '2026-05-11 08:32:17'),
+(4, '1901900088812', 'ธนพล', 'รัตนะ', NULL, 'thanaphon.r', 'f66a5feeeab628babfdeb63449c656a2:f613edc5424966ad8f44e1cf3660dd46d4b2dc72c63eeb06433a5c564f2a2532066a923ce1e91e4c14fe0e9fd6d3db21ef2b1207016999f64b3089ed834dcd30', 'officer', 1, NULL, '2026-05-11 08:32:17', '2026-05-11 08:32:17');
 
 --
 -- Indexes for dumped tables
@@ -513,7 +515,7 @@ ALTER TABLE `information_asset_surveys`
 --
 ALTER TABLE `users`
   ADD PRIMARY KEY (`id`),
-  ADD UNIQUE KEY `uk_users_thaid_cid` (`thaid_cid`),
+  ADD UNIQUE KEY `uk_users_thaid_cid_hash` (`thaid_cid_hash`),
   ADD UNIQUE KEY `uk_users_email` (`email`),
   ADD UNIQUE KEY `uk_users_username` (`username`);
 

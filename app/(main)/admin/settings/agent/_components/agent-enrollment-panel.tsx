@@ -6,7 +6,13 @@ import {
   createAgentEnrollmentAction,
 } from "@/app/(main)/admin/settings/agent/actions";
 import { agentEnrollmentInitialState } from "@/app/(main)/admin/settings/agent/types";
-import { buildLinuxAgentInstallCommand, buildWindowsAgentInstallCommand } from "@/lib/agent-install";
+import {
+  AGENT_INSTALL_KEY_PLACEHOLDER,
+  buildLinuxAgentInstallCommand,
+  buildLinuxStaticAgentInstallCommand,
+  buildWindowsAgentInstallCommand,
+  buildWindowsStaticAgentInstallCommand,
+} from "@/lib/agent-install";
 
 type FacilityOption = {
   id: number;
@@ -56,6 +62,7 @@ function requiresWorkGroup(typecode: string | null | undefined) {
 export function AgentEnrollmentPanel({ facilities, workGroups }: AgentEnrollmentPanelProps) {
   const [selectedFacilityId, setSelectedFacilityId] = useState("");
   const [facilityLabel, setFacilityLabel] = useState("");
+  const [workGroupName, setWorkGroupName] = useState("");
   const [state, formAction, pending] = useActionState(createAgentEnrollmentAction, agentEnrollmentInitialState);
   const facilitiesRef = useRef(facilities);
   const windowsInstallCommand = state.createdToken ? buildWindowsAgentInstallCommand(state.createdToken) : "";
@@ -63,6 +70,13 @@ export function AgentEnrollmentPanel({ facilities, workGroups }: AgentEnrollment
   const selectedFacility = facilities.find((item) => String(item.id) === selectedFacilityId);
   const selectedRequiresWorkGroup = requiresWorkGroup(selectedFacility?.typecode);
   const selectedWorkGroups = workGroups.filter((group) => String(group.facilityId) === selectedFacilityId);
+  const staticWorkGroup = selectedRequiresWorkGroup ? workGroupName.trim() || "<WORK_GROUP_NAME>" : "";
+  const staticWindowsCommand = selectedFacility
+    ? buildWindowsStaticAgentInstallCommand({ facilityId: selectedFacility.id, workGroupName: staticWorkGroup })
+    : "";
+  const staticLinuxCommand = selectedFacility
+    ? buildLinuxStaticAgentInstallCommand({ facilityId: selectedFacility.id, workGroupName: staticWorkGroup })
+    : "";
 
   useEffect(() => {
     facilitiesRef.current = facilities;
@@ -91,7 +105,10 @@ export function AgentEnrollmentPanel({ facilities, workGroups }: AgentEnrollment
           <select
             name="facilityId"
             value={selectedFacilityId}
-            onChange={(event) => setSelectedFacilityId(event.target.value)}
+            onChange={(event) => {
+              setSelectedFacilityId(event.target.value);
+              setWorkGroupName("");
+            }}
             required
             className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
           >
@@ -109,6 +126,8 @@ export function AgentEnrollmentPanel({ facilities, workGroups }: AgentEnrollment
           <label className="block text-sm font-medium">ชื่อกลุ่มงาน</label>
           <input
             name="workGroupName"
+            value={workGroupName}
+            onChange={(event) => setWorkGroupName(event.target.value)}
             list="admin-facility-work-groups"
             required={selectedRequiresWorkGroup}
             disabled={!selectedFacilityId || !selectedRequiresWorkGroup}
@@ -147,6 +166,45 @@ export function AgentEnrollmentPanel({ facilities, workGroups }: AgentEnrollment
           </button>
         </div>
       </form>
+
+      {selectedFacility && (
+        <div className="mt-5 rounded-2xl border border-sky-200 bg-sky-50 p-4">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p className="text-sm font-semibold text-sky-950">คำสั่งติดตั้งแบบใช้ซ้ำ</p>
+              <p className="mt-1 text-xs text-sky-800">
+                ใช้เมื่อต้องการให้ผู้ติดตั้งแก้แค่ facilityId / ชื่อกลุ่มงาน โดยไม่ต้องสร้าง token จากหน้านี้ทุกครั้ง
+              </p>
+            </div>
+            <div className="rounded-lg border border-sky-200 bg-white px-3 py-1.5 font-mono text-xs text-sky-900">
+              facilityId={selectedFacility.id}
+            </div>
+          </div>
+          <div className="mt-3 grid gap-3 xl:grid-cols-2">
+            <div className="rounded-xl border border-sky-200 bg-white/90 px-4 py-3">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm font-semibold text-sky-950">Windows PowerShell</p>
+                <CopyButton text={staticWindowsCommand} label="คัดลอกคำสั่ง" />
+              </div>
+              <div className="mt-3 max-h-32 overflow-auto rounded-lg bg-stone-950 px-3 py-2 font-mono text-[11px] leading-5 text-sky-100">
+                {staticWindowsCommand}
+              </div>
+            </div>
+            <div className="rounded-xl border border-sky-200 bg-white/90 px-4 py-3">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm font-semibold text-sky-950">Linux Terminal</p>
+                <CopyButton text={staticLinuxCommand} label="คัดลอกคำสั่ง" />
+              </div>
+              <div className="mt-3 max-h-32 overflow-auto rounded-lg bg-stone-950 px-3 py-2 font-mono text-[11px] leading-5 text-sky-100">
+                {staticLinuxCommand}
+              </div>
+            </div>
+          </div>
+          <p className="mt-3 text-xs text-sky-800">
+            ก่อนใช้งานจริงให้แทน {AGENT_INSTALL_KEY_PLACEHOLDER} ด้วยค่า ATACS_AGENT_INSTALL_KEY ที่ตั้งไว้บน server
+          </p>
+        </div>
+      )}
 
       {state.error && (
         <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{state.error}</div>

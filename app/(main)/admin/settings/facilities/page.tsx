@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth";
 import { listFacilitiesAdmin } from "@/lib/assets";
+import { getFacilityScopeId } from "@/lib/facility-scope";
 import { hasPermission } from "@/lib/role-permissions";
 import { FacilitiesClient } from "./_components/facilities-client";
 
@@ -13,7 +14,9 @@ export default async function AdminFacilitiesPage() {
   const allowManageFacilities = user.role === "admin" || (await hasPermission(user.role, "facilities.manage"));
   if (!allowManageFacilities) redirect("/dashboard");
 
-  const facilities = await listFacilitiesAdmin();
+  const facilityScopeId = getFacilityScopeId(user);
+  if (facilityScopeId === null) redirect("/profile");
+  const facilities = await listFacilitiesAdmin(facilityScopeId ? { facilityId: facilityScopeId } : undefined);
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6">
@@ -29,7 +32,7 @@ export default async function AdminFacilitiesPage() {
         <p className="mt-1 text-sm text-[var(--muted)]">เพิ่ม/แก้ไข/ปิดใช้งาน หน่วยบริการสาธารณสุขในจังหวัดสตูล</p>
       </div>
 
-      <FacilitiesClient facilities={facilities} />
+      <FacilitiesClient facilities={facilities} canCreate={user.role === "admin"} canToggleActive={user.role === "admin"} />
     </div>
   );
 }

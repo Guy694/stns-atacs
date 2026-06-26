@@ -50,8 +50,8 @@ export default async function Home({ searchParams }: HomeProps) {
   const { facilitySurveys: allFacilitySurveys, districtCoverage, dataSource, connectionMessage, allowPublicOfficerBoard } =
     await getDashboardData();
   const isAdmin = currentUser.role === "admin";
-  const isOfficer = currentUser.role === "officer";
   const isViewer = currentUser.role === "viewer";
+  const isScopedUser = !isAdmin;
   const canViewExactInfrastructure = isAdmin;
   const canViewPublicIpPanel = isAdmin || allowPublicOfficerBoard;
   const referenceDate = new Date();
@@ -98,7 +98,7 @@ export default async function Home({ searchParams }: HomeProps) {
     ? scopedFacilitySurveys.find((survey) => survey.facilityId === selectedFacilityId)?.facilityName
     : "";
 
-  const scopeFacilityName = isOfficer ? dashboardScope.scopeFacilityName : null;
+  const scopeFacilityName = isScopedUser ? dashboardScope.scopeFacilityName : null;
   const hasScopedData = scopedFacilitySurveys.length > 0;
   const hasFilteredData = facilitySurveys.length > 0;
 
@@ -385,7 +385,7 @@ export default async function Home({ searchParams }: HomeProps) {
             </div>
             <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 text-sm sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0">
               <Link href={assetQuickLink} className="shrink-0 rounded-xl border border-black/10 bg-white/80 px-4 py-2 font-medium text-[var(--foreground)] transition hover:bg-white">
-                {isOfficer ? "ไปหน้าทรัพย์สิน" : "ดูทรัพย์สินทั้งหมด"}
+                {isScopedUser ? "ไปหน้าทรัพย์สิน" : "ดูทรัพย์สินทั้งหมด"}
               </Link>
               <Link href={brokenQuickLink} className="shrink-0 rounded-xl border border-rose-200 bg-rose-50 px-4 py-2 font-medium text-rose-700 transition hover:bg-rose-100">
                 ดูรายการชำรุด
@@ -400,7 +400,7 @@ export default async function Home({ searchParams }: HomeProps) {
           </div>
         </div>
 
-        {isOfficer && !missingFacilityAssignment && !hasScopedData && (
+        {isScopedUser && !missingFacilityAssignment && !hasScopedData && (
           <div className="glass-panel rounded-2xl p-8 text-center">
             <p className="text-lg font-semibold text-[var(--foreground)]">ยังไม่พบข้อมูลสำรวจของหน่วยงานนี้</p>
             <p className="mt-2 text-sm text-[var(--muted)]">
@@ -414,7 +414,7 @@ export default async function Home({ searchParams }: HomeProps) {
           </div>
         )}
 
-        {(!isOfficer || hasScopedData) && (
+        {(!isScopedUser || hasScopedData) && (
           !hasFilteredData ? (
             <div className="glass-panel rounded-2xl p-8 text-center">
               <p className="text-lg font-semibold text-[var(--foreground)]">ไม่พบข้อมูลตามตัวกรองที่เลือก</p>

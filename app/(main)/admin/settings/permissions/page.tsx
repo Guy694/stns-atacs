@@ -9,7 +9,6 @@ import {
   APP_ROLES,
   PERMISSION_DEFINITIONS,
   getRolePermissionMatrix,
-  hasPermission,
   type AppRole,
   type PermissionKey,
 } from "@/lib/role-permissions";
@@ -28,14 +27,13 @@ export default async function AdminPermissionsPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
-  const allowManageByPolicy = user.role === "admin" || (await hasPermission(user.role, "permissions.manage"));
-  if (!allowManageByPolicy) redirect("/dashboard");
+  if (user.role !== "admin") redirect("/dashboard");
 
   const matrix = await getRolePermissionMatrix();
   const users = await selectRows<UserPermissionRow>(
-    `SELECT id, full_name, role, is_active
+     `SELECT id, TRIM(CONCAT(first_name, ' ', last_name)) AS full_name, role, is_active
      FROM users
-     ORDER BY role DESC, full_name ASC`
+      ORDER BY role DESC, first_name ASC, last_name ASC`
   );
 
   return (

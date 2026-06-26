@@ -5,6 +5,7 @@ import crypto from "node:crypto";
 import type { RowDataPacket } from "mysql2/promise";
 
 import { createAsset, findOrCreateSurvey, updateAsset } from "@/lib/assets";
+import { findOrCreateFacilityWorkGroup, getFacilityAgentContext, normalizeWorkGroupName } from "@/lib/facility-work-groups";
 import { executeStatement, selectRows } from "@/lib/mysql";
 
 type EnrollmentRow = RowDataPacket & {
@@ -247,18 +248,24 @@ async function findAssetCandidate(facilityId: number, serialNumber?: string | nu
   return null;
 }
 
-export async function listAgentEnrollments(): Promise<AgentEnrollment[]> {
+export async function listAgentEnrollments(filter?: { facilityId?: number }): Promise<AgentEnrollment[]> {
+  const where = filter?.facilityId ? "WHERE ae.facility_id = ?" : "";
+  const values = filter?.facilityId ? [filter.facilityId] : [];
   const rows = await selectRows<EnrollmentRow>(
     `SELECT ae.*, hf.name AS facility_name, fwg.work_group_name
      FROM agent_enrollments ae
      JOIN health_facilities hf ON hf.id = ae.facility_id
      LEFT JOIN facility_work_groups fwg ON fwg.id = ae.work_group_id
-     ORDER BY ae.created_at DESC, ae.id DESC`
+     ${where}
+     ORDER BY ae.created_at DESC, ae.id DESC`,
+    values
   );
   return rows.map(toEnrollment);
 }
 
-export async function listAgentDevices(): Promise<AgentDevice[]> {
+export async function listAgentDevices(filter?: { facilityId?: number }): Promise<AgentDevice[]> {
+  const where = filter?.facilityId ? "WHERE ad.facility_id = ?" : "";
+  const values = filter?.facilityId ? [filter.facilityId] : [];
   const rows = await selectRows<DeviceRow>(
     `SELECT ad.*, hf.name AS facility_name,
             a.asset_registration_no AS linked_asset_registration_no,
@@ -266,7 +273,9 @@ export async function listAgentDevices(): Promise<AgentDevice[]> {
      FROM agent_devices ad
      JOIN health_facilities hf ON hf.id = ad.facility_id
      LEFT JOIN information_assets a ON a.id = ad.linked_asset_id
-     ORDER BY ad.last_seen_at DESC, ad.id DESC`
+     ${where}
+     ORDER BY ad.last_seen_at DESC, ad.id DESC`,
+    values
   );
   return rows.map(toDevice);
 }
@@ -312,6 +321,66 @@ async function getEnrollmentByToken(token: string) {
   return rows[0] ?? null;
 }
 
+async function getEnrollmentById(id: number) {
+  const rows = await selectRows<EnrollmentRow>(
+    `SELECT ae.*, hf.name AS facility_name, fwg.work_group_name
+     FROM agent_enrollments ae
+     JOIN health_facilities hf ON hf.id = ae.facility_id
+     LEFT JOIN facility_work_groups fwg ON fwg.id = ae.work_group_id
+     WHERE ae.id = ?
+       AND ae.is_active = 1
+       AND (ae.expires_at IS NULL OR ae.expires_at > NOW())
+     LIMIT 1`,
+    [id]
+  );
+  return rows[0] ?? null;
+}
+
+async function getReusableInstallEnrollment(input: {
+  facilityId: number;
+  workGroupId: number | null;
+  enrollmentName: string;
+}) {
+  const rows = await selectRows<EnrollmentRow>(
+    `SELECT ae.*, hf.name AS facility_name, fwg.work_group_name
+     FROM agent_enrollments ae
+     JOIN health_facilities hf ON hf.id = ae.facility_id
+     LEFT JOIN facility_work_groups fwg ON fwg.id = ae.work_group_id
+     WHERE ae.facility_id = ?
+       AND ((? IS NULL AND ae.work_group_id IS NULL) OR ae.work_group_id = ?)
+       AND ae.enrollment_name = ?
+       AND ae.created_by_user_id IS NULL
+       AND ae.expires_at IS NULL
+       AND ae.is_active = 1
+     ORDER BY ae.id ASC
+     LIMIT 1`,
+    [input.facilityId, input.workGroupId, input.workGroupId, input.enrollmentName]
+  );
+  return rows[0] ?? null;
+}
+
+async function ensureReusableInstallEnrollment(input: {
+  facilityId: number;
+  workGroupId: number | null;
+  enrollmentName: string;
+}) {
+  const existing = await getReusableInstallEnrollment(input);
+  if (existing) return existing;
+
+  const tokenHash = hashSecret(randomToken("atacs_install"));
+  const result = await executeStatement(
+    `INSERT INTO agent_enrollments (facility_id, work_group_id, enrollment_name, token_hash, expires_at, created_by_user_id, is_active)
+     VALUES (?, ?, ?, ?, NULL, NULL, 1)`,
+    [input.facilityId, input.workGroupId, input.enrollmentName, tokenHash]
+  );
+
+  const created = await getEnrollmentById(result.insertId);
+  if (!created) {
+    throw new Error("INSTALL_ENROLLMENT_UNAVAILABLE");
+  }
+  return created;
+}
+
 async function getAgentDeviceByCredentials(agentId: string, agentKey: string) {
   const rows = await selectRows<DeviceRow>(
     `SELECT ad.*, hf.name AS facility_name,
@@ -329,17 +398,12 @@ async function getAgentDeviceByCredentials(agentId: string, agentKey: string) {
   return rows[0] ?? null;
 }
 
-export async function enrollAgentDevice(input: {
-  enrollmentToken: string;
+async function enrollAgentDeviceForEnrollment(input: {
+  enrollment: EnrollmentRow;
   fingerprint: string;
   hostname?: string | null;
   agentVersion?: string | null;
 }) {
-  const enrollment = await getEnrollmentByToken(input.enrollmentToken);
-  if (!enrollment) {
-    throw new Error("INVALID_ENROLLMENT_TOKEN");
-  }
-
   const fingerprint = normalizeFingerprint(input.fingerprint);
   if (!fingerprint) {
     throw new Error("INVALID_FINGERPRINT");
@@ -356,7 +420,7 @@ export async function enrollAgentDevice(input: {
      LEFT JOIN information_assets a ON a.id = ad.linked_asset_id
      WHERE ad.facility_id = ? AND ad.device_fingerprint = ?
      LIMIT 1`,
-    [enrollment.facility_id, fingerprint]
+    [input.enrollment.facility_id, fingerprint]
   );
 
   let deviceId = existing[0]?.id ?? 0;
@@ -367,7 +431,7 @@ export async function enrollAgentDevice(input: {
       `UPDATE agent_devices
        SET enrollment_id = ?, agent_uuid = ?, agent_key_hash = ?, hostname = ?, agent_version = ?, is_active = 1, status = 'online', last_seen_at = NOW()
        WHERE id = ?`,
-      [enrollment.id, agentUuid, deviceSecretHash, input.hostname?.trim() || null, input.agentVersion?.trim() || null, existing[0].id]
+      [input.enrollment.id, agentUuid, deviceSecretHash, input.hostname?.trim() || null, input.agentVersion?.trim() || null, existing[0].id]
     );
     deviceId = existing[0].id;
   } else {
@@ -376,8 +440,8 @@ export async function enrollAgentDevice(input: {
          (facility_id, enrollment_id, agent_uuid, agent_key_hash, device_fingerprint, hostname, agent_version, status, is_active, first_seen_at, last_seen_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, 'online', 1, NOW(), NOW())`,
       [
-        enrollment.facility_id,
-        enrollment.id,
+        input.enrollment.facility_id,
+        input.enrollment.id,
         agentUuid,
         deviceSecretHash,
         fingerprint,
@@ -388,18 +452,79 @@ export async function enrollAgentDevice(input: {
     deviceId = result.insertId;
   }
 
-  await executeStatement("UPDATE agent_enrollments SET last_used_at = NOW() WHERE id = ?", [enrollment.id]);
+  await executeStatement("UPDATE agent_enrollments SET last_used_at = NOW() WHERE id = ?", [input.enrollment.id]);
 
   return {
     agentId: agentUuid,
     agentKey: deviceSecret,
-    facilityId: enrollment.facility_id,
-    facilityName: enrollment.facility_name,
-    workGroupId: enrollment.work_group_id,
-    workGroupName: enrollment.work_group_name,
+    facilityId: input.enrollment.facility_id,
+    facilityName: input.enrollment.facility_name,
+    workGroupId: input.enrollment.work_group_id,
+    workGroupName: input.enrollment.work_group_name,
     deviceId,
     wasExisting: Boolean(existing[0]),
   };
+}
+
+export async function enrollAgentDevice(input: {
+  enrollmentToken: string;
+  fingerprint: string;
+  hostname?: string | null;
+  agentVersion?: string | null;
+}) {
+  const enrollment = await getEnrollmentByToken(input.enrollmentToken);
+  if (!enrollment) {
+    throw new Error("INVALID_ENROLLMENT_TOKEN");
+  }
+
+  return enrollAgentDeviceForEnrollment({
+    enrollment,
+    fingerprint: input.fingerprint,
+    hostname: input.hostname,
+    agentVersion: input.agentVersion,
+  });
+}
+
+export async function enrollAgentDeviceWithInstallKey(input: {
+  facilityId: number;
+  workGroupName?: string | null;
+  fingerprint: string;
+  hostname?: string | null;
+  agentVersion?: string | null;
+}) {
+  const facility = await getFacilityAgentContext(input.facilityId);
+  if (!facility) {
+    throw new Error("INVALID_FACILITY");
+  }
+
+  const workGroupName = normalizeWorkGroupName(input.workGroupName ?? "");
+  if (facility.requiresWorkGroup && workGroupName.length < 2) {
+    throw new Error("WORK_GROUP_REQUIRED");
+  }
+  if (workGroupName.length > 150) {
+    throw new Error("WORK_GROUP_TOO_LONG");
+  }
+
+  const workGroupId = facility.requiresWorkGroup ? await findOrCreateFacilityWorkGroup(facility.id, workGroupName) : null;
+  if (facility.requiresWorkGroup && !workGroupId) {
+    throw new Error("WORK_GROUP_UNAVAILABLE");
+  }
+
+  const enrollmentName = facility.requiresWorkGroup
+    ? `Install Key · ${facility.name} · ${workGroupName}`
+    : `Install Key · ${facility.name}`;
+  const enrollment = await ensureReusableInstallEnrollment({
+    facilityId: facility.id,
+    workGroupId,
+    enrollmentName,
+  });
+
+  return enrollAgentDeviceForEnrollment({
+    enrollment,
+    fingerprint: input.fingerprint,
+    hostname: input.hostname,
+    agentVersion: input.agentVersion,
+  });
 }
 
 export async function authenticateAgent(agentId: string, agentKey: string) {
@@ -541,6 +666,22 @@ export async function linkAgentDeviceToAsset(deviceId: number, assetId: number |
     `UPDATE agent_devices SET linked_asset_id = ? WHERE id = ?`,
     [assetId ?? null, deviceId]
   );
+}
+
+export async function getAgentDeviceFacilityId(deviceId: number) {
+  const rows = await selectRows<RowDataPacket & { facility_id: number }>(
+    "SELECT facility_id FROM agent_devices WHERE id = ? LIMIT 1",
+    [deviceId]
+  );
+  return rows[0]?.facility_id ?? null;
+}
+
+export async function getAgentEnrollmentFacilityId(enrollmentId: number) {
+  const rows = await selectRows<RowDataPacket & { facility_id: number }>(
+    "SELECT facility_id FROM agent_enrollments WHERE id = ? LIMIT 1",
+    [enrollmentId]
+  );
+  return rows[0]?.facility_id ?? null;
 }
 
 export async function heartbeatAgent(input: { agentId: string; agentKey: string; status?: string | null }) {

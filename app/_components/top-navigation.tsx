@@ -25,7 +25,7 @@ export function TopNavigation({ current, user }: TopNavigationProps) {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className=" flex flex-wrap items-center gap-2">
           <Link href="/" className= {navItemClass(current === "public")}>
-            แดชบอร์ดสรุปภาพรวม
+            <p className="text-white">แดชบอร์ดสรุปภาพรวม</p>
           </Link>
           {user ? (
             <>

@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { assetStatusLabel } from "@/lib/asset-status";
 import { getCurrentUser } from "@/lib/auth";
 import { listAssets } from "@/lib/assets";
+import { resolveFacilityFilter } from "@/lib/facility-scope";
 import { hasPermission } from "@/lib/role-permissions";
 import { readRequestIp, recordSecurityEvent } from "@/lib/security";
 
@@ -40,8 +41,8 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = req.nextUrl;
   const requestedFacilityId = searchParams.get("facilityId") ? Number(searchParams.get("facilityId")) : undefined;
-  const facilityId = user.role === "admin" ? requestedFacilityId : Number(user.facilityId ?? 0) || undefined;
-  if (user.role !== "admin" && !facilityId) {
+  const facilityId = resolveFacilityFilter(user, requestedFacilityId);
+  if (facilityId === null) {
     return NextResponse.json({ error: "No facility scope" }, { status: 403 });
   }
   const status = searchParams.get("status") ?? undefined;

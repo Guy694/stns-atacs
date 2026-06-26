@@ -6,6 +6,7 @@ import { StatusBadge } from "@/app/_components/ui/status-badge";
 import { getCurrentUser } from "@/lib/auth";
 import { getFacilityById, listAssets, listAllFacilitiesForSelect } from "@/lib/assets";
 import { formatThaiDate } from "@/lib/date-format";
+import { canAccessFacility } from "@/lib/facility-scope";
 import { listFacilityWorkGroups } from "@/lib/facility-work-groups";
 import { AssetFormModal } from "@/app/(main)/assets/_components/asset-form-modal";
 import { DeleteAssetButton } from "@/app/(main)/assets/_components/delete-asset-button";
@@ -85,11 +86,11 @@ export default async function FacilityDetailPage({ params, searchParams }: Props
   const facilityId = Number(id);
   if (!facilityId) notFound();
 
-  if (user.role === "officer" && user.facilityId && user.facilityId !== facilityId) {
+  if (!canAccessFacility(user, facilityId) && user.facilityId) {
     redirect(`/facilities/${user.facilityId}`);
   }
 
-  if (user.role === "officer" && !user.facilityId) {
+  if (!canAccessFacility(user, facilityId) && !user.facilityId) {
     redirect("/profile");
   }
 
@@ -116,7 +117,7 @@ export default async function FacilityDetailPage({ params, searchParams }: Props
       maExpiringDays,
       sort: normalizedSort,
     }),
-    listAllFacilitiesForSelect(),
+    listAllFacilitiesForSelect(user.role === "admin" ? undefined : { facilityId }),
     listFacilityWorkGroups(facilityId),
   ]);
 

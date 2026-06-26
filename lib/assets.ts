@@ -319,14 +319,17 @@ export async function getAssetById(id: number): Promise<AssetWithFacility | null
 }
 
 /** ดึง survey list (เพื่อใช้ใน dropdown เลือกหน่วยงานตอน add asset) */
-export async function listSurveys(): Promise<SurveyRow[]> {
+export async function listSurveys(filter?: { facilityId?: number }): Promise<SurveyRow[]> {
+  const where = filter?.facilityId ? "WHERE s.facility_id = ?" : "";
+  const values = filter?.facilityId ? [filter.facilityId] : [];
   try {
     return await selectRows<SurveyRow>(`
       SELECT s.id, s.facility_id, hf.name AS facility_name, hf.district_name, s.survey_title, s.survey_date, s.personnel_count
       FROM information_asset_surveys s
       JOIN health_facilities hf ON hf.id = s.facility_id
+      ${where}
       ORDER BY hf.district_name, hf.name
-    `);
+    `, values);
   } catch {
     return [];
   }
@@ -489,14 +492,16 @@ export type FacilitySelectRow = RowDataPacket & {
   typecode: string;
 };
 
-export async function listAllFacilitiesForSelect(): Promise<FacilitySelectRow[]> {
+export async function listAllFacilitiesForSelect(filter?: { facilityId?: number }): Promise<FacilitySelectRow[]> {
+  const where = filter?.facilityId ? "WHERE is_active = 1 AND id = ?" : "WHERE is_active = 1";
+  const values = filter?.facilityId ? [filter.facilityId] : [];
   try {
     return await selectRows<FacilitySelectRow>(`
       SELECT id, name AS facility_name, district_name, typecode
       FROM health_facilities
-      WHERE is_active = 1
+      ${where}
       ORDER BY district_name, typecode DESC, name
-    `);
+    `, values);
   } catch {
     return [];
   }
@@ -535,7 +540,9 @@ export type FacilityRow = RowDataPacket & {
 };
 
 /** รายการหน่วยบริการทั้งหมด พร้อมจำนวนทรัพย์สิน */
-export async function listFacilities(): Promise<FacilityRow[]> {
+export async function listFacilities(filter?: { facilityId?: number }): Promise<FacilityRow[]> {
+  const facilityClause = filter?.facilityId ? "AND hf.id = ?" : "";
+  const values = filter?.facilityId ? [filter.facilityId] : [];
   try {
     return await selectRows<FacilityRow>(`
       SELECT
@@ -554,10 +561,10 @@ export async function listFacilities(): Promise<FacilityRow[]> {
       FROM health_facilities hf
       LEFT JOIN information_asset_surveys s ON s.facility_id = hf.id
       LEFT JOIN information_assets a        ON a.survey_id   = s.id
-      WHERE hf.is_active = 1
+      WHERE hf.is_active = 1 ${facilityClause}
       GROUP BY hf.id
       ORDER BY hf.district_name, hf.typecode DESC, hf.name
-    `);
+    `, values);
   } catch {
     return [];
   }
@@ -606,7 +613,9 @@ export type FacilityAdminRow = RowDataPacket & {
   asset_count: number;
 };
 
-export async function listFacilitiesAdmin(): Promise<FacilityAdminRow[]> {
+export async function listFacilitiesAdmin(filter?: { facilityId?: number }): Promise<FacilityAdminRow[]> {
+  const where = filter?.facilityId ? "WHERE hf.id = ?" : "";
+  const values = filter?.facilityId ? [filter.facilityId] : [];
   try {
     return await selectRows<FacilityAdminRow>(`
       SELECT hf.id, hf.name, hf.typecode, hf.district_name, hf.tambon, hf.lat, hf.lon, hf.is_active,
@@ -614,9 +623,10 @@ export async function listFacilitiesAdmin(): Promise<FacilityAdminRow[]> {
       FROM health_facilities hf
       LEFT JOIN information_asset_surveys s ON s.facility_id = hf.id
       LEFT JOIN information_assets a        ON a.survey_id   = s.id
+      ${where}
       GROUP BY hf.id
       ORDER BY hf.district_name, hf.typecode DESC, hf.name
-    `);
+    `, values);
   } catch {
     return [];
   }

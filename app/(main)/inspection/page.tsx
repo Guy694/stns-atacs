@@ -5,6 +5,7 @@ import { AppIcon } from "@/app/_components/ui/icon";
 import { getCurrentUser } from "@/lib/auth";
 import { listInspections } from "@/lib/inspection";
 import { listFacilities } from "@/lib/assets";
+import { getFacilityScopeId } from "@/lib/facility-scope";
 import { canManageFacility } from "@/lib/permissions";
 import { hasPermission } from "@/lib/role-permissions";
 import NewInspectionForm from "./_components/new-inspection-form";
@@ -22,11 +23,12 @@ export default async function InspectionPage({
 
   const params = await searchParams;
   const view = canMutate && params["view"] === "new" ? "new" : "list";
-  const facilityScopeId = user.role === "officer" ? Number(user.facilityId ?? 0) : undefined;
+  const facilityScopeId = getFacilityScopeId(user);
+  if (facilityScopeId === null) redirect("/profile");
 
   const [inspections, facilities] = await Promise.all([
     listInspections(facilityScopeId),
-    listFacilities(),
+    listFacilities(facilityScopeId ? { facilityId: facilityScopeId } : undefined),
   ]);
   const facilitiesForForm = facilityScopeId
     ? facilities.filter((facility) => canManageFacility(user, facility.id))

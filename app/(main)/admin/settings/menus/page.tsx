@@ -7,7 +7,6 @@ import { StatusBadge } from "@/app/_components/ui/status-badge";
 import { getMenuVisibility } from "@/lib/app-settings";
 import { getCurrentUser } from "@/lib/auth";
 import { APP_MENU_GROUPS, APP_MENU_ITEMS } from "@/lib/menu";
-import { hasPermission } from "@/lib/role-permissions";
 
 type MenuSettingsPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -21,8 +20,7 @@ function readQueryValue(value: string | string[] | undefined) {
 export default async function MenuSettingsPage({ searchParams }: MenuSettingsPageProps) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
-  const canManage = user.role === "admin" || (await hasPermission(user.role, "permissions.manage"));
-  if (!canManage) redirect("/dashboard");
+  if (user.role !== "admin") redirect("/dashboard");
 
   const [params, menuVisibility] = await Promise.all([searchParams, getMenuVisibility()]);
   const notice = readQueryValue(params.notice);
