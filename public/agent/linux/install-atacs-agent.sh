@@ -5,7 +5,7 @@ usage() {
   cat <<'EOF'
 Usage:
   install-atacs-agent.sh --api-base-url <url> --enrollment-token <token> [--install-root <path>]
-  install-atacs-agent.sh --api-base-url <url> --install-key <key> --facility-id <id> [--work-group-name <name>] [--install-root <path>]
+  install-atacs-agent.sh --api-base-url <url> --install-key <key> --facility-id <id> [--work-group-id <id>] [--work-group-name <name>] [--install-root <path>]
 
 Installs the ATACS Linux agent, performs the first enrollment, and registers
 an automatic refresh job with systemd or cron.
@@ -15,6 +15,7 @@ EOF
 api_base_url=""
 enrollment_token=""
 facility_id=""
+work_group_id=""
 work_group_name=""
 install_key=""
 install_root="/opt/atacs-agent"
@@ -38,6 +39,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --facility-id)
       facility_id="${2:-}"
+      shift 2
+      ;;
+    --work-group-id)
+      work_group_id="${2:-}"
       shift 2
       ;;
     --work-group-name)
@@ -97,6 +102,9 @@ if [[ -n "$enrollment_token" ]]; then
   enroll_args+=(--enrollment-token "$enrollment_token")
 else
   enroll_args+=(--install-key "$install_key" --facility-id "$facility_id")
+  if [[ -n "$work_group_id" ]]; then
+    enroll_args+=(--work-group-id "$work_group_id")
+  fi
   if [[ -n "$work_group_name" ]]; then
     enroll_args+=(--work-group-name "$work_group_name")
   fi

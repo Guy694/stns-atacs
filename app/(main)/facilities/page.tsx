@@ -3,15 +3,17 @@ import Link from "next/link";
 import { StatusBadge } from "@/app/_components/ui/status-badge";
 import { getCurrentUser } from "@/lib/auth";
 import { listFacilities } from "@/lib/assets";
-import { getFacilityScopeId } from "@/lib/facility-scope";
+import { getAssetFacilityScopeIds } from "@/lib/facility-scope";
 
 export default async function FacilitiesPage() {
   const user = await getCurrentUser();
   if (!user) return null;
 
-  const facilityScopeId = getFacilityScopeId(user);
-  if (facilityScopeId === null) return null;
-  const facilities = await listFacilities({ facilityId: facilityScopeId });
+  const facilityScopeIds = getAssetFacilityScopeIds(user);
+  if (facilityScopeIds === null) return null;
+  const facilities = await listFacilities(
+    facilityScopeIds === undefined ? undefined : { facilityIds: facilityScopeIds }
+  );
 
   // Group by district
   const byDistrict = facilities.reduce<Record<string, typeof facilities>>((acc, f) => {
@@ -110,16 +112,12 @@ export default async function FacilitiesPage() {
                       )}
                     </td>
                     <td className="px-4 py-3 text-right">
-                      {f.has_survey > 0 ? (
-                        <Link
-                          href={`/facilities/${f.id}`}
-                          className="rounded-full bg-[var(--accent)]/10 px-3 py-1 text-xs font-medium text-[var(--accent)] transition hover:bg-[var(--accent)]/20"
-                        >
-                          ดูรายละเอียด →
-                        </Link>
-                      ) : (
-                        <span className="text-xs text-[var(--muted)]">—</span>
-                      )}
+                      <Link
+                        href={`/facilities/${f.id}`}
+                        className="rounded-full bg-[var(--accent)]/10 px-3 py-1 text-xs font-medium text-[var(--accent)] transition hover:bg-[var(--accent)]/20"
+                      >
+                        {f.has_survey > 0 ? "ดูรายละเอียด →" : "เริ่มกรอกข้อมูล →"}
+                      </Link>
                     </td>
                   </tr>
                 ))}

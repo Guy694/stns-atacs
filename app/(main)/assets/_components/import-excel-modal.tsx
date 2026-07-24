@@ -123,7 +123,7 @@ export default function ImportExcelModal({ facilities }: { facilities: FacilityR
                     className="w-full text-sm"
                   />
                   <p className="text-xs" style={{ color: "var(--muted)" }}>
-                    คอลัมน์ที่รองรับ: asset_registration_no, asset_name, asset_category, asset_group, device_type, manufacturer_brand, serial_number, operating_system, private_ip, public_ip, owner_name, location_detail, current_status, maintenance_end_date, usage_description
+                    คอลัมน์ที่รองรับ: asset_registration_no, asset_name, asset_class, asset_category, asset_group, device_type, manufacturer_brand, serial_number, operating_system, private_ip, public_ip, owner_name, location_detail, current_status, maintenance_end_date, usage_description
                   </p>
                 </div>
 

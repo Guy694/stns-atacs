@@ -13,7 +13,7 @@ import {
 import { getCurrentUser } from "@/lib/auth";
 import { getAssetById } from "@/lib/assets";
 import { canAccessFacility } from "@/lib/facility-scope";
-import { findOrCreateFacilityWorkGroup, getFacilityAgentContext, normalizeWorkGroupName } from "@/lib/facility-work-groups";
+import { getActiveFacilityWorkGroupForFacility, getFacilityAgentContext } from "@/lib/facility-work-groups";
 import { hasPermission } from "@/lib/role-permissions";
 import type { AgentEnrollmentActionState } from "./types";
 import { agentEnrollmentInitialState } from "./types";
@@ -35,7 +35,7 @@ export async function createAgentEnrollmentAction(
   const user = await requireAdmin();
 
   const facilityId = Number(formData.get("facilityId"));
-  const workGroupName = normalizeWorkGroupName((formData.get("workGroupName") as string | null) ?? "");
+  const workGroupIdInput = Number(formData.get("workGroupId"));
   const expiresAt = (formData.get("expiresAt") as string | null)?.trim() ?? "";
 
   if (!facilityId || Number.isNaN(facilityId)) {
@@ -50,25 +50,25 @@ export async function createAgentEnrollmentAction(
     return { ...agentEnrollmentInitialState, error: "คุณไม่มีสิทธิ์สร้าง token ให้หน่วยงานนี้" };
   }
 
-  if (facility.requiresWorkGroup && workGroupName.length < 2) {
-    return { ...agentEnrollmentInitialState, error: "หน่วยงานประเภทโรงพยาบาล / สสจ / สสอ ต้องระบุชื่อกลุ่มงาน" };
-  }
-  if (workGroupName.length > 150) {
-    return { ...agentEnrollmentInitialState, error: "ชื่อกลุ่มงานต้องไม่เกิน 150 ตัวอักษร" };
+  if (facility.requiresWorkGroup && (!workGroupIdInput || Number.isNaN(workGroupIdInput))) {
+    return { ...agentEnrollmentInitialState, error: "หน่วยงานประเภทโรงพยาบาล / สสจ / สสอ ต้องเลือกกลุ่มงาน" };
   }
 
   let workGroupId: number | null = null;
+  let selectedWorkGroupName = "";
   try {
     if (facility.requiresWorkGroup) {
-      workGroupId = await findOrCreateFacilityWorkGroup(facility.id, workGroupName);
-      if (!workGroupId) return { ...agentEnrollmentInitialState, error: "ไม่สามารถบันทึกชื่อกลุ่มงานได้" };
+      const workGroup = await getActiveFacilityWorkGroupForFacility(facility.id, workGroupIdInput);
+      if (!workGroup) return { ...agentEnrollmentInitialState, error: "ไม่พบกลุ่มงานนี้ในหน่วยงาน กรุณาเลือกจากรายการกลุ่มงานที่มีอยู่" };
+      workGroupId = workGroup.id;
+      selectedWorkGroupName = workGroup.workGroupName;
     }
   } catch {
     return { ...agentEnrollmentInitialState, error: "ยังไม่พบตาราง facility_work_groups กรุณารัน database/add_facility_work_groups.sql ก่อน" };
   }
 
   const enrollmentName = facility.requiresWorkGroup
-    ? `${facility.name} · ${workGroupName}`
+    ? `${facility.name} · ${selectedWorkGroupName}`
     : facility.name;
 
   try {

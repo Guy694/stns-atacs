@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { assetClassLabel } from "@/lib/asset-classes";
 import { assetStatusLabel } from "@/lib/asset-status";
 import { getCurrentUser } from "@/lib/auth";
 import { listAssets } from "@/lib/assets";
@@ -47,8 +48,9 @@ export async function GET(req: NextRequest) {
   }
   const status = searchParams.get("status") ?? undefined;
   const search = searchParams.get("q") ?? undefined;
+  const assetClass = searchParams.get("assetClass") ?? undefined;
 
-  const assets = await listAssets({ facilityId, status, search });
+  const assets = await listAssets({ facilityId, status, search, assetClass });
 
   const isAdmin = user.role === "admin";
 
@@ -56,8 +58,9 @@ export async function GET(req: NextRequest) {
     "ลำดับ",
     "เลขครุภัณฑ์",
     "ชื่อทรัพย์สิน",
-    "หมวด",
-    "ประเภท",
+    "กลุ่มครุภัณฑ์",
+    "ลักษณะทรัพย์สิน",
+    "ประเภททรัพย์สิน / อุปกรณ์",
     "หน่วยงาน",
     "อำเภอ",
     "สถานะ",
@@ -78,6 +81,7 @@ export async function GET(req: NextRequest) {
     i + 1,
     a.assetRegistrationNo,
     a.assetName,
+    assetClassLabel(a.assetClass),
     a.assetGroup,
     a.deviceType || a.assetGroup,
     a.facilityName,

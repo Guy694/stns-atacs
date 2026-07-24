@@ -5,17 +5,18 @@ import { notFound, redirect } from "next/navigation";
 
 import { AppIcon } from "@/app/_components/ui/icon";
 import { StatusBadge } from "@/app/_components/ui/status-badge";
+import { assetClassLabel } from "@/lib/asset-classes";
 import { assetStatusLabel, assetStatusTone } from "@/lib/asset-status";
 import { getCurrentUser } from "@/lib/auth";
 import { getAssetById, listAllFacilitiesForSelect } from "@/lib/assets";
-import { canAccessFacility } from "@/lib/facility-scope";
 import { listFacilityWorkGroups } from "@/lib/facility-work-groups";
 import { listActiveDeviceTypes } from "@/lib/device-types";
 import { AssetFormModal } from "@/app/(main)/assets/_components/asset-form-modal";
 import { DeleteAssetButton } from "@/app/(main)/assets/_components/delete-asset-button";
 import { QrDownloadButton } from "@/app/(main)/assets/_components/print-button";
+import { getAgentDeviceByLinkedAssetId, type AgentDevice } from "@/lib/agent";
 import { listAssetStatusHistory } from "@/lib/asset-status-history";
-import { canManageAsset, canSeeSensitiveAssetNetwork } from "@/lib/permissions";
+import { canAccessAssetFacility, canManageAssetRecord, canSeeSensitiveAssetNetwork } from "@/lib/permissions";
 import { formatThaiDate, formatThaiDateTime } from "@/lib/date-format";
 import { hasPermission } from "@/lib/role-permissions";
 
@@ -23,9 +24,35 @@ type Props = { params: Promise<{ id: string }> };
 
 function Field({ label, value }: { label: string; value?: string | null }) {
   return (
-    <div>
+    <div className="min-w-0">
       <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-[var(--muted)]">{label}</p>
-      <p className="mt-0.5 text-sm font-medium text-[var(--foreground)]">{value || "–"}</p>
+      <p className="mt-0.5 break-words text-sm font-medium text-[var(--foreground)]">{value || "–"}</p>
+    </div>
+  );
+}
+
+function AssetImageGallery({ images, assetName }: { images: string[]; assetName: string }) {
+  if (images.length === 0) {
+    return (
+      <div className="mb-4 flex min-h-36 items-center justify-center rounded-xl border border-dashed border-black/15 bg-[var(--neutral-bg)] px-4 py-6 text-center text-sm text-[var(--muted)]">
+        ยังไม่มีรูปภาพทรัพย์สิน
+      </div>
+    );
+  }
+
+  return (
+    <div className={`mb-5 grid gap-3 ${images.length === 1 ? "sm:grid-cols-1" : "sm:grid-cols-2"}`}>
+      {images.map((src, index) => (
+        <div key={src} className="relative aspect-[4/3] min-h-44 overflow-hidden rounded-xl border border-black/10 bg-[var(--neutral-bg)]">
+          <Image
+            src={src}
+            alt={`${assetName} ภาพที่ ${index + 1}`}
+            fill
+            sizes={images.length === 1 ? "(max-width: 1024px) 100vw, 720px" : "(max-width: 640px) 100vw, 360px"}
+            className="object-cover"
+          />
+        </div>
+      ))}
     </div>
   );
 }
@@ -38,6 +65,83 @@ function sanitizeDownloadName(value: string) {
     .slice(0, 100);
 }
 
+function formatRam(mb?: number | null) {
+  if (!mb || !Number.isFinite(mb)) return "–";
+  if (mb >= 1024) {
+    return `${(mb / 1024).toLocaleString("th-TH", { maximumFractionDigits: 1 })} GB`;
+  }
+  return `${mb.toLocaleString("th-TH")} MB`;
+}
+
+function formatStorage(gb?: number | null) {
+  if (gb === null || gb === undefined || !Number.isFinite(gb)) return "–";
+  return `${gb.toLocaleString("th-TH")} GB`;
+}
+
+function isComputerAsset(asset: Awaited<ReturnType<typeof getAssetById>>, agentDevice: AgentDevice | null) {
+  const text = [
+    asset?.assetName,
+    asset?.deviceType,
+    asset?.operatingSystem,
+    agentDevice?.deviceType,
+    agentDevice?.operatingSystem,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  return /(computer|desktop|laptop|notebook|workstation|pc|windows|ubuntu|linux|macos|server)/i.test(text);
+}
+
+function ComputerSpecPanel({ device }: { device: AgentDevice | null }) {
+  if (!device) {
+    return (
+      <div className="mb-5 rounded-xl border border-[var(--state-info-border)] bg-[var(--state-info-bg)] px-4 py-3 text-sm text-[var(--state-info-fg)]">
+        ยังไม่มีข้อมูล RAM/Storage จาก Agent สำหรับอุปกรณ์คอมพิวเตอร์นี้
+      </div>
+    );
+  }
+
+  const storageTotal = device.diskTotalGb;
+  const storageUsed = device.diskUsedGb;
+  const storageFree = device.diskFreeGb;
+  const hasSpec =
+    device.ramMb !== null ||
+    storageTotal !== null ||
+    storageUsed !== null ||
+    storageFree !== null ||
+    device.cpuModel;
+
+  if (!hasSpec) return null;
+
+  return (
+    <div className="mb-5 rounded-xl border border-[var(--primary-soft-strong)] bg-[var(--primary-soft)]/55 p-4">
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="text-sm font-semibold text-[var(--primary-text)]">สเปคคอมพิวเตอร์จาก Agent</p>
+          <p className="mt-0.5 text-xs text-[var(--muted)]">
+            รายงานล่าสุด {device.lastReportedAt ?? device.lastSeenAt ?? "–"}
+          </p>
+        </div>
+        <StatusBadge tone={device.status === "offline" ? "danger" : "success"}>
+          {device.status === "offline" ? "offline" : "online"}
+        </StatusBadge>
+      </div>
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Field label="RAM" value={formatRam(device.ramMb)} />
+        <Field label="Storage รวม" value={formatStorage(storageTotal)} />
+        <Field label="Storage ใช้ไป" value={formatStorage(storageUsed)} />
+        <Field label="Storage คงเหลือ" value={formatStorage(storageFree)} />
+      </div>
+      {device.cpuModel && (
+        <div className="mt-3">
+          <Field label="CPU" value={device.cpuModel} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default async function AssetDetailPage({ params }: Props) {
   const { id } = await params;
   const numId = Number(id);
@@ -46,24 +150,25 @@ export default async function AssetDetailPage({ params }: Props) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
-  const [asset, facilitiesForSelect, statusHistory, workGroups, deviceTypes] = await Promise.all([
+  const [asset, facilitiesForSelect, statusHistory, workGroups, deviceTypes, agentDevice] = await Promise.all([
     getAssetById(numId),
     listAllFacilitiesForSelect(),
     listAssetStatusHistory(numId),
     listFacilityWorkGroups(),
     listActiveDeviceTypes(),
+    getAgentDeviceByLinkedAssetId(numId),
   ]);
   if (!asset) notFound();
-  if (!canAccessFacility(user, asset.facilityId)) {
-    redirect(user.facilityId ? `/facilities/${user.facilityId}` : "/profile");
+  if (!canAccessAssetFacility(user, asset.facilityId)) {
+    redirect(user.facilityId ? "/facilities" : "/profile");
   }
   const requestHeaders = await headers();
   const host = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host") ?? "";
   const protocol = requestHeaders.get("x-forwarded-proto") ?? (host.includes("localhost") ? "http" : "https");
   const assetScanUrl = host ? `${protocol}://${host}/scan/assets/${asset.id}` : `/scan/assets/${asset.id}`;
 
-  const canMutateThisAsset = (await hasPermission(user.role, "assets.update")) && canManageAsset(user, asset.facilityId);
-  const canDeleteThisAsset = (await hasPermission(user.role, "assets.delete")) && canManageAsset(user, asset.facilityId);
+  const canMutateThisAsset = (await hasPermission(user.role, "assets.update")) && canManageAssetRecord(user, asset.facilityId);
+  const canDeleteThisAsset = (await hasPermission(user.role, "assets.delete")) && canManageAssetRecord(user, asset.facilityId);
   const canViewNetwork = (await hasPermission(user.role, "assets.network.view")) && canSeeSensitiveAssetNetwork(user, asset.facilityId);
 
   const maStart = asset.maintenanceEndDate
@@ -83,7 +188,7 @@ export default async function AssetDetailPage({ params }: Props) {
     <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6">
 
       {/* Breadcrumb */}
-      <nav className="flex items-center gap-2 text-xs text-[var(--muted)]">
+      <nav className="flex flex-wrap items-center gap-2 text-xs text-[var(--muted)]">
         <Link href="/dashboard" className="hover:text-[var(--foreground)]">หน้าหลัก</Link>
         <span>/</span>
         {user.role === "officer" ? (
@@ -97,23 +202,26 @@ export default async function AssetDetailPage({ params }: Props) {
 
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
+        <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <StatusBadge tone={assetStatusTone(asset.currentStatus)}>
               {assetStatusLabel(asset.currentStatus)}
             </StatusBadge>
             <StatusBadge tone="primary">
+              {assetClassLabel(asset.assetClass)}
+            </StatusBadge>
+            <StatusBadge tone="neutral">
               {asset.assetGroup}
             </StatusBadge>
             {asset.deviceType && (
               <StatusBadge tone="neutral">{asset.deviceType}</StatusBadge>
             )}
           </div>
-          <h1 className="section-title mt-2 text-2xl font-semibold sm:text-3xl">{asset.assetName}</h1>
-          <p className="mt-1 font-mono text-sm text-[var(--muted)]">{asset.assetRegistrationNo}</p>
+          <h1 className="section-title mt-2 break-words text-2xl font-semibold leading-tight sm:text-3xl">{asset.assetName}</h1>
+          <p className="mt-1 break-all font-mono text-sm text-[var(--muted)]">{asset.assetRegistrationNo}</p>
         </div>
         {canMutateThisAsset && (
-          <div className="flex shrink-0 flex-wrap gap-2">
+          <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
             <AssetFormModal
               facilities={user.role === "admin" ? facilitiesForSelect : facilitiesForSelect.filter((facility) => facility.id === asset.facilityId)}
               deviceTypes={deviceTypes}
@@ -131,10 +239,10 @@ export default async function AssetDetailPage({ params }: Props) {
         )}
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]">
 
         {/* Main details */}
-        <div className="space-y-4 lg:col-span-2">
+        <div className="min-w-0 space-y-4">
 
           {/* ข้อมูลหน่วยงาน */}
           <div className="glass-panel rounded-2xl p-5">
@@ -148,10 +256,15 @@ export default async function AssetDetailPage({ params }: Props) {
             </div>
           </div>
 
-          {/* ข้อมูลอุปกรณ์ */}
+          {/* ข้อมูลทรัพย์สิน */}
           <div className="glass-panel rounded-2xl p-5">
-            <h2 className="mb-4 text-sm font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">ข้อมูลอุปกรณ์</h2>
+            <h2 className="mb-4 text-sm font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">ข้อมูลทรัพย์สิน</h2>
+            <AssetImageGallery images={asset.assetImages} assetName={asset.assetName} />
+            {isComputerAsset(asset, agentDevice) && <ComputerSpecPanel device={agentDevice} />}
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <Field label="กลุ่มครุภัณฑ์" value={assetClassLabel(asset.assetClass)} />
+              <Field label="ลักษณะทรัพย์สิน" value={asset.assetGroup} />
+              <Field label="ประเภททรัพย์สิน / อุปกรณ์" value={asset.deviceType} />
               <Field label="ยี่ห้อ (Brand)" value={asset.manufacturerBrand} />
               <Field label="Serial Number" value={asset.serialNumber} />
               <Field label="ระบบปฏิบัติการ" value={asset.operatingSystem} />
@@ -272,7 +385,7 @@ export default async function AssetDetailPage({ params }: Props) {
         </div>
 
         {/* Sidebar panel */}
-        <div className="space-y-4">
+        <div className="min-w-0 space-y-4">
 
           {/* QR Code */}
           <div className="glass-panel rounded-2xl p-5 text-center print:shadow-none">
@@ -287,7 +400,7 @@ export default async function AssetDetailPage({ params }: Props) {
                 className="h-auto w-full object-contain"
               />
             </div>
-            <p className="mt-1 break-all text-[11px] text-[var(--muted)]">{assetScanUrl}</p>
+            <p className="mt-1 break-all text-[11px] leading-4 text-[var(--muted)]">{assetScanUrl}</p>
             <QrDownloadButton
               downloadUrl={`/api/qr/asset/${asset.id}`}
               filename={`${sanitizeDownloadName(`${asset.assetRegistrationNo || `asset-${asset.id}`} ${asset.assetName}`)}.svg`}
@@ -306,11 +419,15 @@ export default async function AssetDetailPage({ params }: Props) {
               </div>
               <div className="flex items-center justify-between text-sm">
                 <span className="text-[var(--muted)]">หมวด</span>
-                <span className="text-[var(--foreground)]">{asset.assetGroup}</span>
+                <span className="text-[var(--foreground)]">{assetClassLabel(asset.assetClass)}</span>
               </div>
               <div className="flex items-center justify-between text-sm">
+                <span className="text-[var(--muted)]">ลักษณะ</span>
+                <span className="text-[var(--foreground)]">{asset.assetGroup}</span>
+              </div>
+              <div className="flex items-center justify-between gap-3 text-sm">
                 <span className="text-[var(--muted)]">ประเภท</span>
-                <span className="text-[var(--foreground)]">{asset.deviceType || "–"}</span>
+                <span className="break-words text-right text-[var(--foreground)]">{asset.deviceType || "–"}</span>
               </div>
               <div className="flex items-center justify-between text-sm">
                 <span className="text-[var(--muted)]">อัปเดตล่าสุด</span>

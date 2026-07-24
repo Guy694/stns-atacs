@@ -262,6 +262,7 @@ def enroll_agent(
     token: str | None,
     config_path: str,
     facility_id: int | None = None,
+    work_group_id: int | None = None,
     work_group_name: str | None = None,
     install_key: str | None = None,
 ) -> dict[str, Any]:
@@ -283,7 +284,10 @@ def enroll_agent(
     else:
         body["installKey"] = install_key
         body["facilityId"] = facility_id
-        body["workGroupName"] = work_group_name
+        if work_group_id:
+            body["workGroupId"] = work_group_id
+        elif work_group_name:
+            body["workGroupName"] = work_group_name
 
     response = post_json(
         f"{base_url.rstrip('/')}/api/agent/enroll",
@@ -316,6 +320,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--api-base-url", dest="api_base_url")
     parser.add_argument("--enrollment-token", dest="enrollment_token")
     parser.add_argument("--facility-id", dest="facility_id", type=int)
+    parser.add_argument("--work-group-id", dest="work_group_id", type=int)
     parser.add_argument("--work-group-name", dest="work_group_name")
     parser.add_argument("--install-key", dest="install_key")
     parser.add_argument("--config-path", dest="config_path", default=DEFAULT_CONFIG_PATH)
@@ -342,6 +347,7 @@ def main() -> int:
             args.enrollment_token,
             args.config_path,
             args.facility_id,
+            args.work_group_id,
             args.work_group_name,
             args.install_key,
         )

@@ -9,6 +9,7 @@ type EnrollBody = {
   enrollmentToken?: string;
   installKey?: string;
   facilityId?: number | string;
+  workGroupId?: number | string | null;
   workGroupName?: string | null;
   fingerprint?: string;
   hostname?: string | null;
@@ -26,6 +27,7 @@ export async function POST(req: NextRequest) {
   const enrollmentToken = body.enrollmentToken?.trim() ?? "";
   const installKey = body.installKey?.trim() ?? "";
   const facilityId = Number(body.facilityId ?? 0);
+  const workGroupId = Number(body.workGroupId ?? 0);
   const fingerprint = body.fingerprint?.trim() ?? "";
 
   if (!fingerprint) {
@@ -70,6 +72,7 @@ export async function POST(req: NextRequest) {
         })
       : await enrollAgentDeviceWithInstallKey({
           facilityId,
+          workGroupId: Number.isInteger(workGroupId) && workGroupId > 0 ? workGroupId : null,
           workGroupName: body.workGroupName,
           fingerprint,
           hostname: body.hostname,
@@ -122,10 +125,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Facility is invalid or inactive" }, { status: 400 });
     }
     if (message === "WORK_GROUP_REQUIRED") {
-      return NextResponse.json({ error: "workGroupName is required for this facility" }, { status: 400 });
+      return NextResponse.json({ error: "workGroupId is required for this facility" }, { status: 400 });
     }
     if (message === "WORK_GROUP_TOO_LONG") {
       return NextResponse.json({ error: "workGroupName is too long" }, { status: 400 });
+    }
+    if (message === "WORK_GROUP_UNAVAILABLE") {
+      return NextResponse.json({ error: "workGroupId must match an active work group for this facility" }, { status: 400 });
     }
     return NextResponse.json({ error: "Unable to enroll agent" }, { status: 500 });
   }

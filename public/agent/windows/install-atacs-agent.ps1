@@ -6,6 +6,8 @@ param(
 
     [int]$FacilityId,
 
+    [int]$WorkGroupId,
+
     [string]$WorkGroupName,
 
     [string]$InstallKey,
@@ -55,6 +57,9 @@ if ($hasToken) {
 }
 else {
     $enrollArgs += @("-FacilityId", $FacilityId, "-InstallKey", $InstallKey)
+    if ($WorkGroupId -gt 0) {
+        $enrollArgs += @("-WorkGroupId", $WorkGroupId)
+    }
     if (-not [string]::IsNullOrWhiteSpace($WorkGroupName)) {
         $enrollArgs += @("-WorkGroupName", $WorkGroupName)
     }

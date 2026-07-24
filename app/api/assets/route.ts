@@ -33,6 +33,7 @@ export async function GET(req: NextRequest) {
       assetName: a.assetName,
       assetRegistrationNo: a.assetRegistrationNo,
       deviceType: a.deviceType,
+      assetClass: a.assetClass,
       assetGroup: a.assetGroup,
       currentStatus: a.currentStatus,
     }))

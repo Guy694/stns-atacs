@@ -1,15 +1,20 @@
 "use server";
 
+import { mkdir, writeFile } from "node:fs/promises";
+import path from "node:path";
+import { randomUUID } from "node:crypto";
+
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { RowDataPacket } from "mysql2/promise";
 
+import { ASSET_CLASS_VALUE_SET, normalizeAssetClass } from "@/lib/asset-classes";
 import { getCurrentUser } from "@/lib/auth";
 import { recordAssetStatusHistory } from "@/lib/asset-status-history";
-import { createAsset, deleteAsset, findOrCreateSurvey, getAssetById, updateAsset, type AssetInput } from "@/lib/assets";
+import { createAsset, deleteAsset, findOrCreateSurvey, getAssetById, updateAsset, type AssetInput, type AssetWithFacility } from "@/lib/assets";
 import { writeAuditLog } from "@/lib/audit";
 import { selectRows } from "@/lib/mysql";
-import { canManageAsset, canMutateAssets } from "@/lib/permissions";
+import { canManageAssetRecord, canMutateAssets } from "@/lib/permissions";
 import { hasPermission } from "@/lib/role-permissions";
 
 async function requireAuth() {
@@ -30,11 +35,61 @@ function readOptional(fd: FormData, key: string) {
 type AssetFormInput = AssetInput & { facilityId: number };
 
 const IPV4_REGEX = /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
+const MAX_ASSET_IMAGE_BYTES = 5 * 1024 * 1024;
+const ASSET_IMAGE_TYPES: Record<string, string> = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+};
 
 function parseDateOnly(value?: string) {
   if (!value) return null;
   const parsed = new Date(`${value}T00:00:00`);
   return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function readFile(fd: FormData, key: string) {
+  const file = fd.get(key);
+  return file instanceof File && file.size > 0 ? file : null;
+}
+
+async function storeAssetImage(file: File, slot: 1 | 2) {
+  const extension = ASSET_IMAGE_TYPES[file.type];
+  if (!extension) {
+    throw new Error("รองรับเฉพาะไฟล์รูปภาพ JPG, PNG หรือ WebP");
+  }
+  if (file.size > MAX_ASSET_IMAGE_BYTES) {
+    throw new Error("รูปภาพต้องมีขนาดไม่เกิน 5MB ต่อภาพ");
+  }
+
+  const uploadDir = path.join(process.cwd(), "public", "uploads", "assets");
+  await mkdir(uploadDir, { recursive: true });
+
+  const filename = `asset-${Date.now()}-${slot}-${randomUUID()}.${extension}`;
+  const bytes = Buffer.from(await file.arrayBuffer());
+  await writeFile(path.join(uploadDir, filename), bytes);
+
+  return `/uploads/assets/${filename}`;
+}
+
+async function buildAssetImageUrls(fd: FormData, currentAsset?: AssetWithFacility | null) {
+  const firstFile = readFile(fd, "assetImage1");
+  const secondFile = readFile(fd, "assetImage2");
+  const removeFirst = readStr(fd, "removeAssetImage1") === "1";
+  const removeSecond = readStr(fd, "removeAssetImage2") === "1";
+
+  return {
+    assetImage1Url: firstFile
+      ? await storeAssetImage(firstFile, 1)
+      : removeFirst
+        ? null
+        : currentAsset?.assetImage1Url || null,
+    assetImage2Url: secondFile
+      ? await storeAssetImage(secondFile, 2)
+      : removeSecond
+        ? null
+        : currentAsset?.assetImage2Url || null,
+  };
 }
 
 async function validateAssetBusinessRules(input: AssetFormInput, assetId?: number) {
@@ -114,8 +169,12 @@ async function buildInput(fd: FormData, updaterName: string): Promise<AssetFormI
   const assetName = readStr(fd, "assetName");
   if (!assetName) throw new Error("กรุณากรอกชื่อทรัพย์สิน");
 
+  const assetClassInput = readOptional(fd, "assetClass") ?? "IT";
+  if (!ASSET_CLASS_VALUE_SET.has(assetClassInput)) throw new Error("กลุ่มครุภัณฑ์ไม่ถูกต้อง");
+  const assetClass = normalizeAssetClass(assetClassInput);
+
   const assetCategory = readStr(fd, "assetCategory") as "Hardware" | "Software";
-  if (!["Hardware", "Software"].includes(assetCategory)) throw new Error("หมวดทรัพย์สินไม่ถูกต้อง");
+  if (!["Hardware", "Software"].includes(assetCategory)) throw new Error("ลักษณะทรัพย์สินไม่ถูกต้อง");
   const workGroupIdRaw = readOptional(fd, "workGroupId");
   let parsedWorkGroupId: number | null = null;
   if (workGroupIdRaw) {
@@ -129,6 +188,7 @@ async function buildInput(fd: FormData, updaterName: string): Promise<AssetFormI
     workGroupId: parsedWorkGroupId,
     assetRegistrationNo,
     assetName,
+    assetClass,
     assetCategory,
     usageDescription: readOptional(fd, "usageDescription"),
     ownerName: readOptional(fd, "ownerName"),
@@ -160,10 +220,13 @@ export async function createAssetAction(_prev: string | null, fd: FormData): Pro
   if (!(await hasPermission(user.role, "assets.create"))) return "สิทธิ์การเพิ่มทรัพย์สินถูกปิดใช้งาน";
 
   try {
+    const requestedFacilityId = Number(fd.get("facilityId"));
+    if (!requestedFacilityId || isNaN(requestedFacilityId)) return "กรุณาเลือกหน่วยงาน";
+    if (!canManageAssetRecord(user, requestedFacilityId)) return "คุณไม่มีสิทธิ์ดำเนินการกับหน่วยงานนี้";
     const input = await buildInput(fd, user.fullName);
     await validateAssetBusinessRules(input);
-    if (!canManageAsset(user, input.facilityId)) return "คุณไม่มีสิทธิ์ดำเนินการกับหน่วยงานนี้";
-    const result = await createAsset(input);
+    const imageUrls = await buildAssetImageUrls(fd);
+    const result = await createAsset({ ...input, ...imageUrls });
     const newId = result.insertId;
     await recordAssetStatusHistory({
       assetId: newId,
@@ -193,11 +256,14 @@ export async function updateAssetAction(_prev: string | null, fd: FormData): Pro
   try {
     const currentAsset = await getAssetById(id);
     if (!currentAsset) return "ไม่พบทรัพย์สิน";
+    if (!canManageAssetRecord(user, currentAsset.facilityId)) return "คุณไม่มีสิทธิ์ดำเนินการกับทรัพย์สินนี้";
+    const requestedFacilityId = Number(fd.get("facilityId"));
+    if (!requestedFacilityId || isNaN(requestedFacilityId)) return "กรุณาเลือกหน่วยงาน";
+    if (!canManageAssetRecord(user, requestedFacilityId)) return "คุณไม่มีสิทธิ์ดำเนินการกับหน่วยงานนี้";
     const input = await buildInput(fd, user.fullName);
     await validateAssetBusinessRules(input, id);
-    if (!canManageAsset(user, currentAsset.facilityId)) return "คุณไม่มีสิทธิ์ดำเนินการกับทรัพย์สินนี้";
-    if (!canManageAsset(user, input.facilityId)) return "คุณไม่มีสิทธิ์ดำเนินการกับหน่วยงานนี้";
-    await updateAsset(id, input);
+    const imageUrls = await buildAssetImageUrls(fd, currentAsset);
+    await updateAsset(id, { ...input, ...imageUrls });
     await recordAssetStatusHistory({
       assetId: id,
       fromStatus: currentAsset.currentStatus,
@@ -208,6 +274,7 @@ export async function updateAssetAction(_prev: string | null, fd: FormData): Pro
     });
     await writeAuditLog({ userId: user.id, userName: user.fullName, action: "update", entity: "information_assets", entityId: id, summary: `แก้ไขทรัพย์สิน ${input.assetName}` });
     revalidatePath("/assets");
+    revalidatePath(`/assets/${id}`);
     revalidatePath("/");
     revalidatePath(`/facilities/${input.facilityId}`);
   } catch (err) {
@@ -224,7 +291,7 @@ export async function deleteAssetAction(id: number): Promise<string | null> {
   try {
     const asset = await getAssetById(id);
     if (!asset) return "ไม่พบทรัพย์สิน";
-    if (!canManageAsset(user, asset.facilityId)) return "คุณไม่มีสิทธิ์ลบทรัพย์สินของหน่วยงานนี้";
+    if (!canManageAssetRecord(user, asset.facilityId)) return "คุณไม่มีสิทธิ์ลบทรัพย์สินของหน่วยงานนี้";
     await deleteAsset(id);
     await writeAuditLog({ userId: user.id, userName: user.fullName, action: "delete", entity: "information_assets", entityId: id, summary: `ลบทรัพย์สิน #${id}` });
     revalidatePath("/assets");

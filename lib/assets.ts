@@ -3,6 +3,7 @@ import "server-only";
 import type { RowDataPacket } from "mysql2/promise";
 
 import { facilitySurveys as fallbackSurveys, type AssetRecord } from "@/app/atacs-data";
+import { normalizeAssetClass } from "@/lib/asset-classes";
 import { executeStatement, selectRows } from "@/lib/mysql";
 
 // ── DB Row types ───────────────────────────────────────────────────────────
@@ -20,6 +21,7 @@ type AssetRow = RowDataPacket & {
   asset_name: string;
   usage_description: string | null;
   owner_name: string | null;
+  asset_class: string | null;
   asset_category: "Hardware" | "Software" | null;
   asset_group: string | null;
   device_type: string | null;
@@ -41,6 +43,8 @@ type AssetRow = RowDataPacket & {
   purchase_order_no: string | null;
   maintenance_start_date: Date | string | null;
   maintenance_end_date: Date | string | null;
+  asset_image_1_url: string | null;
+  asset_image_2_url: string | null;
 };
 
 type SurveyRow = RowDataPacket & {
@@ -84,6 +88,7 @@ function rowToAsset(row: AssetRow) {
     districtName: row.district_name ?? "",
     assetRegistrationNo: row.asset_registration_no ?? "",
     assetName: row.asset_name,
+    assetClass: normalizeAssetClass(row.asset_class),
     usageDescription: row.usage_description ?? "",
     ownerName: row.owner_name ?? "",
     assetGroup: row.asset_category ?? normalizeGroup(row.asset_group),
@@ -102,6 +107,9 @@ function rowToAsset(row: AssetRow) {
     purchasePrice: row.purchase_price ?? null,
     purchaseDate: toDateOnly(row.purchase_date),
     purchaseOrderNo: row.purchase_order_no ?? "",
+    assetImage1Url: row.asset_image_1_url ?? "",
+    assetImage2Url: row.asset_image_2_url ?? "",
+    assetImages: [row.asset_image_1_url, row.asset_image_2_url].filter((url): url is string => Boolean(url)),
   };
 }
 
@@ -114,6 +122,7 @@ export type AssetInput = {
   workGroupId?: number | null;
   assetRegistrationNo: string | null;
   assetName: string;
+  assetClass?: string | null;
   usageDescription?: string;
   ownerName?: string;
   assetCategory: "Hardware" | "Software";
@@ -136,6 +145,8 @@ export type AssetInput = {
   maintenanceEndDate?: string;
   installedAt?: string;
   lastUpdatedAt?: string;
+  assetImage1Url?: string | null;
+  assetImage2Url?: string | null;
   rowNo?: number;
 };
 
@@ -145,6 +156,7 @@ export type AssetListFilter = {
   status?: string;
   search?: string;
   district?: string;
+  assetClass?: string;
   assetGroup?: "Hardware" | "Software";
   deviceType?: string;
   maExpiringDays?: number;
@@ -203,6 +215,10 @@ function buildAssetFilter(filter?: AssetListFilter) {
     conditions.push("hf.district_name = ?");
     values.push(filter.district);
   }
+  if (filter?.assetClass) {
+    conditions.push("COALESCE(a.asset_class, 'IT') = ?");
+    values.push(filter.assetClass);
+  }
   if (filter?.assetGroup) {
     conditions.push("a.asset_category = ?");
     values.push(filter.assetGroup);
@@ -249,11 +265,15 @@ function filterFallbackAssets(filter?: AssetListFilter) {
       facilityId: s.facilityId,
       facilityName: s.facilityName,
       districtName: s.districtName,
+      assetClass: normalizeAssetClass(a.assetClass),
       publicIp: a.publicIp ?? undefined,
       purchasePrice: a.purchasePrice ?? null,
       purchaseDate: a.purchaseDate ?? "",
       purchaseOrderNo: a.purchaseOrderNo ?? "",
       maintenanceStartDate: "",
+      assetImage1Url: "",
+      assetImage2Url: "",
+      assetImages: [],
     }))
   );
 
@@ -261,6 +281,7 @@ function filterFallbackAssets(filter?: AssetListFilter) {
   if (filter?.workGroupId) assets = [];
   if (filter?.status) assets = assets.filter((asset) => asset.currentStatus === filter.status);
   if (filter?.district) assets = assets.filter((asset) => asset.districtName === filter.district);
+  if (filter?.assetClass) assets = assets.filter((asset) => asset.assetClass === normalizeAssetClass(filter.assetClass));
   if (filter?.assetGroup) assets = assets.filter((asset) => asset.assetGroup === filter.assetGroup);
   if (filter?.deviceType) assets = assets.filter((asset) => asset.deviceType === filter.deviceType);
   if (filter?.search) {
@@ -370,12 +391,13 @@ export async function createAsset(input: AssetInput) {
   return executeStatement(
     `INSERT INTO information_assets
       (survey_id, row_no, asset_registration_no, asset_name, usage_description, owner_name,
-       work_group_id, asset_category, device_type, operating_system, operating_system_version,
+       work_group_id, asset_class, asset_category, device_type, operating_system, operating_system_version,
        private_ip, public_ip, location_detail, current_status, updated_by,
        manufacturer_brand, manufacturer_model, manufacturer_specification,
        serial_number, purchase_price, purchase_date, purchase_order_no,
-       maintenance_start_date, maintenance_end_date, installed_at, last_updated_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+       maintenance_start_date, maintenance_end_date, installed_at, last_updated_at,
+       asset_image_1_url, asset_image_2_url)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [
       input.surveyId,
       input.rowNo ?? null,
@@ -384,6 +406,7 @@ export async function createAsset(input: AssetInput) {
       input.usageDescription ?? null,
       input.ownerName ?? null,
       input.workGroupId ?? null,
+      normalizeAssetClass(input.assetClass),
       input.assetCategory,
       input.deviceType ?? null,
       input.operatingSystem ?? null,
@@ -404,6 +427,8 @@ export async function createAsset(input: AssetInput) {
       input.maintenanceEndDate ?? null,
       input.installedAt ?? null,
       input.lastUpdatedAt ?? null,
+      input.assetImage1Url ?? null,
+      input.assetImage2Url ?? null,
     ]
   );
 }
@@ -420,6 +445,7 @@ export async function updateAsset(id: number, input: Partial<AssetInput>) {
     asset_name: input.assetName,
     usage_description: input.usageDescription,
     owner_name: input.ownerName,
+    asset_class: input.assetClass === undefined ? undefined : normalizeAssetClass(input.assetClass),
     asset_category: input.assetCategory,
     device_type: input.deviceType,
     operating_system: input.operatingSystem,
@@ -440,6 +466,8 @@ export async function updateAsset(id: number, input: Partial<AssetInput>) {
     maintenance_end_date: input.maintenanceEndDate ?? null,
     installed_at: input.installedAt ?? null,
     last_updated_at: input.lastUpdatedAt ?? null,
+    asset_image_1_url: input.assetImage1Url,
+    asset_image_2_url: input.assetImage2Url,
   };
 
   for (const [col, val] of Object.entries(fieldMap)) {
@@ -551,9 +579,16 @@ export type FacilityRow = RowDataPacket & {
 };
 
 /** รายการหน่วยบริการทั้งหมด พร้อมจำนวนทรัพย์สิน */
-export async function listFacilities(filter?: { facilityId?: number }): Promise<FacilityRow[]> {
-  const facilityClause = filter?.facilityId ? "AND hf.id = ?" : "";
-  const values = filter?.facilityId ? [filter.facilityId] : [];
+export async function listFacilities(filter?: { facilityId?: number; facilityIds?: number[] }): Promise<FacilityRow[]> {
+  const scopedFacilityIds = filter?.facilityIds?.filter((id) => Number.isInteger(id) && id > 0) ?? [];
+  const facilityClause = filter?.facilityId
+    ? "AND hf.id = ?"
+    : scopedFacilityIds.length > 0
+      ? `AND hf.id IN (${scopedFacilityIds.map(() => "?").join(", ")})`
+      : filter?.facilityIds
+        ? "AND 1 = 0"
+        : "";
+  const values = filter?.facilityId ? [filter.facilityId] : scopedFacilityIds;
   try {
     return await selectRows<FacilityRow>(`
       SELECT

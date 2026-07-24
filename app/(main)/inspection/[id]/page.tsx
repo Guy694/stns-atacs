@@ -2,24 +2,113 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { AppIcon } from "@/app/_components/ui/icon";
+import { StatusBadge } from "@/app/_components/ui/status-badge";
+import { updateInspectionItemAction } from "@/app/(main)/inspection/actions";
+import { assetStatusLabel, assetStatusTone } from "@/lib/asset-status";
 import { getCurrentUser } from "@/lib/auth";
-import { getInspectionById, getInspectionItems } from "@/lib/inspection";
+import { formatThaiDate, formatThaiDateTime } from "@/lib/date-format";
 import { canAccessFacility } from "@/lib/facility-scope";
+import { getInspectionById, getInspectionItems, type InspectionItem } from "@/lib/inspection";
+import { canManageFacility, canMutateAssets } from "@/lib/permissions";
 import { hasPermission } from "@/lib/role-permissions";
 
-export default async function InspectionDetailPage({
-  params,
-}: {
+type InspectionDetailPageProps = {
   params: Promise<{ id: string }>;
-}) {
+};
+
+const ASSET_STATUS_OPTIONS = [
+  { value: "Active", label: "พร้อมใช้งาน" },
+  { value: "Inactive", label: "ไม่ใช้งาน" },
+  { value: "Broken", label: "ชำรุด" },
+  { value: "Lost", label: "สูญหาย" },
+  { value: "Disposed", label: "จำหน่ายแล้ว" },
+] as const;
+
+function inspectionStatusLabel(status: InspectionItem["inspectionStatus"]) {
+  if (status === "Found") return "พบ";
+  if (status === "Missing") return "ไม่พบ";
+  return "รอตรวจ";
+}
+
+function inspectionStatusTone(status: InspectionItem["inspectionStatus"]) {
+  if (status === "Found") return "success";
+  if (status === "Missing") return "danger";
+  return "warning";
+}
+
+function InspectionItemForm({ item, canMutate }: { item: InspectionItem; canMutate: boolean }) {
+  const defaultInspectionStatus = item.inspectionStatus === "Pending" ? "Found" : item.inspectionStatus;
+  const defaultAssetStatus = item.assetStatus || item.currentStatus || "Active";
+
+  if (!canMutate) {
+    return (
+      <td className="px-4 py-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <StatusBadge tone={inspectionStatusTone(item.inspectionStatus)}>
+            {inspectionStatusLabel(item.inspectionStatus)}
+          </StatusBadge>
+          <StatusBadge tone={assetStatusTone(defaultAssetStatus)}>
+            {assetStatusLabel(defaultAssetStatus)}
+          </StatusBadge>
+        </div>
+        {item.conditionNote && <p className="mt-1 text-xs text-[var(--muted)]">{item.conditionNote}</p>}
+      </td>
+    );
+  }
+
+  return (
+    <td className="px-4 py-3">
+      <form action={updateInspectionItemAction} className="grid min-w-[420px] gap-2 sm:grid-cols-[110px_130px_minmax(160px,1fr)_auto]">
+        <input type="hidden" name="itemId" value={item.id} />
+        <select
+          name="inspectionStatus"
+          defaultValue={defaultInspectionStatus}
+          className="min-h-10 rounded-xl border border-black/10 bg-white/85 px-3 py-2 text-xs outline-none focus:border-[var(--accent)]"
+        >
+          <option value="Found">พบ</option>
+          <option value="Missing">ไม่พบ</option>
+        </select>
+        <select
+          name="assetStatus"
+          defaultValue={defaultAssetStatus}
+          className="min-h-10 rounded-xl border border-black/10 bg-white/85 px-3 py-2 text-xs outline-none focus:border-[var(--accent)]"
+        >
+          {ASSET_STATUS_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>{option.label}</option>
+          ))}
+        </select>
+        <input
+          name="conditionNote"
+          defaultValue={item.conditionNote}
+          placeholder="หมายเหตุ / สภาพครุภัณฑ์"
+          className="min-h-10 min-w-0 rounded-xl border border-black/10 bg-white/85 px-3 py-2 text-xs outline-none focus:border-[var(--accent)]"
+        />
+        <button
+          type="submit"
+          className="min-h-10 rounded-xl bg-[var(--accent-strong)] px-3 py-2 text-xs font-semibold text-white transition hover:opacity-90"
+        >
+          บันทึก
+        </button>
+      </form>
+      {item.checkedAt && (
+        <p className="mt-1 text-xs text-[var(--muted)]">
+          ตรวจล่าสุด {formatThaiDateTime(item.checkedAt)}{item.checkedBy ? ` โดย ${item.checkedBy}` : ""}
+        </p>
+      )}
+    </td>
+  );
+}
+
+export default async function InspectionDetailPage({ params }: InspectionDetailPageProps) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
   if (!(await hasPermission(user.role, "inspection.view"))) redirect("/dashboard");
 
   const { id } = await params;
+  const inspectionId = Number(id);
   const [inspection, items] = await Promise.all([
-    getInspectionById(Number(id)),
-    getInspectionItems(Number(id)),
+    getInspectionById(inspectionId),
+    getInspectionItems(inspectionId),
   ]);
 
   if (!inspection) notFound();
@@ -27,138 +116,167 @@ export default async function InspectionDetailPage({
     redirect("/inspection");
   }
 
+  const canMutate =
+    canMutateAssets(user) &&
+    (await hasPermission(user.role, "inspection.create")) &&
+    canManageFacility(user, inspection.facilityId);
   const pct = inspection.totalItems > 0
-    ? Math.round((inspection.foundItems / inspection.totalItems) * 100)
+    ? Math.round((inspection.checkedItems / inspection.totalItems) * 100)
     : 0;
-  const missing = items.filter((i) => !i.found);
+  const remaining = items.filter((item) => item.inspectionStatus === "Pending");
+  const missing = items.filter((item) => item.inspectionStatus === "Missing");
 
   return (
-    <main className="p-6 space-y-6 max-w-5xl mx-auto">
-      {/* Breadcrumb */}
-      <nav className="text-sm" style={{ color: "var(--muted)" }}>
-        <Link href="/inspection" style={{ color: "var(--accent)" }}>ตรวจนับทรัพย์สิน</Link>
-        <span className="mx-2">›</span>
-        <span>{inspection.roundName}</span>
+    <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 p-6">
+      <nav className="flex flex-wrap items-center gap-2 text-sm text-[var(--muted)]">
+        <Link href="/inspection" className="text-[var(--accent)] hover:underline">ตรวจนับทรัพย์สิน</Link>
+        <span>/</span>
+        <span className="text-[var(--foreground)]">{inspection.roundName}</span>
       </nav>
 
-      {/* Header */}
-      <div className="glass-panel rounded-2xl p-6">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <h1 className="text-xl font-bold" style={{ color: "var(--foreground)" }}>
+      <div className="glass-panel rounded-2xl p-5 sm:p-6">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              {inspection.remainingItems === 0 ? (
+                <StatusBadge tone="success">ตรวจครบแล้ว</StatusBadge>
+              ) : (
+                <StatusBadge tone="warning">คงเหลือ {inspection.remainingItems.toLocaleString("th-TH")} รายการ</StatusBadge>
+              )}
+              <StatusBadge tone="neutral">
+                {inspection.startDate ? formatThaiDate(inspection.startDate) : "-"} - {inspection.endDate ? formatThaiDate(inspection.endDate) : "-"}
+              </StatusBadge>
+            </div>
+            <h1 className="section-title mt-2 break-words text-2xl font-semibold text-[var(--foreground)]">
               {inspection.roundName}
             </h1>
-            <p className="text-sm mt-1" style={{ color: "var(--muted)" }}>
+            <p className="mt-1 text-sm text-[var(--muted)]">
               {inspection.facilityName} · อ.{inspection.districtName}
             </p>
-            <p className="text-xs mt-0.5" style={{ color: "var(--muted)" }}>
-              ผู้ตรวจ: {inspection.inspectedBy} · วันที่: {inspection.inspectedAt}
+            <p className="mt-0.5 text-xs text-[var(--muted)]">
+              เปิดรอบโดย {inspection.inspectedBy} · {formatThaiDate(inspection.inspectedAt)}
             </p>
             {inspection.note && (
-              <p className="mt-2 flex items-start gap-2 rounded-lg bg-[var(--primary-soft)] p-2 text-sm" style={{ color: "var(--foreground)" }}>
+              <p className="mt-3 flex max-w-3xl items-start gap-2 rounded-xl bg-[var(--primary-soft)] px-3 py-2 text-sm text-[var(--foreground)]">
                 <AppIcon name="file-text" className="mt-0.5 h-4 w-4 shrink-0 text-[var(--primary)]" /> {inspection.note}
               </p>
             )}
           </div>
 
-          {/* Summary ring */}
-          <div className="flex items-center gap-4">
-            <div className="flex flex-col items-center">
-              <div
-                className="relative w-20 h-20 rounded-full flex items-center justify-center"
-                style={{
-                  background: `conic-gradient(var(--accent) ${pct * 3.6}deg, var(--primary-soft) ${pct * 3.6}deg)`,
-                }}
-              >
-                <div className="w-14 h-14 rounded-full bg-white flex items-center justify-center">
-                  <span className="text-sm font-bold" style={{ color: "var(--accent)" }}>{pct}%</span>
-                </div>
+          <div className="grid min-w-[260px] grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-2">
+            {[
+              { label: "ตรวจแล้ว", value: inspection.checkedItems, tone: "text-[var(--accent-strong)]" },
+              { label: "คงเหลือ", value: inspection.remainingItems, tone: "text-amber-700" },
+              { label: "พบ", value: inspection.foundItems, tone: "text-[var(--accent-strong)]" },
+              { label: "ไม่พบ", value: inspection.missingItems, tone: "text-rose-600" },
+            ].map((metric) => (
+              <div key={metric.label} className="rounded-xl border border-black/10 bg-white/70 px-3 py-2">
+                <p className="text-xs text-[var(--muted)]">{metric.label}</p>
+                <p className={`mt-1 text-xl font-semibold ${metric.tone}`}>{metric.value.toLocaleString("th-TH")}</p>
               </div>
-              <span className="text-xs mt-1" style={{ color: "var(--muted)" }}>อัตราพบ</span>
-            </div>
-            <div className="space-y-1">
-              <div className="text-sm"><span className="font-bold text-[var(--primary)]">{inspection.foundItems}</span> <span style={{ color: "var(--muted)" }}>พบ</span></div>
-              <div className="text-sm"><span className="font-bold text-red-500">{inspection.totalItems - inspection.foundItems}</span> <span style={{ color: "var(--muted)" }}>ไม่พบ</span></div>
-              <div className="text-sm"><span className="font-bold" style={{ color: "var(--foreground)" }}>{inspection.totalItems}</span> <span style={{ color: "var(--muted)" }}>ทั้งหมด</span></div>
-            </div>
+            ))}
           </div>
+        </div>
+
+        <div className="mt-5">
+          <div className="h-2 overflow-hidden rounded-full bg-[var(--primary-soft)]">
+            <div
+              className="h-full rounded-full bg-[var(--accent)] transition-[width]"
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+          <p className="mt-1 text-xs text-[var(--muted)]">ความคืบหน้า {pct}% จากรายการทั้งหมด {inspection.totalItems.toLocaleString("th-TH")} รายการ</p>
         </div>
       </div>
 
-      {/* Missing items alert */}
+      {remaining.length > 0 && (
+        <div className="glass-panel rounded-2xl p-5">
+          <h2 className="flex items-center gap-2 text-base font-semibold text-[var(--foreground)]">
+            <AppIcon name="activity" className="h-4 w-4 text-amber-600" /> รายการคงเหลือ ({remaining.length.toLocaleString("th-TH")})
+          </h2>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {remaining.slice(0, 24).map((item) => (
+              <Link
+                key={item.id}
+                href={`/assets/${item.assetId}`}
+                className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-medium text-amber-800 hover:bg-amber-100"
+              >
+                {item.assetRegistrationNo || item.assetName}
+              </Link>
+            ))}
+            {remaining.length > 24 && (
+              <span className="rounded-full border border-black/10 bg-white/80 px-3 py-1 text-xs text-[var(--muted)]">
+                +{(remaining.length - 24).toLocaleString("th-TH")} รายการ
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
       {missing.length > 0 && (
         <div className="glass-panel rounded-2xl p-5">
-          <h2 className="mb-3 flex items-center gap-2 text-base font-bold text-red-600">
-            <AppIcon name="activity" className="h-4 w-4" /> รายการที่ไม่พบ ({missing.length})
+          <h2 className="mb-3 flex items-center gap-2 text-base font-semibold text-rose-700">
+            <AppIcon name="activity" className="h-4 w-4" /> รายการที่ไม่พบ ({missing.length.toLocaleString("th-TH")})
           </h2>
-          <div className="space-y-2">
+          <div className="grid gap-2 sm:grid-cols-2">
             {missing.map((item) => (
-              <div
-                key={item.id}
-                className="flex items-center justify-between rounded-lg px-3 py-2 bg-red-50 border border-red-100"
-              >
-                <div>
-                  <span className="font-medium text-sm text-red-800">{item.assetName}</span>
-                  <span className="text-xs text-red-400 ml-2">{item.assetRegistrationNo}</span>
-                </div>
-                {item.conditionNote && (
-                  <span className="text-xs text-red-600">{item.conditionNote}</span>
-                )}
+              <div key={item.id} className="rounded-xl border border-rose-100 bg-rose-50 px-3 py-2">
+                <p className="font-medium text-sm text-rose-800">{item.assetName}</p>
+                <p className="mt-0.5 font-mono text-xs text-rose-500">{item.assetRegistrationNo || "-"}</p>
+                {item.conditionNote && <p className="mt-1 text-xs text-rose-700">{item.conditionNote}</p>}
               </div>
             ))}
           </div>
         </div>
       )}
 
-      {/* All items table */}
-      <div className="glass-panel rounded-2xl overflow-hidden">
-        <div className="px-5 py-4 border-b" style={{ borderColor: "var(--line)" }}>
-          <h2 className="font-bold" style={{ color: "var(--foreground)" }}>
-            รายการทรัพย์สินทั้งหมด ({items.length})
+      <div className="glass-panel overflow-hidden rounded-2xl">
+        <div className="border-b border-black/6 px-5 py-4">
+          <h2 className="font-semibold text-[var(--foreground)]">
+            รายการครุภัณฑ์ในรอบตรวจ ({items.length.toLocaleString("th-TH")})
           </h2>
+          <p className="mt-1 text-xs text-[var(--muted)]">
+            บันทึกผลตรวจรายรายการ และเลือกสถานะครุภัณฑ์ล่าสุดเพื่ออัปเดตข้อมูลอุปกรณ์
+          </p>
         </div>
-        <table className="w-full text-sm">
-          <thead>
-            <tr style={{ background: "rgba(99,102,241,0.04)", borderBottom: "1px solid var(--line)" }}>
-              {["ทะเบียน", "ชื่อทรัพย์สิน", "ประเภท", "ผล", "หมายเหตุ"].map((h) => (
-                <th key={h} className="px-4 py-3 text-left font-semibold" style={{ color: "var(--muted)" }}>
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((item) => (
-              <tr key={item.id} style={{ borderBottom: "1px solid var(--line)" }}>
-                <td className="px-4 py-3 font-mono text-xs" style={{ color: "var(--muted)" }}>
-                  {item.assetRegistrationNo}
-                </td>
-                <td className="px-4 py-3" style={{ color: "var(--foreground)" }}>
-                  <Link href={`/assets/${item.assetId}`} style={{ color: "var(--accent)" }} className="hover:underline">
-                    {item.assetName}
-                  </Link>
-                </td>
-                <td className="px-4 py-3 text-xs" style={{ color: "var(--muted)" }}>
-                  {item.deviceType}
-                </td>
-                <td className="px-4 py-3">
-                  {item.found ? (
-                    <span className="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-700">
-                      ✓ พบ
-                    </span>
-                  ) : (
-                    <span className="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700">
-                      ✗ ไม่พบ
-                    </span>
-                  )}
-                </td>
-                <td className="px-4 py-3 text-xs" style={{ color: "var(--muted)" }}>
-                  {item.conditionNote}
-                </td>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[1080px] text-sm">
+            <thead>
+              <tr className="border-b border-black/6 bg-stone-50/60 text-xs text-[var(--muted)]">
+                <th className="px-4 py-3 text-left font-medium">ทะเบียน</th>
+                <th className="px-4 py-3 text-left font-medium">ชื่อครุภัณฑ์</th>
+                <th className="px-4 py-3 text-left font-medium">ประเภท</th>
+                <th className="px-4 py-3 text-left font-medium">ผลตรวจ / อัปเดตสถานะ</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-black/4">
+              {items.map((item) => (
+                <tr key={item.id} className={item.inspectionStatus === "Pending" ? "bg-amber-50/35" : "hover:bg-white/50"}>
+                  <td className="px-4 py-3 font-mono text-xs text-[var(--muted)]">
+                    {item.assetRegistrationNo || "-"}
+                  </td>
+                  <td className="px-4 py-3">
+                    <Link href={`/assets/${item.assetId}`} className="font-medium text-[var(--accent)] hover:underline">
+                      {item.assetName}
+                    </Link>
+                    <div className="mt-1 flex flex-wrap items-center gap-2">
+                      <StatusBadge tone={inspectionStatusTone(item.inspectionStatus)}>
+                        {inspectionStatusLabel(item.inspectionStatus)}
+                      </StatusBadge>
+                      <StatusBadge tone={assetStatusTone(item.currentStatus)}>
+                        ปัจจุบัน {assetStatusLabel(item.currentStatus)}
+                      </StatusBadge>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 text-xs text-[var(--muted)]">
+                    {item.deviceType || "-"}
+                  </td>
+                  <InspectionItemForm item={item} canMutate={canMutate} />
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </main>
   );

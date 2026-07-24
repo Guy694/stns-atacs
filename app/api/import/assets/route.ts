@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import * as XLSX from "xlsx";
 
+import { ASSET_CLASS_VALUE_SET, normalizeAssetClass } from "@/lib/asset-classes";
 import { getCurrentUser } from "@/lib/auth";
 import { executeStatement, selectRows } from "@/lib/mysql";
 import type { RowDataPacket } from "mysql2/promise";
@@ -9,6 +10,7 @@ import { readRequestIp, recordSecurityEvent } from "@/lib/security";
 type AssetImportRow = {
   asset_registration_no: string;
   asset_name: string;
+  asset_class: string;
   asset_category: string;
   asset_group: string;
   device_type: string;
@@ -86,22 +88,30 @@ export async function POST(req: NextRequest) {
   for (const row of rows) {
     const regNo = String(row.asset_registration_no ?? "").trim();
     if (!regNo || !row.asset_name) { skipped++; continue; }
+    const assetClassInput = String(row.asset_class ?? "IT").trim() || "IT";
+    if (!ASSET_CLASS_VALUE_SET.has(assetClassInput)) {
+      errors.push(`แถว ${regNo}: กลุ่มครุภัณฑ์ไม่ถูกต้อง`);
+      skipped++;
+      continue;
+    }
 
     try {
       await executeStatement(
         `INSERT INTO information_assets
-          (survey_id, asset_registration_no, asset_name, asset_category, asset_group, device_type,
+          (survey_id, asset_registration_no, asset_name, asset_class, asset_category, asset_group, device_type,
            manufacturer_brand, serial_number, operating_system, private_ip, public_ip,
            owner_name, location_detail, current_status, maintenance_end_date, usage_description,
            updated_by)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
          ON DUPLICATE KEY UPDATE
            asset_name = VALUES(asset_name),
+           asset_class = VALUES(asset_class),
            updated_by = VALUES(updated_by)`,
         [
           surveyId,
           regNo,
           String(row.asset_name ?? "").trim(),
+          normalizeAssetClass(assetClassInput),
           String(row.asset_category ?? "Hardware").trim() || "Hardware",
           String(row.asset_group ?? "").trim() || null,
           String(row.device_type ?? "").trim() || null,

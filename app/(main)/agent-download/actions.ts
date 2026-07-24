@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 
 import { createAgentEnrollment } from "@/lib/agent";
 import { getCurrentUser } from "@/lib/auth";
-import { findOrCreateFacilityWorkGroup, getFacilityAgentContext, normalizeWorkGroupName } from "@/lib/facility-work-groups";
+import { getActiveFacilityWorkGroupForFacility, getFacilityAgentContext } from "@/lib/facility-work-groups";
 import { executeStatement, selectRows } from "@/lib/mysql";
 import type { RowDataPacket } from "mysql2/promise";
 
@@ -39,28 +39,28 @@ export async function createOfficerDownloadTokenAction(
     return { token: null, error: "ไม่พบข้อมูลหน่วยงานของบัญชีนี้ กรุณาติดต่อผู้ดูแลระบบ", enrollmentName: null };
   }
 
-  const workGroupName = normalizeWorkGroupName(String(formData.get("workGroupName") ?? ""));
-  if (facility.requiresWorkGroup && workGroupName.length < 2) {
-    return { token: null, error: "หน่วยงานประเภทโรงพยาบาล / สสจ / สสอ ต้องระบุชื่อกลุ่มงานก่อนสร้าง token", enrollmentName: null };
-  }
-  if (workGroupName.length > 150) {
-    return { token: null, error: "ชื่อกลุ่มงานต้องไม่เกิน 150 ตัวอักษร", enrollmentName: null };
+  const workGroupIdInput = Number(formData.get("workGroupId"));
+  if (facility.requiresWorkGroup && (!workGroupIdInput || Number.isNaN(workGroupIdInput))) {
+    return { token: null, error: "หน่วยงานประเภทโรงพยาบาล / สสจ / สสอ ต้องเลือกกลุ่มงานก่อนสร้าง token", enrollmentName: null };
   }
 
   let workGroupId: number | null = null;
+  let selectedWorkGroupName = "";
   try {
     if (facility.requiresWorkGroup) {
-      workGroupId = await findOrCreateFacilityWorkGroup(facility.id, workGroupName);
-      if (!workGroupId) {
-        return { token: null, error: "ไม่สามารถบันทึกชื่อกลุ่มงานได้", enrollmentName: null };
+      const workGroup = await getActiveFacilityWorkGroupForFacility(facility.id, workGroupIdInput);
+      if (!workGroup) {
+        return { token: null, error: "ไม่พบกลุ่มงานนี้ในหน่วยงาน กรุณาเลือกจากรายการกลุ่มงานที่มีอยู่", enrollmentName: null };
       }
+      workGroupId = workGroup.id;
+      selectedWorkGroupName = workGroup.workGroupName;
     }
   } catch {
     return { token: null, error: "ยังไม่พบตาราง facility_work_groups กรุณารัน database/add_facility_work_groups.sql ก่อน", enrollmentName: null };
   }
 
   const enrollmentName = facility.requiresWorkGroup
-    ? `${facility.name} · ${workGroupName} · สร้างโดย ${user.fullName}`
+    ? `${facility.name} · ${selectedWorkGroupName} · สร้างโดย ${user.fullName}`
     : `${facility.name} · สร้างโดย ${user.fullName}`;
 
   // revoke token เดิมของชื่อเครื่อง/กลุ่มงานนี้ก่อน

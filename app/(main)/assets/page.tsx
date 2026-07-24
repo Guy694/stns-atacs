@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { StatusBadge } from "@/app/_components/ui/status-badge";
+import { ASSET_CLASS_OPTIONS, assetClassLabel } from "@/lib/asset-classes";
 import { getCurrentUser } from "@/lib/auth";
 import { countAssets, listAssets, listAllFacilitiesForSelect, listFacilities, type AssetListFilter } from "@/lib/assets";
 import { formatThaiDate } from "@/lib/date-format";
@@ -73,12 +74,12 @@ const STATUS_TONE = {
   Inactive: "warning",
   Broken: "danger",
 } as const;
-
 export default async function AssetsPage({ searchParams }: AssetsPageProps) {
   const user = await getCurrentUser();
   if (!user) return null;
 
   if (user.role !== "admin") {
+    if ((user.managedAssetFacilityIds?.length ?? 0) > 1) redirect("/facilities");
     if (user.facilityId) redirect(`/facilities/${user.facilityId}`);
     redirect("/profile");
   }
@@ -92,6 +93,7 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
   const search = readParam(params, "search");
   const statusFilter = readParam(params, "status");
   const districtFilter = readParam(params, "district");
+  const assetClassFilter = readParam(params, "assetClass");
   const groupFilter = readParam(params, "group");
   const workGroupFilter = Number(readParam(params, "workGroup")) || undefined;
   const deviceTypeFilter = readParam(params, "deviceType");
@@ -107,6 +109,7 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
     facilityId: facilityFilter,
     workGroupId: workGroupFilter,
     district: districtFilter || undefined,
+    assetClass: assetClassFilter || undefined,
     assetGroup: groupFilter === "Hardware" || groupFilter === "Software" ? groupFilter : undefined,
     deviceType: deviceTypeFilter || undefined,
     maExpiringDays,
@@ -129,6 +132,7 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
   const pageQuery = {
     search: search || undefined,
     status: statusFilter || undefined,
+    assetClass: assetClassFilter || undefined,
     group: groupFilter || undefined,
     workGroup: workGroupFilter,
     deviceType: deviceTypeFilter || undefined,
@@ -166,7 +170,7 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-xs font-medium uppercase tracking-[0.22em] text-[var(--muted)]">ATACS · ทะเบียนทรัพย์สิน</p>
-          <h1 className="section-title mt-1 text-3xl font-semibold">รายการทรัพย์สินสารสนเทศ</h1>
+          <h1 className="section-title mt-1 text-3xl font-semibold">รายการครุภัณฑ์และทรัพย์สิน</h1>
           <p className="mt-1 text-sm text-[var(--muted)]">
             {totalAssets.toLocaleString("th-TH")} รายการ
             {totalAssets > 0 && (
@@ -214,25 +218,37 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
           <option value="Inactive">ไม่ใช้งาน</option>
           <option value="Broken">ชำรุด</option>
         </select>
-        <label htmlFor="asset-group-filter" className="sr-only">กรองหมวดทรัพย์สิน</label>
+        <label htmlFor="asset-class-filter" className="sr-only">กรองกลุ่มครุภัณฑ์</label>
+        <select
+          id="asset-class-filter"
+          name="assetClass"
+          defaultValue={assetClassFilter}
+          className="rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+        >
+          <option value="">ทุกกลุ่มครุภัณฑ์</option>
+          {ASSET_CLASS_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>{option.label}</option>
+          ))}
+        </select>
+        <label htmlFor="asset-group-filter" className="sr-only">กรองลักษณะทรัพย์สิน</label>
         <select
           id="asset-group-filter"
           name="group"
           defaultValue={groupFilter}
           className="rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
         >
-          <option value="">ทุกหมวด</option>
+          <option value="">ทุกลักษณะ</option>
           <option value="Hardware">Hardware</option>
           <option value="Software">Software</option>
         </select>
-        <label htmlFor="asset-device-type-filter" className="sr-only">กรองประเภทอุปกรณ์</label>
+        <label htmlFor="asset-device-type-filter" className="sr-only">กรองประเภททรัพย์สิน / อุปกรณ์</label>
         <select
           id="asset-device-type-filter"
           name="deviceType"
           defaultValue={deviceTypeFilter}
           className="rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
         >
-          <option value="">ทุกประเภทอุปกรณ์</option>
+          <option value="">ทุกประเภททรัพย์สิน</option>
           {deviceTypes.map((deviceType) => (
             <option key={deviceType.id + deviceType.name} value={deviceType.name}>
               {deviceType.name}
@@ -329,7 +345,7 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
         >
           ค้นหา
         </button>
-        {(search || statusFilter || requestedFacilityFilter || districtFilter || groupFilter || workGroupFilter || deviceTypeFilter || maExpiringDays || sort || perPage !== 25) && (
+        {(search || statusFilter || requestedFacilityFilter || districtFilter || assetClassFilter || groupFilter || workGroupFilter || deviceTypeFilter || maExpiringDays || sort || perPage !== 25) && (
           <Link href="/assets" className="rounded-xl border border-black/10 bg-white/80 px-4 py-2 text-sm text-[var(--muted)] hover:bg-white">
             ล้างตัวกรอง
           </Link>
@@ -375,7 +391,10 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
                       </Link>
                     </td>
                     <td className="px-4 py-3">
-                      <span className="rounded-full bg-stone-100 px-2.5 py-0.5 text-xs">{asset.deviceType || asset.assetGroup}</span>
+                      <div className="flex min-w-44 flex-col gap-1">
+                        <StatusBadge tone="primary">{assetClassLabel(asset.assetClass)}</StatusBadge>
+                        <span className="text-xs text-[var(--muted)]">{asset.deviceType || asset.assetGroup}</span>
+                      </div>
                     </td>
                     <td className="px-4 py-3">
                       <StatusBadge tone={STATUS_TONE[asset.currentStatus as keyof typeof STATUS_TONE] ?? "neutral"}>

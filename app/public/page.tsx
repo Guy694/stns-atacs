@@ -3,12 +3,14 @@ import Link from "next/link";
 import { StatusBadge } from "@/app/_components/ui/status-badge";
 import { TopNavigation } from "@/app/_components/top-navigation";
 import { districtCoverage } from "@/app/atacs-data";
-import { assetStatusLabel, assetStatusTone } from "@/lib/asset-status";
+import { assetStatusLabel } from "@/lib/asset-status";
 import { listAllFacilitiesForSelect, listAssets } from "@/lib/assets";
 
 type Props = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
+
+const TEST_SYSTEM_EMBED_URL = "https://satunhealth-srykdxrz.manus.space/";
 
 function sp(params: Record<string, string | string[] | undefined>, key: string) {
   const v = params[key];
@@ -38,21 +40,6 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
 
   // ── Load all assets (server-only, no IP/serial exposed to client) ────────
   const [allAssets, allFacilities] = await Promise.all([listAssets(), listAllFacilitiesForSelect()]);
-
-  // ── Search results (public-safe fields only) ─────────────────────────────
-  let searchResults: { assetName: string; assetRegistrationNo: string; deviceType: string; assetGroup: string; facilityName: string; districtName: string; currentStatus: string }[] = [];
-  if (q.length >= 2) {
-    const found = await listAssets({ search: q });
-    searchResults = found.slice(0, 20).map((a) => ({
-      assetName: a.assetName,
-      assetRegistrationNo: a.assetRegistrationNo,
-      deviceType: a.deviceType,
-      assetGroup: a.assetGroup,
-      facilityName: a.facilityName,
-      districtName: a.districtName,
-      currentStatus: a.currentStatus,
-    }));
-  }
 
   // ── District list for filter ─────────────────────────────────────────────
   const seededDistricts = districtCoverage.map((district) => district.district);
@@ -122,6 +109,36 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
       }, {}
     )
   ).sort((a, b) => b.total - a.total);
+  const facilityStatsById = new Map(byFacility.map((facility) => [facility.id, facility]));
+  const facilitiesByDistrict = Object.fromEntries(
+    allDistricts.map((district) => {
+      const registeredFacilities = allFacilities
+        .filter((facility) => facility.district_name === district)
+        .map((facility) => {
+          const stats = facilityStatsById.get(facility.id);
+          return {
+            id: facility.id,
+            name: facility.facility_name,
+            district,
+            total: stats?.total ?? 0,
+            active: stats?.active ?? 0,
+            broken: stats?.broken ?? 0,
+            inactive: stats?.inactive ?? 0,
+          };
+        });
+      const registeredIds = new Set(registeredFacilities.map((facility) => facility.id));
+      const facilitiesFromAssets = byFacility.filter(
+        (facility) => facility.district === district && !registeredIds.has(facility.id)
+      );
+
+      return [
+        district,
+        [...registeredFacilities, ...facilitiesFromAssets].sort(
+          (left, right) => right.total - left.total || left.name.localeCompare(right.name, "th")
+        ),
+      ];
+    })
+  ) as Record<string, typeof byFacility>;
 
   // ── By device type ───────────────────────────────────────────────────────
   const byType = Object.entries(
@@ -406,37 +423,104 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
           {/* District comparison */}
           <div className="glass-panel overflow-hidden rounded-2xl">
             <div className="flex items-center justify-between border-b border-black/6 px-5 py-3">
-              <h2 className="font-semibold">เปรียบเทียบรายอำเภอ</h2>
-              <span className="text-xs text-[var(--muted)]">{byDistrict.length} อำเภอ</span>
+              <div>
+                <h2 className="font-semibold">เปรียบเทียบรายอำเภอ</h2>
+                <p className="mt-0.5 text-xs text-[var(--muted)]">เลือกอำเภอเพื่อดูหน่วยงานและจำนวนข้อมูล</p>
+              </div>
+              <span className="shrink-0 text-xs text-[var(--muted)]">{byDistrict.length} อำเภอ</span>
             </div>
             <div className="divide-y divide-black/4">
               {byDistrict.map((d) => {
                 const rate = Math.round((d.active / Math.max(d.total, 1)) * 100);
                 const barColor = rate >= 85 ? "bg-emerald-500" : rate >= 70 ? "bg-amber-400" : "bg-rose-500";
+                const districtFacilities = facilitiesByDistrict[d.name] ?? [];
                 return (
-                  <div key={d.name} className="grid gap-3 px-5 py-4 text-sm hover:bg-white/40 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center lg:grid-cols-[minmax(0,1fr)_auto_auto_auto_auto] lg:gap-4 lg:py-3">
-                    <div className="min-w-0">
-                      <Link href={filterHref({ district: d.name })} className="font-semibold hover:text-[var(--primary)] hover:underline">
-                        อ.{d.name}
-                      </Link>
-                      <div className="mt-1.5">
-                        <PctBar value={d.total} max={maxDistrict} color="bg-[var(--primary-soft-strong)]" />
+                  <details key={d.name} className="group">
+                    <summary className="grid cursor-pointer list-none gap-3 px-5 py-4 text-sm transition hover:bg-white/50 focus-visible:bg-white/70 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center lg:grid-cols-[minmax(0,1fr)_auto_auto_auto_auto_auto] lg:gap-4 lg:py-3 [&::-webkit-details-marker]:hidden">
+                      <div className="flex min-w-0 items-center gap-3">
+                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[var(--primary-soft)] text-[var(--primary-text)]">
+                          <svg
+                            viewBox="0 0 20 20"
+                            fill="none"
+                            aria-hidden="true"
+                            className="h-4 w-4 transition-transform duration-200 group-open:rotate-180"
+                          >
+                            <path d="m6 8 4 4 4-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <span className="font-semibold">อ.{d.name}</span>
+                          <div className="mt-1.5">
+                            <PctBar value={d.total} max={maxDistrict} color="bg-[var(--primary-soft-strong)]" />
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                    <span className="text-xs text-[var(--muted)] sm:text-center">{d.facilityCount} หน่วยงาน</span>
-                    <span className="font-semibold sm:text-center">{d.total}</span>
-                    <div className="flex items-center gap-1.5 sm:col-span-2 lg:col-span-1">
-                      <div className="h-1.5 w-16 overflow-hidden rounded-full bg-slate-100">
-                        <div className={`h-full rounded-full ${barColor}`} style={{ width: `${rate}%` }} />
+                      <span className="text-xs text-[var(--muted)] sm:text-center">{d.facilityCount} หน่วยงาน</span>
+                      <span className="font-semibold sm:text-center">{d.total} รายการ</span>
+                      <div className="flex items-center gap-1.5 sm:col-span-2 lg:col-span-1">
+                        <div className="h-1.5 w-16 overflow-hidden rounded-full bg-slate-100">
+                          <div className={`h-full rounded-full ${barColor}`} style={{ width: `${rate}%` }} />
+                        </div>
+                        <span className="text-xs">{rate}%</span>
                       </div>
-                      <span className="text-xs">{rate}%</span>
+                      <div className="flex flex-wrap gap-2 text-xs sm:col-span-3 lg:col-span-1">
+                        <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-emerald-700">{d.active}</span>
+                        {d.broken > 0 && <span className="rounded-full bg-rose-100 px-2 py-0.5 text-rose-700">{d.broken}</span>}
+                        {d.inactive > 0 && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-amber-700">{d.inactive}</span>}
+                      </div>
+                    </summary>
+
+                    <div className="border-t border-black/6 bg-[var(--neutral-bg)]/65 px-5 py-4">
+                      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-sm font-semibold">หน่วยงานในอำเภอ{d.name}</p>
+                        <Link
+                          href={filterHref({ district: d.name })}
+                          className="text-xs font-medium text-[var(--primary-text)] hover:underline"
+                        >
+                          ดูเฉพาะอำเภอนี้
+                        </Link>
+                      </div>
+
+                      {districtFacilities.length > 0 ? (
+                        <div className="overflow-x-auto rounded-xl border border-black/8 bg-white">
+                          <table className="w-full min-w-[620px] text-sm">
+                            <thead>
+                              <tr className="border-b border-black/6 bg-slate-50/80 text-xs text-[var(--muted)]">
+                                <th className="px-4 py-2.5 text-left font-medium">หน่วยงาน</th>
+                                <th className="px-4 py-2.5 text-center font-medium">ข้อมูลทั้งหมด</th>
+                                <th className="px-4 py-2.5 text-center font-medium">พร้อมใช้งาน</th>
+                                <th className="px-4 py-2.5 text-center font-medium">ชำรุด</th>
+                                <th className="px-4 py-2.5 text-center font-medium">ไม่ใช้งาน</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-black/4">
+                              {districtFacilities.map((facility) => (
+                                <tr key={facility.id} className="hover:bg-slate-50/70">
+                                  <td className="px-4 py-3 font-medium">{facility.name}</td>
+                                  <td className="px-4 py-3 text-center">
+                                    {facility.total > 0 ? (
+                                      <span className="font-semibold">{facility.total} รายการ</span>
+                                    ) : (
+                                      <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-[var(--muted)]">
+                                        ยังไม่มีข้อมูล
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td className="px-4 py-3 text-center font-medium text-emerald-700">{facility.active || "–"}</td>
+                                  <td className="px-4 py-3 text-center text-rose-700">{facility.broken || "–"}</td>
+                                  <td className="px-4 py-3 text-center text-amber-700">{facility.inactive || "–"}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      ) : (
+                        <p className="rounded-xl bg-white px-4 py-5 text-center text-sm text-[var(--muted)]">
+                          ยังไม่มีรายชื่อหน่วยงานในอำเภอนี้
+                        </p>
+                      )}
                     </div>
-                    <div className="flex flex-wrap gap-2 text-xs sm:col-span-3 lg:col-span-1">
-                      <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-emerald-700">{d.active}</span>
-                      {d.broken > 0 && <span className="rounded-full bg-rose-100 px-2 py-0.5 text-rose-700">{d.broken}</span>}
-                      {d.inactive > 0 && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-amber-700">{d.inactive}</span>}
-                    </div>
-                  </div>
+                  </details>
                 );
               })}
             </div>
@@ -444,9 +528,9 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
 
           {/* Device type horizontal bar chart */}
           <div className="glass-panel rounded-2xl p-6">
-            <h2 className="mb-5 font-semibold">ประเภทอุปกรณ์ — Top {Math.min(byType.length, 10)}</h2>
+            <h2 className="mb-5 font-semibold">ประเภทอุปกรณ์ — Top 7</h2>
             <div className="space-y-3">
-              {byType.slice(0, 10).map((t, i) => (
+              {byType.slice(0, 7).map((t, i) => (
                 <div key={t.type} className="flex items-center gap-3 text-sm">
                   <span className="w-4 shrink-0 text-right text-xs text-[var(--muted)]">{i + 1}</span>
                   <span className="w-36 shrink-0 truncate text-xs font-medium">{t.type}</span>
@@ -467,6 +551,8 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
               <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-amber-300" />ไม่ใช้งาน</span>
             </div>
           </div>
+
+
         </>
       )}
 

@@ -17,6 +17,7 @@ import { getFacilityById } from "@/lib/assets";
 type HomeProps = { searchParams: Promise<Record<string, string | undefined>> };
 
 const DISTRICT_CHART_COLORS = ["#047857", "#0e7490", "#b45309", "#dc2626", "#0f766e", "#475569", "#2563eb"];
+const TEST_SYSTEM_EMBED_URL = "https://satunhealth-srykdxrz.manus.space/";
 const FACILITY_GROUP_OPTIONS: Array<{ value: DashboardFacilityGroup; label: string; description: string }> = [
   { value: "province", label: "สสจ", description: "สำนักงานสาธารณสุขจังหวัด" },
   { value: "primary-office", label: "สสอ", description: "สำนักงานสาธารณสุขอำเภอ" },
@@ -133,6 +134,7 @@ export default async function Home({ searchParams }: HomeProps) {
       return acc;
     }, {})
   ).sort((a, b) => b[1] - a[1]);
+  const topDeviceTypes = deviceTypes.slice(0, 7);
 
   const districtMetrics = facilitySurveys.reduce<Record<string, { assets: number; facilities: number; activeAssets: number; completionTotal: number }>>(
     (acc, survey) => {
@@ -595,7 +597,7 @@ export default async function Home({ searchParams }: HomeProps) {
           {/* Asset Distribution */}
           <div className="glass-panel rounded-2xl p-6">
             <p className="text-xs font-medium uppercase tracking-[0.2em] text-[var(--muted)]">Asset Distribution</p>
-            <h2 className="section-title mt-1 text-xl font-semibold">ประเภทอุปกรณ์</h2>
+            <h2 className="section-title mt-1 text-xl font-semibold">ประเภทอุปกรณ์ — Top 7</h2>
 
             <div className="mt-4 grid grid-cols-2 gap-3">
               <div className="rounded-xl bg-[var(--accent-strong)] p-4 text-white">
@@ -611,7 +613,7 @@ export default async function Home({ searchParams }: HomeProps) {
             </div>
 
             <div className="mt-5 space-y-3">
-              {deviceTypes.map(([type, count]) => (
+              {topDeviceTypes.map(([type, count]) => (
                 <div key={type}>
                   <div className="flex items-center justify-between text-sm">
                     <span>{type}</span>
@@ -630,6 +632,8 @@ export default async function Home({ searchParams }: HomeProps) {
             </div>
           </div>
         </div>
+
+        
 
         {/* ── Provincial Coverage (admin/viewer only) ───────────────────────── */}
         {!scopeFacilityName && (

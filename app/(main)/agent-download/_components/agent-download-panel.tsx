@@ -44,12 +44,12 @@ export function AgentDownloadPanel({ facilityId, facilityName, requiresWorkGroup
     createOfficerDownloadTokenAction,
     INITIAL
   );
-  const [staticWorkGroupName, setStaticWorkGroupName] = useState("");
+  const [staticWorkGroupId, setStaticWorkGroupId] = useState("");
 
   const token = state.token;
-  const staticWorkGroup = requiresWorkGroup ? staticWorkGroupName.trim() || "<WORK_GROUP_NAME>" : "";
-  const staticWinCmd = buildWindowsStaticAgentInstallCommand({ facilityId, workGroupName: staticWorkGroup, installKey: staticInstallKey ?? undefined });
-  const staticLinuxCmd = buildLinuxStaticAgentInstallCommand({ facilityId, workGroupName: staticWorkGroup, installKey: staticInstallKey ?? undefined });
+  const staticWorkGroup = requiresWorkGroup ? staticWorkGroupId || 0 : 0;
+  const staticWinCmd = buildWindowsStaticAgentInstallCommand({ facilityId, workGroupId: staticWorkGroup, installKey: staticInstallKey ?? undefined });
+  const staticLinuxCmd = buildLinuxStaticAgentInstallCommand({ facilityId, workGroupId: staticWorkGroup, installKey: staticInstallKey ?? undefined });
 
   const winCmd = token ? buildWindowsAgentInstallCommand(token) : "";
   const linuxCmd = token ? buildLinuxAgentInstallCommand(token) : "";
@@ -100,20 +100,20 @@ export function AgentDownloadPanel({ facilityId, facilityName, requiresWorkGroup
             <label htmlFor="staticWorkGroupName" className="block text-sm font-semibold text-sky-950">
               ชื่อกลุ่มงานในคำสั่ง
             </label>
-            <input
+            <select
               id="staticWorkGroupName"
-              value={staticWorkGroupName}
-              onChange={(event) => setStaticWorkGroupName(event.target.value)}
-              list="static-facility-work-groups"
-              maxLength={150}
-              placeholder="เช่น กลุ่มงานไอที / OPD / งานการเงิน"
+              value={staticWorkGroupId}
+              onChange={(event) => setStaticWorkGroupId(event.target.value)}
               className="mt-1 w-full rounded-xl border border-sky-200 bg-white px-3 py-2.5 text-sm text-sky-950 outline-none transition focus:border-[var(--accent)]"
-            />
-            <datalist id="static-facility-work-groups">
+            >
+              <option value="">{workGroups.length > 0 ? "เลือกกลุ่มงาน" : "ยังไม่มีกลุ่มงานในหน่วยงานนี้"}</option>
               {workGroups.map((group) => (
-                <option key={group.id} value={group.workGroupName} />
+                <option key={group.id} value={group.id}>{group.workGroupName}</option>
               ))}
-            </datalist>
+            </select>
+            <p className="mt-1 text-xs text-sky-800">
+              ใช้ชื่อกลุ่มงานที่มีอยู่แล้วเท่านั้น ระบบจะไม่บันทึกกลุ่มงานใหม่จากการติดตั้ง agent
+            </p>
           </div>
         )}
 
@@ -153,22 +153,19 @@ export function AgentDownloadPanel({ facilityId, facilityName, requiresWorkGroup
                 <label htmlFor="workGroupName" className="block text-sm font-semibold text-[var(--foreground)]">
                   ชื่อกลุ่มงาน
                 </label>
-                <input
+                <select
                   id="workGroupName"
-                  name="workGroupName"
-                  list="facility-work-groups"
+                  name="workGroupId"
                   required
-                  maxLength={150}
-                  placeholder="เช่น กลุ่มงานไอที / OPD / งานการเงิน"
                   className="mt-1 w-full rounded-xl border border-black/10 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-[var(--accent)]"
-                />
-                <datalist id="facility-work-groups">
+                >
+                  <option value="">{workGroups.length > 0 ? "เลือกกลุ่มงาน" : "ยังไม่มีกลุ่มงานในหน่วยงานนี้"}</option>
                   {workGroups.map((group) => (
-                    <option key={group.id} value={group.workGroupName} />
+                    <option key={group.id} value={group.id}>{group.workGroupName}</option>
                   ))}
-                </datalist>
+                </select>
                 <p className="mt-1 text-xs text-[var(--muted)]">
-                  ระบบจะบันทึกชื่อกลุ่มงานนี้ผูกกับหน่วยงาน{facilityName} และนำไปแสดงกับ token ติดตั้ง agent
+                  เลือกจากกลุ่มงานที่มีอยู่แล้วของ{facilityName} ระบบจะไม่สร้างชื่อกลุ่มงานใหม่จากการติดตั้ง agent
                 </p>
               </div>
             )}

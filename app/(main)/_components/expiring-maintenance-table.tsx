@@ -209,7 +209,7 @@ export function ExpiringMaintenanceTable({
               <dl className="mt-4 grid gap-x-6 sm:grid-cols-2">
                 <DetailField label="เลขทะเบียนทรัพย์สิน" value={selectedRow.assetRegistrationNo} />
                 <DetailField label="วันสิ้นสุดสัญญา MA" value={formatThaiDate(selectedRow.maintenanceEndDate)} />
-                <DetailField label="ประเภทอุปกรณ์" value={`${selectedRow.deviceType} · ${selectedRow.assetGroup}`} />
+                <DetailField label="ประเภททรัพย์สิน / อุปกรณ์" value={`${selectedRow.deviceType} · ${selectedRow.assetGroup}`} />
                 <DetailField label="สถานะปัจจุบัน" value={assetStatusLabel(selectedRow.currentStatus)} />
                 <DetailField label="ยี่ห้อ / รุ่น" value={selectedRow.manufacturerBrand} />
                 <DetailField label="ระบบปฏิบัติการ" value={selectedRow.operatingSystem} />

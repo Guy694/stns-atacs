@@ -253,6 +253,51 @@ export async function findOrCreateFacilityWorkGroup(facilityId: number, rawName:
   return rows[0]?.id ?? null;
 }
 
+export async function findActiveFacilityWorkGroup(facilityId: number, rawName: string) {
+  const workGroupName = normalizeWorkGroupName(rawName);
+  if (!workGroupName) return null;
+
+  const rows = await selectRows<FacilityWorkGroupRow>(
+    `SELECT
+       fwg.id,
+       fwg.facility_id,
+       hf.name AS facility_name,
+       fwg.work_group_name,
+       fwg.is_active
+     FROM facility_work_groups fwg
+     JOIN health_facilities hf ON hf.id = fwg.facility_id
+     WHERE fwg.facility_id = ?
+       AND fwg.work_group_name = ?
+       AND fwg.is_active = 1
+     LIMIT 1`,
+    [facilityId, workGroupName]
+  );
+
+  return rows[0] ? toWorkGroupOption(rows[0]) : null;
+}
+
+export async function getActiveFacilityWorkGroupForFacility(facilityId: number, workGroupId: number) {
+  if (!Number.isInteger(workGroupId) || workGroupId <= 0) return null;
+
+  const rows = await selectRows<FacilityWorkGroupRow>(
+    `SELECT
+       fwg.id,
+       fwg.facility_id,
+       hf.name AS facility_name,
+       fwg.work_group_name,
+       fwg.is_active
+     FROM facility_work_groups fwg
+     JOIN health_facilities hf ON hf.id = fwg.facility_id
+     WHERE fwg.id = ?
+       AND fwg.facility_id = ?
+       AND fwg.is_active = 1
+     LIMIT 1`,
+    [workGroupId, facilityId]
+  );
+
+  return rows[0] ? toWorkGroupOption(rows[0]) : null;
+}
+
 export async function setFacilityWorkGroupActive(id: number, active: boolean) {
   return executeStatement(
     `UPDATE facility_work_groups

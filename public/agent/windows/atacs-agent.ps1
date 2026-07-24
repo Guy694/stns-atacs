@@ -2,6 +2,7 @@ param(
     [string]$ApiBaseUrl,
     [string]$EnrollmentToken,
     [int]$FacilityId,
+    [int]$WorkGroupId,
     [string]$WorkGroupName,
     [string]$InstallKey,
     [string]$ConfigPath = "$env:ProgramData\ATACSAgent\agent-config.json",
@@ -177,6 +178,7 @@ function Enroll-Agent {
         [string]$BaseUrl,
         [string]$Token,
         [int]$FacilityId,
+        [int]$WorkGroupId,
         [string]$WorkGroupName,
         [string]$InstallKey,
         [string]$Path
@@ -202,7 +204,12 @@ function Enroll-Agent {
     else {
         $body.installKey = $InstallKey
         $body.facilityId = $FacilityId
-        $body.workGroupName = $WorkGroupName
+        if ($WorkGroupId -gt 0) {
+            $body.workGroupId = $WorkGroupId
+        }
+        elseif (-not [string]::IsNullOrWhiteSpace($WorkGroupName)) {
+            $body.workGroupName = $WorkGroupName
+        }
     }
     $response = Invoke-JsonPost -Url "$normalizedBaseUrl/api/agent/enroll" -Body $body -Headers @{}
 
@@ -241,7 +248,7 @@ try {
     $hasStaticInstall = -not [string]::IsNullOrWhiteSpace($InstallKey) -and $FacilityId -gt 0
     $forceEnroll = -not [string]::IsNullOrWhiteSpace($ApiBaseUrl) -and ($hasToken -or $hasStaticInstall)
     if (-not $config -or $forceEnroll) {
-        $config = Enroll-Agent -BaseUrl $ApiBaseUrl -Token $EnrollmentToken -FacilityId $FacilityId -WorkGroupName $WorkGroupName -InstallKey $InstallKey -Path $ConfigPath
+        $config = Enroll-Agent -BaseUrl $ApiBaseUrl -Token $EnrollmentToken -FacilityId $FacilityId -WorkGroupId $WorkGroupId -WorkGroupName $WorkGroupName -InstallKey $InstallKey -Path $ConfigPath
         Write-Host "Enrolled device for facility: $($config.facilityName)"
     }
 

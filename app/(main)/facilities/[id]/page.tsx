@@ -3,12 +3,13 @@ import { notFound, redirect } from "next/navigation";
 
 import { AppIcon } from "@/app/_components/ui/icon";
 import { StatusBadge } from "@/app/_components/ui/status-badge";
+import { ASSET_CLASS_OPTIONS, assetClassLabel } from "@/lib/asset-classes";
 import { getCurrentUser } from "@/lib/auth";
 import { getFacilityById, listAssets, listAllFacilitiesForSelect } from "@/lib/assets";
 import { formatThaiDate } from "@/lib/date-format";
 import { listActiveDeviceTypes } from "@/lib/device-types";
-import { canAccessFacility } from "@/lib/facility-scope";
 import { listFacilityWorkGroups } from "@/lib/facility-work-groups";
+import { canAccessAssetFacility, canManageAssetRecord } from "@/lib/permissions";
 import { AssetFormModal } from "@/app/(main)/assets/_components/asset-form-modal";
 import { DeleteAssetButton } from "@/app/(main)/assets/_components/delete-asset-button";
 import { FacilityAssetQrActions } from "@/app/(main)/facilities/[id]/_components/facility-asset-qr-actions";
@@ -53,17 +54,14 @@ export default async function FacilityDetailPage({ params, searchParams }: Props
   const facilityId = Number(id);
   if (!facilityId) notFound();
 
-  if (!canAccessFacility(user, facilityId) && user.facilityId) {
-    redirect(`/facilities/${user.facilityId}`);
-  }
-
-  if (!canAccessFacility(user, facilityId) && !user.facilityId) {
-    redirect("/profile");
+  if (!canAccessAssetFacility(user, facilityId)) {
+    redirect(user.facilityId ? "/facilities" : "/profile");
   }
 
   const query = await searchParams;
   const search = readParam(query, "search");
   const statusFilter = readParam(query, "status");
+  const assetClassFilter = readParam(query, "assetClass");
   const groupFilter = readParam(query, "group");
   const workGroupFilter = Number(readParam(query, "workGroup")) || undefined;
   const deviceTypeFilter = readParam(query, "deviceType");
@@ -79,6 +77,7 @@ export default async function FacilityDetailPage({ params, searchParams }: Props
       workGroupId: workGroupFilter,
       search: search || undefined,
       status: statusFilter || undefined,
+      assetClass: assetClassFilter || undefined,
       assetGroup: groupFilter === "Hardware" || groupFilter === "Software" ? groupFilter : undefined,
       deviceType: deviceTypeFilter || undefined,
       maExpiringDays,
@@ -95,7 +94,7 @@ export default async function FacilityDetailPage({ params, searchParams }: Props
   const facilityName = allAssets[0]?.facilityName ?? currentFacility.name ?? `หน่วยงาน #${facilityId}`;
   const districtName = allAssets[0]?.districtName ?? currentFacility.district_name ?? "";
 
-  const canManageAssets = user.role === "admin" || user.facilityId === facilityId;
+  const canManageAssets = canManageAssetRecord(user, facilityId);
 
   const totalAssets = allAssets.length;
   const activeCount = allAssets.filter((a) => a.currentStatus === "Active").length;
@@ -105,7 +104,7 @@ export default async function FacilityDetailPage({ params, searchParams }: Props
   const deviceTypeOptions = [...new Set(allAssets.map((asset) => asset.deviceType).filter(Boolean))].sort((a, b) =>
     a.localeCompare(b, "th")
   );
-  const hasActiveFilters = Boolean(search || statusFilter || groupFilter || workGroupFilter || deviceTypeFilter || maExpiringDays || normalizedSort);
+  const hasActiveFilters = Boolean(search || statusFilter || assetClassFilter || groupFilter || workGroupFilter || deviceTypeFilter || maExpiringDays || normalizedSort);
 
   const expiringSoon = allAssets
     .filter((a) => a.maintenanceEndDate)
@@ -139,8 +138,8 @@ export default async function FacilityDetailPage({ params, searchParams }: Props
           {[
             { label: "ทรัพย์สินรวม", value: totalAssets },
             { label: "พร้อมใช้งาน", value: activeCount, green: true },
-            { label: "ฮาร์ดแวร์", value: hardwareCount },
-            { label: "ซอฟต์แวร์", value: softwareCount },
+            { label: "ลักษณะฮาร์ดแวร์", value: hardwareCount },
+            { label: "ลักษณะซอฟต์แวร์", value: softwareCount },
           ].map((kpi) => (
             <div key={kpi.label} className="px-5 py-4">
               <p className="text-xs text-[var(--muted)]">{kpi.label}</p>
@@ -227,25 +226,38 @@ export default async function FacilityDetailPage({ params, searchParams }: Props
             </select>
           </label>
           <label>
+            <span className="sr-only">กลุ่มครุภัณฑ์</span>
+            <select
+              name="assetClass"
+              defaultValue={assetClassFilter}
+              className="min-h-11 w-full rounded-xl border border-black/10 bg-white/85 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+            >
+              <option value="">ทุกกลุ่มครุภัณฑ์</option>
+              {ASSET_CLASS_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </label>
+          <label>
             <span className="sr-only">หมวด</span>
             <select
               name="group"
               defaultValue={groupFilter}
               className="min-h-11 w-full rounded-xl border border-black/10 bg-white/85 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
             >
-              <option value="">ทุกหมวด</option>
+              <option value="">ทุกลักษณะ</option>
               <option value="Hardware">ฮาร์ดแวร์</option>
               <option value="Software">ซอฟต์แวร์</option>
             </select>
           </label>
           <label>
-            <span className="sr-only">ประเภทอุปกรณ์</span>
+            <span className="sr-only">ประเภททรัพย์สิน / อุปกรณ์</span>
             <select
               name="deviceType"
               defaultValue={deviceTypeFilter}
               className="min-h-11 w-full rounded-xl border border-black/10 bg-white/85 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
             >
-              <option value="">ทุกประเภท</option>
+              <option value="">ทุกประเภททรัพย์สิน</option>
               {deviceTypeOptions.map((deviceType) => (
                 <option key={deviceType} value={deviceType}>{deviceType}</option>
               ))}
@@ -341,7 +353,8 @@ export default async function FacilityDetailPage({ params, searchParams }: Props
                       )}
                     </td>
                     <td className="px-4 py-3">
-                      <p className="text-xs">{asset.deviceType || "–"}</p>
+                      <StatusBadge tone="primary">{assetClassLabel(asset.assetClass)}</StatusBadge>
+                      <p className="mt-1 text-xs">{asset.deviceType || "–"}</p>
                       <p className="text-xs text-[var(--muted)]">{asset.assetGroup}</p>
                     </td>
                     <td className="px-4 py-3">

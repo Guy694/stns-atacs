@@ -645,6 +645,38 @@ export async function getCurrentUser() {
     return null;
   }
 
+  let managedAssetFacilityIds: number[] = rows[0].facility_id ? [Number(rows[0].facility_id)] : [];
+  if (rows[0].role === "officer" && rows[0].facility_id) {
+    try {
+      const managedFacilities = await selectRows<RowDataPacket & { id: number }>(
+        `
+          SELECT target.id
+          FROM health_facilities owner
+          INNER JOIN health_facilities target
+            ON target.district_name = owner.district_name
+           AND target.is_active = 1
+          WHERE owner.id = ?
+            AND (
+              target.id = owner.id
+              OR (
+                REPLACE(COALESCE(owner.typecode, ''), ' ', '') LIKE '%สสอ%'
+                AND (
+                  REPLACE(COALESCE(target.typecode, ''), ' ', '') LIKE '%รพ.สต%'
+                  OR REPLACE(COALESCE(target.typecode, ''), ' ', '') LIKE '%ศสช%'
+                  OR REPLACE(COALESCE(target.typecode, ''), ' ', '') LIKE '%สอน.%'
+                )
+              )
+            )
+          ORDER BY target.id
+        `,
+        [rows[0].facility_id]
+      );
+      managedAssetFacilityIds = managedFacilities.map((facility) => Number(facility.id));
+    } catch {
+      // Keep the officer restricted to their own facility if facility metadata cannot be read.
+    }
+  }
+
   try {
     await executeStatement(
       `
@@ -665,6 +697,7 @@ export async function getCurrentUser() {
     email: rows[0].email,
     role: rows[0].role,
     facilityId: rows[0].facility_id ?? null,
+    managedAssetFacilityIds,
   };
 }
 

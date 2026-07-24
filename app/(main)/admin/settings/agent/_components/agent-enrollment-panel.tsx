@@ -62,7 +62,7 @@ function requiresWorkGroup(typecode: string | null | undefined) {
 export function AgentEnrollmentPanel({ facilities, workGroups, staticInstallKey }: AgentEnrollmentPanelProps) {
   const [selectedFacilityId, setSelectedFacilityId] = useState("");
   const [facilityLabel, setFacilityLabel] = useState("");
-  const [workGroupName, setWorkGroupName] = useState("");
+  const [workGroupId, setWorkGroupId] = useState("");
   const [state, formAction, pending] = useActionState(createAgentEnrollmentAction, agentEnrollmentInitialState);
   const facilitiesRef = useRef(facilities);
   const windowsInstallCommand = state.createdToken ? buildWindowsAgentInstallCommand(state.createdToken) : "";
@@ -70,12 +70,12 @@ export function AgentEnrollmentPanel({ facilities, workGroups, staticInstallKey 
   const selectedFacility = facilities.find((item) => String(item.id) === selectedFacilityId);
   const selectedRequiresWorkGroup = requiresWorkGroup(selectedFacility?.typecode);
   const selectedWorkGroups = workGroups.filter((group) => String(group.facilityId) === selectedFacilityId);
-  const staticWorkGroup = selectedRequiresWorkGroup ? workGroupName.trim() || "<WORK_GROUP_NAME>" : "";
+  const staticWorkGroupId = selectedRequiresWorkGroup ? workGroupId || 0 : 0;
   const staticWindowsCommand = selectedFacility
-    ? buildWindowsStaticAgentInstallCommand({ facilityId: selectedFacility.id, workGroupName: staticWorkGroup, installKey: staticInstallKey ?? undefined })
+    ? buildWindowsStaticAgentInstallCommand({ facilityId: selectedFacility.id, workGroupId: staticWorkGroupId, installKey: staticInstallKey ?? undefined })
     : "";
   const staticLinuxCommand = selectedFacility
-    ? buildLinuxStaticAgentInstallCommand({ facilityId: selectedFacility.id, workGroupName: staticWorkGroup, installKey: staticInstallKey ?? undefined })
+    ? buildLinuxStaticAgentInstallCommand({ facilityId: selectedFacility.id, workGroupId: staticWorkGroupId, installKey: staticInstallKey ?? undefined })
     : "";
 
   useEffect(() => {
@@ -107,7 +107,7 @@ export function AgentEnrollmentPanel({ facilities, workGroups, staticInstallKey 
             value={selectedFacilityId}
             onChange={(event) => {
               setSelectedFacilityId(event.target.value);
-              setWorkGroupName("");
+              setWorkGroupId("");
             }}
             required
             className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
@@ -124,25 +124,28 @@ export function AgentEnrollmentPanel({ facilities, workGroups, staticInstallKey 
 
         <div>
           <label className="block text-sm font-medium">ชื่อกลุ่มงาน</label>
-          <input
-            name="workGroupName"
-            value={workGroupName}
-            onChange={(event) => setWorkGroupName(event.target.value)}
-            list="admin-facility-work-groups"
+          <select
+            name="workGroupId"
+            value={workGroupId}
+            onChange={(event) => setWorkGroupId(event.target.value)}
             required={selectedRequiresWorkGroup}
             disabled={!selectedFacilityId || !selectedRequiresWorkGroup}
-            maxLength={150}
-            placeholder={selectedRequiresWorkGroup ? "เช่น กลุ่มงานไอที / OPD / งานการเงิน" : "รพ.สต. ไม่ต้องระบุ"}
             className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)] disabled:bg-stone-100 disabled:text-[var(--muted)]"
-          />
-          <datalist id="admin-facility-work-groups">
+          >
+            <option value="">
+              {selectedRequiresWorkGroup
+                ? selectedWorkGroups.length > 0
+                  ? "เลือกกลุ่มงาน"
+                  : "ยังไม่มีกลุ่มงานในหน่วยงานนี้"
+                : "รพ.สต. ไม่ต้องระบุ"}
+            </option>
             {selectedWorkGroups.map((group) => (
-              <option key={group.id} value={group.workGroupName} />
+              <option key={group.id} value={group.id}>{group.workGroupName}</option>
             ))}
-          </datalist>
+          </select>
           <p className="mt-1 text-xs text-[var(--muted)]">
             {selectedRequiresWorkGroup
-              ? "ใช้ระบุกลุ่มงานของหน่วยงานที่นำ token ไปติดตั้ง agent"
+              ? "เลือกจากกลุ่มงานที่มีอยู่แล้ว ระบบจะไม่สร้างชื่อกลุ่มงานใหม่จากการติดตั้ง agent"
               : "หน่วยงานประเภท รพ.สต. สร้าง token โดยใช้ชื่อหน่วยงานได้เลย"}
           </p>
         </div>
@@ -173,7 +176,7 @@ export function AgentEnrollmentPanel({ facilities, workGroups, staticInstallKey 
             <div>
               <p className="text-sm font-semibold text-sky-950">คำสั่งติดตั้งแบบใช้ซ้ำ</p>
               <p className="mt-1 text-xs text-sky-800">
-                ใช้เมื่อต้องการให้ผู้ติดตั้งแก้แค่ facilityId / ชื่อกลุ่มงาน โดยไม่ต้องสร้าง token จากหน้านี้ทุกครั้ง
+                ใช้เมื่อต้องการให้ผู้ติดตั้งเลือกชื่อกลุ่มงานจากรายการเดิม โดยไม่ต้องสร้าง token จากหน้านี้ทุกครั้ง
               </p>
             </div>
             <div className="rounded-lg border border-sky-200 bg-white px-3 py-1.5 font-mono text-xs text-sky-900">

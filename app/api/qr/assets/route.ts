@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAssetQrSvg } from "@/lib/asset-qr";
 import { getCurrentUser } from "@/lib/auth";
 import { getAssetById } from "@/lib/assets";
-import { canAccessFacility } from "@/lib/facility-scope";
+import { canAccessAssetFacility } from "@/lib/permissions";
 
 type DownloadQrRequest = {
   ids?: unknown;
@@ -142,7 +142,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Assets not found" }, { status: 404 });
   }
 
-  if (assets.some((asset) => !canAccessFacility(user, asset.facilityId))) {
+  if (assets.some((asset) => !canAccessAssetFacility(user, asset.facilityId))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

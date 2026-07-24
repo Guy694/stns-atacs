@@ -5,7 +5,7 @@ import crypto from "node:crypto";
 import type { RowDataPacket } from "mysql2/promise";
 
 import { createAsset, findOrCreateSurvey, updateAsset } from "@/lib/assets";
-import { findOrCreateFacilityWorkGroup, getFacilityAgentContext, normalizeWorkGroupName } from "@/lib/facility-work-groups";
+import { findActiveFacilityWorkGroup, getActiveFacilityWorkGroupForFacility, getFacilityAgentContext, normalizeWorkGroupName } from "@/lib/facility-work-groups";
 import { executeStatement, selectRows } from "@/lib/mysql";
 
 type EnrollmentRow = RowDataPacket & {
@@ -288,6 +288,28 @@ export async function listAgentDevices(filter?: { facilityId?: number }): Promis
   return rows.map(toDevice);
 }
 
+export async function getAgentDeviceByLinkedAssetId(assetId: number): Promise<AgentDevice | null> {
+  if (!Number.isInteger(assetId) || assetId <= 0) return null;
+
+  try {
+    const rows = await selectRows<DeviceRow>(
+      `SELECT ad.*, hf.name AS facility_name,
+              a.asset_registration_no AS linked_asset_registration_no,
+              a.asset_name AS linked_asset_name
+       FROM agent_devices ad
+       JOIN health_facilities hf ON hf.id = ad.facility_id
+       LEFT JOIN information_assets a ON a.id = ad.linked_asset_id
+       WHERE ad.linked_asset_id = ?
+       ORDER BY ad.last_reported_at DESC, ad.last_seen_at DESC, ad.id DESC
+       LIMIT 1`,
+      [assetId]
+    );
+    return rows[0] ? toDevice(rows[0]) : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function createAgentEnrollment(input: {
   facilityId: number;
   workGroupId?: number | null;
@@ -495,6 +517,7 @@ export async function enrollAgentDevice(input: {
 
 export async function enrollAgentDeviceWithInstallKey(input: {
   facilityId: number;
+  workGroupId?: number | null;
   workGroupName?: string | null;
   fingerprint: string;
   hostname?: string | null;
@@ -506,24 +529,29 @@ export async function enrollAgentDeviceWithInstallKey(input: {
   }
 
   const workGroupName = normalizeWorkGroupName(input.workGroupName ?? "");
-  if (facility.requiresWorkGroup && workGroupName.length < 2) {
+  const workGroupId = input.workGroupId && Number.isInteger(input.workGroupId) && input.workGroupId > 0 ? input.workGroupId : null;
+  if (facility.requiresWorkGroup && !workGroupId && workGroupName.length < 2) {
     throw new Error("WORK_GROUP_REQUIRED");
   }
   if (workGroupName.length > 150) {
     throw new Error("WORK_GROUP_TOO_LONG");
   }
 
-  const workGroupId = facility.requiresWorkGroup ? await findOrCreateFacilityWorkGroup(facility.id, workGroupName) : null;
-  if (facility.requiresWorkGroup && !workGroupId) {
+  const workGroup = facility.requiresWorkGroup
+    ? workGroupId
+      ? await getActiveFacilityWorkGroupForFacility(facility.id, workGroupId)
+      : await findActiveFacilityWorkGroup(facility.id, workGroupName)
+    : null;
+  if (facility.requiresWorkGroup && !workGroup) {
     throw new Error("WORK_GROUP_UNAVAILABLE");
   }
 
   const enrollmentName = facility.requiresWorkGroup
-    ? `Install Key · ${facility.name} · ${workGroupName}`
+    ? `Install Key · ${facility.name} · ${workGroup?.workGroupName ?? workGroupName}`
     : `Install Key · ${facility.name}`;
   const enrollment = await ensureReusableInstallEnrollment({
     facilityId: facility.id,
-    workGroupId,
+    workGroupId: workGroup?.id ?? null,
     enrollmentName,
   });
 

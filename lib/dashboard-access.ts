@@ -7,6 +7,7 @@ type Role = "admin" | "officer" | "viewer";
 type DashboardUser = {
   role: Role;
   facilityId?: number | null;
+  managedAssetFacilityIds?: number[];
 };
 
 export type DashboardFacilityGroup = "province" | "primary" | "primary-office" | "primary-unit" | "hospital";
@@ -78,6 +79,17 @@ export function buildDashboardAccessScope(
       scopeFacilityName: "รายการทรัพย์สิน",
       missingFacilityAssignment: true,
       officerScopeKind: "own",
+      lockedFacilityId: null,
+    };
+  }
+
+  if (user.role === "officer" && (user.managedAssetFacilityIds?.length ?? 0) > 1) {
+    const managedFacilityIds = new Set(user.managedAssetFacilityIds);
+    return {
+      surveys: allFacilitySurveys.filter((survey) => managedFacilityIds.has(survey.facilityId)),
+      scopeFacilityName: "หน่วยงานในความดูแลของ สสอ.",
+      missingFacilityAssignment: false,
+      officerScopeKind: "district-primary",
       lockedFacilityId: null,
     };
   }

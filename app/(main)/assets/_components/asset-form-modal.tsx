@@ -4,6 +4,7 @@ import { useActionState, useEffect, useId, useMemo, useRef, useState } from "rea
 import { createPortal } from "react-dom";
 
 import { createAssetAction, updateAssetAction } from "@/app/(main)/assets/actions";
+import { ASSET_CLASS_OPTIONS } from "@/lib/asset-classes";
 import type { AssetWithFacility } from "@/lib/assets";
 
 type FacilityOption = { id: number; facility_name: string | null; district_name: string | null };
@@ -237,10 +238,10 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
               role="dialog"
               aria-modal="true"
               aria-labelledby={titleId}
-              className="relative z-10 max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-[var(--surface-strong)] p-6 shadow-2xl sm:p-8"
+              className="relative z-10 mx-3 max-h-[calc(100dvh-1.5rem)] w-full max-w-3xl overflow-y-auto rounded-2xl bg-[var(--surface-strong)] p-4 shadow-2xl sm:p-6"
             >
-              <div className="flex items-center justify-between">
-                <h2 id={titleId} className="section-title text-xl font-semibold">{title}</h2>
+              <div className="flex items-start justify-between gap-3 colors-[var(--foreground)]">
+                <h2 id={titleId} className="section-title min-w-0 text-xl font-semibold leading-snug">{title}</h2>
                 <button
                   type="button"
                   onClick={() => setOpen(false)}
@@ -332,7 +333,19 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
               <div className="grid gap-4 sm:grid-cols-2">
                 {/* หมวด */}
                 <div>
-                  <label className="block text-sm font-medium">หมวดทรัพย์สิน <span className="text-rose-500">*</span></label>
+                  <label className="block text-sm font-medium">กลุ่มครุภัณฑ์ <span className="text-rose-500">*</span></label>
+                  <select
+                    name="assetClass"
+                    defaultValue={asset?.assetClass ?? "IT"}
+                    className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+                  >
+                    {ASSET_CLASS_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium">ลักษณะทรัพย์สิน <span className="text-rose-500">*</span></label>
                   <select
                     name="assetCategory"
                     defaultValue={asset?.assetGroup ?? "Hardware"}
@@ -342,15 +355,15 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
                     <option value="Software">Software</option>
                   </select>
                 </div>
-                {/* ประเภทอุปกรณ์ */}
-                <div>
-                  <label className="block text-sm font-medium">ประเภทอุปกรณ์</label>
+                {/* ประเภททรัพย์สิน */}
+                <div className="sm:col-span-2">
+                  <label className="block text-sm font-medium">ประเภททรัพย์สิน / อุปกรณ์</label>
                   <select
                     name="deviceType"
                     defaultValue={selectedDeviceType}
                     className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
                   >
-                    <option value="">เลือกประเภทอุปกรณ์</option>
+                    <option value="">เลือกประเภททรัพย์สิน</option>
                     {hasSelectedDeviceType && <option value={selectedDeviceType}>{selectedDeviceType} (ค่าปัจจุบัน)</option>}
                     {hardwareDeviceTypes.length > 0 && (
                       <optgroup label="ฮาร์ดแวร์">
@@ -502,7 +515,7 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
                 />
               </div>
 
-                <div className="flex justify-end gap-3 pt-2">
+                <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-end">
                   <button
                     type="button"
                     onClick={() => setOpen(false)}

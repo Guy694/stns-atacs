@@ -11,6 +11,7 @@ type NavUser = {
   fullName: string;
   role: "admin" | "officer" | "viewer";
   facilityId?: number | null;
+  managedAssetFacilityIds?: number[];
 };
 
 type SidebarProps = {
@@ -108,8 +109,12 @@ export function Sidebar({ user, grantedPermissions, pendingRegistrationCount, me
             item,
             {
               key: "officer-assets",
-              href: user.facilityId ? `/facilities/${user.facilityId}` : "/profile",
-              label: "รายการทรัพย์สิน",
+              href: (user.managedAssetFacilityIds?.length ?? 0) > 1
+                ? "/facilities"
+                : user.facilityId
+                  ? `/facilities/${user.facilityId}`
+                  : "/profile",
+              label: (user.managedAssetFacilityIds?.length ?? 0) > 1 ? "หน่วยงานในความดูแล" : "รายการทรัพย์สิน",
               icon: "package",
               group: "overview",
             },

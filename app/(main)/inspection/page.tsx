@@ -2,13 +2,20 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { AppIcon } from "@/app/_components/ui/icon";
+import { StatusBadge } from "@/app/_components/ui/status-badge";
 import { getCurrentUser } from "@/lib/auth";
+import { formatThaiDate } from "@/lib/date-format";
 import { listInspections } from "@/lib/inspection";
 import { listFacilities } from "@/lib/assets";
 import { getFacilityScopeId } from "@/lib/facility-scope";
 import { canManageFacility } from "@/lib/permissions";
 import { hasPermission } from "@/lib/role-permissions";
 import NewInspectionForm from "./_components/new-inspection-form";
+
+function readParam(params: Record<string, string | string[] | undefined>, key: string) {
+  const value = params[key];
+  return Array.isArray(value) ? value[0] : (value ?? "");
+}
 
 export default async function InspectionPage({
   searchParams,
@@ -23,6 +30,8 @@ export default async function InspectionPage({
 
   const params = await searchParams;
   const view = canMutate && params["view"] === "new" ? "new" : "list";
+  const search = readParam(params, "search").trim();
+  const statusFilter = readParam(params, "status");
   const facilityScopeId = getFacilityScopeId(user);
   if (facilityScopeId === null) redirect("/profile");
 
@@ -33,9 +42,30 @@ export default async function InspectionPage({
   const facilitiesForForm = facilityScopeId
     ? facilities.filter((facility) => canManageFacility(user, facility.id))
     : facilities;
+  const normalizedSearch = search.toLowerCase();
+  const filteredInspections = inspections.filter((inspection) => {
+    const matchesSearch = normalizedSearch
+      ? [
+          inspection.roundName,
+          inspection.facilityName,
+          inspection.districtName,
+          inspection.inspectedBy,
+          inspection.note,
+        ].some((value) => value.toLowerCase().includes(normalizedSearch))
+      : true;
+    const matchesStatus =
+      statusFilter === "complete"
+        ? inspection.remainingItems === 0
+        : statusFilter === "open"
+          ? inspection.remainingItems > 0
+          : true;
+
+    return matchesSearch && matchesStatus;
+  });
+  const hasActiveFilters = Boolean(search || statusFilter);
 
   return (
-    <main className="p-6 space-y-6">
+    <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 p-6">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
@@ -43,7 +73,7 @@ export default async function InspectionPage({
             <AppIcon name="clipboard-check" className="h-6 w-6 text-[var(--primary)]" /> ตรวจนับทรัพย์สิน
           </h1>
           <p className="text-sm mt-1" style={{ color: "var(--muted)" }}>
-            บันทึกรอบการตรวจนับสินทรัพย์สารสนเทศประจำหน่วยบริการ
+            เปิดรอบตรวจนับตามช่วงวันที่ และติดตามรายการที่ตรวจแล้วกับรายการคงเหลือของแต่ละหน่วยบริการ
           </p>
         </div>
         {canMutate && view !== "new" && (
@@ -76,17 +106,58 @@ export default async function InspectionPage({
       {/* List */}
       {view !== "new" && (
         <div className="glass-panel rounded-2xl overflow-hidden">
+          <form method="GET" className="grid gap-3 border-b border-black/6 bg-[var(--neutral-bg)]/60 px-5 py-4 sm:grid-cols-[minmax(240px,1fr)_180px_auto_auto]">
+            <label htmlFor="inspection-search" className="sr-only">ค้นหารอบตรวจนับ</label>
+            <input
+              id="inspection-search"
+              name="search"
+              defaultValue={search}
+              placeholder="ค้นหาชื่อรอบ / หน่วยบริการ / อำเภอ / ผู้เปิดรอบ"
+              className="min-h-11 min-w-0 rounded-xl border border-black/10 bg-white/85 px-4 py-2 text-sm outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/20"
+            />
+            <label htmlFor="inspection-status" className="sr-only">กรองสถานะรอบตรวจ</label>
+            <select
+              id="inspection-status"
+              name="status"
+              defaultValue={statusFilter}
+              className="min-h-11 rounded-xl border border-black/10 bg-white/85 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+            >
+              <option value="">ทุกสถานะ</option>
+              <option value="open">ยังตรวจไม่ครบ</option>
+              <option value="complete">ตรวจครบแล้ว</option>
+            </select>
+            <button
+              type="submit"
+              className="min-h-11 rounded-xl bg-[var(--accent-strong)] px-5 py-2 text-sm font-semibold text-white transition hover:opacity-90"
+            >
+              ค้นหา
+            </button>
+            {hasActiveFilters && (
+              <Link
+                href="/inspection"
+                className="inline-flex min-h-11 items-center justify-center rounded-xl border border-black/10 bg-white/80 px-4 py-2 text-sm text-[var(--muted)] hover:bg-white"
+              >
+                ล้างตัวกรอง
+              </Link>
+            )}
+          </form>
+
           {inspections.length === 0 ? (
             <div className="text-center py-16" style={{ color: "var(--muted)" }}>
 	              <AppIcon name="clipboard-check" className="mx-auto mb-3 h-10 w-10 text-[var(--primary)]" />
               <p className="font-semibold">ยังไม่มีรอบการตรวจนับ</p>
               <p className="text-sm mt-1">คลิก &quot;เริ่มรอบตรวจนับใหม่&quot; เพื่อบันทึกครั้งแรก</p>
             </div>
+          ) : filteredInspections.length === 0 ? (
+            <div className="px-5 py-14 text-center text-sm" style={{ color: "var(--muted)" }}>
+              ไม่พบรายการตรวจนับที่ตรงกับเงื่อนไขค้นหา
+            </div>
           ) : (
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto">
+            <table className="w-full min-w-[980px] text-sm">
               <thead>
 	                <tr style={{ borderBottom: "1px solid var(--line)", background: "var(--neutral-bg)" }}>
-                  {["รอบการตรวจนับ", "หน่วยบริการ", "อำเภอ", "ผู้ตรวจ", "วันที่", "พบ/ทั้งหมด", ""].map((h) => (
+                  {["รอบการตรวจนับ", "หน่วยบริการ", "ช่วงวันที่", "ผู้เปิดรอบ", "สถานะ", "เช็คแล้ว/ทั้งหมด", ""].map((h) => (
                     <th key={h} className="px-4 py-3 text-left font-semibold" style={{ color: "var(--muted)" }}>
                       {h}
                     </th>
@@ -94,8 +165,8 @@ export default async function InspectionPage({
                 </tr>
               </thead>
               <tbody>
-                {inspections.map((ins) => {
-                  const pct = ins.totalItems > 0 ? Math.round((ins.foundItems / ins.totalItems) * 100) : 0;
+                {filteredInspections.map((ins) => {
+                  const pct = ins.totalItems > 0 ? Math.round((ins.checkedItems / ins.totalItems) * 100) : 0;
                   return (
                     <tr
                       key={ins.id}
@@ -104,18 +175,26 @@ export default async function InspectionPage({
                     >
                       <td className="px-4 py-3 font-medium" style={{ color: "var(--foreground)" }}>
                         {ins.roundName}
+                        <p className="mt-1 text-xs font-normal" style={{ color: "var(--muted)" }}>
+                          เปิดเมื่อ {formatThaiDate(ins.inspectedAt)}
+                        </p>
                       </td>
                       <td className="px-4 py-3" style={{ color: "var(--foreground)" }}>
                         {ins.facilityName}
+                        <p className="mt-1 text-xs" style={{ color: "var(--muted)" }}>อ.{ins.districtName}</p>
                       </td>
                       <td className="px-4 py-3" style={{ color: "var(--muted)" }}>
-                        {ins.districtName}
+                        {ins.startDate ? formatThaiDate(ins.startDate) : "-"} - {ins.endDate ? formatThaiDate(ins.endDate) : "-"}
                       </td>
                       <td className="px-4 py-3" style={{ color: "var(--muted)" }}>
                         {ins.inspectedBy}
                       </td>
-                      <td className="px-4 py-3" style={{ color: "var(--muted)" }}>
-                        {ins.inspectedAt}
+                      <td className="px-4 py-3">
+                        {ins.remainingItems === 0 ? (
+                          <StatusBadge tone="success">ตรวจครบแล้ว</StatusBadge>
+                        ) : (
+                          <StatusBadge tone="warning">คงเหลือ {ins.remainingItems.toLocaleString("th-TH")}</StatusBadge>
+                        )}
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
@@ -129,9 +208,12 @@ export default async function InspectionPage({
                             />
                           </div>
                           <span className="text-xs font-semibold" style={{ color: "var(--muted)" }}>
-                            {ins.foundItems}/{ins.totalItems}
+                            {ins.checkedItems}/{ins.totalItems}
                           </span>
                         </div>
+                        <p className="mt-1 text-xs" style={{ color: "var(--muted)" }}>
+                          พบ {ins.foundItems} · ไม่พบ {ins.missingItems}
+                        </p>
                       </td>
                       <td className="px-4 py-3">
                         <Link
@@ -147,6 +229,7 @@ export default async function InspectionPage({
                 })}
               </tbody>
             </table>
+            </div>
           )}
         </div>
       )}

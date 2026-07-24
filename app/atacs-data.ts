@@ -3,6 +3,7 @@ export type AssetRecord = {
   assetRegistrationNo: string;
   assetName: string;
   usageDescription: string;
+  assetClass?: string;
   assetGroup: "Hardware" | "Software";
   deviceType: string;
   operatingSystem: string;
