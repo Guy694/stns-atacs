@@ -425,7 +425,12 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
             <div className="flex items-center justify-between border-b border-black/6 px-5 py-3">
               <div>
                 <h2 className="font-semibold">เปรียบเทียบรายอำเภอ</h2>
-                <p className="mt-0.5 text-xs text-[var(--muted)]">เลือกอำเภอเพื่อดูหน่วยงานและจำนวนข้อมูล</p>
+                <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
+                  เปอร์เซ็นต์พร้อมใช้งาน = ทรัพย์สินสถานะพร้อมใช้งาน ÷ ทรัพย์สินทั้งหมดของอำเภอ × 100
+                </p>
+                <p className="text-xs leading-5 text-[var(--muted)]">
+                  เลือกอำเภอเพื่อดูหน่วยงานและจำนวนข้อมูล
+                </p>
               </div>
               <span className="shrink-0 text-xs text-[var(--muted)]">{byDistrict.length} อำเภอ</span>
             </div>
@@ -461,12 +466,12 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
                         <div className="h-1.5 w-16 overflow-hidden rounded-full bg-slate-100">
                           <div className={`h-full rounded-full ${barColor}`} style={{ width: `${rate}%` }} />
                         </div>
-                        <span className="text-xs">{rate}%</span>
+                        <span className="whitespace-nowrap text-xs font-medium">พร้อมใช้งาน {rate}%</span>
                       </div>
                       <div className="flex flex-wrap gap-2 text-xs sm:col-span-3 lg:col-span-1">
-                        <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-emerald-700">{d.active}</span>
-                        {d.broken > 0 && <span className="rounded-full bg-rose-100 px-2 py-0.5 text-rose-700">{d.broken}</span>}
-                        {d.inactive > 0 && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-amber-700">{d.inactive}</span>}
+                        <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-emerald-700">พร้อมใช้ {d.active}</span>
+                        {d.broken > 0 && <span className="rounded-full bg-rose-100 px-2 py-0.5 text-rose-700">ชำรุด {d.broken}</span>}
+                        {d.inactive > 0 && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-amber-700">ไม่ใช้งาน {d.inactive}</span>}
                       </div>
                     </summary>
 
