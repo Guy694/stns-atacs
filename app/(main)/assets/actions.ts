@@ -16,6 +16,7 @@ import { writeAuditLog } from "@/lib/audit";
 import { selectRows } from "@/lib/mysql";
 import { canManageAssetRecord, canMutateAssets } from "@/lib/permissions";
 import { hasPermission } from "@/lib/role-permissions";
+import { isComputerDeviceType, WINDOWS_LICENSE_STATUS_VALUES, type WindowsLicenseStatus } from "@/lib/windows-license";
 
 async function requireAuth() {
   const user = await getCurrentUser();
@@ -175,6 +176,18 @@ async function buildInput(fd: FormData, updaterName: string): Promise<AssetFormI
 
   const assetCategory = readStr(fd, "assetCategory") as "Hardware" | "Software";
   if (!["Hardware", "Software"].includes(assetCategory)) throw new Error("ลักษณะทรัพย์สินไม่ถูกต้อง");
+  const deviceType = readOptional(fd, "deviceType");
+  const requiresWindowsLicenseStatus = assetCategory === "Hardware" && isComputerDeviceType(deviceType);
+  const windowsLicenseStatusInput = readOptional(fd, "windowsLicenseStatus");
+  if (requiresWindowsLicenseStatus && !windowsLicenseStatusInput) {
+    throw new Error("กรุณาระบุว่า Windows เป็นของแท้หรือเถื่อน");
+  }
+  if (
+    windowsLicenseStatusInput &&
+    !WINDOWS_LICENSE_STATUS_VALUES.includes(windowsLicenseStatusInput as WindowsLicenseStatus)
+  ) {
+    throw new Error("สถานะลิขสิทธิ์ Windows ไม่ถูกต้อง");
+  }
   const workGroupIdRaw = readOptional(fd, "workGroupId");
   let parsedWorkGroupId: number | null = null;
   if (workGroupIdRaw) {
@@ -192,9 +205,12 @@ async function buildInput(fd: FormData, updaterName: string): Promise<AssetFormI
     assetCategory,
     usageDescription: readOptional(fd, "usageDescription"),
     ownerName: readOptional(fd, "ownerName"),
-    deviceType: readOptional(fd, "deviceType"),
+    deviceType,
     operatingSystem: readOptional(fd, "operatingSystem"),
     operatingSystemVersion: readOptional(fd, "operatingSystemVersion"),
+    windowsLicenseStatus: requiresWindowsLicenseStatus
+      ? (windowsLicenseStatusInput as WindowsLicenseStatus)
+      : null,
     privateIp: readOptional(fd, "privateIp"),
     publicIp: readOptional(fd, "publicIp"),
     locationDetail: readOptional(fd, "locationDetail"),

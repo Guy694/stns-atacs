@@ -39,6 +39,7 @@ type AssetRow = RowDataPacket & {
   asset_group: string | null;
   device_type: string | null;
   operating_system: string | null;
+  windows_license_status: "Genuine" | "Pirated" | null;
   private_ip: string | null;
   public_ip: string | null;
   location_detail: string | null;
@@ -224,6 +225,7 @@ export async function getDashboardData(): Promise<DashboardData> {
           asset_group,
           device_type,
           operating_system,
+          windows_license_status,
           private_ip,
           public_ip,
           location_detail,
@@ -250,6 +252,7 @@ export async function getDashboardData(): Promise<DashboardData> {
         assetGroup: asset.asset_category ?? normalizeAssetGroup(asset.asset_group),
         deviceType: asset.device_type ?? "ไม่ระบุ",
         operatingSystem: asset.operating_system ?? "ไม่ระบุ",
+        windowsLicenseStatus: asset.windows_license_status ?? null,
         privateIp: asset.private_ip ?? "-",
         publicIp: asset.public_ip ?? "",
         locationDetail: asset.location_detail ?? "ไม่ระบุ",

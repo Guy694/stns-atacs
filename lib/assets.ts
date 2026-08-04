@@ -5,6 +5,7 @@ import type { RowDataPacket } from "mysql2/promise";
 import { facilitySurveys as fallbackSurveys, type AssetRecord } from "@/app/atacs-data";
 import { normalizeAssetClass } from "@/lib/asset-classes";
 import { executeStatement, selectRows } from "@/lib/mysql";
+import type { WindowsLicenseStatus } from "@/lib/windows-license";
 
 // ── DB Row types ───────────────────────────────────────────────────────────
 
@@ -27,6 +28,7 @@ type AssetRow = RowDataPacket & {
   device_type: string | null;
   operating_system: string | null;
   operating_system_version: string | null;
+  windows_license_status: WindowsLicenseStatus | null;
   private_ip: string | null;
   public_ip: string | null;
   location_detail: string | null;
@@ -94,6 +96,7 @@ function rowToAsset(row: AssetRow) {
     assetGroup: row.asset_category ?? normalizeGroup(row.asset_group),
     deviceType: row.device_type ?? "",
     operatingSystem: row.operating_system ?? "",
+    windowsLicenseStatus: row.windows_license_status ?? null,
     privateIp: row.private_ip ?? "",
     publicIp: row.public_ip ?? undefined,
     locationDetail: row.location_detail ?? "",
@@ -129,6 +132,7 @@ export type AssetInput = {
   deviceType?: string;
   operatingSystem?: string;
   operatingSystemVersion?: string;
+  windowsLicenseStatus?: WindowsLicenseStatus | null;
   privateIp?: string;
   publicIp?: string;
   locationDetail?: string;
@@ -271,6 +275,7 @@ function filterFallbackAssets(filter?: AssetListFilter) {
       purchaseDate: a.purchaseDate ?? "",
       purchaseOrderNo: a.purchaseOrderNo ?? "",
       maintenanceStartDate: "",
+      windowsLicenseStatus: null,
       assetImage1Url: "",
       assetImage2Url: "",
       assetImages: [],
@@ -391,13 +396,13 @@ export async function createAsset(input: AssetInput) {
   return executeStatement(
     `INSERT INTO information_assets
       (survey_id, row_no, asset_registration_no, asset_name, usage_description, owner_name,
-       work_group_id, asset_class, asset_category, device_type, operating_system, operating_system_version,
+       work_group_id, asset_class, asset_category, device_type, operating_system, operating_system_version, windows_license_status,
        private_ip, public_ip, location_detail, current_status, updated_by,
        manufacturer_brand, manufacturer_model, manufacturer_specification,
        serial_number, purchase_price, purchase_date, purchase_order_no,
        maintenance_start_date, maintenance_end_date, installed_at, last_updated_at,
        asset_image_1_url, asset_image_2_url)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [
       input.surveyId,
       input.rowNo ?? null,
@@ -411,6 +416,7 @@ export async function createAsset(input: AssetInput) {
       input.deviceType ?? null,
       input.operatingSystem ?? null,
       input.operatingSystemVersion ?? null,
+      input.windowsLicenseStatus ?? null,
       input.privateIp ?? null,
       input.publicIp ?? null,
       input.locationDetail ?? null,
@@ -450,6 +456,7 @@ export async function updateAsset(id: number, input: Partial<AssetInput>) {
     device_type: input.deviceType,
     operating_system: input.operatingSystem,
     operating_system_version: input.operatingSystemVersion,
+    windows_license_status: input.windowsLicenseStatus,
     private_ip: input.privateIp,
     public_ip: input.publicIp,
     location_detail: input.locationDetail,

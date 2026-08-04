@@ -7,6 +7,7 @@ export type AssetRecord = {
   assetGroup: "Hardware" | "Software";
   deviceType: string;
   operatingSystem: string;
+  windowsLicenseStatus?: "Genuine" | "Pirated" | null;
   privateIp: string;
   publicIp?: string;
   locationDetail: string;

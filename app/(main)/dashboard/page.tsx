@@ -13,6 +13,7 @@ import {
 } from "@/lib/dashboard-access";
 import { formatThaiDateTime } from "@/lib/date-format";
 import { getFacilityById } from "@/lib/assets";
+import { isComputerDeviceType } from "@/lib/windows-license";
 
 type HomeProps = { searchParams: Promise<Record<string, string | undefined>> };
 
@@ -42,6 +43,34 @@ function isDashboardFacilityGroup(
 
 function uniqueSorted(values: string[]) {
   return [...new Set(values.filter(Boolean))].sort((a, b) => a.localeCompare(b, "th"));
+}
+
+type ComputerLicenseSummary = {
+  computers: number;
+  genuine: number;
+  nonGenuine: number;
+  unreported: number;
+};
+
+function summarizeComputerLicenses(
+  assets: Array<{
+    assetGroup: "Hardware" | "Software";
+    deviceType: string;
+    windowsLicenseStatus?: "Genuine" | "Pirated" | null;
+  }>
+): ComputerLicenseSummary {
+  return assets.reduce<ComputerLicenseSummary>(
+    (summary, asset) => {
+      if (asset.assetGroup !== "Hardware" || !isComputerDeviceType(asset.deviceType)) return summary;
+
+      summary.computers += 1;
+      if (asset.windowsLicenseStatus === "Genuine") summary.genuine += 1;
+      else if (asset.windowsLicenseStatus === "Pirated") summary.nonGenuine += 1;
+      else summary.unreported += 1;
+      return summary;
+    },
+    { computers: 0, genuine: 0, nonGenuine: 0, unreported: 0 }
+  );
 }
 
 export default async function Home({ searchParams }: HomeProps) {
@@ -79,6 +108,7 @@ export default async function Home({ searchParams }: HomeProps) {
     const value = Number(params.facility);
     return Number.isInteger(value) && value > 0 ? value : null;
   })();
+  const computerView = params.computerView === "facility" ? "facility" : "district";
 
   const scopedFacilitySurveys = dashboardScope.surveys;
   const baseGroupOptions = dashboardScope.officerScopeKind === "district-primary" ? DHO_FACILITY_GROUP_OPTIONS : FACILITY_GROUP_OPTIONS;
@@ -125,6 +155,32 @@ export default async function Home({ searchParams }: HomeProps) {
   const inactiveAssets = allAssets.filter((a) => a.currentStatus === "Inactive").length;
   const hardwareCount = allAssets.filter((a) => a.assetGroup === "Hardware").length;
   const softwareCount = allAssets.filter((a) => a.assetGroup === "Software").length;
+  const computerLicenseSummary = summarizeComputerLicenses(allAssets);
+  const computerDistrictRows = uniqueSorted(facilitySurveys.map((survey) => survey.districtName)).map((districtName) => {
+    const districtSurveys = facilitySurveys.filter((survey) => survey.districtName === districtName);
+    return {
+      key: districtName,
+      districtName,
+      label: `อำเภอ${districtName}`,
+      facilities: districtSurveys.length,
+      summary: summarizeComputerLicenses(districtSurveys.flatMap((survey) => survey.assets)),
+    };
+  });
+  const computerFacilityRows = facilitySurveys
+    .map((survey) => ({
+      key: String(survey.facilityId),
+      districtName: survey.districtName,
+      label: survey.facilityName,
+      facilities: 1,
+      summary: summarizeComputerLicenses(survey.assets),
+    }))
+    .sort(
+      (a, b) =>
+        b.summary.computers - a.summary.computers ||
+        a.districtName.localeCompare(b.districtName, "th") ||
+        a.label.localeCompare(b.label, "th")
+    );
+  const computerRows = computerView === "facility" ? computerFacilityRows : computerDistrictRows;
   const totalDistricts = selectedDistrict ? 1 : new Set(facilitySurveys.map((s) => s.districtName)).size;
   const activeRate = Math.round((activeAssets / safeTotalAssets) * 100);
 
@@ -239,6 +295,14 @@ export default async function Home({ searchParams }: HomeProps) {
   const brokenQuickLink = `${assetQuickLink}${assetQuickLink.includes("?") ? "&" : "?"}status=Broken`;
   const activeQuickLink = `${assetQuickLink}${assetQuickLink.includes("?") ? "&" : "?"}status=Active`;
   const numberFormat = new Intl.NumberFormat("th-TH");
+  const computerViewHref = (view: "district" | "facility", district?: string) => {
+    const query = new URLSearchParams();
+    if (selectedGroup) query.set("group", selectedGroup);
+    if (district ?? selectedDistrict) query.set("district", district ?? selectedDistrict);
+    if (!district && selectedFacilityId) query.set("facility", String(selectedFacilityId));
+    query.set("computerView", view);
+    return `/dashboard?${query.toString()}`;
+  };
   const quickScopeLabel =
     selectedFacilityName ||
     (selectedDistrict ? `อำเภอ${selectedDistrict}` : "") ||
@@ -354,6 +418,7 @@ export default async function Home({ searchParams }: HomeProps) {
         )}
 
         <form method="GET" className="glass-panel rounded-2xl p-4" aria-label="ตัวกรองข้อมูลภาพรวม">
+          <input type="hidden" name="computerView" value={computerView} />
           <div className="flex flex-col gap-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex flex-wrap items-center gap-2">
@@ -633,7 +698,107 @@ export default async function Home({ searchParams }: HomeProps) {
           </div>
         </div>
 
-        
+        {isAdmin && (
+          <section className="glass-panel overflow-hidden rounded-2xl" aria-labelledby="computer-license-heading">
+            <div className="flex flex-col gap-4 border-b border-black/8 p-5 sm:flex-row sm:items-start sm:justify-between lg:p-6">
+              <div>
+                <h2 id="computer-license-heading" className="section-title text-xl font-semibold">
+                  ภาพรวมคอมพิวเตอร์และลิขสิทธิ์ Windows
+                </h2>
+                <p className="mt-1 text-sm text-[var(--muted)]">
+                  สรุปเฉพาะ Hardware ประเภทคอมพิวเตอร์ตามตัวกรองปัจจุบัน
+                </p>
+              </div>
+              <div className="inline-flex w-fit rounded-xl bg-[var(--neutral-bg)] p-1" aria-label="เลือกรูปแบบการสรุป">
+                <Link
+                  href={computerViewHref("district")}
+                  aria-current={computerView === "district" ? "page" : undefined}
+                  className={`rounded-lg px-3 py-2 text-sm font-medium transition ${
+                    computerView === "district"
+                      ? "bg-white text-[var(--foreground)] shadow-sm"
+                      : "text-[var(--muted)] hover:text-[var(--foreground)]"
+                  }`}
+                >
+                  รายอำเภอ
+                </Link>
+                <Link
+                  href={computerViewHref("facility")}
+                  aria-current={computerView === "facility" ? "page" : undefined}
+                  className={`rounded-lg px-3 py-2 text-sm font-medium transition ${
+                    computerView === "facility"
+                      ? "bg-white text-[var(--foreground)] shadow-sm"
+                      : "text-[var(--muted)] hover:text-[var(--foreground)]"
+                  }`}
+                >
+                  รายหน่วยงาน
+                </Link>
+              </div>
+            </div>
+
+            <dl className="grid grid-cols-2 divide-x divide-y divide-black/8 border-b border-black/8 sm:grid-cols-4 sm:divide-y-0">
+              {[
+                { label: "คอมพิวเตอร์ทั้งหมด", value: computerLicenseSummary.computers, tone: "text-[var(--foreground)]" },
+                { label: "Windows แท้", value: computerLicenseSummary.genuine, tone: "text-emerald-700" },
+                { label: "Windows ไม่แท้", value: computerLicenseSummary.nonGenuine, tone: "text-rose-700" },
+                { label: "ยังไม่ระบุ", value: computerLicenseSummary.unreported, tone: "text-amber-700" },
+              ].map((metric) => (
+                <div key={metric.label} className="px-4 py-4 sm:px-5">
+                  <dt className="text-xs font-medium text-[var(--muted)]">{metric.label}</dt>
+                  <dd className={`mt-1 text-2xl font-semibold tabular-nums ${metric.tone}`}>
+                    {numberFormat.format(metric.value)}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+
+            {computerRows.length > 0 ? (
+              <div className="max-h-[34rem] overflow-auto">
+                <table className="w-full min-w-[720px] text-left text-sm">
+                  <thead className="sticky top-0 z-10 bg-[var(--neutral-bg)] text-xs font-medium text-[var(--muted)]">
+                    <tr>
+                      <th className="px-5 py-3">{computerView === "facility" ? "หน่วยงาน" : "อำเภอ"}</th>
+                      {computerView === "facility" && <th className="px-4 py-3">อำเภอ</th>}
+                      {computerView === "district" && <th className="px-4 py-3 text-right">หน่วยงาน</th>}
+                      <th className="px-4 py-3 text-right">คอมพิวเตอร์</th>
+                      <th className="px-4 py-3 text-right text-emerald-700">Windows แท้</th>
+                      <th className="px-4 py-3 text-right text-rose-700">Windows ไม่แท้</th>
+                      <th className="px-5 py-3 text-right text-amber-700">ยังไม่ระบุ</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-black/6">
+                    {computerRows.map((row) => (
+                      <tr key={row.key} className="bg-white/55 hover:bg-white/90">
+                        <th scope="row" className="px-5 py-3.5 font-medium text-[var(--foreground)]">
+                          {computerView === "district" ? (
+                            <Link
+                              href={computerViewHref("facility", row.districtName)}
+                              className="group inline-flex items-center gap-2 hover:text-[var(--accent-strong)]"
+                              title={`ดูหน่วยงานในอำเภอ${row.districtName}`}
+                            >
+                              {row.label}
+                              <span aria-hidden="true" className="text-[var(--muted)] transition group-hover:translate-x-0.5">→</span>
+                            </Link>
+                          ) : row.label}
+                        </th>
+                        {computerView === "facility" && <td className="px-4 py-3.5 text-[var(--muted)]">{row.districtName}</td>}
+                        {computerView === "district" && <td className="px-4 py-3.5 text-right tabular-nums text-[var(--muted)]">{numberFormat.format(row.facilities)}</td>}
+                        <td className="px-4 py-3.5 text-right font-semibold tabular-nums">{numberFormat.format(row.summary.computers)}</td>
+                        <td className="px-4 py-3.5 text-right font-semibold tabular-nums text-emerald-700">{numberFormat.format(row.summary.genuine)}</td>
+                        <td className="px-4 py-3.5 text-right font-semibold tabular-nums text-rose-700">{numberFormat.format(row.summary.nonGenuine)}</td>
+                        <td className="px-5 py-3.5 text-right font-semibold tabular-nums text-amber-700">{numberFormat.format(row.summary.unreported)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="px-6 py-10 text-center">
+                <p className="font-medium">ยังไม่มีข้อมูลคอมพิวเตอร์ในขอบเขตนี้</p>
+                <p className="mt-1 text-sm text-[var(--muted)]">ลองเปลี่ยนอำเภอหรือหน่วยงานจากตัวกรองด้านบน</p>
+              </div>
+            )}
+          </section>
+        )}
 
         {/* ── Provincial Coverage (admin/viewer only) ───────────────────────── */}
         {!scopeFacilityName && (

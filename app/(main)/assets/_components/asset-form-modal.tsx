@@ -6,6 +6,7 @@ import { createPortal } from "react-dom";
 import { createAssetAction, updateAssetAction } from "@/app/(main)/assets/actions";
 import { ASSET_CLASS_OPTIONS } from "@/lib/asset-classes";
 import type { AssetWithFacility } from "@/lib/assets";
+import { isComputerDeviceType, type WindowsLicenseStatus } from "@/lib/windows-license";
 
 type FacilityOption = { id: number; facility_name: string | null; district_name: string | null };
 type DeviceTypeOption = { name: string; category: string };
@@ -179,11 +180,17 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
   const [open, setOpen] = useState(false);
   const [selectedFacilityId, setSelectedFacilityId] = useState<number | null>(fixedFacilityId ?? asset?.facilityId ?? null);
   const [selectedWorkGroupId, setSelectedWorkGroupId] = useState(asset?.workGroupId?.toString() ?? "");
+  const [assetCategory, setAssetCategory] = useState<"Hardware" | "Software">(asset?.assetGroup ?? "Hardware");
+  const [deviceType, setDeviceType] = useState(asset?.deviceType?.trim() ?? "");
+  const [windowsLicenseStatus, setWindowsLicenseStatus] = useState<WindowsLicenseStatus | "">(
+    asset?.windowsLicenseStatus ?? ""
+  );
   const titleId = useId();
   const mounted = typeof document !== "undefined";
   const formRef = useRef<HTMLFormElement>(null);
   const today = new Date().toISOString().slice(0, 10);
   const selectedDeviceType = asset?.deviceType?.trim() ?? "";
+  const requiresWindowsLicenseStatus = assetCategory === "Hardware" && isComputerDeviceType(deviceType);
   const hasSelectedDeviceType = Boolean(
     selectedDeviceType && !deviceTypes.some((t) => t.name === selectedDeviceType)
   );
@@ -206,6 +213,9 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
   function openModal() {
     setSelectedFacilityId(fixedFacilityId ?? asset?.facilityId ?? null);
     setSelectedWorkGroupId(asset?.workGroupId?.toString() ?? "");
+    setAssetCategory(asset?.assetGroup ?? "Hardware");
+    setDeviceType(asset?.deviceType?.trim() ?? "");
+    setWindowsLicenseStatus(asset?.windowsLicenseStatus ?? "");
     setOpen(true);
   }
 
@@ -348,7 +358,12 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
                   <label className="block text-sm font-medium">ลักษณะทรัพย์สิน <span className="text-rose-500">*</span></label>
                   <select
                     name="assetCategory"
-                    defaultValue={asset?.assetGroup ?? "Hardware"}
+                    value={assetCategory}
+                    onChange={(event) => {
+                      const nextCategory = event.target.value as "Hardware" | "Software";
+                      setAssetCategory(nextCategory);
+                      if (nextCategory !== "Hardware") setWindowsLicenseStatus("");
+                    }}
                     className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
                   >
                     <option value="Hardware">Hardware</option>
@@ -360,7 +375,12 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
                   <label className="block text-sm font-medium">ประเภททรัพย์สิน / อุปกรณ์</label>
                   <select
                     name="deviceType"
-                    defaultValue={selectedDeviceType}
+                    value={deviceType}
+                    onChange={(event) => {
+                      const nextDeviceType = event.target.value;
+                      setDeviceType(nextDeviceType);
+                      if (!isComputerDeviceType(nextDeviceType)) setWindowsLicenseStatus("");
+                    }}
                     className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
                   >
                     <option value="">เลือกประเภททรัพย์สิน</option>
@@ -377,6 +397,28 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
                     )}
                   </select>
                 </div>
+                {requiresWindowsLicenseStatus && (
+                  <div className="sm:col-span-2">
+                    <label className="block text-sm font-medium">
+                      สถานะลิขสิทธิ์ Windows <span className="text-rose-500">*</span>
+                    </label>
+                    <select
+                      name="windowsLicenseStatus"
+                      value={windowsLicenseStatus}
+                      onChange={(event) => setWindowsLicenseStatus(event.target.value as WindowsLicenseStatus | "")}
+                      required
+                      aria-describedby="windows-license-status-help"
+                      className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+                    >
+                      <option value="">เลือกสถานะลิขสิทธิ์ Windows</option>
+                      <option value="Genuine">Windows แท้ (มีลิขสิทธิ์ถูกต้อง)</option>
+                      <option value="Pirated">Windows เถื่อน (ไม่มีลิขสิทธิ์ถูกต้อง)</option>
+                    </select>
+                    <p id="windows-license-status-help" className="mt-1 text-xs text-[var(--muted)]">
+                      จำเป็นสำหรับ Hardware ประเภทคอมพิวเตอร์
+                    </p>
+                  </div>
+                )}
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2">

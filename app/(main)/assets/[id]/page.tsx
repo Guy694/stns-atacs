@@ -19,6 +19,7 @@ import { listAssetStatusHistory } from "@/lib/asset-status-history";
 import { canAccessAssetFacility, canManageAssetRecord, canSeeSensitiveAssetNetwork } from "@/lib/permissions";
 import { formatThaiDate, formatThaiDateTime } from "@/lib/date-format";
 import { hasPermission } from "@/lib/role-permissions";
+import { windowsLicenseStatusLabel } from "@/lib/windows-license";
 
 type Props = { params: Promise<{ id: string }> };
 
@@ -268,6 +269,9 @@ export default async function AssetDetailPage({ params }: Props) {
               <Field label="ยี่ห้อ (Brand)" value={asset.manufacturerBrand} />
               <Field label="Serial Number" value={asset.serialNumber} />
               <Field label="ระบบปฏิบัติการ" value={asset.operatingSystem} />
+              {asset.windowsLicenseStatus && (
+                <Field label="สถานะลิขสิทธิ์ Windows" value={windowsLicenseStatusLabel(asset.windowsLicenseStatus)} />
+              )}
               <Field label="Private IP" value={canViewNetwork ? (asset.privateIp || "–") : "ซ่อนข้อมูล"} />
               <Field label="Public IP" value={canViewNetwork ? (asset.publicIp || "–") : "ซ่อนข้อมูล"} />
             </div>

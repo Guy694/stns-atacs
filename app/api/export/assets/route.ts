@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { assetClassLabel } from "@/lib/asset-classes";
+import { windowsLicenseStatusLabel } from "@/lib/windows-license";
 import { assetStatusLabel } from "@/lib/asset-status";
 import { getCurrentUser } from "@/lib/auth";
 import { listAssets } from "@/lib/assets";
@@ -66,6 +67,7 @@ export async function GET(req: NextRequest) {
     "สถานะ",
     "ยี่ห้อ",
     "ระบบปฏิบัติการ",
+    "สถานะลิขสิทธิ์ Windows",
     "วันหมดอายุ MA",
     "ราคาที่ซื้อ (บาท)",
     "วันที่ซื้อ",
@@ -89,6 +91,7 @@ export async function GET(req: NextRequest) {
     assetStatusLabel(a.currentStatus),
     a.manufacturerBrand,
     a.operatingSystem,
+    windowsLicenseStatusLabel(a.windowsLicenseStatus),
     a.maintenanceEndDate,
     a.purchasePrice != null ? a.purchasePrice.toString() : "",
     a.purchaseDate,

@@ -162,6 +162,7 @@ CREATE TABLE `information_assets` (
   `device_type` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'ประเภทอุปกรณ์ เช่น Firewall, Windows, Linux หรืออื่นๆ',
   `operating_system` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'Operating System (ระบบปฏิบัติการ)',
   `operating_system_version` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'Operating System Version (เวอร์ชันของระบบปฏิบัติการ)',
+  `windows_license_status` enum('Genuine','Pirated') COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'สถานะลิขสิทธิ์ Windows: Genuine=แท้, Pirated=เถื่อน',
   `private_ip` varchar(45) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'Private IP',
   `public_ip` varchar(45) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'Public IP',
   `location_detail` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'ที่ตั้ง (Location)',
