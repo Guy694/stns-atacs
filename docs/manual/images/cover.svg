@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
+  <title id="title">หน้าปกคู่มือการใช้งานระบบ ATACS</title>
+  <desc id="desc">ภาพประกอบทะเบียนทรัพย์สินเชื่อมโยงหน่วยงาน อำเภอ และรายงานส่วนกลาง</desc>
+  <rect width="1600" height="900" fill="#edf8f2"/>
+  <path d="M0 0h1600v180H0z" fill="#14532d"/>
+  <circle cx="1360" cy="110" r="260" fill="#16a34a" opacity=".18"/>
+  <circle cx="1490" cy="70" r="150" fill="#f59e0b" opacity=".16"/>
+  <text x="110" y="115" fill="#fff" font-family="system-ui,sans-serif" font-size="34" font-weight="700">ATACS</text>
+  <text x="110" y="150" fill="#dcfce7" font-family="system-ui,sans-serif" font-size="20">Asset Tracking and Control System</text>
+  <text x="110" y="330" fill="#113127" font-family="system-ui,sans-serif" font-size="66" font-weight="700">คู่มือการใช้งานระบบ</text>
+  <text x="110" y="405" fill="#166534" font-family="system-ui,sans-serif" font-size="34">ทะเบียนและติดตามทรัพย์สินสารสนเทศ</text>
+  <text x="110" y="455" fill="#4f6b60" font-family="system-ui,sans-serif" font-size="24">สำหรับหน่วยบริการสาธารณสุข จังหวัดสตูล</text>
+  <g transform="translate(980 270)">
+    <rect x="0" y="0" width="430" height="380" rx="24" fill="#fff" stroke="#bbf7d0" stroke-width="3"/>
+    <rect x="35" y="35" width="360" height="58" rx="12" fill="#dcfce7"/>
+    <circle cx="70" cy="64" r="13" fill="#15803d"/>
+    <rect x="100" y="53" width="190" height="20" rx="8" fill="#166534" opacity=".8"/>
+    <g fill="#f4f7f5" stroke="#d7e0db" stroke-width="2">
+      <rect x="35" y="120" width="110" height="92" rx="12"/>
+      <rect x="160" y="120" width="110" height="92" rx="12"/>
+      <rect x="285" y="120" width="110" height="92" rx="12"/>
+    </g>
+    <g fill="#15803d">
+      <rect x="55" y="142" width="70" height="14" rx="6" opacity=".35"/>
+      <rect x="180" y="142" width="70" height="14" rx="6" opacity=".35"/>
+      <rect x="305" y="142" width="70" height="14" rx="6" opacity=".35"/>
+    </g>
+    <g fill="#113127" font-family="system-ui,sans-serif" font-size="30" font-weight="700">
+      <text x="55" y="190">72</text><text x="180" y="190">318</text><text x="305" y="190">7</text>
+    </g>
+    <rect x="35" y="240" width="360" height="105" rx="12" fill="#fff" stroke="#d7e0db" stroke-width="2"/>
+    <path d="M65 315l70-40 64 20 74-55 90 35" fill="none" stroke="#15803d" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+    <g fill="#15803d"><circle cx="65" cy="315" r="8"/><circle cx="135" cy="275" r="8"/><circle cx="199" cy="295" r="8"/><circle cx="273" cy="240" r="8"/><circle cx="363" cy="275" r="8"/></g>
+  </g>
+  <text x="110" y="760" fill="#113127" font-family="system-ui,sans-serif" font-size="24" font-weight="600">ฉบับสำหรับผู้ดูแลระบบ เจ้าหน้าที่ และผู้ตรวจสอบ</text>
+  <text x="110" y="805" fill="#4f6b60" font-family="system-ui,sans-serif" font-size="20">เวอร์ชันคู่มือ 1.0 · สิงหาคม 2569</text>
+</svg>
