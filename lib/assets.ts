@@ -88,14 +88,18 @@ function rowToAsset(row: AssetRow) {
     facilityId: row.facility_id,
     facilityName: row.facility_name ?? "",
     districtName: row.district_name ?? "",
+    rowNo: row.row_no ?? null,
     assetRegistrationNo: row.asset_registration_no ?? "",
     assetName: row.asset_name,
     assetClass: normalizeAssetClass(row.asset_class),
     usageDescription: row.usage_description ?? "",
     ownerName: row.owner_name ?? "",
     assetGroup: row.asset_category ?? normalizeGroup(row.asset_group),
+    assetCategory: row.asset_category ?? normalizeGroup(row.asset_group),
+    assetGroupDetail: row.asset_group ?? "",
     deviceType: row.device_type ?? "",
     operatingSystem: row.operating_system ?? "",
+    operatingSystemVersion: row.operating_system_version ?? "",
     windowsLicenseStatus: row.windows_license_status ?? null,
     privateIp: row.private_ip ?? "",
     publicIp: row.public_ip ?? undefined,
@@ -105,7 +109,10 @@ function rowToAsset(row: AssetRow) {
     updatedAt: toDateOnly(row.last_updated_at),
     maintenanceStartDate: toDateOnly(row.maintenance_start_date),
     maintenanceEndDate: toDateOnly(row.maintenance_end_date),
+    installedAt: toDateOnly(row.installed_at),
     manufacturerBrand: row.manufacturer_brand ?? "",
+    manufacturerModel: row.manufacturer_model ?? "",
+    manufacturerSpecification: row.manufacturer_specification ?? "",
     serialNumber: row.serial_number ?? "",
     purchasePrice: row.purchase_price ?? null,
     purchaseDate: toDateOnly(row.purchase_date),
@@ -129,6 +136,7 @@ export type AssetInput = {
   usageDescription?: string;
   ownerName?: string;
   assetCategory: "Hardware" | "Software";
+  assetGroup?: string;
   deviceType?: string;
   operatingSystem?: string;
   operatingSystemVersion?: string;
@@ -263,6 +271,7 @@ function filterFallbackAssets(filter?: AssetListFilter) {
   let assets = fallbackSurveys.flatMap((s) =>
     s.assets.map((a) => ({
       ...a,
+      rowNo: null,
       surveyId: 0,
       workGroupId: null,
       workGroupName: null,
@@ -270,6 +279,12 @@ function filterFallbackAssets(filter?: AssetListFilter) {
       facilityName: s.facilityName,
       districtName: s.districtName,
       assetClass: normalizeAssetClass(a.assetClass),
+      assetCategory: a.assetGroup,
+      assetGroupDetail: "",
+      operatingSystemVersion: "",
+      manufacturerModel: "",
+      manufacturerSpecification: "",
+      installedAt: "",
       publicIp: a.publicIp ?? undefined,
       purchasePrice: a.purchasePrice ?? null,
       purchaseDate: a.purchaseDate ?? "",
@@ -396,13 +411,13 @@ export async function createAsset(input: AssetInput) {
   return executeStatement(
     `INSERT INTO information_assets
       (survey_id, row_no, asset_registration_no, asset_name, usage_description, owner_name,
-       work_group_id, asset_class, asset_category, device_type, operating_system, operating_system_version, windows_license_status,
+       work_group_id, asset_class, asset_category, asset_group, device_type, operating_system, operating_system_version, windows_license_status,
        private_ip, public_ip, location_detail, current_status, updated_by,
        manufacturer_brand, manufacturer_model, manufacturer_specification,
        serial_number, purchase_price, purchase_date, purchase_order_no,
        maintenance_start_date, maintenance_end_date, installed_at, last_updated_at,
        asset_image_1_url, asset_image_2_url)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [
       input.surveyId,
       input.rowNo ?? null,
@@ -413,6 +428,7 @@ export async function createAsset(input: AssetInput) {
       input.workGroupId ?? null,
       normalizeAssetClass(input.assetClass),
       input.assetCategory,
+      input.assetGroup ?? null,
       input.deviceType ?? null,
       input.operatingSystem ?? null,
       input.operatingSystemVersion ?? null,
@@ -453,6 +469,7 @@ export async function updateAsset(id: number, input: Partial<AssetInput>) {
     owner_name: input.ownerName,
     asset_class: input.assetClass === undefined ? undefined : normalizeAssetClass(input.assetClass),
     asset_category: input.assetCategory,
+    asset_group: input.assetGroup,
     device_type: input.deviceType,
     operating_system: input.operatingSystem,
     operating_system_version: input.operatingSystemVersion,

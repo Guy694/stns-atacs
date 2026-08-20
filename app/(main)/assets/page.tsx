@@ -180,7 +180,7 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
         </div>
         {canCreateAsset && (
           <div className="flex gap-2">
-            {isAdmin && <ImportExcelModal facilities={facilities} />}
+            {isAdmin && <ImportExcelModal facilities={facilities} workGroups={workGroups} />}
             <AssetFormModal
               facilities={facilitiesForForm}
               deviceTypes={deviceTypes}
