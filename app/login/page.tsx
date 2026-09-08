@@ -289,7 +289,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
                   style={{ background: "rgba(22,163,74,0.08)" }}>
                   <span className="text-2xl">🪪</span>
                   <p className="text-sm" style={{ color: "var(--muted)" }}>
-                    ยืนยันตัวตนด้วย ThaiD ผ่าน DOPA OAuth 2.0 — หากยังไม่มีบัญชีจะพาไปสมัครสมาชิกอัตโนมัติ
+                    ยืนยันตัวตนด้วย ThaiD หากยังไม่มีบัญชีจะพาไปสมัครสมาชิกอัตโนมัติ
                   </p>
                 </div>
                 <>
@@ -304,11 +304,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
                     หากไม่พบข้อมูลผู้ใช้งาน ระบบจะพาไปหน้าสมัครสมาชิกอัตโนมัติ
                   </p>
                 </>
-                <div className="text-center">
-                  <Link href="/login" className="text-sm font-semibold hover:underline" style={{ color: "var(--accent)" }}>
-                    ← กลับเข้าสู่ระบบด้วย Username
-                  </Link>
-                </div>
+                
               </>
             ) : (
               <>
