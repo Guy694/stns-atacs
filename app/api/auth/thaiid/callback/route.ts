@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   clearPendingRegistrationClaim,
   createSession,
-  findUserByThaiCid,
+  findOrLinkUserByVerifiedThaiD,
   getUserDisplayName,
   normalizeDisplayName,
   normalizeThaiCid,
@@ -190,7 +190,11 @@ export async function GET(req: NextRequest) {
       throw new Error("ThaiD ไม่ส่งเลขบัตรประชาชน 13 หลัก");
     }
 
-    const user = await findUserByThaiCid(thaiCid);
+    const user = await findOrLinkUserByVerifiedThaiD({
+      thaiCid,
+      firstName: typeof tokenJson.given_name === "string" ? tokenJson.given_name : "",
+      lastName: typeof tokenJson.family_name === "string" ? tokenJson.family_name : "",
+    });
     if (user) {
       if (!user.is_active) {
         const context = await recordThaiDSecurityEvent(req, "login_pending_account", "ThaiD", getUserDisplayName(user));

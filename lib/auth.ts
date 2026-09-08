@@ -355,6 +355,72 @@ export async function findUserByThaiCid(thaiCid: string): Promise<UserRecord | n
   return hydrateUserRecord(row);
 }
 
+// Call only with identity claims returned by the verified ThaiD OAuth exchange.
+// Never use names supplied by a login form to link an account.
+export async function findOrLinkUserByVerifiedThaiD(input: {
+  thaiCid: string;
+  firstName: string;
+  lastName: string;
+}): Promise<UserRecord | null> {
+  if (!/^\d{13}$/.test(input.thaiCid)) {
+    throw new Error("ข้อมูลยืนยันตัวตน ThaiD ไม่ถูกต้อง");
+  }
+
+  const existingUser = await findUserByThaiCid(input.thaiCid);
+  if (existingUser) return existingUser;
+
+  const firstName = input.firstName.trim();
+  const lastName = input.lastName.trim();
+  if (!firstName || !lastName) {
+    throw new Error("ThaiD ไม่ส่งชื่อและนามสกุลสำหรับเชื่อมต่อบัญชีครั้งแรก กรุณาติดต่อผู้ดูแลระบบ");
+  }
+
+  // Binary comparisons preserve Thai marks; do not fuzzy-match, strip titles,
+  // or exclude linked/inactive namesakes when checking for ambiguity.
+  const matches = await selectRows<UserRecord>(
+    `SELECT id, thaid_cid, thaid_cid_hash, NULL AS google_sub, first_name, last_name,
+            email, username, password_hash, role, is_active
+     FROM users
+     WHERE CAST(TRIM(first_name) AS BINARY) = CAST(? AS BINARY)
+       AND CAST(TRIM(last_name) AS BINARY) = CAST(? AS BINARY)
+     LIMIT 2`,
+    [firstName, lastName]
+  );
+  if (matches.length === 0) return null;
+  if (matches.length > 1) {
+    throw new Error("พบชื่อ–นามสกุลซ้ำในระบบ กรุณาติดต่อผู้ดูแลระบบเพื่อเชื่อมต่อ ThaiD");
+  }
+
+  const candidate = matches[0];
+  if (candidate.thaid_cid || candidate.thaid_cid_hash) {
+    throw new Error("บัญชีชื่อนี้เชื่อมต่อ ThaiD ไว้แล้ว กรุณาติดต่อผู้ดูแลระบบ");
+  }
+  // Preserve the existing pending-approval flow without linking inactive users.
+  if (!candidate.is_active) return hydrateUserRecord(candidate);
+
+  const encryptedCid = encryptThaiCidForStorage(input.thaiCid);
+  const cidHash = hashThaiCidForLookup(input.thaiCid);
+  const result = await executeStatement(
+    `UPDATE users SET thaid_cid = ?, thaid_cid_hash = ?
+     WHERE id = ? AND is_active = 1
+       AND (thaid_cid IS NULL OR thaid_cid = '')
+       AND (thaid_cid_hash IS NULL OR thaid_cid_hash = '')
+       AND CAST(TRIM(first_name) AS BINARY) = CAST(? AS BINARY)
+       AND CAST(TRIM(last_name) AS BINARY) = CAST(? AS BINARY)`,
+    [encryptedCid, cidHash, candidate.id, firstName, lastName]
+  );
+  if (result.affectedRows !== 1) {
+    throw new Error("ข้อมูลบัญชีเปลี่ยนระหว่างเชื่อมต่อ ThaiD กรุณาลองเข้าสู่ระบบใหม่");
+  }
+
+  // Reload account status and permissions after the conditional update.
+  const linkedUser = await findUserByThaiCid(input.thaiCid);
+  if (!linkedUser || linkedUser.id !== candidate.id) {
+    throw new Error("ไม่สามารถยืนยันการเชื่อมต่อ ThaiD ได้ กรุณาลองเข้าสู่ระบบใหม่");
+  }
+  return linkedUser;
+}
+
 export async function findUserByUsername(username: string): Promise<UserRecord | null> {
   const rows = await selectRows<UserRecord & RowDataPacket>(
     `SELECT id, thaid_cid, thaid_cid_hash, NULL AS google_sub, first_name, last_name, email, username, password_hash, role, is_active

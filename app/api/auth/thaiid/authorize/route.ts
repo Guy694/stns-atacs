@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
   authUrl.searchParams.set("response_type", "code");
   authUrl.searchParams.set("client_id", config.clientId);
   authUrl.searchParams.set("redirect_uri", config.callbackUrl);
-  authUrl.searchParams.set("scope", "pid");
+  authUrl.searchParams.set("scope", "pid given_name family_name");
   authUrl.searchParams.set("state", state);
 
   const response = NextResponse.redirect(authUrl);
