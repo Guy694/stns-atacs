@@ -15,7 +15,7 @@ function toLoginUrl(req: NextRequest, search: Record<string, string>) {
 }
 
 export async function GET(req: NextRequest) {
-  const config = getThaiIdConfig(req.nextUrl.origin);
+  const config = await getThaiIdConfig(req.nextUrl.origin);
 
   if (!config.enabled) {
     return NextResponse.redirect(
@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
   authUrl.searchParams.set("response_type", "code");
   authUrl.searchParams.set("client_id", config.clientId);
   authUrl.searchParams.set("redirect_uri", config.callbackUrl);
-  authUrl.searchParams.set("scope", "pid");
+  authUrl.searchParams.set("scope", "pid given_name family_name");
   authUrl.searchParams.set("state", state);
 
   const response = NextResponse.redirect(authUrl);

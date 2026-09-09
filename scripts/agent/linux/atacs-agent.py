@@ -22,7 +22,7 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
-AGENT_VERSION = "1.0.0"
+AGENT_VERSION = "1.0.1"
 DEFAULT_CONFIG_PATH = "/var/lib/atacs-agent/agent-config.json"
 
 
@@ -150,12 +150,16 @@ def get_ram_mb() -> int | None:
     return None
 
 
-def get_disk_total_gb() -> int | None:
+def get_disk_usage_gb() -> dict[str, int | None]:
     try:
         usage = shutil.disk_usage("/")
     except OSError:
-        return None
-    return round(usage.total / (1024**3))
+        return {"total": None, "free": None, "used": None}
+    return {
+        "total": round(usage.total / (1024**3)),
+        "free": round(usage.free / (1024**3)),
+        "used": round(usage.used / (1024**3)),
+    }
 
 
 def get_device_type() -> str:
@@ -202,6 +206,7 @@ def get_inventory_payload() -> dict[str, Any]:
     os_name = get_os_name()
     cpu_model = get_cpu_model()
     current_user = get_current_user()
+    disk_usage = get_disk_usage_gb()
 
     return {
         "fingerprint": get_fingerprint(),
@@ -218,7 +223,9 @@ def get_inventory_payload() -> dict[str, Any]:
         "currentUser": current_user,
         "cpuModel": cpu_model,
         "ramMb": get_ram_mb(),
-        "diskTotalGb": get_disk_total_gb(),
+        "diskTotalGb": disk_usage["total"],
+        "diskFreeGb": disk_usage["free"],
+        "diskUsedGb": disk_usage["used"],
         "locationDetail": hostname,
         "agentVersion": AGENT_VERSION,
         "status": "online",
@@ -250,21 +257,37 @@ def post_json(url: str, body: dict[str, Any], headers: dict[str, str] | None = N
         raise RuntimeError(f"Request failed: {exc.reason}") from exc
 
 
-def enroll_agent(base_url: str, token: str, config_path: str) -> dict[str, Any]:
+def enroll_agent(
+    base_url: str,
+    token: str | None,
+    config_path: str,
+    facility_id: int | None = None,
+    work_group_name: str | None = None,
+    install_key: str | None = None,
+) -> dict[str, Any]:
     if not base_url:
         raise RuntimeError("ApiBaseUrl is required for enrollment.")
-    if not token:
-        raise RuntimeError("EnrollmentToken is required for enrollment.")
+    has_token = bool(token)
+    has_static_install = bool(install_key) and bool(facility_id)
+    if not has_token and not has_static_install:
+        raise RuntimeError("EnrollmentToken or InstallKey + FacilityId is required for enrollment.")
 
     payload = get_inventory_payload()
+    body = {
+        "fingerprint": payload["fingerprint"],
+        "hostname": payload["hostname"],
+        "agentVersion": payload["agentVersion"],
+    }
+    if has_token:
+        body["enrollmentToken"] = token
+    else:
+        body["installKey"] = install_key
+        body["facilityId"] = facility_id
+        body["workGroupName"] = work_group_name
+
     response = post_json(
         f"{base_url.rstrip('/')}/api/agent/enroll",
-        {
-            "enrollmentToken": token,
-            "fingerprint": payload["fingerprint"],
-            "hostname": payload["hostname"],
-            "agentVersion": payload["agentVersion"],
-        },
+        body,
     )
 
     config = {
@@ -292,6 +315,9 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="ATACS Linux agent")
     parser.add_argument("--api-base-url", dest="api_base_url")
     parser.add_argument("--enrollment-token", dest="enrollment_token")
+    parser.add_argument("--facility-id", dest="facility_id", type=int)
+    parser.add_argument("--work-group-name", dest="work_group_name")
+    parser.add_argument("--install-key", dest="install_key")
     parser.add_argument("--config-path", dest="config_path", default=DEFAULT_CONFIG_PATH)
     parser.add_argument("--run-once", action="store_true")
     parser.add_argument("--enroll-only", action="store_true")
@@ -303,10 +329,22 @@ def main() -> int:
     config = load_config(args.config_path)
 
     if not config:
-        if not args.api_base_url or not args.enrollment_token:
-            print("Enrollment requires --api-base-url and --enrollment-token on first run.", file=sys.stderr)
+        has_token = bool(args.enrollment_token)
+        has_static_install = bool(args.install_key) and bool(args.facility_id)
+        if not args.api_base_url or (not has_token and not has_static_install):
+            print(
+                "Enrollment requires --api-base-url and either --enrollment-token or --install-key + --facility-id on first run.",
+                file=sys.stderr,
+            )
             return 1
-        config = enroll_agent(args.api_base_url, args.enrollment_token, args.config_path)
+        config = enroll_agent(
+            args.api_base_url,
+            args.enrollment_token,
+            args.config_path,
+            args.facility_id,
+            args.work_group_name,
+            args.install_key,
+        )
         print(f"Enrolled device for facility: {config['facilityName']}")
 
     if args.enroll_only:

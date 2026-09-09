@@ -1,8 +1,13 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { AppIcon } from "@/app/_components/ui/icon";
+import { StatusBadge } from "@/app/_components/ui/status-badge";
+import { assetStatusLabel, assetStatusTone } from "@/lib/asset-status";
 import { getCurrentUser } from "@/lib/auth";
-import { listAssets } from "@/lib/assets";
+import { formatThaiDate } from "@/lib/date-format";
+import { getFacilityById, listAssets } from "@/lib/assets";
+import { hasPermission } from "@/lib/role-permissions";
 
 type Props = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -12,17 +17,6 @@ function readParam(p: Record<string, string | string[] | undefined>, key: string
   const v = p[key];
   return Array.isArray(v) ? v[0] : (v ?? "");
 }
-
-const STATUS_STYLE: Record<string, string> = {
-  Active: "bg-emerald-100 text-emerald-700",
-  Inactive: "bg-amber-100 text-amber-700",
-  Broken: "bg-rose-100 text-rose-700",
-};
-const STATUS_LABEL: Record<string, string> = {
-  Active: "ใช้งานอยู่",
-  Inactive: "ไม่ใช้งาน",
-  Broken: "ชำรุด",
-};
 
 const VIEWS = [
   { key: "summary", label: "ภาพรวม" },
@@ -34,17 +28,26 @@ const VIEWS = [
 
 type View = (typeof VIEWS)[number]["key"];
 
-const TODAY = new Date("2026-05-08T00:00:00+07:00");
+const TODAY = new Date();
 
 export default async function ReportsPage({ searchParams }: Props) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
+  if (!(await hasPermission(user.role, "reports.view"))) redirect("/dashboard");
+  if (user.role !== "admin" && !user.facilityId) redirect("/profile");
+
   const canMutate = user.role !== "viewer";
 
   const params = await searchParams;
   const view = (readParam(params, "view") || "summary") as View;
 
-  const assets = await listAssets();
+  const scopedFacilityId = user.role === "admin" ? undefined : Number(user.facilityId);
+  const [assets, scopedFacility] = await Promise.all([
+    listAssets({ facilityId: scopedFacilityId }),
+    scopedFacilityId ? getFacilityById(scopedFacilityId) : Promise.resolve(null),
+  ]);
+  const reportScopeLabel = scopedFacility?.name ?? (scopedFacilityId ? "หน่วยงานของคุณ" : "ทุกหน่วยงาน");
+  const exportHref = scopedFacilityId ? `/api/export/assets?facilityId=${scopedFacilityId}` : "/api/export/assets";
   const total = assets.length;
   const active = assets.filter((a) => a.currentStatus === "Active").length;
   const broken = assets.filter((a) => a.currentStatus === "Broken").length;
@@ -91,7 +94,7 @@ export default async function ReportsPage({ searchParams }: Props) {
   // ── expiring MA ─────────────────────────────────────────────────────
   const expiring = assets
     .map((a) => {
-      const d = a.maintenanceEndDate ? new Date(a.maintenanceEndDate) : null;
+      const d = a.maintenanceEndDate ? new Date(`${a.maintenanceEndDate}T00:00:00+07:00`) : null;
       const days = d && !isNaN(d.getTime()) ? Math.ceil((d.getTime() - TODAY.getTime()) / 86400000) : null;
       return { ...a, daysLeft: days };
     })
@@ -104,7 +107,7 @@ export default async function ReportsPage({ searchParams }: Props) {
   function navClass(key: View) {
     return `rounded-xl px-4 py-2 text-sm font-medium transition ${
       view === key
-        ? "bg-emerald-600 text-white shadow"
+        ? "bg-[var(--primary)] text-white shadow-sm"
         : "bg-white/70 text-[var(--muted)] hover:bg-white hover:text-[var(--foreground)]"
     }`;
   }
@@ -116,14 +119,15 @@ export default async function ReportsPage({ searchParams }: Props) {
         <div>
           <p className="text-xs font-medium uppercase tracking-[0.22em] text-[var(--muted)]">ATACS · รายงาน</p>
           <h1 className="section-title mt-1 text-3xl font-semibold">รายงาน</h1>
+          <p className="mt-1 text-sm text-[var(--muted)]">แสดงข้อมูล: {reportScopeLabel}</p>
         </div>
         <div className="flex items-center gap-3">
-          <span className="text-xs text-[var(--muted)]">ข้อมูล ณ วันที่ {TODAY.toLocaleDateString("th-TH")}</span>
+          <span className="text-xs text-[var(--muted)]">ข้อมูล ณ วันที่ {formatThaiDate(TODAY)}</span>
           <a
-            href="/api/export/assets"
-            className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700 transition hover:bg-emerald-100"
+            href={exportHref}
+            className="inline-flex items-center gap-2 rounded-xl border border-[var(--primary-soft-strong)] bg-[var(--primary-soft)] px-4 py-2 text-sm font-medium text-[var(--primary-text)] transition hover:bg-[var(--primary-soft-strong)]"
           >
-            ⬇ Export CSV
+            <AppIcon name="download" className="h-4 w-4" /> Export CSV
           </a>
         </div>
       </div>
@@ -162,14 +166,14 @@ export default async function ReportsPage({ searchParams }: Props) {
           <div className="border-b border-black/6 px-5 py-3 font-semibold">สรุปภาพรวมทรัพย์สิน</div>
           <div className="p-5 space-y-4">
             {[
-              { label: "พร้อมใช้งาน (Active)", count: active, bar: "bg-emerald-500", badge: "bg-emerald-100 text-emerald-700" },
-              { label: "ไม่ใช้งาน (Inactive)", count: inactive, bar: "bg-amber-400", badge: "bg-amber-100 text-amber-700" },
-              { label: "ชำรุด (Broken)", count: broken, bar: "bg-rose-500", badge: "bg-rose-100 text-rose-700" },
-            ].map(({ label, count, bar, badge }) => (
+              { label: assetStatusLabel("Active"), count: active, bar: "bg-emerald-500", tone: "success" as const },
+              { label: assetStatusLabel("Inactive"), count: inactive, bar: "bg-amber-400", tone: "warning" as const },
+              { label: assetStatusLabel("Broken"), count: broken, bar: "bg-rose-500", tone: "danger" as const },
+            ].map(({ label, count, bar, tone }) => (
               <div key={label}>
                 <div className="flex items-center justify-between text-sm">
                   <span>{label}</span>
-                  <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${badge}`}>{count} ({Math.round(count / Math.max(total, 1) * 100)}%)</span>
+                  <StatusBadge tone={tone}>{count} ({Math.round(count / Math.max(total, 1) * 100)}%)</StatusBadge>
                 </div>
                 <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-slate-100">
                   <div className={`h-full rounded-full ${bar}`} style={{ width: `${(count / Math.max(total, 1)) * 100}%` }} />
@@ -193,10 +197,10 @@ export default async function ReportsPage({ searchParams }: Props) {
                   <th className="px-4 py-2.5 text-left font-medium">หน่วยงาน</th>
                   <th className="px-4 py-2.5 text-left font-medium">อำเภอ</th>
                   <th className="px-4 py-2.5 text-center font-medium">รวม</th>
-                  <th className="px-4 py-2.5 text-center font-medium">Active</th>
-                  <th className="px-4 py-2.5 text-center font-medium">Broken</th>
-                  <th className="px-4 py-2.5 text-center font-medium">Inactive</th>
-                  <th className="px-4 py-2.5 text-center font-medium">อัตรา Active</th>
+                  <th className="px-4 py-2.5 text-center font-medium">พร้อมใช้งาน</th>
+                  <th className="px-4 py-2.5 text-center font-medium">ชำรุด</th>
+                  <th className="px-4 py-2.5 text-center font-medium">ไม่ใช้งาน</th>
+                  <th className="px-4 py-2.5 text-center font-medium">อัตราพร้อมใช้งาน</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-black/4">
@@ -242,8 +246,8 @@ export default async function ReportsPage({ searchParams }: Props) {
                 <tr className="border-b border-black/6 bg-slate-50/60 text-xs text-[var(--muted)]">
                   <th className="px-4 py-2.5 text-left font-medium">ประเภทอุปกรณ์</th>
                   <th className="px-4 py-2.5 text-center font-medium">รวม</th>
-                  <th className="px-4 py-2.5 text-center font-medium">Active</th>
-                  <th className="px-4 py-2.5 text-center font-medium">Broken</th>
+                  <th className="px-4 py-2.5 text-center font-medium">พร้อมใช้งาน</th>
+                  <th className="px-4 py-2.5 text-center font-medium">ชำรุด</th>
                   <th className="px-4 py-2.5 text-left font-medium">สัดส่วน</th>
                 </tr>
               </thead>
@@ -251,7 +255,7 @@ export default async function ReportsPage({ searchParams }: Props) {
                 {byType.map((t) => (
                   <tr key={t.type} className="transition hover:bg-white/50">
                     <td className="px-4 py-3">
-                      <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700">{t.type}</span>
+                      <StatusBadge tone="primary">{t.type}</StatusBadge>
                     </td>
                     <td className="px-4 py-3 text-center font-semibold">{t.total}</td>
                     <td className="px-4 py-3 text-center text-emerald-600">{t.active}</td>
@@ -301,16 +305,12 @@ export default async function ReportsPage({ searchParams }: Props) {
                         <p className="font-mono text-xs text-[var(--muted)]">{a.assetRegistrationNo}</p>
                       </td>
                       <td className="px-4 py-3 text-[var(--muted)]">{a.facilityName}</td>
-                      <td className="px-4 py-3 font-mono text-xs">{a.maintenanceEndDate}</td>
+                      <td className="px-4 py-3 text-xs">{formatThaiDate(a.maintenanceEndDate)}</td>
                       <td className="px-4 py-3 text-center font-semibold">{a.daysLeft}</td>
                       <td className="px-4 py-3 text-center">
-                        <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                          (a.daysLeft ?? 99) <= 7 ? "bg-rose-100 text-rose-700" :
-                          (a.daysLeft ?? 99) <= 30 ? "bg-amber-100 text-amber-700" :
-                          "bg-yellow-100 text-yellow-700"
-                        }`}>
+                        <StatusBadge tone={(a.daysLeft ?? 99) <= 7 ? "danger" : (a.daysLeft ?? 99) <= 30 ? "warning" : "neutral"}>
                           {(a.daysLeft ?? 99) <= 7 ? "วิกฤต" : (a.daysLeft ?? 99) <= 30 ? "เฝ้าระวัง" : "ปกติ"}
-                        </span>
+                        </StatusBadge>
                       </td>
                     </tr>
                   ))}
@@ -329,7 +329,9 @@ export default async function ReportsPage({ searchParams }: Props) {
             <span className="ml-2 text-sm font-normal text-[var(--muted)]">{brokenList.length} รายการ</span>
           </div>
           {brokenList.length === 0 ? (
-            <div className="p-10 text-center text-emerald-600">✅ ไม่มีทรัพย์สินชำรุดหรือไม่ใช้งาน</div>
+            <div className="flex items-center justify-center gap-2 p-10 text-center text-[var(--primary-text)]">
+              <AppIcon name="check" className="h-4 w-4" /> ไม่มีทรัพย์สินชำรุดหรือไม่ใช้งาน
+            </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -352,14 +354,14 @@ export default async function ReportsPage({ searchParams }: Props) {
                       </td>
                       <td className="px-4 py-3 text-[var(--muted)]">{a.facilityName}</td>
                       <td className="px-4 py-3">
-                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs">{a.deviceType || a.assetGroup}</span>
+                        <StatusBadge tone="neutral">{a.deviceType || a.assetGroup}</StatusBadge>
                       </td>
                       <td className="px-4 py-3 text-center">
-                        <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${STATUS_STYLE[a.currentStatus] ?? ""}`}>
-                          {STATUS_LABEL[a.currentStatus] ?? a.currentStatus}
-                        </span>
+                        <StatusBadge tone={assetStatusTone(a.currentStatus)}>
+                          {assetStatusLabel(a.currentStatus)}
+                        </StatusBadge>
                       </td>
-                      <td className="px-4 py-3 font-mono text-xs text-[var(--muted)]">{a.updatedAt || "–"}</td>
+                      <td className="px-4 py-3 text-xs text-[var(--muted)]">{formatThaiDate(a.updatedAt)}</td>
                       <td className="px-4 py-3 text-right">
                         {canMutate ? (
                           <Link href={`/disposal?assetId=${a.id}`} className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-medium text-rose-700 transition hover:bg-rose-100">
@@ -382,4 +384,3 @@ export default async function ReportsPage({ searchParams }: Props) {
     </div>
   );
 }
-

@@ -1,8 +1,9 @@
 import { redirect } from "next/navigation";
 
+import { StatusBadge } from "@/app/_components/ui/status-badge";
 import { getCurrentUser } from "@/lib/auth";
 import { listAuditLogs } from "@/lib/audit";
-import { hasPermission } from "@/lib/role-permissions";
+import { formatThaiDateTime } from "@/lib/date-format";
 import Link from "next/link";
 
 type AuditPageProps = {
@@ -23,21 +24,19 @@ const ACTION_LABEL: Record<string, string> = {
   inspect: "ตรวจนับ",
 };
 
-const ACTION_COLOR: Record<string, string> = {
-  create: "bg-green-100 text-green-700",
-  update: "bg-blue-100 text-blue-700",
-  delete: "bg-red-100 text-red-700",
-  transfer: "bg-purple-100 text-purple-700",
-  dispose: "bg-orange-100 text-orange-700",
-  inspect: "bg-indigo-100 text-indigo-700",
-};
+const ACTION_TONE = {
+  create: "success",
+  update: "info",
+  delete: "danger",
+  transfer: "primary",
+  dispose: "warning",
+  inspect: "neutral",
+} as const;
 
 export default async function AuditLogPage({ searchParams }: AuditPageProps) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
-  const canViewAudit = user.role === "admin" || (await hasPermission(user.role, "audit.view"));
-  if (!canViewAudit) redirect("/");
-  const canExportAudit = user.role === "admin" || (await hasPermission(user.role, "audit.export"));
+  if (user.role !== "admin") redirect("/dashboard");
 
   const params = await searchParams;
   const actionFilter = readParam(params, "action") as "create" | "update" | "delete" | "transfer" | "dispose" | "inspect";
@@ -132,14 +131,12 @@ export default async function AuditLogPage({ searchParams }: AuditPageProps) {
         <button type="submit" className="rounded-xl bg-[var(--accent-strong)] px-5 py-2 text-sm font-semibold text-white transition hover:opacity-90">
           ค้นหา
         </button>
-        {canExportAudit && (
-          <a
-            href={`/api/export/audit?search=${encodeURIComponent(search)}&actor=${encodeURIComponent(actorFilter)}&entity=${encodeURIComponent(entityFilter)}&action=${encodeURIComponent(actionFilter)}&dateFrom=${encodeURIComponent(dateFrom)}&dateTo=${encodeURIComponent(dateTo)}`}
-            className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-100"
-          >
-            Export CSV
-          </a>
-        )}
+        <a
+          href={`/api/export/audit?search=${encodeURIComponent(search)}&actor=${encodeURIComponent(actorFilter)}&entity=${encodeURIComponent(entityFilter)}&action=${encodeURIComponent(actionFilter)}&dateFrom=${encodeURIComponent(dateFrom)}&dateTo=${encodeURIComponent(dateTo)}`}
+          className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-100"
+        >
+          Export CSV
+        </a>
         {(search || actorFilter || entityFilter || actionFilter || dateFrom || dateTo) && (
           <Link href="/admin/audit" className="rounded-xl border border-black/10 bg-white/80 px-4 py-2 text-sm text-[var(--muted)] hover:bg-white">
             ล้างตัวกรอง
@@ -155,7 +152,7 @@ export default async function AuditLogPage({ searchParams }: AuditPageProps) {
         ) : (
           <table className="w-full text-sm">
             <thead>
-              <tr style={{ background: "rgba(99,102,241,0.04)", borderBottom: "1px solid var(--line)" }}>
+              <tr style={{ background: "var(--neutral-bg)", borderBottom: "1px solid var(--line)" }}>
                 {["วันที่/เวลา", "ผู้ใช้", "การดำเนินการ", "ข้อมูล", "รายละเอียด"].map((h) => (
                   <th key={h} className="px-4 py-3 text-left font-semibold" style={{ color: "var(--muted)" }}>
                     {h}
@@ -165,17 +162,17 @@ export default async function AuditLogPage({ searchParams }: AuditPageProps) {
             </thead>
             <tbody>
               {logs.map((log) => (
-                <tr key={log.id} style={{ borderBottom: "1px solid var(--line)" }} className="hover:bg-indigo-50/30">
+                <tr key={log.id} style={{ borderBottom: "1px solid var(--line)" }} className="hover:bg-[var(--neutral-bg)]">
                   <td className="px-4 py-3 text-xs font-mono" style={{ color: "var(--muted)" }}>
-                    {log.createdAt}
+                    {formatThaiDateTime(log.createdAt)}
                   </td>
                   <td className="px-4 py-3 font-medium" style={{ color: "var(--foreground)" }}>
                     {log.userName || "-"}
                   </td>
                   <td className="px-4 py-3">
-                    <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${ACTION_COLOR[log.action] ?? "bg-gray-100 text-gray-600"}`}>
+                    <StatusBadge tone={ACTION_TONE[log.action as keyof typeof ACTION_TONE] ?? "neutral"}>
                       {ACTION_LABEL[log.action] ?? log.action}
-                    </span>
+                    </StatusBadge>
                   </td>
                   <td className="px-4 py-3 text-xs" style={{ color: "var(--muted)" }}>
                     {log.entity}{log.entityId ? ` #${log.entityId}` : ""}

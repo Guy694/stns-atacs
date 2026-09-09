@@ -1,29 +1,21 @@
 import Link from "next/link";
 
+import { StatusBadge } from "@/app/_components/ui/status-badge";
 import { TopNavigation } from "@/app/_components/top-navigation";
-import { listAssets } from "@/lib/assets";
+import { districtCoverage } from "@/app/atacs-data";
+import { assetStatusLabel } from "@/lib/asset-status";
+import { listAllFacilitiesForSelect, listAssets } from "@/lib/assets";
 
 type Props = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
+const TEST_SYSTEM_EMBED_URL = "https://satunhealth-srykdxrz.manus.space/";
+
 function sp(params: Record<string, string | string[] | undefined>, key: string) {
   const v = params[key];
   return (Array.isArray(v) ? v[0] : v ?? "").trim();
 }
-
-const STATUS_STYLE: Record<string, string> = {
-  Active: "bg-emerald-100 text-emerald-700",
-  Inactive: "bg-amber-100 text-amber-700",
-  Broken: "bg-rose-100 text-rose-700",
-};
-const STATUS_LABEL: Record<string, string> = {
-  Active: "ใช้งานอยู่",
-  Inactive: "ไม่ใช้งาน",
-  Broken: "ชำรุด",
-};
-
-const ALL_DISTRICTS = ["เมืองสตูล", "ควนกาหลง", "ควนโดน", "ท่าแพ", "ละงู", "ทุ่งหว้า", "มะนัง"] as const;
 
 function PctBar({ value, max, color }: { value: number; max: number; color: string }) {
   const w = max > 0 ? Math.round((value / max) * 100) : 0;
@@ -32,6 +24,10 @@ function PctBar({ value, max, color }: { value: number; max: number; color: stri
       <div className={`h-full rounded-full ${color}`} style={{ width: `${w}%` }} />
     </div>
   );
+}
+
+function uniqueSorted(values: string[]) {
+  return [...new Set(values.filter(Boolean))].sort((a, b) => a.localeCompare(b, "th"));
 }
 
 export default async function PublicDashboardPage({ searchParams }: Props) {
@@ -43,26 +39,26 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
   const view = requestedView === "facilities" ? "facilities" : "overview";
 
   // ── Load all assets (server-only, no IP/serial exposed to client) ────────
-  const allAssets = await listAssets();
-
-  // ── Search results (public-safe fields only) ─────────────────────────────
-  let searchResults: { assetName: string; assetRegistrationNo: string; deviceType: string; assetGroup: string; facilityName: string; districtName: string; currentStatus: string }[] = [];
-  if (q.length >= 2) {
-    const found = await listAssets({ search: q });
-    searchResults = found.slice(0, 20).map((a) => ({
-      assetName: a.assetName,
-      assetRegistrationNo: a.assetRegistrationNo,
-      deviceType: a.deviceType,
-      assetGroup: a.assetGroup,
-      facilityName: a.facilityName,
-      districtName: a.districtName,
-      currentStatus: a.currentStatus,
-    }));
-  }
+  const [allAssets, allFacilities] = await Promise.all([listAssets(), listAllFacilitiesForSelect()]);
 
   // ── District list for filter ─────────────────────────────────────────────
-  const allDistricts = [...ALL_DISTRICTS];
-  const shownDistricts = districtFilter ? allDistricts.filter((d) => d === districtFilter) : allDistricts;
+  const seededDistricts = districtCoverage.map((district) => district.district);
+  const seededDistrictSet = new Set(seededDistricts);
+  const extraDistricts = uniqueSorted([
+    ...allFacilities.map((facility) => facility.district_name ?? ""),
+    ...allAssets.map((asset) => asset.districtName),
+    districtFilter,
+  ]).filter((district) => !seededDistrictSet.has(district));
+  const allDistricts = [...seededDistricts, ...extraDistricts];
+  const facilityCountByDistrict = allFacilities.reduce<Record<string, number>>((acc, facility) => {
+    const district = facility.district_name ?? "";
+    if (!district) return acc;
+    acc[district] = (acc[district] ?? 0) + 1;
+    return acc;
+  }, {});
+  const seededFacilityCountByDistrict = Object.fromEntries(
+    districtCoverage.map((district) => [district.district, district.facilities])
+  ) as Record<string, number>;
 
   // ── Apply filters ────────────────────────────────────────────────────────
   let filtered = allAssets;
@@ -76,40 +72,29 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
   const hw = filtered.filter((a) => a.assetGroup === "Hardware").length;
   const sw = filtered.filter((a) => a.assetGroup === "Software").length;
   const facilityCount = new Set(filtered.map((a) => a.facilityId)).size;
-  const districtCount = shownDistricts.length;
+  const districtCount = districtFilter ? (allDistricts.includes(districtFilter) ? 1 : 0) : allDistricts.length;
   const safeTotal = Math.max(total, 1);
   const activeRate = Math.round((active / safeTotal) * 100);
 
   // ── By district aggregation ──────────────────────────────────────────────
-  const districtSummary = filtered.reduce<Record<string, { name: string; total: number; active: number; broken: number; inactive: number; facilities: Set<number> }>>(
-    (acc, a) => {
-      if (!acc[a.districtName]) acc[a.districtName] = { name: a.districtName, total: 0, active: 0, broken: 0, inactive: 0, facilities: new Set() };
-      acc[a.districtName].total++;
-      acc[a.districtName].facilities.add(a.facilityId);
-      if (a.currentStatus === "Active") acc[a.districtName].active++;
-      if (a.currentStatus === "Broken") acc[a.districtName].broken++;
-      if (a.currentStatus === "Inactive") acc[a.districtName].inactive++;
-      return acc;
-    },
-    {}
-  );
-
-  const byDistrict = shownDistricts
-    .map((name) => {
-      const summary = districtSummary[name];
-      if (!summary) {
-        return { name, total: 0, active: 0, broken: 0, inactive: 0, facilityCount: 0 };
-      }
-      return {
-        name,
-        total: summary.total,
-        active: summary.active,
-        broken: summary.broken,
-        inactive: summary.inactive,
-        facilityCount: summary.facilities.size,
-      };
-    })
-    .sort((a, b) => b.total - a.total);
+  const districtStats = filtered.reduce<Record<string, { name: string; total: number; active: number; broken: number; inactive: number; facilities: Set<number> }>>(
+      (acc, a) => {
+        if (!acc[a.districtName]) acc[a.districtName] = { name: a.districtName, total: 0, active: 0, broken: 0, inactive: 0, facilities: new Set() };
+        acc[a.districtName].total++;
+        acc[a.districtName].facilities.add(a.facilityId);
+        if (a.currentStatus === "Active") acc[a.districtName].active++;
+        if (a.currentStatus === "Broken") acc[a.districtName].broken++;
+        if (a.currentStatus === "Inactive") acc[a.districtName].inactive++;
+        return acc;
+      }, {}
+    );
+  const byDistrict = allDistricts.map((district) => {
+    const stats = districtStats[district] ?? { name: district, total: 0, active: 0, broken: 0, inactive: 0, facilities: new Set<number>() };
+    return {
+      ...stats,
+      facilityCount: facilityCountByDistrict[district] ?? seededFacilityCountByDistrict[district] ?? stats.facilities.size,
+    };
+  });
 
   // ── By facility aggregation ──────────────────────────────────────────────
   const byFacility = Object.values(
@@ -124,6 +109,36 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
       }, {}
     )
   ).sort((a, b) => b.total - a.total);
+  const facilityStatsById = new Map(byFacility.map((facility) => [facility.id, facility]));
+  const facilitiesByDistrict = Object.fromEntries(
+    allDistricts.map((district) => {
+      const registeredFacilities = allFacilities
+        .filter((facility) => facility.district_name === district)
+        .map((facility) => {
+          const stats = facilityStatsById.get(facility.id);
+          return {
+            id: facility.id,
+            name: facility.facility_name,
+            district,
+            total: stats?.total ?? 0,
+            active: stats?.active ?? 0,
+            broken: stats?.broken ?? 0,
+            inactive: stats?.inactive ?? 0,
+          };
+        });
+      const registeredIds = new Set(registeredFacilities.map((facility) => facility.id));
+      const facilitiesFromAssets = byFacility.filter(
+        (facility) => facility.district === district && !registeredIds.has(facility.id)
+      );
+
+      return [
+        district,
+        [...registeredFacilities, ...facilitiesFromAssets].sort(
+          (left, right) => right.total - left.total || left.name.localeCompare(right.name, "th")
+        ),
+      ];
+    })
+  ) as Record<string, typeof byFacility>;
 
   // ── By device type ───────────────────────────────────────────────────────
   const byType = Object.entries(
@@ -139,7 +154,7 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
   ).map(([type, c]) => ({ type, ...c })).sort((a, b) => b.total - a.total);
 
   const maxType = byType[0]?.total ?? 1;
-  const maxDistrict = byDistrict[0]?.total ?? 1;
+  const maxDistrict = Math.max(...byDistrict.map((district) => district.total), 1);
 
   // CSS conic-gradient for status donut
   const activePct = (active / safeTotal) * 100;
@@ -149,11 +164,11 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
   function filterHref(changes: Record<string, string>) {
     const next = { district: districtFilter, group: groupFilter, view, q, ...changes };
     const parts = Object.entries(next).filter(([, v]) => v).map(([k, v]) => `${k}=${encodeURIComponent(v)}`);
-    return `/public${parts.length ? "?" + parts.join("&") : ""}`;
+    return `/${parts.length ? "?" + parts.join("&") : ""}`;
   }
 
   function tabClass(v: string) {
-    return `rounded-xl px-4 py-2 text-sm font-medium transition ${view === v ? "bg-indigo-600 text-white shadow" : "bg-white/70 text-[var(--muted)] hover:bg-white hover:text-[var(--foreground)]"}`;
+    return `rounded-xl px-4 py-2 text-sm font-medium transition ${view === v ? "bg-[var(--primary)] text-white shadow-sm" : "bg-white/70 text-[var(--muted)] hover:bg-white hover:text-[var(--foreground)]"}`;
   }
 
   return (
@@ -161,10 +176,8 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
       <TopNavigation current="public" user={null} />
 
       {/* ── Hero ──────────────────────────────────────────────────────────── */}
-      <section className="relative overflow-hidden rounded-2xl bg-[linear-gradient(135deg,#4c1d95_0%,#5b21b6_40%,#4338ca_80%,#3b82f6_100%)] px-6 py-10 text-white sm:px-10 sm:py-12 lg:px-14 lg:py-14">
+      <section className="relative overflow-hidden rounded-2xl bg-[linear-gradient(135deg,#123d2f_0%,#14532d_58%,#166534_100%)] px-6 py-10 text-white sm:px-10 sm:py-12 lg:px-14 lg:py-14">
         <div className="absolute inset-0 opacity-10 [background-image:linear-gradient(rgba(255,255,255,0.2)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.2)_1px,transparent_1px)] [background-size:40px_40px]" />
-        <div className="absolute -right-24 -top-24 h-72 w-72 rounded-full bg-white/10 blur-3xl" />
-        <div className="absolute -bottom-16 left-1/3 h-48 w-48 rounded-full bg-emerald-300/10 blur-2xl" />
 
         <div className="relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-2xl">
@@ -176,10 +189,10 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
               ทะเบียนทรัพย์สิน<br className="hidden sm:block" />สารสนเทศ จ.สตูล
             </h1>
             <p className="mt-3 max-w-lg text-sm leading-7 text-white">
-              ข้อมูลสรุประดับจังหวัดและอำเภอ — ไม่เปิดเผย IP, Serial, ผู้รับผิดชอบ และตำแหน่งติดตั้ง
+              ข้อมูลสรุประดับจังหวัดและอำเภอ
             </p>
           </div>
-          {/* Active ring */}
+          {/* Status ring */}
           <div className="flex shrink-0 flex-col items-center gap-2">
             <div className="relative flex h-32 w-32 items-center justify-center">
               <svg viewBox="0 0 120 120" className="absolute inset-0 -rotate-90">
@@ -190,7 +203,7 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
               </svg>
               <div className="z-10 text-center">
                 <p className="text-3xl font-semibold">{activeRate}%</p>
-                <p className="text-[11px] text-white">Active</p>
+                <p className="text-[11px] text-white">พร้อมใช้งาน</p>
               </div>
             </div>
             <p className="text-xs text-white">{active} / {total} รายการ</p>
@@ -222,27 +235,29 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
         {districtFilter && (
           <div className="relative mt-3 flex items-center gap-2 text-xs text-white/60">
             <span>กรองข้อมูล: อำเภอ {districtFilter}</span>
-            <Link href="/public" className="rounded-full bg-white/10 px-2 py-0.5 hover:bg-white/20">✕ ล้างตัวกรอง</Link>
+            <Link href="/" className="rounded-full bg-white/10 px-2 py-0.5 hover:bg-white/20">✕ ล้างตัวกรอง</Link>
           </div>
         )}
       </section>
 
       {/* ── Search ─────────────────────────────────────────────────────────── */}
-      <section className="glass-panel rounded-2xl p-5 sm:p-6">
+      {/* <section className="glass-panel rounded-2xl p-5 sm:p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-xs font-medium uppercase tracking-[0.22em] text-[var(--muted)]">ค้นหาสาธารณะ</p>
             <p className="mt-0.5 text-sm font-semibold">ค้นหาจากเลขครุภัณฑ์ / ชื่ออุปกรณ์</p>
           </div>
         </div>
-        <form method="GET" action="/public" className="mt-3 flex gap-3">
+        <form method="GET" action="/" className="mt-3 flex gap-3">
           <input type="hidden" name="district" value={districtFilter} />
           <input type="hidden" name="group" value={groupFilter} />
           <input type="hidden" name="view" value={view} />
+          <label htmlFor="public-search" className="sr-only">ค้นหาทรัพย์สินสาธารณะ</label>
           <input type="search" name="q" defaultValue={q}
+            id="public-search"
             placeholder="เลขครุภัณฑ์, ชื่ออุปกรณ์, ประเภท…"
-            className="min-w-0 flex-1 rounded-xl border border-[var(--line)] bg-white/80 px-4 py-2.5 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100" />
-          <button type="submit" className="shrink-0 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-700">ค้นหา</button>
+            className="min-w-0 flex-1 rounded-xl border border-[var(--line)] bg-white/80 px-4 py-2.5 text-sm outline-none focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/15" />
+          <button type="submit" className="shrink-0 rounded-xl bg-[var(--primary)] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[var(--primary-hover)]">ค้นหา</button>
         </form>
 
         {q.length >= 2 && (
@@ -264,17 +279,17 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-black/4">
-                      {searchResults.map((a) => (
-                        <tr key={a.assetRegistrationNo} className="hover:bg-white/50">
-                          <td className="py-2.5 pr-4 font-mono text-xs">{a.assetRegistrationNo}</td>
-                          <td className="py-2.5 pr-4 font-medium">{a.assetName}</td>
-                          <td className="py-2.5 pr-4"><span className="rounded-full bg-indigo-50 px-2 py-0.5 text-xs text-indigo-700">{a.deviceType || a.assetGroup}</span></td>
-                          <td className="py-2.5 pr-4 text-[var(--muted)]">{a.facilityName}</td>
-                          <td className="py-2.5 text-center">
-                            <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_STYLE[a.currentStatus] ?? ""}`}>
-                              {STATUS_LABEL[a.currentStatus] ?? a.currentStatus}
-                            </span>
-                          </td>
+	                      {searchResults.map((a) => (
+	                        <tr key={`${a.assetRegistrationNo}-${a.assetName}-${a.facilityName}`} className="hover:bg-white/50">
+	                          <td className="py-2.5 pr-4 font-mono text-xs">{a.assetRegistrationNo}</td>
+	                          <td className="py-2.5 pr-4 font-medium">{a.assetName}</td>
+	                          <td className="py-2.5 pr-4"><StatusBadge tone="primary">{a.deviceType || a.assetGroup}</StatusBadge></td>
+	                          <td className="py-2.5 pr-4 text-[var(--muted)]">{a.facilityName}</td>
+	                          <td className="py-2.5 text-center">
+	                            <StatusBadge tone={assetStatusTone(a.currentStatus)}>
+	                              {assetStatusLabel(a.currentStatus)}
+	                            </StatusBadge>
+	                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -285,18 +300,20 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
           </div>
         )}
         {q.length > 0 && q.length < 2 && <p className="mt-3 text-xs text-[var(--muted)]">กรุณาป้อนอย่างน้อย 2 ตัวอักษร</p>}
-      </section>
+      </section> */}
 
       {/* ── Filter + Tabs ───────────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-center gap-3">
         {/* District filter */}
-        <form method="GET" action="/public" className="flex items-center gap-2">
+        <form method="GET" action="/" className="flex items-center gap-2">
           <input type="hidden" name="view" value={view} />
           <input type="hidden" name="group" value={groupFilter} />
           <input type="hidden" name="q" value={q} />
+          <label htmlFor="public-district-filter" className="sr-only">กรองอำเภอ</label>
           <select name="district" defaultValue={districtFilter}
+            id="public-district-filter"
             onChange={undefined}
-            className="rounded-xl border border-[var(--line)] bg-white/80 px-3 py-2 text-sm text-[var(--foreground)] outline-none focus:border-indigo-400">
+            className="rounded-xl border border-[var(--line)] bg-white/80 px-3 py-2 text-sm text-[var(--foreground)] outline-none focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/15">
             <option value="">ทุกอำเภอ</option>
             {allDistricts.map((d) => <option key={d} value={d}>{d}</option>)}
           </select>
@@ -307,7 +324,7 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
         <div className="flex gap-1.5">
           {[["", "ทั้งหมด"], ["Hardware", "Hardware"], ["Software", "Software"]].map(([val, label]) => (
             <Link key={val} href={filterHref({ group: val })}
-              className={`rounded-xl px-3 py-2 text-xs font-medium transition ${groupFilter === val ? "bg-indigo-600 text-white" : "bg-white/70 text-[var(--muted)] hover:bg-white"}`}>
+              className={`rounded-xl px-3 py-2 text-xs font-medium transition ${groupFilter === val ? "bg-[var(--primary)] text-white shadow-sm" : "bg-white/70 text-[var(--muted)] hover:bg-white"}`}>
               {label}
             </Link>
           ))}
@@ -336,16 +353,16 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
                 <div className="relative shrink-0" style={{ width: 160, height: 160 }}>
                   <div className="h-full w-full rounded-full" style={{ background: donutGradient }} />
                   <div className="absolute inset-0 m-auto flex h-[100px] w-[100px] flex-col items-center justify-center rounded-full bg-white shadow-sm">
-                    <p className="text-2xl font-bold text-indigo-700">{activeRate}%</p>
-                    <p className="text-[10px] text-[var(--muted)]">Active</p>
+                    <p className="text-2xl font-bold text-[var(--primary-text)]">{activeRate}%</p>
+                    <p className="text-[10px] text-[var(--muted)]">พร้อมใช้งาน</p>
                   </div>
                 </div>
                 {/* Legend */}
                 <div className="flex flex-col gap-4 text-sm">
                   {[
-                    { label: "พร้อมใช้งาน", count: active, color: "bg-emerald-500", pct: Math.round((active / safeTotal) * 100) },
-                    { label: "ชำรุด", count: broken, color: "bg-rose-500", pct: Math.round((broken / safeTotal) * 100) },
-                    { label: "ไม่ใช้งาน", count: inactive, color: "bg-amber-400", pct: Math.round((inactive / safeTotal) * 100) },
+                    { label: assetStatusLabel("Active"), count: active, color: "bg-emerald-500", pct: Math.round((active / safeTotal) * 100) },
+                    { label: assetStatusLabel("Broken"), count: broken, color: "bg-rose-500", pct: Math.round((broken / safeTotal) * 100) },
+                    { label: assetStatusLabel("Inactive"), count: inactive, color: "bg-amber-400", pct: Math.round((inactive / safeTotal) * 100) },
                   ].map((s) => (
                     <div key={s.label} className="flex items-center gap-2.5">
                       <span className={`h-3 w-3 shrink-0 rounded-full ${s.color}`} />
@@ -361,11 +378,11 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
 
             {/* HW/SW + status bars */}
             <div className="glass-panel rounded-2xl p-6">
-              <p className="text-xs font-medium uppercase tracking-[0.22em] text-[var(--muted)]">สัดส่วน Hardware / Software</p>
-              <h2 className="section-title mt-1 text-xl font-semibold">Asset Mix</h2>
+              <p className="text-xs font-medium uppercase tracking-[0.22em] text-[var(--muted)]">สัดส่วน ฮาร์ดแวร์ / ซอฟต์แวร์</p>
+              <h2 className="section-title mt-1 text-xl font-semibold">สัดส่วน ฮาร์ดแวร์ / ซอฟต์แวร์</h2>
               {/* stacked bar */}
               <div className="mt-5 flex h-8 overflow-hidden rounded-xl text-xs font-semibold text-white">
-                <div className="flex items-center justify-center bg-indigo-600" style={{ width: `${Math.round((hw / safeTotal) * 100)}%` }}>
+                <div className="flex items-center justify-center bg-[var(--primary)]" style={{ width: `${Math.round((hw / safeTotal) * 100)}%` }}>
                   {hw > 0 && `${Math.round((hw / safeTotal) * 100)}%`}
                 </div>
                 <div className="flex flex-1 items-center justify-center bg-emerald-400 text-emerald-900">
@@ -373,9 +390,9 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
                 </div>
               </div>
               <div className="mt-3 grid grid-cols-2 gap-3">
-                <div className="rounded-xl bg-indigo-50 p-4">
-                  <div className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-indigo-600" /><span className="text-xs text-[var(--muted)]">Hardware</span></div>
-                  <p className="mt-2 text-2xl font-bold text-indigo-700">{hw}</p>
+                <div className="rounded-xl bg-[var(--primary-soft)] p-4">
+                  <div className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-[var(--primary)]" /><span className="text-xs text-[var(--muted)]">Hardware</span></div>
+                  <p className="mt-2 text-2xl font-bold text-[var(--primary-text)]">{hw}</p>
                   <p className="text-xs text-[var(--muted)]">{Math.round((hw / safeTotal) * 100)}% ของทั้งหมด</p>
                 </div>
                 <div className="rounded-xl bg-emerald-50 p-4">
@@ -387,14 +404,14 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
               {/* status quick bars */}
               <div className="mt-4 space-y-3 border-t border-black/6 pt-4">
                 {[
-                  { label: "พร้อมใช้งาน", value: active, color: "bg-emerald-500", badge: "bg-emerald-100 text-emerald-700" },
-                  { label: "ชำรุด", value: broken, color: "bg-rose-500", badge: "bg-rose-100 text-rose-700" },
-                  { label: "ไม่ใช้งาน", value: inactive, color: "bg-amber-400", badge: "bg-amber-100 text-amber-700" },
+	                  { label: assetStatusLabel("Active"), value: active, color: "bg-emerald-500", tone: "success" as const },
+	                  { label: assetStatusLabel("Broken"), value: broken, color: "bg-rose-500", tone: "danger" as const },
+	                  { label: assetStatusLabel("Inactive"), value: inactive, color: "bg-amber-400", tone: "warning" as const },
                 ].map((s) => (
                   <div key={s.label}>
                     <div className="flex items-center justify-between text-xs">
                       <span>{s.label}</span>
-                      <span className={`rounded-full px-2 py-0.5 font-semibold ${s.badge}`}>{s.value} ({Math.round((s.value / safeTotal) * 100)}%)</span>
+                      <StatusBadge tone={s.tone}>{s.value} ({Math.round((s.value / safeTotal) * 100)}%)</StatusBadge>
                     </div>
                     <PctBar value={s.value} max={total} color={s.color} />
                   </div>
@@ -406,37 +423,109 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
           {/* District comparison */}
           <div className="glass-panel overflow-hidden rounded-2xl">
             <div className="flex items-center justify-between border-b border-black/6 px-5 py-3">
-              <h2 className="font-semibold">เปรียบเทียบรายอำเภอ</h2>
-              <span className="text-xs text-[var(--muted)]">{byDistrict.length} อำเภอ</span>
+              <div>
+                <h2 className="font-semibold">เปรียบเทียบรายอำเภอ</h2>
+                <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
+                  เปอร์เซ็นต์พร้อมใช้งาน = ทรัพย์สินสถานะพร้อมใช้งาน ÷ ทรัพย์สินทั้งหมดของอำเภอ × 100
+                </p>
+                <p className="text-xs leading-5 text-[var(--muted)]">
+                  เลือกอำเภอเพื่อดูหน่วยงานและจำนวนข้อมูล
+                </p>
+              </div>
+              <span className="shrink-0 text-xs text-[var(--muted)]">{byDistrict.length} อำเภอ</span>
             </div>
             <div className="divide-y divide-black/4">
               {byDistrict.map((d) => {
                 const rate = Math.round((d.active / Math.max(d.total, 1)) * 100);
                 const barColor = rate >= 85 ? "bg-emerald-500" : rate >= 70 ? "bg-amber-400" : "bg-rose-500";
+                const districtFacilities = facilitiesByDistrict[d.name] ?? [];
                 return (
-                  <div key={d.name} className="grid grid-cols-[1fr_auto_auto_auto_auto] items-center gap-4 px-5 py-3 text-sm hover:bg-white/40">
-                    <div>
-                      <Link href={filterHref({ district: d.name })} className="font-semibold hover:text-indigo-600 hover:underline">
-                        อ.{d.name}
-                      </Link>
-                      <div className="mt-1.5">
-                        <PctBar value={d.total} max={maxDistrict} color="bg-indigo-300" />
+                  <details key={d.name} className="group">
+                    <summary className="grid cursor-pointer list-none gap-3 px-5 py-4 text-sm transition hover:bg-white/50 focus-visible:bg-white/70 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center lg:grid-cols-[minmax(0,1fr)_auto_auto_auto_auto_auto] lg:gap-4 lg:py-3 [&::-webkit-details-marker]:hidden">
+                      <div className="flex min-w-0 items-center gap-3">
+                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[var(--primary-soft)] text-[var(--primary-text)]">
+                          <svg
+                            viewBox="0 0 20 20"
+                            fill="none"
+                            aria-hidden="true"
+                            className="h-4 w-4 transition-transform duration-200 group-open:rotate-180"
+                          >
+                            <path d="m6 8 4 4 4-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <span className="font-semibold">อ.{d.name}</span>
+                          <div className="mt-1.5">
+                            <PctBar value={d.total} max={maxDistrict} color="bg-[var(--primary-soft-strong)]" />
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                    <span className="text-center text-xs text-[var(--muted)]">{d.facilityCount} หน่วยงาน</span>
-                    <span className="text-center font-semibold">{d.total}</span>
-                    <div className="flex items-center gap-1.5">
-                      <div className="h-1.5 w-16 overflow-hidden rounded-full bg-slate-100">
-                        <div className={`h-full rounded-full ${barColor}`} style={{ width: `${rate}%` }} />
+                      <span className="text-xs text-[var(--muted)] sm:text-center">{d.facilityCount} หน่วยงาน</span>
+                      <span className="font-semibold sm:text-center">{d.total} รายการ</span>
+                      <div className="flex items-center gap-1.5 sm:col-span-2 lg:col-span-1">
+                        <div className="h-1.5 w-16 overflow-hidden rounded-full bg-slate-100">
+                          <div className={`h-full rounded-full ${barColor}`} style={{ width: `${rate}%` }} />
+                        </div>
+                        <span className="whitespace-nowrap text-xs font-medium">พร้อมใช้งาน {rate}%</span>
                       </div>
-                      <span className="text-xs">{rate}%</span>
+                      <div className="flex flex-wrap gap-2 text-xs sm:col-span-3 lg:col-span-1">
+                        <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-emerald-700">พร้อมใช้ {d.active}</span>
+                        {d.broken > 0 && <span className="rounded-full bg-rose-100 px-2 py-0.5 text-rose-700">ชำรุด {d.broken}</span>}
+                        {d.inactive > 0 && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-amber-700">ไม่ใช้งาน {d.inactive}</span>}
+                      </div>
+                    </summary>
+
+                    <div className="border-t border-black/6 bg-[var(--neutral-bg)]/65 px-5 py-4">
+                      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-sm font-semibold">หน่วยงานในอำเภอ{d.name}</p>
+                        <Link
+                          href={filterHref({ district: d.name })}
+                          className="text-xs font-medium text-[var(--primary-text)] hover:underline"
+                        >
+                          ดูเฉพาะอำเภอนี้
+                        </Link>
+                      </div>
+
+                      {districtFacilities.length > 0 ? (
+                        <div className="overflow-x-auto rounded-xl border border-black/8 bg-white">
+                          <table className="w-full min-w-[620px] text-sm">
+                            <thead>
+                              <tr className="border-b border-black/6 bg-slate-50/80 text-xs text-[var(--muted)]">
+                                <th className="px-4 py-2.5 text-left font-medium">หน่วยงาน</th>
+                                <th className="px-4 py-2.5 text-center font-medium">ข้อมูลทั้งหมด</th>
+                                <th className="px-4 py-2.5 text-center font-medium">พร้อมใช้งาน</th>
+                                <th className="px-4 py-2.5 text-center font-medium">ชำรุด</th>
+                                <th className="px-4 py-2.5 text-center font-medium">ไม่ใช้งาน</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-black/4">
+                              {districtFacilities.map((facility) => (
+                                <tr key={facility.id} className="hover:bg-slate-50/70">
+                                  <td className="px-4 py-3 font-medium">{facility.name}</td>
+                                  <td className="px-4 py-3 text-center">
+                                    {facility.total > 0 ? (
+                                      <span className="font-semibold">{facility.total} รายการ</span>
+                                    ) : (
+                                      <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-[var(--muted)]">
+                                        ยังไม่มีข้อมูล
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td className="px-4 py-3 text-center font-medium text-emerald-700">{facility.active || "–"}</td>
+                                  <td className="px-4 py-3 text-center text-rose-700">{facility.broken || "–"}</td>
+                                  <td className="px-4 py-3 text-center text-amber-700">{facility.inactive || "–"}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      ) : (
+                        <p className="rounded-xl bg-white px-4 py-5 text-center text-sm text-[var(--muted)]">
+                          ยังไม่มีรายชื่อหน่วยงานในอำเภอนี้
+                        </p>
+                      )}
                     </div>
-                    <div className="flex gap-2 text-xs">
-                      <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-emerald-700">{d.active}</span>
-                      {d.broken > 0 && <span className="rounded-full bg-rose-100 px-2 py-0.5 text-rose-700">{d.broken}</span>}
-                      {d.inactive > 0 && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-amber-700">{d.inactive}</span>}
-                    </div>
-                  </div>
+                  </details>
                 );
               })}
             </div>
@@ -444,9 +533,9 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
 
           {/* Device type horizontal bar chart */}
           <div className="glass-panel rounded-2xl p-6">
-            <h2 className="mb-5 font-semibold">ประเภทอุปกรณ์ — Top {Math.min(byType.length, 10)}</h2>
+            <h2 className="mb-5 font-semibold">ประเภทอุปกรณ์ — Top 7</h2>
             <div className="space-y-3">
-              {byType.slice(0, 10).map((t, i) => (
+              {byType.slice(0, 7).map((t, i) => (
                 <div key={t.type} className="flex items-center gap-3 text-sm">
                   <span className="w-4 shrink-0 text-right text-xs text-[var(--muted)]">{i + 1}</span>
                   <span className="w-36 shrink-0 truncate text-xs font-medium">{t.type}</span>
@@ -467,6 +556,8 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
               <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-amber-300" />ไม่ใช้งาน</span>
             </div>
           </div>
+
+
         </>
       )}
 
@@ -500,7 +591,7 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
                     <tr key={f.id} className="hover:bg-white/50">
                       <td className="px-4 py-3 font-medium">{f.name}</td>
                       <td className="px-4 py-3 text-[var(--muted)]">
-                        <Link href={filterHref({ view: "facilities", district: f.district })} className="hover:text-indigo-600 hover:underline">
+                        <Link href={filterHref({ view: "facilities", district: f.district })} className="hover:text-[var(--primary)] hover:underline">
                           อ.{f.district}
                         </Link>
                       </td>

@@ -26,6 +26,22 @@ This project uses [`next/font`](https://nextjs.org/docs/app/building-your-applic
 
 Run `database/agent_inventory.sql` after the main auth schema so the agent tables exist before creating enrollment tokens. The script adds `agent_enrollments` and `agent_devices`, and `users.id` must already be `bigint unsigned`.
 
+### Reusable Agent Install Key
+
+Set `ATACS_AGENT_INSTALL_KEY` on the server to allow reusable install commands that specify `facilityId` and `workGroupName` instead of generating a new enrollment token from the UI every time. Multiple active keys can be comma-separated during key rotation.
+
+Example Windows static install command shape:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File install-atacs-agent.ps1 -ApiBaseUrl https://stns-atacs.vercel.app -InstallKey <INSTALL_KEY> -FacilityId 65 -WorkGroupName "กลุ่มงานไอที"
+```
+
+Example Linux static install command shape:
+
+```bash
+sudo bash install-atacs-agent.sh --api-base-url https://stns-atacs.vercel.app --install-key <INSTALL_KEY> --facility-id 65 --work-group-name "กลุ่มงานไอที"
+```
+
 ### Admin Flow
 
 1. Open `/admin/settings/agent`.
@@ -38,7 +54,7 @@ Run `database/agent_inventory.sql` after the main auth schema so the agent table
 Install the agent on a Windows client machine with PowerShell:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File install-atacs-agent.ps1 -ApiBaseUrl https://your-domain.example -EnrollmentToken <token>
+powershell -ExecutionPolicy Bypass -File install-atacs-agent.ps1 -ApiBaseUrl https://stns-atacs.vercel.app -EnrollmentToken <token>
 ```
 
 The installer enrolls the device, stores credentials under `ProgramData`, and registers a scheduled task to report inventory every 4 hours.
@@ -48,7 +64,7 @@ The installer enrolls the device, stores credentials under `ProgramData`, and re
 Install the agent on a Linux client machine with sudo or root access:
 
 ```bash
-sudo bash install-atacs-agent.sh --api-base-url https://your-domain.example --enrollment-token <token>
+sudo bash install-atacs-agent.sh --api-base-url https://stns-atacs.vercel.app --enrollment-token <token>
 ```
 
 The installer copies the Python agent into `/opt/atacs-agent`, stores config under `/var/lib/atacs-agent`, and registers a systemd timer or cron fallback to report inventory every 4 hours.

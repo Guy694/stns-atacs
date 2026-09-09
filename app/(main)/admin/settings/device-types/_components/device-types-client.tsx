@@ -1,6 +1,8 @@
 "use client";
 
-import { useActionState, useRef, useState, useTransition } from "react";
+import { useActionState, useId, useRef, useState, useTransition } from "react";
+
+import { StatusBadge, activeTone } from "@/app/_components/ui/status-badge";
 import { createDeviceTypeAction, toggleDeviceTypeActiveAction, updateDeviceTypeAction } from "../actions";
 import type { DeviceTypeRow } from "@/lib/device-types";
 
@@ -14,7 +16,9 @@ function DeviceTypeModal({
   onClose: () => void;
 }) {
   const formRef = useRef<HTMLFormElement>(null);
+  const titleId = useId();
   const action = mode === "create" ? createDeviceTypeAction : updateDeviceTypeAction;
+  const title = mode === "create" ? "เพิ่มประเภทอุปกรณ์" : `แก้ไข: ${item?.name}`;
 
   const [error, formAction, pending] = useActionState(
     async (prev: string | null, fd: FormData) => {
@@ -28,10 +32,22 @@ function DeviceTypeModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative z-10 w-full max-w-sm rounded-2xl bg-[var(--surface-strong)] p-6 shadow-2xl">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className="relative z-10 w-full max-w-sm rounded-2xl bg-[var(--surface-strong)] p-6 shadow-2xl"
+      >
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">{mode === "create" ? "เพิ่มประเภทอุปกรณ์" : `แก้ไข: ${item?.name}`}</h2>
-          <button onClick={onClose} className="text-[var(--muted)] hover:text-[var(--foreground)]">✕</button>
+          <h2 id={titleId} className="text-lg font-semibold">{title}</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="ปิดหน้าต่างประเภทอุปกรณ์"
+            className="min-h-11 min-w-11 rounded-xl text-[var(--muted)] hover:bg-stone-100 hover:text-[var(--foreground)]"
+          >
+            ✕
+          </button>
         </div>
 
         {error && <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</div>}
@@ -81,19 +97,19 @@ function DeviceTypeItem({ item }: { item: DeviceTypeRow }) {
           <p className="text-sm font-medium">{item.name}</p>
         </td>
         <td className="px-4 py-3">
-          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${item.category === "Hardware" ? "bg-sky-100 text-sky-700" : "bg-violet-100 text-violet-700"}`}>
+          <StatusBadge tone={item.category === "Hardware" ? "info" : "primary"}>
             {item.category}
-          </span>
+          </StatusBadge>
         </td>
         <td className="px-4 py-3">
-          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${item.is_active ? "bg-emerald-100 text-emerald-700" : "bg-stone-100 text-stone-500"}`}>
+          <StatusBadge tone={activeTone(!!item.is_active)}>
             {item.is_active ? "ใช้งาน" : "ปิด"}
-          </span>
+          </StatusBadge>
         </td>
         <td className="px-4 py-3 text-right">
           <div className="inline-flex gap-2">
             <button onClick={() => setEditOpen(true)}
-              className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-700 hover:bg-indigo-100">
+              className="rounded-lg border border-[var(--primary-soft-strong)] bg-[var(--primary-soft)] px-3 py-1 text-xs font-medium text-[var(--primary-text)] hover:bg-[var(--primary-soft-strong)]">
               แก้ไข
             </button>
             <button

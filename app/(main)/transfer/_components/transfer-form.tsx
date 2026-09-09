@@ -37,8 +37,8 @@ export function TransferForm({ asset, surveys }: Props) {
       )}
 
       {/* Current asset info */}
-      <div className="rounded-xl border border-indigo-100 bg-indigo-50 p-4">
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-indigo-500 mb-2">ทรัพย์สินที่จะโอนย้าย</p>
+      <div className="rounded-xl border border-[var(--primary-soft-strong)] bg-[var(--primary-soft)] p-4">
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--primary-text)] mb-2">ทรัพย์สินที่จะโอนย้าย</p>
         <div className="grid gap-2 sm:grid-cols-2 text-sm">
           <div>
             <span className="text-[var(--muted)]">ชื่อทรัพย์สิน: </span>
@@ -72,7 +72,7 @@ export function TransferForm({ asset, surveys }: Props) {
           name="newSurveyId"
           required
           defaultValue=""
-          className="w-full rounded-xl border border-[var(--line)] bg-white/80 px-3 py-2.5 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-200"
+          className="w-full rounded-xl border border-[var(--line)] bg-white/80 px-3 py-2.5 text-sm outline-none focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/15"
         >
           <option value="" disabled>-- เลือกหน่วยงานปลายทาง --</option>
           {Object.entries(grouped).sort().map(([district, items]) => (
@@ -95,7 +95,7 @@ export function TransferForm({ asset, surveys }: Props) {
           type="text"
           placeholder="ชื่อ-นามสกุล ผู้ครอบครองใหม่"
           defaultValue={asset.ownerName}
-          className="w-full rounded-xl border border-[var(--line)] bg-white/80 px-3 py-2.5 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-200"
+          className="w-full rounded-xl border border-[var(--line)] bg-white/80 px-3 py-2.5 text-sm outline-none focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/15"
         />
       </div>
 
@@ -107,7 +107,7 @@ export function TransferForm({ asset, surveys }: Props) {
           type="text"
           placeholder="อาคาร / ชั้น / ห้อง"
           defaultValue={asset.locationDetail}
-          className="w-full rounded-xl border border-[var(--line)] bg-white/80 px-3 py-2.5 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-200"
+          className="w-full rounded-xl border border-[var(--line)] bg-white/80 px-3 py-2.5 text-sm outline-none focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/15"
         />
       </div>
 
@@ -118,7 +118,7 @@ export function TransferForm({ asset, surveys }: Props) {
           name="reason"
           rows={3}
           placeholder="ระบุเหตุผลในการโอนย้าย เช่น ปรับโครงสร้างหน่วยงาน, เพิ่มอุปกรณ์ประจำสาขา…"
-          className="w-full rounded-xl border border-[var(--line)] bg-white/80 px-3 py-2.5 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-200"
+          className="w-full rounded-xl border border-[var(--line)] bg-white/80 px-3 py-2.5 text-sm outline-none focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/15"
         />
       </div>
 
@@ -133,7 +133,7 @@ export function TransferForm({ asset, surveys }: Props) {
         <button
           type="submit"
           disabled={pending}
-          className="rounded-xl bg-indigo-600 px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:opacity-60"
+          className="rounded-xl bg-[var(--primary)] px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-[var(--primary-hover)] disabled:opacity-60"
         >
           {pending ? "กำลังบันทึก…" : "บันทึกการโอนย้าย"}
         </button>

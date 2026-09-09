@@ -2,13 +2,13 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import type { RowDataPacket } from "mysql2/promise";
 
+import { StatusBadge, activeTone } from "@/app/_components/ui/status-badge";
 import { getCurrentUser } from "@/lib/auth";
 import { selectRows } from "@/lib/mysql";
 import {
   APP_ROLES,
   PERMISSION_DEFINITIONS,
   getRolePermissionMatrix,
-  hasPermission,
   type AppRole,
   type PermissionKey,
 } from "@/lib/role-permissions";
@@ -27,14 +27,13 @@ export default async function AdminPermissionsPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
-  const allowManageByPolicy = user.role === "admin" || (await hasPermission(user.role, "permissions.manage"));
-  if (!allowManageByPolicy) redirect("/");
+  if (user.role !== "admin") redirect("/dashboard");
 
   const matrix = await getRolePermissionMatrix();
   const users = await selectRows<UserPermissionRow>(
-    `SELECT id, full_name, role, is_active
+     `SELECT id, TRIM(CONCAT(first_name, ' ', last_name)) AS full_name, role, is_active
      FROM users
-     ORDER BY role DESC, full_name ASC`
+      ORDER BY role DESC, first_name ASC, last_name ASC`
   );
 
   return (
@@ -110,15 +109,15 @@ export default async function AdminPermissionsPage() {
                   <tr key={account.id} className="transition hover:bg-white/50">
                     <td className="px-4 py-3 font-medium">{account.full_name}</td>
                     <td className="px-4 py-3">
-                      <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-600">
-                        {account.role}
-                      </span>
+	                      <StatusBadge tone="info">
+	                        {account.role}
+	                      </StatusBadge>
                     </td>
                     <td className="px-4 py-3">
                       {account.is_active ? (
-                        <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">active</span>
-                      ) : (
-                        <span className="rounded-full bg-stone-100 px-2.5 py-0.5 text-xs font-semibold text-stone-500">inactive</span>
+	                        <StatusBadge tone={activeTone(!!account.is_active)}>active</StatusBadge>
+	                      ) : (
+	                        <StatusBadge tone={activeTone(!!account.is_active)}>inactive</StatusBadge>
                       )}
                     </td>
                     <td className="px-4 py-3 text-sm font-semibold text-[var(--foreground)]">

@@ -14,16 +14,24 @@ type SurveyRow = RowDataPacket & {
   survey_id: number;
   facility_id: number;
   facility_name: string | null;
+  facility_typecode: string | null;
   district_name: string | null;
   survey_date: Date | string | null;
   personnel_count: number | null;
   survey_updated_at: Date | string;
 };
 
+type FacilityRow = RowDataPacket & {
+  facility_id: number;
+  facility_name: string | null;
+  facility_typecode: string | null;
+  district_name: string | null;
+};
+
 type AssetRow = RowDataPacket & {
   id: number;
   survey_id: number;
-  asset_registration_no: string;
+  asset_registration_no: string | null;
   asset_name: string;
   usage_description: string | null;
   owner_name: string | null;
@@ -31,6 +39,7 @@ type AssetRow = RowDataPacket & {
   asset_group: string | null;
   device_type: string | null;
   operating_system: string | null;
+  windows_license_status: "Genuine" | "Pirated" | null;
   private_ip: string | null;
   public_ip: string | null;
   location_detail: string | null;
@@ -143,7 +152,11 @@ function buildDistrictCoverage(facilitySurveys: FacilitySurvey[]) {
     const current = completionByDistrict[district.district];
 
     if (!current) {
-      return district;
+      return {
+        ...district,
+        completionRate: 0,
+        facilities: 0,
+      };
     }
 
     return {
@@ -164,6 +177,7 @@ export async function getDashboardData(): Promise<DashboardData> {
           s.id AS survey_id,
           s.facility_id,
           hf.name AS facility_name,
+          hf.typecode AS facility_typecode,
           hf.district_name,
           s.survey_date,
           s.personnel_count,
@@ -171,6 +185,19 @@ export async function getDashboardData(): Promise<DashboardData> {
         FROM information_asset_surveys s
         LEFT JOIN health_facilities hf ON hf.id = s.facility_id
         ORDER BY s.survey_date DESC, s.id DESC
+      `
+    );
+
+    const facilities = await selectRows<FacilityRow>(
+      `
+        SELECT
+          id AS facility_id,
+          name AS facility_name,
+          typecode AS facility_typecode,
+          district_name
+        FROM health_facilities
+        WHERE is_active = 1
+        ORDER BY district_name, typecode DESC, name
       `
     );
 
@@ -198,6 +225,7 @@ export async function getDashboardData(): Promise<DashboardData> {
           asset_group,
           device_type,
           operating_system,
+          windows_license_status,
           private_ip,
           public_ip,
           location_detail,
@@ -218,12 +246,13 @@ export async function getDashboardData(): Promise<DashboardData> {
       const current = summary[asset.survey_id] ?? [];
       current.push({
         id: asset.id,
-        assetRegistrationNo: asset.asset_registration_no,
+        assetRegistrationNo: asset.asset_registration_no ?? "",
         assetName: asset.asset_name,
         usageDescription: asset.usage_description ?? "-",
         assetGroup: asset.asset_category ?? normalizeAssetGroup(asset.asset_group),
         deviceType: asset.device_type ?? "ไม่ระบุ",
         operatingSystem: asset.operating_system ?? "ไม่ระบุ",
+        windowsLicenseStatus: asset.windows_license_status ?? null,
         privateIp: asset.private_ip ?? "-",
         publicIp: asset.public_ip ?? "",
         locationDetail: asset.location_detail ?? "ไม่ระบุ",
@@ -243,6 +272,7 @@ export async function getDashboardData(): Promise<DashboardData> {
       const surveyBase = {
         facilityId: survey.facility_id,
         facilityName: survey.facility_name ?? `Facility ${survey.facility_id}`,
+        facilityTypeCode: survey.facility_typecode ?? "",
         districtName: survey.district_name ?? "ไม่ระบุอำเภอ",
         surveyDate: toDateOnly(survey.survey_date),
         personnelCount: survey.personnel_count ?? 0,
@@ -255,12 +285,27 @@ export async function getDashboardData(): Promise<DashboardData> {
         completionRate: calculateCompletionRate(surveyBase),
       };
     });
+    const surveyedFacilityIds = new Set(facilitySurveys.map((survey) => survey.facilityId));
+    const facilitiesWithoutSurvey = facilities
+      .filter((facility) => !surveyedFacilityIds.has(facility.facility_id))
+      .map((facility) => ({
+        facilityId: facility.facility_id,
+        facilityName: facility.facility_name ?? `Facility ${facility.facility_id}`,
+        facilityTypeCode: facility.facility_typecode ?? "",
+        districtName: facility.district_name ?? "ไม่ระบุอำเภอ",
+        surveyDate: "-",
+        personnelCount: 0,
+        completionRate: 0,
+        lastUpdatedBy: "system",
+        assets: [],
+      }));
+    const mergedFacilitySurveys = [...facilitySurveys, ...facilitiesWithoutSurvey];
 
     return {
-      facilitySurveys,
-      districtCoverage: buildDistrictCoverage(facilitySurveys),
+      facilitySurveys: mergedFacilitySurveys,
+      districtCoverage: buildDistrictCoverage(mergedFacilitySurveys),
       dataSource: "database",
-      connectionMessage: `สถานะฐานข้อมูล:เชื่อมต่อ (${facilitySurveys.length} สำรวจ, ${assets.length} ทรัพย์สิน)`,
+      connectionMessage: `สถานะฐานข้อมูล:เชื่อมต่อ (${surveys.length} สำรวจ, ${mergedFacilitySurveys.length} หน่วยงาน, ${assets.length} ทรัพย์สิน)`,
       allowPublicOfficerBoard,
     };
   } catch (error) {

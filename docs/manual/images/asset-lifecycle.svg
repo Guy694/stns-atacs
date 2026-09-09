@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
+  <title id="title">วงจรการจัดการทรัพย์สินใน ATACS</title>
+  <desc id="desc">ตั้งแต่เพิ่มทะเบียน ใช้งาน ตรวจนับ โอนย้าย ไปจนถึงชำรุด สูญหาย หรือจำหน่าย</desc>
+  <defs><marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto"><path d="M0 0l12 6-12 6z" fill="#4f6b60"/></marker></defs>
+  <rect width="1600" height="900" fill="#f5faf7"/>
+  <text x="100" y="105" fill="#113127" font-family="system-ui,sans-serif" font-size="46" font-weight="700">วงจรการจัดการทรัพย์สิน</text>
+  <text x="100" y="150" fill="#4f6b60" font-family="system-ui,sans-serif" font-size="22">ทุกการเปลี่ยนแปลงสำคัญควรตรวจสอบรายการ หน่วยงาน และสถานะก่อนยืนยัน</text>
+  <g font-family="system-ui,sans-serif" text-anchor="middle">
+    <g transform="translate(90 315)"><circle cx="110" cy="110" r="105" fill="#dcfce7" stroke="#15803d" stroke-width="4"/><text x="110" y="98" fill="#14532d" font-size="24" font-weight="700">เพิ่มทะเบียน</text><text x="110" y="133" fill="#4f6b60" font-size="18">ข้อมูล + รูป + QR</text></g>
+    <path d="M310 425h130" stroke="#4f6b60" stroke-width="4" marker-end="url(#arrow)"/>
+    <g transform="translate(450 315)"><circle cx="110" cy="110" r="105" fill="#e0f2fe" stroke="#0e7490" stroke-width="4"/><text x="110" y="98" fill="#075985" font-size="24" font-weight="700">ใช้งาน</text><text x="110" y="133" fill="#4f6b60" font-size="18">ติดตามสถานะและ MA</text></g>
+    <path d="M670 425h130" stroke="#4f6b60" stroke-width="4" marker-end="url(#arrow)"/>
+    <g transform="translate(810 315)"><circle cx="110" cy="110" r="105" fill="#fef3c7" stroke="#d97706" stroke-width="4"/><text x="110" y="98" fill="#92400e" font-size="24" font-weight="700">ตรวจนับ</text><text x="110" y="133" fill="#4f6b60" font-size="18">พบ / ไม่พบ / สถานะ</text></g>
+    <path d="M1030 425h130" stroke="#4f6b60" stroke-width="4" marker-end="url(#arrow)"/>
+    <g transform="translate(1170 315)"><circle cx="110" cy="110" r="105" fill="#edf2ef" stroke="#64748b" stroke-width="4"/><text x="110" y="98" fill="#344a40" font-size="24" font-weight="700">โอนย้าย</text><text x="110" y="133" fill="#4f6b60" font-size="18">เปลี่ยนหน่วยงาน/ผู้ครอบครอง</text></g>
+    <path d="M1280 535v90H920v60" fill="none" stroke="#4f6b60" stroke-width="4" marker-end="url(#arrow)"/>
+    <rect x="680" y="690" width="480" height="120" rx="18" fill="#ffe4e6" stroke="#e11d48" stroke-width="3"/>
+    <text x="920" y="740" fill="#9f1239" font-size="25" font-weight="700">ชำรุด · ระงับใช้งาน · สูญหาย · จำหน่าย</text>
+    <text x="920" y="778" fill="#4f6b60" font-size="19">บันทึกเหตุผลและตรวจประวัติสถานะ</text>
+  </g>
+</svg>

@@ -1,17 +1,21 @@
 "use client";
 
-import { useActionState, useRef, useState } from "react";
+import { useActionState, useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { createAssetAction, updateAssetAction } from "@/app/(main)/assets/actions";
+import { ASSET_CLASS_OPTIONS } from "@/lib/asset-classes";
 import type { AssetWithFacility } from "@/lib/assets";
+import { isComputerDeviceType, type WindowsLicenseStatus } from "@/lib/windows-license";
 
 type FacilityOption = { id: number; facility_name: string | null; district_name: string | null };
 type DeviceTypeOption = { name: string; category: string };
+type WorkGroupOption = { id: number; facilityId: number; facilityName: string; workGroupName: string };
 
 type Props = {
   facilities: FacilityOption[];
   deviceTypes?: DeviceTypeOption[];
+  workGroups?: WorkGroupOption[];
   fixedFacilityId?: number;
   updaterName: string;
   mode: "create" | "edit";
@@ -21,11 +25,199 @@ type Props = {
 
 const INITIAL: string | null = null;
 
-export function AssetFormModal({ facilities, deviceTypes = [], fixedFacilityId, mode, asset, children }: Props) {
+function formatFacilityOption(facility: FacilityOption) {
+  const name = facility.facility_name?.trim() || `หน่วยงาน #${facility.id}`;
+  return `${name}${facility.district_name ? ` · อ.${facility.district_name}` : ""}`;
+}
+
+function FacilityCombobox({
+  facilities,
+  defaultFacilityId,
+  onSelectedFacilityIdChange,
+}: {
+  facilities: FacilityOption[];
+  defaultFacilityId?: number | null;
+  onSelectedFacilityIdChange?: (facilityId: number | null) => void;
+}) {
+  const inputId = useId();
+  const listboxId = useId();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const defaultFacility = facilities.find((facility) => facility.id === defaultFacilityId);
+  const [selectedId, setSelectedId] = useState(defaultFacility?.id.toString() ?? "");
+  const [query, setQuery] = useState(defaultFacility ? formatFacilityOption(defaultFacility) : "");
   const [open, setOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(0);
+
+  const filteredFacilities = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    if (!normalizedQuery) return facilities;
+
+    return facilities.filter((facility) => {
+      const label = formatFacilityOption(facility).toLowerCase();
+      return (
+        label.includes(normalizedQuery) ||
+        facility.id.toString().includes(normalizedQuery) ||
+        (facility.facility_name ?? "").toLowerCase().includes(normalizedQuery) ||
+        (facility.district_name ?? "").toLowerCase().includes(normalizedQuery)
+      );
+    });
+  }, [facilities, query]);
+
+  const activeOptionIndex = Math.min(activeIndex, Math.max(filteredFacilities.length - 1, 0));
+  const activeFacility = filteredFacilities[activeOptionIndex];
+
+  useEffect(() => {
+    if (!inputRef.current) return;
+    if (!selectedId && query.trim()) {
+      inputRef.current.setCustomValidity("กรุณาเลือกหน่วยงานจากรายการ");
+    } else {
+      inputRef.current.setCustomValidity("");
+    }
+  }, [query, selectedId]);
+
+  useEffect(() => {
+    onSelectedFacilityIdChange?.(selectedId ? Number(selectedId) : null);
+  }, [onSelectedFacilityIdChange, selectedId]);
+
+  function selectFacility(facility: FacilityOption) {
+    setSelectedId(facility.id.toString());
+    setQuery(formatFacilityOption(facility));
+    setActiveIndex(0);
+    setOpen(false);
+  }
+
+  return (
+    <div className="mt-1">
+      <input type="hidden" name="facilityId" value={selectedId} />
+      <input
+        ref={inputRef}
+        id={inputId}
+        type="text"
+        role="combobox"
+        aria-autocomplete="list"
+        aria-controls={listboxId}
+        aria-expanded={open}
+        aria-activedescendant={open && activeFacility ? `${listboxId}-${activeFacility.id}` : undefined}
+        value={query}
+        required
+        placeholder="พิมพ์ชื่อหน่วยงานหรืออำเภอเพื่อค้นหา"
+        autoComplete="off"
+        onFocus={() => setOpen(true)}
+        onBlur={() => window.setTimeout(() => setOpen(false), 120)}
+        onChange={(event) => {
+          setQuery(event.target.value);
+          setSelectedId("");
+          setActiveIndex(0);
+          setOpen(true);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "ArrowDown") {
+            event.preventDefault();
+            setOpen(true);
+            setActiveIndex((index) => Math.min(index + 1, Math.max(filteredFacilities.length - 1, 0)));
+          }
+          if (event.key === "ArrowUp") {
+            event.preventDefault();
+            setOpen(true);
+            setActiveIndex((index) => Math.max(index - 1, 0));
+          }
+          if (event.key === "Enter" && open && activeFacility) {
+            event.preventDefault();
+            selectFacility(activeFacility);
+          }
+          if (event.key === "Escape") {
+            setOpen(false);
+          }
+        }}
+        className="w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+      />
+
+      {open && (
+        <div id={listboxId} role="listbox" className="mt-2 max-h-60 overflow-y-auto rounded-xl border border-black/10 bg-white shadow-sm">
+          {filteredFacilities.length === 0 ? (
+            <p className="px-4 py-5 text-center text-sm text-[var(--muted)]">ไม่พบหน่วยงานที่ตรงกับคำค้น</p>
+          ) : (
+            filteredFacilities.map((facility, index) => {
+              const selected = selectedId === facility.id.toString();
+              const active = index === activeOptionIndex;
+
+              return (
+                <button
+                  key={facility.id}
+                  id={`${listboxId}-${facility.id}`}
+                  type="button"
+                  role="option"
+                  aria-selected={selected}
+                  onMouseEnter={() => setActiveIndex(index)}
+                  onMouseDown={(event) => {
+                    event.preventDefault();
+                    selectFacility(facility);
+                  }}
+                  className={`flex w-full items-start justify-between gap-3 border-b border-black/6 px-4 py-3 text-left text-sm transition last:border-0 ${
+                    active ? "bg-[var(--accent)]/8" : "hover:bg-[var(--accent)]/5"
+                  }`}
+                >
+                  <span className="min-w-0">
+                    <span className="block truncate font-medium text-[var(--foreground)]">
+                      {facility.facility_name?.trim() || `หน่วยงาน #${facility.id}`}
+                    </span>
+                    {facility.district_name && (
+                      <span className="mt-0.5 block text-xs text-[var(--muted)]">อ.{facility.district_name}</span>
+                    )}
+                  </span>
+                  {selected && <span className="shrink-0 text-xs font-medium text-[var(--accent)]">เลือกอยู่</span>}
+                </button>
+              );
+            })
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], fixedFacilityId, mode, asset, children }: Props) {
+  const [open, setOpen] = useState(false);
+  const [selectedFacilityId, setSelectedFacilityId] = useState<number | null>(fixedFacilityId ?? asset?.facilityId ?? null);
+  const [selectedWorkGroupId, setSelectedWorkGroupId] = useState(asset?.workGroupId?.toString() ?? "");
+  const [assetCategory, setAssetCategory] = useState<"Hardware" | "Software">(asset?.assetGroup ?? "Hardware");
+  const [deviceType, setDeviceType] = useState(asset?.deviceType?.trim() ?? "");
+  const [windowsLicenseStatus, setWindowsLicenseStatus] = useState<WindowsLicenseStatus | "">(
+    asset?.windowsLicenseStatus ?? ""
+  );
+  const titleId = useId();
   const mounted = typeof document !== "undefined";
   const formRef = useRef<HTMLFormElement>(null);
   const today = new Date().toISOString().slice(0, 10);
+  const selectedDeviceType = asset?.deviceType?.trim() ?? "";
+  const requiresWindowsLicenseStatus = assetCategory === "Hardware" && isComputerDeviceType(deviceType);
+  const hasSelectedDeviceType = Boolean(
+    selectedDeviceType && !deviceTypes.some((t) => t.name === selectedDeviceType)
+  );
+  const hardwareDeviceTypes = useMemo(
+    () => deviceTypes.filter((t) => t.category === "Hardware"),
+    [deviceTypes]
+  );
+  const softwareDeviceTypes = useMemo(
+    () => deviceTypes.filter((t) => t.category === "Software"),
+    [deviceTypes]
+  );
+  const selectedWorkGroups = useMemo(
+    () => (selectedFacilityId ? workGroups.filter((group) => group.facilityId === selectedFacilityId) : []),
+    [selectedFacilityId, workGroups]
+  );
+  const selectedWorkGroupValue = selectedWorkGroups.some((group) => String(group.id) === selectedWorkGroupId)
+    ? selectedWorkGroupId
+    : "";
+
+  function openModal() {
+    setSelectedFacilityId(fixedFacilityId ?? asset?.facilityId ?? null);
+    setSelectedWorkGroupId(asset?.workGroupId?.toString() ?? "");
+    setAssetCategory(asset?.assetGroup ?? "Hardware");
+    setDeviceType(asset?.deviceType?.trim() ?? "");
+    setWindowsLicenseStatus(asset?.windowsLicenseStatus ?? "");
+    setOpen(true);
+  }
 
   const action = mode === "create" ? createAssetAction : updateAssetAction;
   const [error, formAction, pending] = useActionState(
@@ -34,6 +226,7 @@ export function AssetFormModal({ facilities, deviceTypes = [], fixedFacilityId, 
       if (!result) {
         setOpen(false);
         formRef.current?.reset();
+        setSelectedWorkGroupId("");
       }
       return result;
     },
@@ -44,17 +237,29 @@ export function AssetFormModal({ facilities, deviceTypes = [], fixedFacilityId, 
 
   return (
     <>
-      <span onClick={() => setOpen(true)} className="cursor-pointer">{children}</span>
+      <span onClick={openModal} className="cursor-pointer">{children}</span>
 
       {mounted &&
         open &&
         createPortal(
           <div className="fixed inset-0 z-50 flex items-center justify-center">
             <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setOpen(false)} />
-            <div className="relative z-10 max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-[var(--surface-strong)] p-6 shadow-2xl sm:p-8">
-              <div className="flex items-center justify-between">
-                <h2 className="section-title text-xl font-semibold">{title}</h2>
-                <button onClick={() => setOpen(false)} className="text-[var(--muted)] hover:text-[var(--foreground)]">✕</button>
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby={titleId}
+              className="relative z-10 mx-3 max-h-[calc(100dvh-1.5rem)] w-full max-w-3xl overflow-y-auto rounded-2xl bg-[var(--surface-strong)] p-4 shadow-2xl sm:p-6"
+            >
+              <div className="flex items-start justify-between gap-3 colors-[var(--foreground)]">
+                <h2 id={titleId} className="section-title min-w-0 text-xl font-semibold leading-snug">{title}</h2>
+                <button
+                  type="button"
+                  onClick={() => setOpen(false)}
+                  aria-label="ปิดหน้าต่างทรัพย์สิน"
+                  className="min-h-11 min-w-11 rounded-xl text-[var(--muted)] hover:bg-stone-100 hover:text-[var(--foreground)]"
+                >
+                  ✕
+                </button>
               </div>
 
               {error && (
@@ -75,31 +280,50 @@ export function AssetFormModal({ facilities, deviceTypes = [], fixedFacilityId, 
                     </div>
                   </>
                 ) : (
+                  <FacilityCombobox
+                    facilities={facilities}
+                    defaultFacilityId={asset?.facilityId}
+                    onSelectedFacilityIdChange={(facilityId) => {
+                      setSelectedFacilityId(facilityId);
+                      setSelectedWorkGroupId("");
+                    }}
+                  />
+                )}
+              </div>
+
+              {selectedWorkGroups.length > 0 && (
+                <div>
+                  <label className="block text-sm font-medium">
+                    กลุ่มงาน <span className="text-rose-500">*</span>
+                  </label>
                   <select
-                    name="facilityId"
-                    defaultValue={asset?.facilityId?.toString() ?? ""}
+                    name="workGroupId"
+                    value={selectedWorkGroupValue}
+                    onChange={(event) => setSelectedWorkGroupId(event.target.value)}
                     required
                     className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
                   >
-                    <option value="">-- เลือกหน่วยงาน --</option>
-                    {facilities.map((f) => (
-                      <option key={f.id} value={f.id}>
-                        {f.facility_name} {f.district_name ? `· อ.${f.district_name}` : ""}
+                    <option value="">เลือกกลุ่มงาน</option>
+                    {selectedWorkGroups.map((group) => (
+                      <option key={group.id} value={group.id}>
+                        {group.workGroupName}
                       </option>
                     ))}
                   </select>
-                )}
-              </div>
+                  <p className="mt-1 text-xs text-[var(--muted)]">
+                    ดึงจากรายการกลุ่มงานของหน่วยงานที่สร้างไว้
+                  </p>
+                </div>
+              )}
 
               <div className="grid gap-4 sm:grid-cols-2">
                 {/* เลขทะเบียน */}
                 <div>
-                  <label className="block text-sm font-medium">เลขทะเบียนทรัพย์สิน <span className="text-rose-500">*</span></label>
+                  <label className="block text-sm font-medium">เลขทะเบียนทรัพย์สิน</label>
                   <input
                     name="assetRegistrationNo"
                     defaultValue={asset?.assetRegistrationNo ?? ""}
-                    required
-                    placeholder="เช่น SAT-HW-0001"
+                    placeholder="เช่น SAT-HW-0001 หรือเว้นว่าง"
                     className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
                   />
                 </div>
@@ -119,36 +343,88 @@ export function AssetFormModal({ facilities, deviceTypes = [], fixedFacilityId, 
               <div className="grid gap-4 sm:grid-cols-2">
                 {/* หมวด */}
                 <div>
-                  <label className="block text-sm font-medium">หมวดทรัพย์สิน <span className="text-rose-500">*</span></label>
+                  <label className="block text-sm font-medium">กลุ่มครุภัณฑ์ <span className="text-rose-500">*</span></label>
+                  <select
+                    name="assetClass"
+                    defaultValue={asset?.assetClass ?? "IT"}
+                    className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+                  >
+                    {ASSET_CLASS_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium">ลักษณะทรัพย์สิน <span className="text-rose-500">*</span></label>
                   <select
                     name="assetCategory"
-                    defaultValue={asset?.assetGroup ?? "Hardware"}
+                    value={assetCategory}
+                    onChange={(event) => {
+                      const nextCategory = event.target.value as "Hardware" | "Software";
+                      setAssetCategory(nextCategory);
+                      if (nextCategory !== "Hardware") setWindowsLicenseStatus("");
+                    }}
                     className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
                   >
                     <option value="Hardware">Hardware</option>
                     <option value="Software">Software</option>
                   </select>
                 </div>
-                {/* ประเภทอุปกรณ์ */}
-                <div>
-                  <label className="block text-sm font-medium">ประเภทอุปกรณ์</label>
-                  <input
+                {/* ประเภททรัพย์สิน */}
+                <div className="sm:col-span-2">
+                  <label className="block text-sm font-medium">ประเภททรัพย์สิน / อุปกรณ์</label>
+                  <select
                     name="deviceType"
-                    list="device-type-list"
-                    defaultValue={asset?.deviceType ?? ""}
-                    placeholder="เช่น Firewall, Server, Switch"
+                    value={deviceType}
+                    onChange={(event) => {
+                      const nextDeviceType = event.target.value;
+                      setDeviceType(nextDeviceType);
+                      if (!isComputerDeviceType(nextDeviceType)) setWindowsLicenseStatus("");
+                    }}
                     className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
-                  />
-                  <datalist id="device-type-list">
-                    {deviceTypes.map((t) => <option key={t.name} value={t.name} />)}
-                  </datalist>
+                  >
+                    <option value="">เลือกประเภททรัพย์สิน</option>
+                    {hasSelectedDeviceType && <option value={selectedDeviceType}>{selectedDeviceType} (ค่าปัจจุบัน)</option>}
+                    {hardwareDeviceTypes.length > 0 && (
+                      <optgroup label="ฮาร์ดแวร์">
+                        {hardwareDeviceTypes.map((t) => <option key={t.name} value={t.name}>{t.name}</option>)}
+                      </optgroup>
+                    )}
+                    {softwareDeviceTypes.length > 0 && (
+                      <optgroup label="ซอฟต์แวร์">
+                        {softwareDeviceTypes.map((t) => <option key={t.name} value={t.name}>{t.name}</option>)}
+                      </optgroup>
+                    )}
+                  </select>
                 </div>
+                {requiresWindowsLicenseStatus && (
+                  <div className="sm:col-span-2">
+                    <label className="block text-sm font-medium">
+                      สถานะลิขสิทธิ์ Windows <span className="text-rose-500">*</span>
+                    </label>
+                    <select
+                      name="windowsLicenseStatus"
+                      value={windowsLicenseStatus}
+                      onChange={(event) => setWindowsLicenseStatus(event.target.value as WindowsLicenseStatus | "")}
+                      required
+                      aria-describedby="windows-license-status-help"
+                      className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+                    >
+                      <option value="">เลือกสถานะลิขสิทธิ์ Windows</option>
+                      <option value="Genuine">Windows แท้ (มีลิขสิทธิ์ถูกต้อง)</option>
+                      <option value="Pirated">Windows เถื่อน (ไม่มีลิขสิทธิ์ถูกต้อง)</option>
+                    </select>
+                    <p id="windows-license-status-help" className="mt-1 text-xs text-[var(--muted)]">
+                      จำเป็นสำหรับ Hardware ประเภทคอมพิวเตอร์
+                    </p>
+                  </div>
+                )}
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
                 {/* OS */}
                 <div>
-                  <label className="block text-sm font-medium">Operating System</label>
+                  <label className="block text-sm font-medium">ระบบปฏิบัติการ</label>
                   <input
                     name="operatingSystem"
                     defaultValue={asset?.operatingSystem ?? ""}
@@ -161,24 +437,10 @@ export function AssetFormModal({ facilities, deviceTypes = [], fixedFacilityId, 
                   <input
                     name="privateIp"
                     defaultValue={asset?.privateIp ?? ""}
-                    placeholder="10.x.x.x"
-                    pattern="^(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)(\\.(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)){3}$"
-                    title="กรอกเป็น IPv4 เช่น 10.0.0.1"
+                    placeholder="เช่น 10.0.0.1 หรือ 10.0.0.1/24"
                     className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 font-mono text-sm outline-none focus:border-[var(--accent)]"
                   />
                 </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium">Public IP</label>
-                <input
-                  name="publicIp"
-                  defaultValue={asset?.publicIp ?? ""}
-                  placeholder="เช่น 1.2.3.4"
-                  pattern="^(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)(\\.(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)){3}$"
-                  title="กรอกเป็น IPv4 เช่น 1.2.3.4"
-                  className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 font-mono text-sm outline-none focus:border-[var(--accent)]"
-                />
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
@@ -216,12 +478,12 @@ export function AssetFormModal({ facilities, deviceTypes = [], fixedFacilityId, 
                 {/* MA Start */}
                 <div>
                   <label className="block text-sm font-medium">วันเริ่มสัญญา</label>
-                  <input
-                    type="date"
-                    name="maintenanceStartDate"
-                    defaultValue={""}
-                    className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
-                  />
+                    <input
+                      type="date"
+                      name="maintenanceStartDate"
+                      defaultValue={asset?.maintenanceStartDate ?? ""}
+                      className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+                    />
                 </div>
                 {/* MA End */}
                 <div>
@@ -278,9 +540,9 @@ export function AssetFormModal({ facilities, deviceTypes = [], fixedFacilityId, 
                   defaultValue={asset?.currentStatus ?? "Active"}
                   className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
                 >
-                  <option value="Active">พร้อมใช้งาน (Active)</option>
-                  <option value="Inactive">ไม่ใช้งาน (Inactive)</option>
-                  <option value="Broken">ชำรุด (Broken)</option>
+                  <option value="Active">พร้อมใช้งาน</option>
+                  <option value="Inactive">ไม่ใช้งาน</option>
+                  <option value="Broken">ชำรุด</option>
                 </select>
               </div>
 
@@ -295,7 +557,7 @@ export function AssetFormModal({ facilities, deviceTypes = [], fixedFacilityId, 
                 />
               </div>
 
-                <div className="flex justify-end gap-3 pt-2">
+                <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-end">
                   <button
                     type="button"
                     onClick={() => setOpen(false)}

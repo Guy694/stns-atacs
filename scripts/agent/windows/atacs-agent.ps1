@@ -1,13 +1,16 @@
 param(
     [string]$ApiBaseUrl,
     [string]$EnrollmentToken,
+    [int]$FacilityId,
+    [string]$WorkGroupName,
+    [string]$InstallKey,
     [string]$ConfigPath = "$env:ProgramData\ATACSAgent\agent-config.json",
     [switch]$RunOnce,
     [switch]$EnrollOnly
 )
 
 $ErrorActionPreference = "Stop"
-$script:AgentVersion = "1.0.0"
+$script:AgentVersion = "1.0.1"
 
 function Enable-TlsForLegacyPowerShell {
     try {
@@ -110,7 +113,10 @@ function Get-InventoryPayload {
     $bios = Get-CimInstance Win32_BIOS
     $os = Get-CimInstance Win32_OperatingSystem
     $cpu = Get-CimInstance Win32_Processor | Select-Object -First 1
-    $diskBytes = (Get-CimInstance Win32_LogicalDisk -Filter "DriveType=3" | Measure-Object -Property Size -Sum).Sum
+    $logicalDisks = Get-CimInstance Win32_LogicalDisk -Filter "DriveType=3"
+    $diskBytes = ($logicalDisks | Measure-Object -Property Size -Sum).Sum
+    $diskFreeBytes = ($logicalDisks | Measure-Object -Property FreeSpace -Sum).Sum
+    $diskUsedBytes = if ($null -ne $diskBytes -and $null -ne $diskFreeBytes) { $diskBytes - $diskFreeBytes } else { $null }
 
     return @{
         fingerprint = Get-Fingerprint
@@ -127,7 +133,9 @@ function Get-InventoryPayload {
         currentUser = $cs.UserName
         cpuModel = $cpu.Name
         ramMb = [int][math]::Round($cs.TotalPhysicalMemory / 1MB)
-        diskTotalGb = if ($diskBytes) { [int][math]::Round($diskBytes / 1GB) } else { $null }
+        diskTotalGb = if ($null -ne $diskBytes) { [int][math]::Round($diskBytes / 1GB) } else { $null }
+        diskFreeGb = if ($null -ne $diskFreeBytes) { [int][math]::Round($diskFreeBytes / 1GB) } else { $null }
+        diskUsedGb = if ($null -ne $diskUsedBytes) { [int][math]::Round($diskUsedBytes / 1GB) } else { $null }
         locationDetail = $env:COMPUTERNAME
         agentVersion = $script:AgentVersion
         status = "online"
@@ -168,20 +176,35 @@ function Enroll-Agent {
     param(
         [string]$BaseUrl,
         [string]$Token,
+        [int]$FacilityId,
+        [string]$WorkGroupName,
+        [string]$InstallKey,
         [string]$Path
     )
 
     $normalizedBaseUrl = Normalize-ApiBaseUrl -BaseUrl $BaseUrl
     if (-not $normalizedBaseUrl) { throw "ApiBaseUrl is required for enrollment." }
-    if (-not $Token) { throw "EnrollmentToken is required for enrollment." }
+    $hasToken = -not [string]::IsNullOrWhiteSpace($Token)
+    $hasStaticInstall = -not [string]::IsNullOrWhiteSpace($InstallKey) -and $FacilityId -gt 0
+    if (-not $hasToken -and -not $hasStaticInstall) {
+        throw "EnrollmentToken or InstallKey + FacilityId is required for enrollment."
+    }
 
     $payload = Get-InventoryPayload
-    $response = Invoke-JsonPost -Url "$normalizedBaseUrl/api/agent/enroll" -Body @{
-        enrollmentToken = $Token
+    $body = @{
         fingerprint = $payload.fingerprint
         hostname = $payload.hostname
         agentVersion = $payload.agentVersion
-    } -Headers @{}
+    }
+    if ($hasToken) {
+        $body.enrollmentToken = $Token
+    }
+    else {
+        $body.installKey = $InstallKey
+        $body.facilityId = $FacilityId
+        $body.workGroupName = $WorkGroupName
+    }
+    $response = Invoke-JsonPost -Url "$normalizedBaseUrl/api/agent/enroll" -Body $body -Headers @{}
 
     $config = @{
         apiBaseUrl = $normalizedBaseUrl
@@ -214,9 +237,11 @@ try {
     Enable-TlsForLegacyPowerShell
 
     $config = Get-Config -Path $ConfigPath
-    $forceEnroll = -not [string]::IsNullOrWhiteSpace($ApiBaseUrl) -and -not [string]::IsNullOrWhiteSpace($EnrollmentToken)
+    $hasToken = -not [string]::IsNullOrWhiteSpace($EnrollmentToken)
+    $hasStaticInstall = -not [string]::IsNullOrWhiteSpace($InstallKey) -and $FacilityId -gt 0
+    $forceEnroll = -not [string]::IsNullOrWhiteSpace($ApiBaseUrl) -and ($hasToken -or $hasStaticInstall)
     if (-not $config -or $forceEnroll) {
-        $config = Enroll-Agent -BaseUrl $ApiBaseUrl -Token $EnrollmentToken -Path $ConfigPath
+        $config = Enroll-Agent -BaseUrl $ApiBaseUrl -Token $EnrollmentToken -FacilityId $FacilityId -WorkGroupName $WorkGroupName -InstallKey $InstallKey -Path $ConfigPath
         Write-Host "Enrolled device for facility: $($config.facilityName)"
     }
 

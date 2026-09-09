@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
+  <title id="title">ขั้นตอนระบุสถานะลิขสิทธิ์ Windows</title>
+  <desc id="desc">แผนผังแสดงว่าเมื่อทรัพย์สินเป็น Hardware ประเภทคอมพิวเตอร์ ต้องเลือก Windows แท้หรือ Windows ไม่แท้ก่อนบันทึก</desc>
+  <defs><marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto"><path d="M0 0l12 6-12 6z" fill="#4f6b60"/></marker></defs>
+  <rect width="1600" height="900" fill="#f5faf7"/>
+  <text x="100" y="105" fill="#113127" font-family="system-ui,sans-serif" font-size="46" font-weight="700">การระบุสถานะลิขสิทธิ์ Windows</text>
+  <text x="100" y="150" fill="#4f6b60" font-family="system-ui,sans-serif" font-size="22">ฟิลด์นี้บังคับเฉพาะ Hardware ประเภทคอมพิวเตอร์</text>
+  <g font-family="system-ui,sans-serif">
+    <rect x="110" y="310" width="260" height="120" rx="16" fill="#fff" stroke="#15803d" stroke-width="3"/>
+    <text x="240" y="355" text-anchor="middle" fill="#4f6b60" font-size="18">ลักษณะทรัพย์สิน</text><text x="240" y="397" text-anchor="middle" fill="#14532d" font-size="28" font-weight="700">Hardware</text>
+    <path d="M370 370h150" stroke="#4f6b60" stroke-width="4" marker-end="url(#arrow)"/>
+    <rect x="530" y="310" width="330" height="120" rx="16" fill="#fff" stroke="#15803d" stroke-width="3"/>
+    <text x="695" y="355" text-anchor="middle" fill="#4f6b60" font-size="18">ประเภทอุปกรณ์</text><text x="695" y="397" text-anchor="middle" fill="#14532d" font-size="28" font-weight="700">คอมพิวเตอร์</text>
+    <path d="M860 370h150" stroke="#4f6b60" stroke-width="4" marker-end="url(#arrow)"/>
+    <rect x="1020" y="275" width="460" height="190" rx="16" fill="#dcfce7" stroke="#15803d" stroke-width="4"/>
+    <text x="1250" y="325" text-anchor="middle" fill="#14532d" font-size="23" font-weight="700">ต้องเลือกสถานะ Windows</text>
+    <rect x="1060" y="350" width="175" height="70" rx="12" fill="#fff" stroke="#16a34a" stroke-width="2"/><text x="1147" y="393" text-anchor="middle" fill="#166534" font-size="23" font-weight="700">Windows แท้</text>
+    <rect x="1260" y="350" width="175" height="70" rx="12" fill="#fff" stroke="#dc2626" stroke-width="2"/><text x="1347" y="393" text-anchor="middle" fill="#9f1239" font-size="23" font-weight="700">Windows ไม่แท้</text>
+    <path d="M1250 465v100" stroke="#4f6b60" stroke-width="4" marker-end="url(#arrow)"/>
+    <rect x="1080" y="580" width="340" height="105" rx="16" fill="#166534"/>
+    <text x="1250" y="645" text-anchor="middle" fill="#fff" font-size="28" font-weight="700">บันทึกทรัพย์สิน</text>
+    <rect x="480" y="610" width="430" height="115" rx="16" fill="#fef3c7" stroke="#fde68a" stroke-width="2"/>
+    <text x="695" y="655" text-anchor="middle" fill="#92400e" font-size="21" font-weight="700">หากยังไม่เลือก ระบบจะไม่บันทึก</text>
+    <text x="695" y="692" text-anchor="middle" fill="#92400e" font-size="18">ข้อความ: กรุณาระบุว่า Windows เป็นของแท้หรือเถื่อน</text>
+  </g>
+</svg>

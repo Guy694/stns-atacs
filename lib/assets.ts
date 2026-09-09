@@ -3,26 +3,32 @@ import "server-only";
 import type { RowDataPacket } from "mysql2/promise";
 
 import { facilitySurveys as fallbackSurveys, type AssetRecord } from "@/app/atacs-data";
+import { normalizeAssetClass } from "@/lib/asset-classes";
 import { executeStatement, selectRows } from "@/lib/mysql";
+import type { WindowsLicenseStatus } from "@/lib/windows-license";
 
 // ── DB Row types ───────────────────────────────────────────────────────────
 
 type AssetRow = RowDataPacket & {
   id: number;
   survey_id: number;
+  work_group_id: number | null;
+  work_group_name: string | null;
   facility_id: number;
   facility_name: string | null;
   district_name: string | null;
   row_no: number | null;
-  asset_registration_no: string;
+  asset_registration_no: string | null;
   asset_name: string;
   usage_description: string | null;
   owner_name: string | null;
+  asset_class: string | null;
   asset_category: "Hardware" | "Software" | null;
   asset_group: string | null;
   device_type: string | null;
   operating_system: string | null;
   operating_system_version: string | null;
+  windows_license_status: WindowsLicenseStatus | null;
   private_ip: string | null;
   public_ip: string | null;
   location_detail: string | null;
@@ -39,6 +45,8 @@ type AssetRow = RowDataPacket & {
   purchase_order_no: string | null;
   maintenance_start_date: Date | string | null;
   maintenance_end_date: Date | string | null;
+  asset_image_1_url: string | null;
+  asset_image_2_url: string | null;
 };
 
 type SurveyRow = RowDataPacket & {
@@ -75,28 +83,43 @@ function rowToAsset(row: AssetRow) {
   return {
     id: row.id,
     surveyId: row.survey_id,
+    workGroupId: row.work_group_id ?? null,
+    workGroupName: row.work_group_name ?? null,
     facilityId: row.facility_id,
     facilityName: row.facility_name ?? "",
     districtName: row.district_name ?? "",
-    assetRegistrationNo: row.asset_registration_no,
+    rowNo: row.row_no ?? null,
+    assetRegistrationNo: row.asset_registration_no ?? "",
     assetName: row.asset_name,
+    assetClass: normalizeAssetClass(row.asset_class),
     usageDescription: row.usage_description ?? "",
     ownerName: row.owner_name ?? "",
     assetGroup: row.asset_category ?? normalizeGroup(row.asset_group),
+    assetCategory: row.asset_category ?? normalizeGroup(row.asset_group),
+    assetGroupDetail: row.asset_group ?? "",
     deviceType: row.device_type ?? "",
     operatingSystem: row.operating_system ?? "",
+    operatingSystemVersion: row.operating_system_version ?? "",
+    windowsLicenseStatus: row.windows_license_status ?? null,
     privateIp: row.private_ip ?? "",
     publicIp: row.public_ip ?? undefined,
     locationDetail: row.location_detail ?? "",
     currentStatus: normalizeStatus(row.current_status),
     updatedBy: row.updated_by ?? "",
     updatedAt: toDateOnly(row.last_updated_at),
+    maintenanceStartDate: toDateOnly(row.maintenance_start_date),
     maintenanceEndDate: toDateOnly(row.maintenance_end_date),
+    installedAt: toDateOnly(row.installed_at),
     manufacturerBrand: row.manufacturer_brand ?? "",
+    manufacturerModel: row.manufacturer_model ?? "",
+    manufacturerSpecification: row.manufacturer_specification ?? "",
     serialNumber: row.serial_number ?? "",
     purchasePrice: row.purchase_price ?? null,
     purchaseDate: toDateOnly(row.purchase_date),
     purchaseOrderNo: row.purchase_order_no ?? "",
+    assetImage1Url: row.asset_image_1_url ?? "",
+    assetImage2Url: row.asset_image_2_url ?? "",
+    assetImages: [row.asset_image_1_url, row.asset_image_2_url].filter((url): url is string => Boolean(url)),
   };
 }
 
@@ -106,14 +129,18 @@ export type AssetWithFacility = ReturnType<typeof rowToAsset>;
 
 export type AssetInput = {
   surveyId: number;
-  assetRegistrationNo: string;
+  workGroupId?: number | null;
+  assetRegistrationNo: string | null;
   assetName: string;
+  assetClass?: string | null;
   usageDescription?: string;
   ownerName?: string;
   assetCategory: "Hardware" | "Software";
+  assetGroup?: string;
   deviceType?: string;
   operatingSystem?: string;
   operatingSystemVersion?: string;
+  windowsLicenseStatus?: WindowsLicenseStatus | null;
   privateIp?: string;
   publicIp?: string;
   locationDetail?: string;
@@ -130,48 +157,62 @@ export type AssetInput = {
   maintenanceEndDate?: string;
   installedAt?: string;
   lastUpdatedAt?: string;
+  assetImage1Url?: string | null;
+  assetImage2Url?: string | null;
   rowNo?: number;
 };
 
 export type AssetListFilter = {
   facilityId?: number;
+  workGroupId?: number;
   status?: string;
   search?: string;
   district?: string;
+  assetClass?: string;
   assetGroup?: "Hardware" | "Software";
   deviceType?: string;
   maExpiringDays?: number;
   sort?: "updated_desc" | "updated_asc" | "name_asc" | "name_desc" | "ma_soon";
+  limit?: number;
+  offset?: number;
 };
+
+const ASSET_FROM_SQL = `
+  FROM information_assets a
+  JOIN information_asset_surveys s ON s.id = a.survey_id
+  JOIN health_facilities hf        ON hf.id = s.facility_id
+  LEFT JOIN facility_work_groups fwg ON fwg.id = a.work_group_id
+`;
 
 const ASSET_JOIN_SQL = `
   SELECT
     a.*,
     s.facility_id,
     hf.name          AS facility_name,
-    hf.district_name
-  FROM information_assets a
-  JOIN information_asset_surveys s ON s.id = a.survey_id
-  JOIN health_facilities hf        ON hf.id = s.facility_id
+    hf.district_name,
+    fwg.work_group_name
+  ${ASSET_FROM_SQL}
 `;
 
-/** รายการทรัพย์สินทั้งหมด (admin) หรือเฉพาะหน่วยงาน (officer ไม่จำกัดในตอนนี้) */
-export async function listAssets(filter?: {
-  facilityId?: number;
-  status?: string;
-  search?: string;
-  district?: string;
-  assetGroup?: "Hardware" | "Software";
-  deviceType?: string;
-  maExpiringDays?: number;
-  sort?: "updated_desc" | "updated_asc" | "name_asc" | "name_desc" | "ma_soon";
-}): Promise<AssetWithFacility[]> {
+function buildAssetFilter(filter?: AssetListFilter) {
   const conditions: string[] = [];
   const values: unknown[] = [];
 
   if (filter?.facilityId) {
     conditions.push("s.facility_id = ?");
     values.push(filter.facilityId);
+  }
+  if (filter?.workGroupId) {
+    conditions.push(
+      `(a.work_group_id = ? OR EXISTS (
+        SELECT 1
+        FROM agent_devices ad_wg
+        JOIN agent_enrollments ae_wg ON ae_wg.id = ad_wg.enrollment_id
+        WHERE ad_wg.linked_asset_id = a.id
+          AND ae_wg.work_group_id = ?
+      ))`
+    );
+    values.push(filter.workGroupId, filter.workGroupId);
   }
   if (filter?.status) {
     conditions.push("a.current_status = ?");
@@ -186,6 +227,10 @@ export async function listAssets(filter?: {
     conditions.push("hf.district_name = ?");
     values.push(filter.district);
   }
+  if (filter?.assetClass) {
+    conditions.push("COALESCE(a.asset_class, 'IT') = ?");
+    values.push(filter.assetClass);
+  }
   if (filter?.assetGroup) {
     conditions.push("a.asset_category = ?");
     values.push(filter.assetGroup);
@@ -199,7 +244,83 @@ export async function listAssets(filter?: {
     values.push(filter.maExpiringDays);
   }
 
-  const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+  return {
+    where: conditions.length ? `WHERE ${conditions.join(" AND ")}` : "",
+    values,
+  };
+}
+
+function sortFallbackAssets(assets: AssetWithFacility[], sort?: AssetListFilter["sort"]) {
+  const sorted = [...assets];
+  sorted.sort((a, b) => {
+    if (sort === "updated_desc") return b.updatedAt.localeCompare(a.updatedAt) || b.id - a.id;
+    if (sort === "updated_asc") return a.updatedAt.localeCompare(b.updatedAt) || a.id - b.id;
+    if (sort === "name_asc") return a.assetName.localeCompare(b.assetName) || a.id - b.id;
+    if (sort === "name_desc") return b.assetName.localeCompare(a.assetName) || b.id - a.id;
+    if (sort === "ma_soon") return (a.maintenanceEndDate || "9999-12-31").localeCompare(b.maintenanceEndDate || "9999-12-31") || a.id - b.id;
+    return (
+      a.districtName.localeCompare(b.districtName) ||
+      a.facilityName.localeCompare(b.facilityName) ||
+      a.id - b.id
+    );
+  });
+  return sorted;
+}
+
+function filterFallbackAssets(filter?: AssetListFilter) {
+  let assets = fallbackSurveys.flatMap((s) =>
+    s.assets.map((a) => ({
+      ...a,
+      rowNo: null,
+      surveyId: 0,
+      workGroupId: null,
+      workGroupName: null,
+      facilityId: s.facilityId,
+      facilityName: s.facilityName,
+      districtName: s.districtName,
+      assetClass: normalizeAssetClass(a.assetClass),
+      assetCategory: a.assetGroup,
+      assetGroupDetail: "",
+      operatingSystemVersion: "",
+      manufacturerModel: "",
+      manufacturerSpecification: "",
+      installedAt: "",
+      publicIp: a.publicIp ?? undefined,
+      purchasePrice: a.purchasePrice ?? null,
+      purchaseDate: a.purchaseDate ?? "",
+      purchaseOrderNo: a.purchaseOrderNo ?? "",
+      maintenanceStartDate: "",
+      windowsLicenseStatus: null,
+      assetImage1Url: "",
+      assetImage2Url: "",
+      assetImages: [],
+    }))
+  );
+
+  if (filter?.facilityId) assets = assets.filter((asset) => asset.facilityId === filter.facilityId);
+  if (filter?.workGroupId) assets = [];
+  if (filter?.status) assets = assets.filter((asset) => asset.currentStatus === filter.status);
+  if (filter?.district) assets = assets.filter((asset) => asset.districtName === filter.district);
+  if (filter?.assetClass) assets = assets.filter((asset) => asset.assetClass === normalizeAssetClass(filter.assetClass));
+  if (filter?.assetGroup) assets = assets.filter((asset) => asset.assetGroup === filter.assetGroup);
+  if (filter?.deviceType) assets = assets.filter((asset) => asset.deviceType === filter.deviceType);
+  if (filter?.search) {
+    const q = filter.search.toLowerCase();
+    assets = assets.filter(
+      (asset) =>
+        asset.assetName.toLowerCase().includes(q) ||
+        asset.assetRegistrationNo.toLowerCase().includes(q) ||
+        asset.deviceType.toLowerCase().includes(q) ||
+        asset.serialNumber.toLowerCase().includes(q)
+    );
+  }
+
+  return sortFallbackAssets(assets, filter?.sort);
+}
+
+/** รายการทรัพย์สินทั้งหมด (admin) หรือเฉพาะหน่วยงาน (officer ไม่จำกัดในตอนนี้) */
+export async function listAssets(filter?: AssetListFilter): Promise<AssetWithFacility[]> {
+  const { where, values } = buildAssetFilter(filter);
   const orderByMap: Record<NonNullable<AssetListFilter["sort"]>, string> = {
     updated_desc: "a.last_updated_at DESC, a.id DESC",
     updated_asc: "a.last_updated_at ASC, a.id ASC",
@@ -208,26 +329,32 @@ export async function listAssets(filter?: {
     ma_soon: "a.maintenance_end_date ASC, a.id ASC",
   };
   const orderBy = filter?.sort ? orderByMap[filter.sort] : "hf.district_name, hf.name, a.row_no, a.id";
-  const sql = `${ASSET_JOIN_SQL} ${where} ORDER BY ${orderBy}`;
+  const limit = filter?.limit && Number.isFinite(filter.limit) ? Math.max(1, Math.floor(filter.limit)) : null;
+  const offset = filter?.offset && Number.isFinite(filter.offset) ? Math.max(0, Math.floor(filter.offset)) : 0;
+  const pageSql = limit ? " LIMIT ? OFFSET ?" : "";
+  const sql = `${ASSET_JOIN_SQL} ${where} ORDER BY ${orderBy}${pageSql}`;
+  const queryValues = limit ? [...values, limit, offset] : values;
 
   try {
-    const rows = await selectRows<AssetRow>(sql, values);
+    const rows = await selectRows<AssetRow>(sql, queryValues);
     return rows.map(rowToAsset);
   } catch {
-    // fallback
-    return fallbackSurveys.flatMap((s) =>
-      s.assets.map((a) => ({
-        ...a,
-        surveyId: 0,
-        facilityId: s.facilityId,
-        facilityName: s.facilityName,
-        districtName: s.districtName,
-        publicIp: a.publicIp ?? undefined,
-        purchasePrice: a.purchasePrice ?? null,
-        purchaseDate: a.purchaseDate ?? "",
-        purchaseOrderNo: a.purchaseOrderNo ?? "",
-      }))
+    const fallback = filterFallbackAssets(filter);
+    return limit ? fallback.slice(offset, offset + limit) : fallback;
+  }
+}
+
+export async function countAssets(filter?: AssetListFilter): Promise<number> {
+  const { where, values } = buildAssetFilter(filter);
+
+  try {
+    const rows = await selectRows<RowDataPacket & { total: number }>(
+      `SELECT COUNT(*) AS total ${ASSET_FROM_SQL} ${where}`,
+      values
     );
+    return Number(rows[0]?.total ?? 0);
+  } catch {
+    return filterFallbackAssets(filter).length;
   }
 }
 
@@ -242,14 +369,17 @@ export async function getAssetById(id: number): Promise<AssetWithFacility | null
 }
 
 /** ดึง survey list (เพื่อใช้ใน dropdown เลือกหน่วยงานตอน add asset) */
-export async function listSurveys(): Promise<SurveyRow[]> {
+export async function listSurveys(filter?: { facilityId?: number }): Promise<SurveyRow[]> {
+  const where = filter?.facilityId ? "WHERE s.facility_id = ?" : "";
+  const values = filter?.facilityId ? [filter.facilityId] : [];
   try {
     return await selectRows<SurveyRow>(`
       SELECT s.id, s.facility_id, hf.name AS facility_name, hf.district_name, s.survey_title, s.survey_date, s.personnel_count
       FROM information_asset_surveys s
       JOIN health_facilities hf ON hf.id = s.facility_id
+      ${where}
       ORDER BY hf.district_name, hf.name
-    `);
+    `, values);
   } catch {
     return [];
   }
@@ -281,23 +411,33 @@ export async function createAsset(input: AssetInput) {
   return executeStatement(
     `INSERT INTO information_assets
       (survey_id, row_no, asset_registration_no, asset_name, usage_description, owner_name,
-       asset_category, device_type, operating_system, operating_system_version,
+       work_group_id, asset_class, asset_category, asset_group, device_type, operating_system, operating_system_version, windows_license_status,
        private_ip, public_ip, location_detail, current_status, updated_by,
        manufacturer_brand, manufacturer_model, manufacturer_specification,
        serial_number, purchase_price, purchase_date, purchase_order_no,
-       maintenance_start_date, maintenance_end_date, installed_at, last_updated_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,  
+       maintenance_start_date, maintenance_end_date, installed_at, last_updated_at,
+       asset_image_1_url, asset_image_2_url)
+     VALUES (
+       ?, ?, ?, ?, ?, ?, ?, ?,
+       ?, ?, ?, ?, ?, ?, ?, ?,
+       ?, ?, ?, ?, ?, ?, ?, ?,
+       ?, ?, ?, ?, ?, ?, ?, ?
+     )`,
     [
       input.surveyId,
       input.rowNo ?? null,
-      input.assetRegistrationNo,
+      input.assetRegistrationNo ?? null,
       input.assetName,
       input.usageDescription ?? null,
       input.ownerName ?? null,
+      input.workGroupId ?? null,
+      normalizeAssetClass(input.assetClass),
       input.assetCategory,
+      input.assetGroup ?? null,
       input.deviceType ?? null,
       input.operatingSystem ?? null,
       input.operatingSystemVersion ?? null,
+      input.windowsLicenseStatus ?? null,
       input.privateIp ?? null,
       input.publicIp ?? null,
       input.locationDetail ?? null,
@@ -314,6 +454,8 @@ export async function createAsset(input: AssetInput) {
       input.maintenanceEndDate ?? null,
       input.installedAt ?? null,
       input.lastUpdatedAt ?? null,
+      input.assetImage1Url ?? null,
+      input.assetImage2Url ?? null,
     ]
   );
 }
@@ -325,14 +467,18 @@ export async function updateAsset(id: number, input: Partial<AssetInput>) {
 
   const fieldMap: Record<string, unknown> = {
     survey_id: input.surveyId,
+    work_group_id: input.workGroupId,
     asset_registration_no: input.assetRegistrationNo,
     asset_name: input.assetName,
     usage_description: input.usageDescription,
     owner_name: input.ownerName,
+    asset_class: input.assetClass === undefined ? undefined : normalizeAssetClass(input.assetClass),
     asset_category: input.assetCategory,
+    asset_group: input.assetGroup,
     device_type: input.deviceType,
     operating_system: input.operatingSystem,
     operating_system_version: input.operatingSystemVersion,
+    windows_license_status: input.windowsLicenseStatus,
     private_ip: input.privateIp,
     public_ip: input.publicIp,
     location_detail: input.locationDetail,
@@ -349,6 +495,8 @@ export async function updateAsset(id: number, input: Partial<AssetInput>) {
     maintenance_end_date: input.maintenanceEndDate ?? null,
     installed_at: input.installedAt ?? null,
     last_updated_at: input.lastUpdatedAt ?? null,
+    asset_image_1_url: input.assetImage1Url,
+    asset_image_2_url: input.assetImage2Url,
   };
 
   for (const [col, val] of Object.entries(fieldMap)) {
@@ -412,14 +560,16 @@ export type FacilitySelectRow = RowDataPacket & {
   typecode: string;
 };
 
-export async function listAllFacilitiesForSelect(): Promise<FacilitySelectRow[]> {
+export async function listAllFacilitiesForSelect(filter?: { facilityId?: number }): Promise<FacilitySelectRow[]> {
+  const where = filter?.facilityId ? "WHERE is_active = 1 AND id = ?" : "WHERE is_active = 1";
+  const values = filter?.facilityId ? [filter.facilityId] : [];
   try {
     return await selectRows<FacilitySelectRow>(`
       SELECT id, name AS facility_name, district_name, typecode
       FROM health_facilities
-      WHERE is_active = 1
+      ${where}
       ORDER BY district_name, typecode DESC, name
-    `);
+    `, values);
   } catch {
     return [];
   }
@@ -458,7 +608,16 @@ export type FacilityRow = RowDataPacket & {
 };
 
 /** รายการหน่วยบริการทั้งหมด พร้อมจำนวนทรัพย์สิน */
-export async function listFacilities(): Promise<FacilityRow[]> {
+export async function listFacilities(filter?: { facilityId?: number; facilityIds?: number[] }): Promise<FacilityRow[]> {
+  const scopedFacilityIds = filter?.facilityIds?.filter((id) => Number.isInteger(id) && id > 0) ?? [];
+  const facilityClause = filter?.facilityId
+    ? "AND hf.id = ?"
+    : scopedFacilityIds.length > 0
+      ? `AND hf.id IN (${scopedFacilityIds.map(() => "?").join(", ")})`
+      : filter?.facilityIds
+        ? "AND 1 = 0"
+        : "";
+  const values = filter?.facilityId ? [filter.facilityId] : scopedFacilityIds;
   try {
     return await selectRows<FacilityRow>(`
       SELECT
@@ -477,10 +636,10 @@ export async function listFacilities(): Promise<FacilityRow[]> {
       FROM health_facilities hf
       LEFT JOIN information_asset_surveys s ON s.facility_id = hf.id
       LEFT JOIN information_assets a        ON a.survey_id   = s.id
-      WHERE hf.is_active = 1
+      WHERE hf.is_active = 1 ${facilityClause}
       GROUP BY hf.id
       ORDER BY hf.district_name, hf.typecode DESC, hf.name
-    `);
+    `, values);
   } catch {
     return [];
   }
@@ -529,7 +688,9 @@ export type FacilityAdminRow = RowDataPacket & {
   asset_count: number;
 };
 
-export async function listFacilitiesAdmin(): Promise<FacilityAdminRow[]> {
+export async function listFacilitiesAdmin(filter?: { facilityId?: number }): Promise<FacilityAdminRow[]> {
+  const where = filter?.facilityId ? "WHERE hf.id = ?" : "";
+  const values = filter?.facilityId ? [filter.facilityId] : [];
   try {
     return await selectRows<FacilityAdminRow>(`
       SELECT hf.id, hf.name, hf.typecode, hf.district_name, hf.tambon, hf.lat, hf.lon, hf.is_active,
@@ -537,9 +698,10 @@ export async function listFacilitiesAdmin(): Promise<FacilityAdminRow[]> {
       FROM health_facilities hf
       LEFT JOIN information_asset_surveys s ON s.facility_id = hf.id
       LEFT JOIN information_assets a        ON a.survey_id   = s.id
+      ${where}
       GROUP BY hf.id
       ORDER BY hf.district_name, hf.typecode DESC, hf.name
-    `);
+    `, values);
   } catch {
     return [];
   }

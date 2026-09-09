@@ -1,22 +1,16 @@
 import type { Metadata } from "next";
-import { IBM_Plex_Mono, Noto_Sans_Thai } from "next/font/google";
+import { Prompt } from "next/font/google";
 import "./globals.css";
 
-const bodyFont = Noto_Sans_Thai({
+const promptFont = Prompt({
   variable: "--font-body",
   subsets: ["thai", "latin"],
-  display: "swap",
-});
-
-const monoFont = IBM_Plex_Mono({
-  variable: "--font-mono",
-  subsets: ["latin"],
-  weight: ["400", "500", "600"],
+  weight: ["300", "400", "500", "600", "700"],
   display: "swap",
 });
 
 export const metadata: Metadata = {
-  title: "ระบบทะเบียนทรัพย์สินสารสนเทศ จังหวัดสตูล (ATACS)",
+  title: "ระบบติดตามทรัพย์สินสารสนเทศ จังหวัดสตูล - ATACS Satun",
   description:
     "ระบบติดตามทรัพย์สินสารสนเทศ จังหวัดสตูล สำหรับสำรวจ ตรวจสอบ และสรุปสถานะอุปกรณ์ของหน่วยบริการสาธารณสุข",
 };
@@ -29,7 +23,7 @@ export default function RootLayout({
   return (
     <html
       lang="th"
-      className={`${bodyFont.variable} ${monoFont.variable} h-full antialiased`}
+      className={`${promptFont.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
         {children}

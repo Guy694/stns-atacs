@@ -2,8 +2,10 @@ import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { loginWithPasswordAction } from "@/app/auth/actions";
+import { loginWithPasswordAction, registerOfficerWithPasswordAction } from "@/app/auth/actions";
+import { listAllFacilitiesForSelect } from "@/lib/assets";
 import { getCurrentUser } from "@/lib/auth";
+import { getGoogleAuthStatus } from "@/lib/google-auth";
 import { getThaiIdStatus } from "@/lib/thaiid";
 
 type LoginPageProps = {
@@ -15,15 +17,27 @@ function readQueryValue(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
 
-export default async function LoginPage({ searchParams }: LoginPageProps) {
-  const user = await getCurrentUser();
-  if (user) redirect("/");
+function safeNextPath(value: string) {
+  if (!value || !value.startsWith("/") || value.startsWith("//")) return "/dashboard";
+  if (value.includes("\\")) return "/dashboard";
+  return value;
+}
 
+export default async function LoginPage({ searchParams }: LoginPageProps) {
   const params = await searchParams;
+  const nextPath = safeNextPath(readQueryValue(params.next));
+  const user = await getCurrentUser();
+  if (user) redirect(nextPath);
+
   const error = readQueryValue(params.error);
   const notice = readQueryValue(params.notice);
   const isThaiDTab = readQueryValue(params.thaid) === "1";
-  const thaiIdStatus = getThaiIdStatus();
+  const isOfficerRegistration = readQueryValue(params.register) === "1";
+  const thaiIdStatus = await getThaiIdStatus();
+  const googleAuthStatus = getGoogleAuthStatus();
+  const hasAltLogin = thaiIdStatus.enabled || googleAuthStatus.enabled;
+  const facilities = isOfficerRegistration ? await listAllFacilitiesForSelect() : [];
+  const showTestCredentials = process.env.NODE_ENV !== "production";
 
   return (
     <div className="min-h-screen flex" style={{ background: "var(--background)" }}>
@@ -49,16 +63,16 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
             </div>
             <div>
               <p className="text-white font-bold text-lg leading-tight">ATACS</p>
-              <p className="text-emerald-100 text-xs">Satun Health IT Assets</p>
+              <p className="text-emerald-100 text-xs">Asset Tracking and Control System</p>
             </div>
           </div>
-          <h2 className="text-white text-3xl font-bold leading-snug">
+          <h2 className="text-white text-6xl font-bold leading-snug">
             ระบบทะเบียน<br />ทรัพย์สินสารสนเทศ<br />จังหวัดสตูล
           </h2>
           <p className="text-emerald-100 mt-4 text-sm leading-7">
-            บริหารจัดการทรัพย์สิน IT ของหน่วยบริการสาธารณสุข
-            ในจังหวัดสตูลอย่างเป็นระบบ ครบวงจร
+            สำนักงานสาธารณสุขจังหวัดสตูล
           </p>
+     
         </div>
 
         {/* Stats strip */}
@@ -77,11 +91,11 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
         </div>
 
         {/* Bottom link */}
-        <div className="relative z-10">
-          <Link href="/public" className="inline-flex items-center gap-2 text-emerald-100 hover:text-white transition text-sm">
+        {/* <div className="relative z-10">
+          <Link href="/" className="inline-flex items-center gap-2 text-emerald-100 hover:text-white transition text-sm">
             <span>←</span> ดู Public Dashboard
           </Link>
-        </div>
+        </div> */}
       </div>
 
       {/* ── Right panel (form) ──────────────────────────────────────── */}
@@ -101,45 +115,15 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
         <div className="w-full max-w-md">
           {/* Heading */}
           <div className="mb-8">
-            <h1 className="text-3xl font-bold" style={{ color: "var(--foreground)" }}>เข้าสู่ระบบ</h1>
+            <h1 className="text-3xl font-bold" style={{ color: "var(--foreground)" }}>
+              {isOfficerRegistration ? "ลงทะเบียนเจ้าหน้าที่" : "เข้าสู่ระบบ"}
+            </h1>
             <p className="mt-2 text-sm" style={{ color: "var(--muted)" }}>
-              ยินดีต้อนรับกลับ — กรอก Username และรหัสผ่านเพื่อเข้าใช้งาน
+              {isOfficerRegistration
+                ? "กรอกข้อมูลให้ครบถ้วน จากนั้นรอผู้ดูแลระบบอนุมัติการเข้าใช้งาน"
+                : ""}
             </p>
           </div>
-
-          {/* Dev credentials hint */}
-          {process.env.NODE_ENV !== "production" && (
-            <div className="mb-6 rounded-2xl p-4 text-xs space-y-2"
-              style={{ background: "rgba(234,179,8,0.08)", border: "1px dashed rgba(234,179,8,0.5)" }}>
-              <p className="font-bold" style={{ color: "#92400e" }}>🔧 Dev — บัญชีทดสอบ</p>
-              <table className="w-full border-separate" style={{ borderSpacing: "0 2px" }}>
-                <thead>
-                  <tr className="text-left" style={{ color: "#78350f" }}>
-                    <th className="pr-3 font-semibold">Role</th>
-                    <th className="pr-3 font-semibold">Username</th>
-                    <th className="font-semibold">Password</th>
-                  </tr>
-                </thead>
-                <tbody style={{ color: "#451a03" }}>
-                  <tr>
-                    <td className="pr-3 py-0.5">admin</td>
-                    <td className="pr-3 font-mono">atacs_admin</td>
-                    <td className="font-mono">Admin@2026</td>
-                  </tr>
-                  <tr>
-                    <td className="pr-3 py-0.5">officer</td>
-                    <td className="pr-3 font-mono">nakharin</td>
-                    <td className="font-mono">Officer@2026</td>
-                  </tr>
-                  <tr>
-                    <td className="pr-3 py-0.5">officer</td>
-                    <td className="pr-3 font-mono">thanaphon.r</td>
-                    <td className="font-mono">Staff@2026</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          )}
 
           {/* Alerts */}
           {notice && (
@@ -161,42 +145,171 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
               boxShadow: "0 20px 60px rgba(22,163,74,0.12)",
             }}>
 
-            {isThaiDTab ? (
+            {isOfficerRegistration ? (
+              <>
+                <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+                  แบบฟอร์มนี้สำหรับเจ้าหน้าที่หน่วยบริการ บัญชีจะยังเข้าใช้งานไม่ได้จนกว่าแอดมินอนุมัติ
+                </div>
+                <form action={registerOfficerWithPasswordAction} className="space-y-4">
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-1.5">
+                      <label htmlFor="registerFirstName" className="text-sm font-semibold">ชื่อ</label>
+                      <input
+                        id="registerFirstName"
+                        name="firstName"
+                        type="text"
+                        autoComplete="given-name"
+                        required
+                        className="w-full rounded-2xl border px-4 py-3 text-sm outline-none transition focus:border-[var(--accent)]"
+                        style={{ borderColor: "var(--line)" }}
+                        placeholder="ชื่อจริง"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label htmlFor="registerLastName" className="text-sm font-semibold">นามสกุล</label>
+                      <input
+                        id="registerLastName"
+                        name="lastName"
+                        type="text"
+                        autoComplete="family-name"
+                        required
+                        className="w-full rounded-2xl border px-4 py-3 text-sm outline-none transition focus:border-[var(--accent)]"
+                        style={{ borderColor: "var(--line)" }}
+                        placeholder="นามสกุล"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label htmlFor="registerEmail" className="text-sm font-semibold">อีเมล</label>
+                    <input
+                      id="registerEmail"
+                      name="email"
+                      type="email"
+                      autoComplete="email"
+                      required
+                      className="w-full rounded-2xl border px-4 py-3 text-sm outline-none transition focus:border-[var(--accent)]"
+                      style={{ borderColor: "var(--line)" }}
+                      placeholder="name@example.go.th"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label htmlFor="registerOfficerPosition" className="text-sm font-semibold">ตำแหน่งเจ้าหน้าที่</label>
+                    <input
+                      id="registerOfficerPosition"
+                      name="officerPosition"
+                      type="text"
+                      required
+                      minLength={2}
+                      maxLength={150}
+                      className="w-full rounded-2xl border px-4 py-3 text-sm outline-none transition focus:border-[var(--accent)]"
+                      style={{ borderColor: "var(--line)" }}
+                      placeholder="เช่น นักวิชาการคอมพิวเตอร์"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label htmlFor="registerFacility" className="text-sm font-semibold">หน่วยงานที่สังกัด</label>
+                    <select
+                      id="registerFacility"
+                      name="facilityId"
+                      required
+                      className="w-full rounded-2xl border bg-white px-4 py-3 text-sm outline-none transition focus:border-[var(--accent)]"
+                      style={{ borderColor: "var(--line)" }}
+                    >
+                      <option value="">— เลือกหน่วยงาน —</option>
+                      {facilities.map((facility) => (
+                        <option key={facility.id} value={facility.id}>
+                          {facility.facility_name}{facility.district_name ? ` · อ.${facility.district_name}` : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label htmlFor="registerUsername" className="text-sm font-semibold">Username</label>
+                    <input
+                      id="registerUsername"
+                      name="username"
+                      type="text"
+                      autoComplete="username"
+                      required
+                      minLength={4}
+                      maxLength={50}
+                      pattern="[a-zA-Z0-9._-]+"
+                      className="w-full rounded-2xl border px-4 py-3 text-sm outline-none transition focus:border-[var(--accent)]"
+                      style={{ borderColor: "var(--line)" }}
+                      placeholder="เช่น somchai.j"
+                    />
+                    <p className="text-xs text-[var(--muted)]">ใช้ตัวอักษรอังกฤษ ตัวเลข จุด ขีดกลาง หรือขีดล่าง</p>
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-1.5">
+                      <label htmlFor="registerPassword" className="text-sm font-semibold">รหัสผ่าน</label>
+                      <input
+                        id="registerPassword"
+                        name="password"
+                        type="password"
+                        autoComplete="new-password"
+                        required
+                        minLength={10}
+                        className="w-full rounded-2xl border px-4 py-3 text-sm outline-none transition focus:border-[var(--accent)]"
+                        style={{ borderColor: "var(--line)" }}
+                        placeholder="อย่างน้อย 10 ตัว"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label htmlFor="registerConfirmPassword" className="text-sm font-semibold">ยืนยันรหัสผ่าน</label>
+                      <input
+                        id="registerConfirmPassword"
+                        name="confirmPassword"
+                        type="password"
+                        autoComplete="new-password"
+                        required
+                        minLength={10}
+                        className="w-full rounded-2xl border px-4 py-3 text-sm outline-none transition focus:border-[var(--accent)]"
+                        style={{ borderColor: "var(--line)" }}
+                        placeholder="กรอกซ้ำอีกครั้ง"
+                      />
+                    </div>
+                  </div>
+                  <button
+                    type="submit"
+                    className="w-full rounded-2xl bg-[var(--accent-strong)] py-3 text-sm font-bold text-white transition hover:opacity-90 active:scale-[0.98]"
+                  >
+                    ส่งคำขอลงทะเบียน
+                  </button>
+                </form>
+                <div className="text-center">
+                  <Link href="/login" className="text-sm font-semibold hover:underline" style={{ color: "var(--accent)" }}>
+                    ← กลับหน้าเข้าสู่ระบบ
+                  </Link>
+                </div>
+              </>
+            ) : isThaiDTab && thaiIdStatus.enabled ? (
               <>
                 <div className="flex items-center gap-3 p-3 rounded-2xl"
                   style={{ background: "rgba(22,163,74,0.08)" }}>
                   <span className="text-2xl">🪪</span>
                   <p className="text-sm" style={{ color: "var(--muted)" }}>
-                    ยืนยันตัวตนด้วย ThaiD ผ่าน DOPA OAuth 2.0 — หากยังไม่มีบัญชีจะพาไปสมัครสมาชิกอัตโนมัติ
+                    ยืนยันตัวตนด้วย ThaiD หากยังไม่มีบัญชีจะพาไปสมัครสมาชิกอัตโนมัติ
                   </p>
                 </div>
-                {thaiIdStatus.enabled ? (
-                  <>
-                    <Link
-                      href="/api/auth/thaiid/authorize"
-                      className="flex items-center justify-center gap-2 w-full rounded-2xl py-3 text-sm font-bold text-white transition hover:opacity-90 active:scale-[0.98]"
-                      style={{ background: "linear-gradient(135deg, var(--accent) 0%, var(--accent-strong) 100%)", boxShadow: "0 4px 16px rgba(99,102,241,0.35)" }}
-                    >
-                      🪪 ดำเนินการผ่าน ThaiD →
-                    </Link>
-                    <p className="text-xs text-center" style={{ color: "var(--muted)" }}>
-                      หากไม่พบข้อมูลผู้ใช้งาน ระบบจะพาไปหน้าสมัครสมาชิกอัตโนมัติ
-                    </p>
-                  </>
-                ) : (
-                  <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                    {thaiIdStatus.reason ?? "ThaiD ไม่พร้อมใช้งานในขณะนี้"}
-                  </div>
-                )}
-                <div className="text-center">
-                  <Link href="/login" className="text-sm font-semibold hover:underline" style={{ color: "var(--accent)" }}>
-                    ← กลับเข้าสู่ระบบด้วย Username
+                <>
+                  <Link
+                    href="/api/auth/thaiid/authorize"
+                    className="flex items-center justify-center gap-2 w-full rounded-2xl py-3 text-sm font-bold text-white transition hover:opacity-90 active:scale-[0.98]"
+                    style={{ background: "linear-gradient(135deg, var(--accent) 0%, var(--accent-strong) 100%)", boxShadow: "0 4px 16px rgba(21,128,61,0.28)" }}
+                  >
+                    🪪 ดำเนินการผ่าน ThaiD →
                   </Link>
-                </div>
+                  <p className="text-xs text-center" style={{ color: "var(--muted)" }}>
+                    หากไม่พบข้อมูลผู้ใช้งาน ระบบจะพาไปหน้าสมัครสมาชิกอัตโนมัติ
+                  </p>
+                </>
+                
               </>
             ) : (
               <>
                 <form action={loginWithPasswordAction} className="space-y-4">
+                  <input type="hidden" name="next" value={nextPath} />
                   <div className="space-y-1.5">
                     <label htmlFor="username" className="text-sm font-semibold" style={{ color: "var(--foreground)" }}>
                       Username
@@ -236,48 +349,79 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
                   <button
                     type="submit"
                     className="w-full rounded-2xl py-3 text-sm font-bold text-white transition hover:opacity-90 active:scale-[0.98]"
-                    style={{ background: "linear-gradient(135deg, var(--accent) 0%, var(--accent-strong) 100%)", boxShadow: "0 4px 16px rgba(99,102,241,0.35)" }}
+                    style={{ background: "linear-gradient(135deg, var(--accent) 0%, var(--accent-strong) 100%)", boxShadow: "0 4px 16px rgba(21,128,61,0.28)" }}
                   >
                     เข้าสู่ระบบ →
                   </button>
                 </form>
 
-                {/* Divider */}
-                <div className="flex items-center gap-3">
-                  <div className="flex-1 h-px" style={{ background: "var(--line)" }} />
-                  <span className="text-xs" style={{ color: "var(--muted)" }}>หรือ</span>
-                  <div className="flex-1 h-px" style={{ background: "var(--line)" }} />
-                </div>
-
-                {/* ThaiD button */}
-                {thaiIdStatus.enabled ? (
-                  <Link
-                    href="/login?thaid=1"
-                    className="flex items-center justify-center gap-2 w-full rounded-2xl py-3 text-sm font-bold transition hover:opacity-80 active:scale-[0.98]"
-                    style={{
-                      border: "2px solid var(--accent)",
-                      color: "var(--accent)",
-                      background: "rgba(99,102,241,0.04)",
-                    }}
-                  >
-                    <img src="thaid.png" alt="ThaiD" className="h-8 w-8 rounded-full" /> เข้าสู่ระบบด้วย ThaiD
-                  </Link>
-                ) : (
-                  <div className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-xs text-stone-600 text-center">
-                    ThaiD ไม่พร้อมใช้งาน: {thaiIdStatus.reason ?? "กรุณาใช้ Username/Password ชั่วคราว"}
+                {showTestCredentials ? (
+                  <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-xs text-sky-900">
+                    <p className="font-semibold">บัญชีทดสอบ (สำหรับ Development)</p>
+                    <ul className="mt-2 space-y-1.5">
+                      <li>
+                        <span className="font-medium">Admin:</span> username <code className="rounded bg-white px-1.5 py-0.5">atacs_admin</code> / password <code className="rounded bg-white px-1.5 py-0.5">Admin@2026</code>
+                      </li>
+                      <li>
+                        <span className="font-medium">Officer:</span> username <code className="rounded bg-white px-1.5 py-0.5">nakharin</code> / password <code className="rounded bg-white px-1.5 py-0.5">Officer@2026</code>
+                      </li>
+                    </ul>
                   </div>
-                )}
+                ) : null}
 
-                <p className="text-xs text-center" style={{ color: "var(--muted)" }}>
-                  ติดต่อผู้ดูแลระบบหากยังไม่มี Username
-                </p>
+                {hasAltLogin ? (
+                  <>
+                    {/* Divider */}
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1 h-px" style={{ background: "var(--line)" }} />
+                      <span className="text-xs" style={{ color: "var(--muted)" }}>หรือ</span>
+                      <div className="flex-1 h-px" style={{ background: "var(--line)" }} />
+                    </div>
+
+                    {/* ThaiD button */}
+                    {thaiIdStatus.enabled ? (
+                      <Link
+                        href={`/login?thaid=1${nextPath !== "/" ? `&next=${encodeURIComponent(nextPath)}` : ""}`}
+                        className="flex items-center justify-center gap-2 w-full rounded-2xl py-3 text-sm font-bold transition hover:opacity-80 active:scale-[0.98]"
+                        style={{
+                          border: "2px solid var(--accent)",
+                          color: "var(--accent)",
+                          background: "rgba(21,128,61,0.06)",
+                        }}
+                      >
+                        <Image src="/thaid.png" alt="ThaiD" width={32} height={32} className="h-8 w-8 rounded-full" /> เข้าสู่ระบบด้วย ThaiD
+                      </Link>
+                    ) : null}
+
+                    {googleAuthStatus.enabled ? (
+                      <Link
+                        href={`/api/auth/google/authorize${nextPath !== "/" ? `?next=${encodeURIComponent(nextPath)}` : ""}`}
+                        className="flex items-center justify-center gap-3 w-full rounded-2xl border border-stone-300 bg-white py-3 text-sm font-bold text-stone-700 transition hover:bg-stone-50 active:scale-[0.98]"
+                      >
+                        <span className="text-lg font-bold text-blue-600">G</span>
+                        เข้าสู่ระบบด้วย Gmail
+                      </Link>
+                    ) : null}
+                  </>
+                ) : null}
+
+                {/* <p className="text-xs text-center" style={{ color: "var(--muted)" }}>
+                  หากอีเมล Google ยังไม่มีในระบบ ระบบจะพาไปลงทะเบียนและรอแอดมินอนุมัติ
+                </p> */}
+
+                <Link
+                  href={`/login?register=1${nextPath !== "/" ? `&next=${encodeURIComponent(nextPath)}` : ""}`}
+                  className="flex items-center justify-center gap-2 w-full rounded-2xl border border-emerald-300 bg-emerald-50 py-3 text-sm font-bold text-emerald-800 transition hover:bg-emerald-100 active:scale-[0.98]"
+                >
+                  ลงทะเบียนเจ้าหน้าที่ใหม่ →
+                </Link>
               </>
             )}
           </div>
 
           {/* Footer */}
           <div className="mt-6 text-center text-sm" style={{ color: "var(--muted)" }}>
-            <Link href="/public" className="font-semibold hover:underline" style={{ color: "var(--accent)" }}>
+            <Link href="/" className="font-semibold hover:underline" style={{ color: "var(--accent)" }}>
               ← กลับหน้า Public Dashboard
             </Link>
           </div>

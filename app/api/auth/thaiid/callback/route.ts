@@ -3,12 +3,15 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   clearPendingRegistrationClaim,
   createSession,
-  findUserByThaiCid,
+  findOrLinkUserByVerifiedThaiD,
+  getUserDisplayName,
   normalizeDisplayName,
   normalizeThaiCid,
-  setPendingRegistrationClaim,
+  setPendingThaiDRegistrationClaim,
 } from "@/lib/auth";
 import { getThaiIdConfig } from "@/lib/thaiid";
+import { notifyTelegramSafe } from "@/lib/telegram";
+import { recordSecurityEvent } from "@/lib/security";
 
 const STATE_COOKIE_NAME = "atacs_thaid_state";
 
@@ -35,6 +38,25 @@ function toRegisterUrl(req: NextRequest, search: Record<string, string>) {
     url.searchParams.set(key, value);
   }
   return url;
+}
+
+function requestDetails(req: NextRequest) {
+  return {
+    IP: req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? req.headers.get("x-real-ip") ?? "unknown",
+    "User Agent": req.headers.get("user-agent") ?? "unknown",
+  };
+}
+
+async function recordThaiDSecurityEvent(req: NextRequest, eventType: string, detail: string, identity?: string) {
+  const context = requestDetails(req);
+  await recordSecurityEvent({
+    eventType,
+    ipAddress: context.IP,
+    identity,
+    path: req.nextUrl.pathname,
+    detail,
+  });
+  return context;
 }
 
 async function fetchWithTimeout(input: string, init: RequestInit, timeoutMs: number) {
@@ -65,7 +87,7 @@ function readDisplayName(token: ThaiIdTokenResponse) {
 }
 
 export async function GET(req: NextRequest) {
-  const config = getThaiIdConfig(req.nextUrl.origin);
+  const config = await getThaiIdConfig(req.nextUrl.origin);
   const stateCookie = req.cookies.get(STATE_COOKIE_NAME)?.value;
   const queryState = req.nextUrl.searchParams.get("state")?.trim() ?? "";
   const code = req.nextUrl.searchParams.get("code")?.trim() ?? "";
@@ -85,6 +107,12 @@ export async function GET(req: NextRequest) {
 
   if (error) {
     const detail = errorDescription ? ` (${errorDescription})` : "";
+    const context = await recordThaiDSecurityEvent(req, "thaid_oauth_error", `${error}${detail}`);
+    await notifyTelegramSafe({
+      category: "security",
+      title: "ThaiD login ไม่สำเร็จ",
+      details: { สาเหตุ: `${error}${detail}`, ...context },
+    });
     const response = NextResponse.redirect(
       toLoginUrl(req, {
         error: `ThaiD เกิดข้อผิดพลาด: ${error}${detail}`,
@@ -96,6 +124,12 @@ export async function GET(req: NextRequest) {
   }
 
   if (!stateCookie || !queryState || stateCookie !== queryState) {
+    const context = await recordThaiDSecurityEvent(req, "thaid_oauth_state_mismatch", "OAuth state ไม่ถูกต้อง");
+    await notifyTelegramSafe({
+      category: "security",
+      title: "ตรวจพบ ThaiD OAuth state ไม่ถูกต้อง",
+      details: context,
+    });
     const response = NextResponse.redirect(
       toLoginUrl(req, {
         error: "เซสชัน ThaiD ไม่ถูกต้อง กรุณาลองใหม่",
@@ -156,9 +190,19 @@ export async function GET(req: NextRequest) {
       throw new Error("ThaiD ไม่ส่งเลขบัตรประชาชน 13 หลัก");
     }
 
-    const user = await findUserByThaiCid(thaiCid);
+    const user = await findOrLinkUserByVerifiedThaiD({
+      thaiCid,
+      firstName: typeof tokenJson.given_name === "string" ? tokenJson.given_name : "",
+      lastName: typeof tokenJson.family_name === "string" ? tokenJson.family_name : "",
+    });
     if (user) {
       if (!user.is_active) {
+        const context = await recordThaiDSecurityEvent(req, "login_pending_account", "ThaiD", getUserDisplayName(user));
+        await notifyTelegramSafe({
+          category: "security",
+          title: "บัญชีที่ยังไม่ได้รับอนุมัติพยายามเข้าสู่ระบบ",
+          details: { ผู้ใช้: getUserDisplayName(user), วิธี: "ThaiD", ...context },
+        });
         const response = NextResponse.redirect(new URL("/pending-approval", req.url));
         response.cookies.delete(STATE_COOKIE_NAME);
         return response;
@@ -166,13 +210,18 @@ export async function GET(req: NextRequest) {
 
       await clearPendingRegistrationClaim();
       await createSession(user.id);
+      await notifyTelegramSafe({
+        category: "security",
+        title: "เข้าสู่ระบบสำเร็จ",
+        details: { ผู้ใช้: getUserDisplayName(user), วิธี: "ThaiD", ...requestDetails(req) },
+      });
 
       const response = NextResponse.redirect(new URL("/", req.url));
       response.cookies.delete(STATE_COOKIE_NAME);
       return response;
     }
 
-    await setPendingRegistrationClaim(thaiCid, displayName);
+    await setPendingThaiDRegistrationClaim(thaiCid, displayName);
     const response = NextResponse.redirect(
       toRegisterUrl(req, {
         notice: "ไม่พบข้อมูลผู้ใช้ในระบบ กรุณาสมัครสมาชิกครั้งแรก",
@@ -182,6 +231,12 @@ export async function GET(req: NextRequest) {
     return response;
   } catch (error) {
     const message = error instanceof Error ? error.message : "ไม่สามารถเข้าสู่ระบบด้วย ThaiD ได้";
+    const context = await recordThaiDSecurityEvent(req, "thaid_login_failed", message);
+    await notifyTelegramSafe({
+      category: "security",
+      title: "ThaiD login ไม่สำเร็จ",
+      details: { สาเหตุ: message, ...context },
+    });
     const isTimeout = message.includes("Abort") || message.toLowerCase().includes("timeout");
     const response = NextResponse.redirect(
       toLoginUrl(req, {

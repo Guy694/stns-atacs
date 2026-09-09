@@ -2,23 +2,31 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+
+import { AppIcon, type IconName } from "@/app/_components/ui/icon";
+import { APP_MENU_GROUPS, APP_MENU_ITEMS, type AppMenuGroupKey } from "@/lib/menu";
 
 type NavUser = {
   fullName: string;
   role: "admin" | "officer" | "viewer";
   facilityId?: number | null;
+  managedAssetFacilityIds?: number[];
 };
 
 type SidebarProps = {
   user: NavUser;
   grantedPermissions: string[];
+  pendingRegistrationCount: number;
+  menuVisibility: Record<string, boolean>;
 };
 
 type NavItem = {
+  key: string;
   href: string;
   label: string;
-  icon: string;
+  icon: IconName;
+  group: AppMenuGroupKey;
   adminOnly?: boolean;
   officerOnly?: boolean;
   hideForViewer?: boolean;
@@ -26,96 +34,140 @@ type NavItem = {
   exact?: boolean;
 };
 
-const NAV_ITEMS: NavItem[] = [
-  { href: "/", label: "Dashboard", icon: "⊞", exact: true },
-  { href: "/assets", label: "ทรัพย์สินทั้งหมด", icon: "☰", permissionKey: "assets.view" },
-  { href: "/inspection", label: "ตรวจนับทรัพย์สิน", icon: "✔", permissionKey: "inspection.view" },
-  { href: "/transfer", label: "โอนย้ายทรัพย์สิน", icon: "⇄", hideForViewer: true, permissionKey: "transfer.manage" },
-  { href: "/disposal", label: "จำหน่าย/ชำรุด/สูญหาย", icon: "⊠", hideForViewer: true, permissionKey: "disposal.manage" },
-  { href: "/reports", label: "รายงาน", icon: "≡", permissionKey: "reports.view" },
-  { href: "/map", label: "แผนที่ทรัพย์สิน", icon: "◎" },
-  { href: "/agent-download", label: "ดาวน์โหลด Agent", icon: "💾", officerOnly: true, permissionKey: "agent.manage" },
-  { href: "/admin/settings", label: "ตั้งค่าระบบ", icon: "◈", permissionKey: "permissions.manage" },
-  { href: "/admin/users", label: "ผู้ใช้งาน", icon: "◉", permissionKey: "users.manage" },
-  { href: "/admin/audit", label: "Audit Log", icon: "📋", permissionKey: "audit.view" },
-];
-
-function NavLink({ item, pathname, onClick }: { item: NavItem; pathname: string; onClick?: () => void }) {
+function NavLink({
+  item,
+  pathname,
+  pendingRegistrationCount,
+  onClick,
+}: {
+  item: NavItem;
+  pathname: string;
+  pendingRegistrationCount: number;
+  onClick?: () => void;
+}) {
   const isActive = item.exact ? pathname === item.href : pathname.startsWith(item.href);
+  const badgeCount = item.href === "/admin/users" ? pendingRegistrationCount : 0;
   return (
     <Link
       href={item.href}
       onClick={onClick}
-      className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all ${
+      className={`flex min-h-11 items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
         isActive
           ? "bg-white/20 text-white shadow-sm ring-1 ring-white/25"
           : "text-white/65 hover:bg-white/10 hover:text-white"
       }`}
     >
-      <span className="text-base leading-none">{item.icon}</span>
-      {item.label}
+      <AppIcon name={item.icon} className="w-4 shrink-0" />
+      <span className="flex-1">{item.label}</span>
+      {badgeCount > 0 && (
+        <span className="min-w-5 rounded-full bg-amber-400 px-1.5 py-0.5 text-center text-[10px] font-bold leading-none text-amber-950">
+          {badgeCount > 99 ? "99+" : badgeCount}
+        </span>
+      )}
     </Link>
   );
 }
 
-export function Sidebar({ user, grantedPermissions }: SidebarProps) {
+export function Sidebar({ user, grantedPermissions, pendingRegistrationCount, menuVisibility }: SidebarProps) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  const items = NAV_ITEMS.filter((item) => {
+  useEffect(() => {
+    if (!mobileOpen) return;
+
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setMobileOpen(false);
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [mobileOpen]);
+
+  const baseItems = APP_MENU_ITEMS.filter((item) => {
+    if (!menuVisibility[item.key]) return false;
+    if (user.role === "officer" && item.key === "assets") return false;
     if (item.adminOnly && user.role !== "admin") return false;
     if (item.officerOnly && user.role !== "officer") return false;
     if (item.hideForViewer && user.role === "viewer") return false;
     if (item.permissionKey && !grantedPermissions.includes(item.permissionKey)) return false;
     return true;
   });
+  const items: NavItem[] =
+    user.role === "officer"
+      ? baseItems.flatMap((item) => {
+          if (item.key !== "dashboard") return [item];
+          return [
+            item,
+            {
+              key: "officer-assets",
+              href: (user.managedAssetFacilityIds?.length ?? 0) > 1
+                ? "/facilities"
+                : user.facilityId
+                  ? `/facilities/${user.facilityId}`
+                  : "/profile",
+              label: (user.managedAssetFacilityIds?.length ?? 0) > 1 ? "หน่วยงานในความดูแล" : "รายการทรัพย์สิน",
+              icon: "package",
+              group: "overview",
+            },
+          ];
+        })
+      : baseItems;
 
   const sidebarContent = (
     <div className="flex h-full flex-col">
       {/* Brand */}
       <div className="border-b border-white/10 px-5 py-5">
-        <p className="font-mono text-[10px] tracking-[0.3em] text-white/40 uppercase">ATACS</p>
-        <p className="mt-0.5 text-base font-semibold text-white"> ทะเบียนทรัพย์สินสารสนเทศ</p>
-        <p className="mt-0.5 text-xs text-white">สังกัด สป. จังหวัดสตูล</p>
+        <p className="font-mono text-xs font-semibold tracking-[0.18em] text-white/70">ATACS</p>
+        <p className="mt-1 text-sm font-semibold text-white">ทะเบียนทรัพย์สินสารสนเทศ</p>
+        <p className="mt-0.5 text-xs text-white/70">สป. จังหวัดสตูล</p>
       </div>
 
       {/* Nav */}
       <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 py-4 text-white">
-        {items.map((item) => (
-          <NavLink key={item.href} item={item} pathname={pathname} onClick={() => setMobileOpen(false)} />
-        ))}
-
-        {user.role === "officer" && (() => {
-          const href = user.facilityId ? `/facilities/${user.facilityId}` : "/profile";
-          const isActive = user.facilityId
-            ? pathname === `/facilities/${user.facilityId}`
-            : pathname === "/profile";
+        {APP_MENU_GROUPS.map((group) => {
+          const groupItems = items.filter((item) => item.group === group.key);
+          if (groupItems.length === 0) return null;
           return (
-            <Link
-              href={href}
-              onClick={() => setMobileOpen(false)}
-              className={`mt-1 flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all ${
-                isActive
-                  ? "bg-white/20 text-white shadow-sm ring-1 ring-white/25"
-                  : "text-white/75 hover:bg-white/10 hover:text-white"
-              }`}
-            >
-              <span className="text-base leading-none">🏠</span>
-              หน่วยงานของฉัน
-            </Link>
+            <div key={group.key} className="mb-5">
+              <p className="mb-1.5 px-3 text-[11px] font-semibold text-white/55">{group.label}</p>
+              <div className="space-y-0.5">
+                {groupItems.map((item) => (
+                  <NavLink
+                    key={item.href}
+                    item={item}
+                    pathname={pathname}
+                    pendingRegistrationCount={pendingRegistrationCount}
+                    onClick={() => setMobileOpen(false)}
+                  />
+                ))}
+              </div>
+            </div>
           );
-        })()}
+        })}
 
-        <div className="my-3 h-px bg-white/10" />
+        {user.role !== "officer" && (
+          <>
+            <div className="my-3 h-px bg-white/10" />
 
-        <Link
-          href="/public"
-          onClick={() => setMobileOpen(false)}
-          className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-white/40 transition hover:bg-white/10 hover:text-white/70"
-        >
-          <span className="text-base leading-none">◌</span>
-          Public Dashboard
-        </Link>
+            <Link
+              href="/"
+              onClick={() => setMobileOpen(false)}
+              className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-white/40 transition hover:bg-white/10 hover:text-white/70"
+            >
+              <AppIcon name="globe" className="w-4 shrink-0" />
+              หน้าข้อมูลสาธารณะ
+            </Link>
+          </>
+        )}
       </nav>
     </div>
   );
@@ -125,14 +177,10 @@ export function Sidebar({ user, grantedPermissions }: SidebarProps) {
       {/* Mobile toggle button */}
       <button
         onClick={() => setMobileOpen(true)}
-        className="fixed left-4 top-4 z-40 flex h-9 w-9 items-center justify-center rounded-xl sidebar-gradient text-white shadow-lg lg:hidden"
+        className="fixed left-3 top-3 z-40 flex h-11 w-11 items-center justify-center rounded-xl sidebar-gradient text-white shadow-md ring-1 ring-white/20 lg:hidden"
         aria-label="เปิดเมนู"
       >
-        <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-          <rect x="2" y="4" width="14" height="1.5" rx="0.75" fill="currentColor" />
-          <rect x="2" y="8.25" width="10" height="1.5" rx="0.75" fill="currentColor" />
-          <rect x="2" y="12.5" width="14" height="1.5" rx="0.75" fill="currentColor" />
-        </svg>
+        <AppIcon name="menu" />
       </button>
 
       {/* Mobile overlay */}
@@ -145,15 +193,16 @@ export function Sidebar({ user, grantedPermissions }: SidebarProps) {
 
       {/* Mobile drawer */}
       <div
-        className={`fixed inset-y-0 left-0 z-50 w-64 sidebar-gradient transition-transform duration-300 lg:hidden ${
+        className={`fixed inset-y-0 left-0 z-50 w-[82vw] max-w-80 sidebar-gradient transition-transform duration-300 lg:hidden ${
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
         <button
           onClick={() => setMobileOpen(false)}
-          className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-lg text-white/60 hover:bg-white/10 hover:text-white"
+          aria-label="ปิดเมนู"
+          className="absolute right-3 top-3 flex h-10 w-10 items-center justify-center rounded-xl text-white/70 hover:bg-white/10 hover:text-white"
         >
-          ✕
+          <AppIcon name="close" />
         </button>
         {sidebarContent}
       </div>

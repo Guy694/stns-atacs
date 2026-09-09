@@ -24,6 +24,8 @@ const mysql = require("mysql2/promise");
     "cpu_model",
     "ram_mb",
     "disk_total_gb",
+    "disk_free_gb",
+    "disk_used_gb",
     "location_detail",
     "agent_version",
     "status",

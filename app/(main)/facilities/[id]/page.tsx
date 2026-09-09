@@ -1,26 +1,52 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
+import { AppIcon } from "@/app/_components/ui/icon";
+import { StatusBadge } from "@/app/_components/ui/status-badge";
+import { ASSET_CLASS_OPTIONS, assetClassLabel } from "@/lib/asset-classes";
 import { getCurrentUser } from "@/lib/auth";
 import { getFacilityById, listAssets, listAllFacilitiesForSelect } from "@/lib/assets";
+import { formatThaiDate } from "@/lib/date-format";
+import { listActiveDeviceTypes } from "@/lib/device-types";
+import { listFacilityWorkGroups } from "@/lib/facility-work-groups";
+import { canAccessAssetFacility, canManageAssetRecord } from "@/lib/permissions";
 import { AssetFormModal } from "@/app/(main)/assets/_components/asset-form-modal";
 import { DeleteAssetButton } from "@/app/(main)/assets/_components/delete-asset-button";
-import { FacilityEditForm } from "./_components/facility-edit-form";
+import { FacilityAssetQrActions } from "@/app/(main)/facilities/[id]/_components/facility-asset-qr-actions";
 
-type Props = { params: Promise<{ id: string }> };
+type Props = {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+};
 
 const STATUS_LABELS: Record<string, string> = {
   Active: "พร้อมใช้งาน",
   Inactive: "ไม่ใช้งาน",
   Broken: "ชำรุด",
 };
-const STATUS_STYLE: Record<string, string> = {
-  Active: "bg-emerald-100 text-emerald-700",
-  Inactive: "bg-stone-100 text-stone-500",
-  Broken: "bg-rose-100 text-rose-700",
-};
+const STATUS_TONE = {
+  Active: "success",
+  Inactive: "warning",
+  Broken: "danger",
+} as const;
 
-export default async function FacilityDetailPage({ params }: Props) {
+function readParam(p: Record<string, string | string[] | undefined>, key: string) {
+  const value = p[key];
+  return Array.isArray(value) ? value[0] : (value ?? "");
+}
+
+function buildFacilityHref(facilityId: number, params: Record<string, string | number | undefined>) {
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== "") query.set(key, String(value));
+  }
+  const queryString = query.toString();
+  return queryString ? `/facilities/${facilityId}?${queryString}` : `/facilities/${facilityId}`;
+}
+
+
+
+export default async function FacilityDetailPage({ params, searchParams }: Props) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
@@ -28,34 +54,59 @@ export default async function FacilityDetailPage({ params }: Props) {
   const facilityId = Number(id);
   if (!facilityId) notFound();
 
-  if (user.role === "officer" && user.facilityId && user.facilityId !== facilityId) {
-    redirect(`/facilities/${user.facilityId}`);
+  if (!canAccessAssetFacility(user, facilityId)) {
+    redirect(user.facilityId ? "/facilities" : "/profile");
   }
 
-  if (user.role === "officer" && !user.facilityId) {
-    redirect("/assets");
-  }
+  const query = await searchParams;
+  const search = readParam(query, "search");
+  const statusFilter = readParam(query, "status");
+  const assetClassFilter = readParam(query, "assetClass");
+  const groupFilter = readParam(query, "group");
+  const workGroupFilter = Number(readParam(query, "workGroup")) || undefined;
+  const deviceTypeFilter = readParam(query, "deviceType");
+  const maDaysFilter = readParam(query, "maDays");
+  const maExpiringDays = Number(maDaysFilter) || undefined;
+  const sort = readParam(query, "sort") as "updated_desc" | "updated_asc" | "name_asc" | "name_desc" | "ma_soon";
+  const normalizedSort = ["updated_desc", "updated_asc", "name_asc", "name_desc", "ma_soon"].includes(sort) ? sort : undefined;
 
-  const [assets, facilitiesForSelect] = await Promise.all([
+  const [allAssets, assets, facilitiesForSelect, workGroups, deviceTypes] = await Promise.all([
     listAssets({ facilityId }),
-    listAllFacilitiesForSelect(),
+    listAssets({
+      facilityId,
+      workGroupId: workGroupFilter,
+      search: search || undefined,
+      status: statusFilter || undefined,
+      assetClass: assetClassFilter || undefined,
+      assetGroup: groupFilter === "Hardware" || groupFilter === "Software" ? groupFilter : undefined,
+      deviceType: deviceTypeFilter || undefined,
+      maExpiringDays,
+      sort: normalizedSort,
+    }),
+    listAllFacilitiesForSelect(user.role === "admin" ? undefined : { facilityId }),
+    listFacilityWorkGroups(facilityId),
+    listActiveDeviceTypes(),
   ]);
 
   const currentFacility = await getFacilityById(facilityId);
   if (!currentFacility) notFound();
 
-  const facilityName = assets[0]?.facilityName ?? currentFacility.name ?? `หน่วยงาน #${facilityId}`;
-  const districtName = assets[0]?.districtName ?? currentFacility.district_name ?? "";
+  const facilityName = allAssets[0]?.facilityName ?? currentFacility.name ?? `หน่วยงาน #${facilityId}`;
+  const districtName = allAssets[0]?.districtName ?? currentFacility.district_name ?? "";
 
-  const canManage = user.role === "admin" || user.facilityId === facilityId;
+  const canManageAssets = canManageAssetRecord(user, facilityId);
 
-  const totalAssets = assets.length;
-  const activeCount = assets.filter((a) => a.currentStatus === "Active").length;
-  const hardwareCount = assets.filter((a) => a.assetGroup === "Hardware").length;
-  const softwareCount = assets.filter((a) => a.assetGroup === "Software").length;
+  const totalAssets = allAssets.length;
+  const activeCount = allAssets.filter((a) => a.currentStatus === "Active").length;
+  const hardwareCount = allAssets.filter((a) => a.assetGroup === "Hardware").length;
+  const softwareCount = allAssets.filter((a) => a.assetGroup === "Software").length;
   const referenceDate = new Date();
+  const deviceTypeOptions = [...new Set(allAssets.map((asset) => asset.deviceType).filter(Boolean))].sort((a, b) =>
+    a.localeCompare(b, "th")
+  );
+  const hasActiveFilters = Boolean(search || statusFilter || assetClassFilter || groupFilter || workGroupFilter || deviceTypeFilter || maExpiringDays || normalizedSort);
 
-  const expiringSoon = assets
+  const expiringSoon = allAssets
     .filter((a) => a.maintenanceEndDate)
     .map((a) => ({
       ...a,
@@ -68,7 +119,11 @@ export default async function FacilityDetailPage({ params }: Props) {
     <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6">
       {/* Breadcrumb */}
       <div className="flex items-center gap-2 text-sm text-[var(--muted)]">
-        <Link href="/assets" className="hover:text-[var(--accent)]">ทะเบียนทรัพย์สิน</Link>
+        {user.role === "officer" ? (
+          <span>รายการทรัพย์สิน</span>
+        ) : (
+          <Link href="/assets" className="hover:text-[var(--accent)]">ทะเบียนทรัพย์สิน</Link>
+        )}
         <span>/</span>
         <span className="text-[var(--foreground)]">{facilityName}</span>
       </div>
@@ -83,8 +138,8 @@ export default async function FacilityDetailPage({ params }: Props) {
           {[
             { label: "ทรัพย์สินรวม", value: totalAssets },
             { label: "พร้อมใช้งาน", value: activeCount, green: true },
-            { label: "Hardware", value: hardwareCount },
-            { label: "Software", value: softwareCount },
+            { label: "ลักษณะฮาร์ดแวร์", value: hardwareCount },
+            { label: "ลักษณะซอฟต์แวร์", value: softwareCount },
           ].map((kpi) => (
             <div key={kpi.label} className="px-5 py-4">
               <p className="text-xs text-[var(--muted)]">{kpi.label}</p>
@@ -94,22 +149,19 @@ export default async function FacilityDetailPage({ params }: Props) {
         </div>
       </div>
 
-      {canManage && <FacilityEditForm facility={currentFacility} />}
+  
 
       {/* MA Alert */}
       {expiringSoon.length > 0 && (
         <div className="glass-panel rounded-2xl p-5">
-          <p className="text-sm font-semibold text-amber-700">⚠ MA ใกล้หมดอายุ ({expiringSoon.length} รายการ)</p>
+          <p className="flex items-center gap-2 text-sm font-semibold text-amber-700">
+            <AppIcon name="activity" className="h-4 w-4" /> MA ใกล้หมดอายุ ({expiringSoon.length} รายการ)
+          </p>
           <div className="mt-3 flex flex-wrap gap-2">
             {expiringSoon.map((a) => (
-              <span
-                key={a.id}
-                className={`rounded-full px-3 py-1 text-xs font-medium ${
-                  a.daysLeft <= 7 ? "bg-rose-100 text-rose-700" : a.daysLeft <= 20 ? "bg-amber-100 text-amber-700" : "bg-yellow-50 text-yellow-700"
-                }`}
-              >
+              <StatusBadge key={a.id} tone={a.daysLeft <= 7 ? "danger" : a.daysLeft <= 20 ? "warning" : "neutral"}>
                 {a.assetName} ({a.daysLeft <= 0 ? "หมดแล้ว" : `${a.daysLeft} วัน`})
-              </span>
+              </StatusBadge>
             ))}
           </div>
         </div>
@@ -117,38 +169,183 @@ export default async function FacilityDetailPage({ params }: Props) {
 
       {/* Asset Table */}
       <div className="glass-panel overflow-hidden rounded-2xl">
-        <div className="flex items-center justify-between border-b border-black/6 px-5 py-3">
-          <h2 className="font-semibold">รายการทรัพย์สินทั้งหมด</h2>
-          {canManage && (
-            <AssetFormModal facilities={facilitiesForSelect} fixedFacilityId={facilityId} updaterName={user.fullName} mode="create">
-              <button className="inline-flex items-center gap-1.5 rounded-full bg-[var(--accent-strong)] px-4 py-1.5 text-xs font-semibold text-white hover:opacity-90">
-                + เพิ่มทรัพย์สิน
-              </button>
-            </AssetFormModal>
-          )}
+        <div className="flex flex-col gap-3 border-b border-black/6 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="font-semibold">รายการทรัพย์สินของหน่วยงานนี้</h2>
+            <p className="mt-0.5 text-xs text-[var(--muted)]">
+              แสดง {assets.length.toLocaleString("th-TH")} จาก {totalAssets.toLocaleString("th-TH")} รายการ
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <FacilityAssetQrActions
+              facilityName={facilityName}
+              assets={allAssets.map((asset) => ({
+                id: asset.id,
+                assetRegistrationNo: asset.assetRegistrationNo,
+                assetName: asset.assetName,
+              }))}
+            />
+            {canManageAssets && (
+              <AssetFormModal
+                facilities={facilitiesForSelect}
+                deviceTypes={deviceTypes}
+                workGroups={workGroups}
+                fixedFacilityId={facilityId}
+                updaterName={user.fullName}
+                mode="create"
+              >
+                <button className="inline-flex min-h-11 items-center gap-1.5 rounded-xl bg-[var(--accent-strong)] px-4 py-2 text-xs font-semibold text-white hover:opacity-90">
+                  + เพิ่มทรัพย์สิน
+                </button>
+              </AssetFormModal>
+            )}
+          </div>
         </div>
 
+        <form method="GET" className="grid gap-3 border-b border-black/6 bg-[var(--neutral-bg)]/60 px-5 py-4 sm:grid-cols-2 lg:grid-cols-6">
+          <label className="min-w-0 lg:col-span-2">
+            <span className="sr-only">ค้นหาทรัพย์สิน</span>
+            <input
+              name="search"
+              defaultValue={search}
+              placeholder="ค้นหาชื่อ / เลขทะเบียน / Serial"
+              className="min-h-11 w-full rounded-xl border border-black/10 bg-white/85 px-4 py-2 text-sm outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/20"
+            />
+          </label>
+          <label>
+            <span className="sr-only">สถานะ</span>
+            <select
+              name="status"
+              defaultValue={statusFilter}
+              className="min-h-11 w-full rounded-xl border border-black/10 bg-white/85 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+            >
+              <option value="">ทุกสถานะ</option>
+              <option value="Active">พร้อมใช้งาน</option>
+              <option value="Inactive">ไม่ใช้งาน</option>
+              <option value="Broken">ชำรุด</option>
+            </select>
+          </label>
+          <label>
+            <span className="sr-only">กลุ่มครุภัณฑ์</span>
+            <select
+              name="assetClass"
+              defaultValue={assetClassFilter}
+              className="min-h-11 w-full rounded-xl border border-black/10 bg-white/85 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+            >
+              <option value="">ทุกกลุ่มครุภัณฑ์</option>
+              {ASSET_CLASS_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span className="sr-only">หมวด</span>
+            <select
+              name="group"
+              defaultValue={groupFilter}
+              className="min-h-11 w-full rounded-xl border border-black/10 bg-white/85 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+            >
+              <option value="">ทุกลักษณะ</option>
+              <option value="Hardware">ฮาร์ดแวร์</option>
+              <option value="Software">ซอฟต์แวร์</option>
+            </select>
+          </label>
+          <label>
+            <span className="sr-only">ประเภททรัพย์สิน / อุปกรณ์</span>
+            <select
+              name="deviceType"
+              defaultValue={deviceTypeFilter}
+              className="min-h-11 w-full rounded-xl border border-black/10 bg-white/85 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+            >
+              <option value="">ทุกประเภททรัพย์สิน</option>
+              {deviceTypeOptions.map((deviceType) => (
+                <option key={deviceType} value={deviceType}>{deviceType}</option>
+              ))}
+            </select>
+          </label>
+          {workGroups.length > 0 && (
+            <label>
+              <span className="sr-only">กลุ่มงาน</span>
+              <select
+                name="workGroup"
+                defaultValue={workGroupFilter ?? ""}
+                className="min-h-11 w-full rounded-xl border border-black/10 bg-white/85 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+              >
+                <option value="">ทุกกลุ่มงาน</option>
+                {workGroups.map((workGroup) => (
+                  <option key={workGroup.id} value={workGroup.id}>
+                    {workGroup.workGroupName}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          <label>
+            <span className="sr-only">MA ใกล้หมดอายุ</span>
+            <select
+              name="maDays"
+              defaultValue={maDaysFilter}
+              className="min-h-11 w-full rounded-xl border border-black/10 bg-white/85 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+            >
+              <option value="">MA ทุกช่วง</option>
+              <option value="30">ภายใน 30 วัน</option>
+              <option value="60">ภายใน 60 วัน</option>
+              <option value="90">ภายใน 90 วัน</option>
+            </select>
+          </label>
+          <label>
+            <span className="sr-only">เรียงลำดับ</span>
+            <select
+              name="sort"
+              defaultValue={normalizedSort ?? ""}
+              className="min-h-11 w-full rounded-xl border border-black/10 bg-white/85 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+            >
+              <option value="">เรียงลำดับเริ่มต้น</option>
+              <option value="updated_desc">อัปเดตล่าสุด</option>
+              <option value="name_asc">ชื่อ A-Z</option>
+              <option value="ma_soon">MA ใกล้หมดก่อน</option>
+            </select>
+          </label>
+          <div className="flex flex-col gap-2 sm:flex-row lg:col-span-2">
+            <button type="submit" className="min-h-11 rounded-xl bg-[var(--accent-strong)] px-5 py-2 text-sm font-semibold text-white transition hover:opacity-90">
+              ค้นหา
+            </button>
+            {hasActiveFilters && (
+              <Link href={buildFacilityHref(facilityId, {})} className="inline-flex min-h-11 items-center justify-center rounded-xl border border-black/10 bg-white/80 px-4 py-2 text-sm text-[var(--muted)] hover:bg-white">
+                ล้างตัวกรอง
+              </Link>
+            )}
+          </div>
+        </form>
+
         {assets.length === 0 ? (
-          <div className="p-10 text-center text-sm text-[var(--muted)]">ยังไม่มีรายการทรัพย์สินสำหรับหน่วยงานนี้</div>
+          <div className="p-10 text-center text-sm text-[var(--muted)]">ไม่พบรายการทรัพย์สินที่ตรงกับเงื่อนไข</div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="min-w-[900px] w-full text-sm">
               <thead>
                 <tr className="border-b border-black/6 bg-stone-50/60 text-xs text-[var(--muted)]">
                   <th className="px-4 py-2.5 text-left font-medium">เลขทะเบียน</th>
                   <th className="px-4 py-2.5 text-left font-medium">ชื่อทรัพย์สิน</th>
                   <th className="px-4 py-2.5 text-left font-medium">ประเภท</th>
                   <th className="px-4 py-2.5 text-left font-medium">สถานะ</th>
-                  {canManage && <th className="px-4 py-2.5 text-left font-medium">IP / Location</th>}
-                  {canManage && <th className="px-4 py-2.5 text-left font-medium">Serial</th>}
+                  {canManageAssets && <th className="px-4 py-2.5 text-left font-medium">IP / Location</th>}
+                  {canManageAssets && <th className="px-4 py-2.5 text-left font-medium">Serial</th>}
                   <th className="px-4 py-2.5 text-left font-medium">MA หมด</th>
-                  {canManage && <th className="px-4 py-2.5 text-right font-medium">จัดการ</th>}
+                  {canManageAssets && <th className="px-4 py-2.5 text-right font-medium">จัดการ</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-black/4">
                 {assets.map((asset) => (
                   <tr key={asset.id} className="transition hover:bg-white/50">
-                    <td className="px-4 py-3 font-mono text-xs text-[var(--accent)]">{asset.assetRegistrationNo}</td>
+                    <td className="px-4 py-3">
+                      <Link
+                        href={`/assets/${asset.id}`}
+                        className="font-mono text-xs font-semibold text-[var(--accent-strong)] underline-offset-4 hover:underline"
+                      >
+                        {asset.assetRegistrationNo || `#${asset.id}`}
+                      </Link>
+                    </td>
                     <td className="px-4 py-3">
                       <p className="font-medium">{asset.assetName}</p>
                       {asset.usageDescription && (
@@ -156,29 +353,38 @@ export default async function FacilityDetailPage({ params }: Props) {
                       )}
                     </td>
                     <td className="px-4 py-3">
-                      <p className="text-xs">{asset.deviceType || "–"}</p>
+                      <StatusBadge tone="primary">{assetClassLabel(asset.assetClass)}</StatusBadge>
+                      <p className="mt-1 text-xs">{asset.deviceType || "–"}</p>
                       <p className="text-xs text-[var(--muted)]">{asset.assetGroup}</p>
                     </td>
                     <td className="px-4 py-3">
-                      <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_STYLE[asset.currentStatus] ?? ""}`}>
+                      <StatusBadge tone={STATUS_TONE[asset.currentStatus as keyof typeof STATUS_TONE] ?? "neutral"}>
                         {STATUS_LABELS[asset.currentStatus] ?? asset.currentStatus}
-                      </span>
+                      </StatusBadge>
                     </td>
-                    {canManage && (
+                    {canManageAssets && (
                       <td className="px-4 py-3 font-mono text-xs">
                         <p>{asset.privateIp || "–"}</p>
                         <p className="text-[var(--muted)]">{asset.locationDetail || ""}</p>
                       </td>
                     )}
-                    {canManage && (
+                    {canManageAssets && (
                       <td className="px-4 py-3 font-mono text-xs text-[var(--muted)]">{asset.serialNumber || "–"}</td>
                     )}
-                    <td className="px-4 py-3 font-mono text-xs text-[var(--muted)]">{asset.maintenanceEndDate || "–"}</td>
-                    {canManage && (
+                    <td className="px-4 py-3 text-xs text-[var(--muted)]">{formatThaiDate(asset.maintenanceEndDate)}</td>
+                    {canManageAssets && (
                       <td className="px-4 py-3 text-right">
                         <div className="inline-flex gap-2">
-                          <AssetFormModal facilities={facilitiesForSelect} fixedFacilityId={facilityId} updaterName={user.fullName} mode="edit" asset={asset}>
-                            <button className="rounded-lg border border-black/10 bg-white/80 px-3 py-1 text-xs font-medium text-[var(--accent-strong)] hover:bg-white">
+                          <AssetFormModal
+                            facilities={facilitiesForSelect}
+                            deviceTypes={deviceTypes}
+                            workGroups={workGroups}
+                            fixedFacilityId={facilityId}
+                            updaterName={user.fullName}
+                            mode="edit"
+                            asset={asset}
+                          >
+                            <button className="inline-flex min-h-11 items-center rounded-lg border border-black/10 bg-white/80 px-3 py-2 text-xs font-medium text-[var(--accent-strong)] hover:bg-white">
                               แก้ไข
                             </button>
                           </AssetFormModal>

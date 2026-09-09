@@ -29,7 +29,8 @@ function esc(value) {
 const users = [
   {
     thaid_cid: "3901900015481",
-    full_name: "อิรฟาน หลงเด็น",
+    first_name: "อิรฟาน",
+    last_name: "หลงเด็น",
     email: "irfan.admin@satun.moph.go.th",
     username: "atacs_admin",
     password: "Admin@2026",
@@ -39,7 +40,8 @@ const users = [
   },
   {
     thaid_cid: "3900600012345",
-    full_name: "สุชาดา ทองมาก",
+    first_name: "สุชาดา",
+    last_name: "ทองมาก",
     email: "suchada.officer@satun.moph.go.th",
     username: null,
     password: null,
@@ -49,7 +51,8 @@ const users = [
   },
   {
     thaid_cid: null,
-    full_name: "นครินทร์ ชายสิทธิ์",
+    first_name: "นครินทร์",
+    last_name: "ชายสิทธิ์",
     email: "nakharin.officer@satun.moph.go.th",
     username: "nakharin",
     password: "Officer@2026",
@@ -59,7 +62,8 @@ const users = [
   },
   {
     thaid_cid: "1901900088812",
-    full_name: "ธนพล รัตนะ",
+    first_name: "ธนพล",
+    last_name: "รัตนะ",
     email: null,
     username: "thanaphon.r",
     password: "Staff@2026",
@@ -83,7 +87,7 @@ const lines = [
   "-- รันหลังจาก auth.sql และ add_password_auth.sql แล้วเท่านั้น",
   "",
   "INSERT INTO `users`",
-  "  (`thaid_cid`, `full_name`, `email`, `username`, `password_hash`, `role`, `is_active`)",
+  "  (`thaid_cid`, `first_name`, `last_name`, `email`, `username`, `password_hash`, `role`, `is_active`)",
   "VALUES",
 ];
 
@@ -91,7 +95,7 @@ const valueRows = users.map((u, i) => {
   const hash = u.password ? hashPassword(u.password) : null;
   const comma = i < users.length - 1 ? "," : ";";
   const comment = `  -- [${u.role.toUpperCase()}] ${u.note}${u.password ? ` | password: ${u.password}` : ""}`;
-  const row = `  (${esc(u.thaid_cid)}, ${esc(u.full_name)}, ${esc(u.email)}, ${esc(u.username)}, ${esc(hash)}, ${esc(u.role)}, ${u.is_active})${comma}`;
+  const row = `  (${esc(u.thaid_cid)}, ${esc(u.first_name)}, ${esc(u.last_name)}, ${esc(u.email)}, ${esc(u.username)}, ${esc(hash)}, ${esc(u.role)}, ${u.is_active})${comma}`;
   return `${comment}\n${row}`;
 });
 
@@ -100,7 +104,7 @@ lines.push(...valueRows);
 lines.push(
   "",
   "-- ตรวจสอบผลลัพธ์",
-  "SELECT id, thaid_cid, full_name, email, username,",
+  "SELECT id, thaid_cid, first_name, last_name, email, username,",
   "       IF(password_hash IS NOT NULL, 'SET', 'NONE') AS pwd_status,",
   "       role, is_active",
   "FROM users",

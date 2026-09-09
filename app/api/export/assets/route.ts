@@ -2,98 +2,164 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { getCurrentUser } from "@/lib/auth";
 import { listAssets } from "@/lib/assets";
+import { resolveFacilityFilter } from "@/lib/facility-scope";
 import { hasPermission } from "@/lib/role-permissions";
+import { readRequestIp, recordSecurityEvent } from "@/lib/security";
 
-function escapeCsv(val: string | undefined | null) {
-  const s = String(val ?? "");
-  if (s.includes(",") || s.includes('"') || s.includes("\n")) {
-    return `"${s.replace(/"/g, '""')}"`;
+const IMPORT_HEADERS = [
+  "id",
+  "work_group_id",
+  "asset_registration_no",
+  "asset_name",
+  "asset_class",
+  "asset_category",
+  "asset_group",
+  "device_type",
+  "manufacturer_brand",
+  "manufacturer_model",
+  "manufacturer_specification",
+  "serial_number",
+  "operating_system",
+  "operating_system_version",
+  "windows_license_status",
+  "private_ip",
+  "public_ip",
+  "owner_name",
+  "location_detail",
+  "current_status",
+  "purchase_price",
+  "purchase_date",
+  "purchase_order_no",
+  "maintenance_start_date",
+  "maintenance_end_date",
+  "installed_at",
+  "usage_description",
+];
+
+const IMPORT_SAMPLE_ROWS = [
+  [
+    "",
+    "",
+    "COM-2569-0001",
+    "คอมพิวเตอร์ตั้งโต๊ะตัวอย่าง",
+    "IT",
+    "Hardware",
+    "Computer",
+    "Desktop",
+    "Example Brand",
+    "Example Model",
+    "CPU i5 / RAM 16 GB / SSD 512 GB",
+    "EXAMPLE-SN-001",
+    "Windows",
+    "11 Pro",
+    "Genuine",
+    "192.168.1.10",
+    "",
+    "นายตัวอย่าง เจ้าหน้าที่",
+    "ห้องธุรการ ชั้น 1",
+    "Active",
+    "24500",
+    "2026-01-15",
+    "PO-2569-001",
+    "2026-01-15",
+    "2029-01-14",
+    "2026-01-20",
+    "สำหรับงานธุรการ",
+  ],
+];
+
+function escapeCsv(value: unknown) {
+  const text = String(value ?? "");
+  if (text.includes(",") || text.includes('"') || text.includes("\n")) {
+    return `"${text.replace(/"/g, '""')}"`;
   }
-  return s;
+  return text;
+}
+
+function csvResponse(rows: unknown[][], filename: string) {
+  const csv = `\ufeff${rows.map((row) => row.map(escapeCsv).join(",")).join("\r\n")}`;
+  return new NextResponse(csv, {
+    status: 200,
+    headers: {
+      "Content-Type": "text/csv; charset=utf-8",
+      "Content-Disposition": `attachment; filename="${filename}"`,
+    },
+  });
 }
 
 export async function GET(req: NextRequest) {
   const user = await getCurrentUser();
   if (!user) {
+    await recordSecurityEvent({
+      eventType: "api_unauthorized",
+      ipAddress: readRequestIp(req.headers),
+      path: req.nextUrl.pathname,
+      detail: "พยายาม export ทรัพย์สินโดยไม่มี session",
+    });
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const canExportAssets = await hasPermission(user.role, "assets.view");
   if (!canExportAssets) {
+    await recordSecurityEvent({
+      eventType: "api_forbidden",
+      ipAddress: readRequestIp(req.headers),
+      identity: user.fullName,
+      path: req.nextUrl.pathname,
+      detail: "ไม่มีสิทธิ์ export ทรัพย์สิน",
+    });
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   const { searchParams } = req.nextUrl;
-  const facilityId = searchParams.get("facilityId") ? Number(searchParams.get("facilityId")) : undefined;
-  const status = searchParams.get("status") ?? undefined;
-  const search = searchParams.get("q") ?? undefined;
+  const template = searchParams.get("template");
+  if (template === "csv" || template === "1") {
+    return csvResponse([IMPORT_HEADERS, ...IMPORT_SAMPLE_ROWS], "atacs-assets-import-example.csv");
+  }
 
-  const assets = await listAssets({ facilityId, status, search });
+  const requestedFacilityId = searchParams.get("facilityId") ? Number(searchParams.get("facilityId")) : undefined;
+  const facilityId = resolveFacilityFilter(user, requestedFacilityId);
+  if (facilityId === null) {
+    return NextResponse.json({ error: "No facility scope" }, { status: 403 });
+  }
 
-  const isAdmin = user.role === "admin";
+  const assets = await listAssets({
+    facilityId,
+    status: searchParams.get("status") ?? undefined,
+    search: searchParams.get("q") ?? undefined,
+    assetClass: searchParams.get("assetClass") ?? undefined,
+  });
 
-  const headers = [
-    "ลำดับ",
-    "เลขครุภัณฑ์",
-    "ชื่อทรัพย์สิน",
-    "หมวด",
-    "ประเภท",
-    "หน่วยงาน",
-    "อำเภอ",
-    "สถานะ",
-    "ยี่ห้อ",
-    "ระบบปฏิบัติการ",
-    "วันหมดอายุ MA",
-    "ราคาที่ซื้อ (บาท)",
-    "วันที่ซื้อ",
-    "เลขที่สัญญา / PO",
-    "ผู้รับผิดชอบ",
-    "ตำแหน่งติดตั้ง",
-    ...(isAdmin ? ["Private IP", "Public IP", "Serial Number"] : []),
-    "อัปเดตล่าสุด",
-    "อัปเดตโดย",
-  ];
-
-  const statusLabel: Record<string, string> = {
-    Active: "ใช้งานอยู่",
-    Inactive: "ไม่ใช้งาน",
-    Broken: "ชำรุด",
-  };
-
-  const rows = assets.map((a, i) => [
-    i + 1,
-    a.assetRegistrationNo,
-    a.assetName,
-    a.assetGroup,
-    a.deviceType || a.assetGroup,
-    a.facilityName,
-    a.districtName,
-    statusLabel[a.currentStatus] ?? a.currentStatus,
-    a.manufacturerBrand,
-    a.operatingSystem,
-    a.maintenanceEndDate,
-    a.purchasePrice != null ? a.purchasePrice.toString() : "",
-    a.purchaseDate,
-    a.purchaseOrderNo,
-    a.ownerName,
-    a.locationDetail,
-    ...(isAdmin ? [a.privateIp, a.publicIp, a.serialNumber] : []),
-    a.updatedAt,
-    a.updatedBy,
+  const rows = assets.map((asset) => [
+    asset.id,
+    asset.workGroupId ?? "",
+    asset.assetRegistrationNo,
+    asset.assetName,
+    asset.assetClass,
+    asset.assetCategory ?? asset.assetGroup,
+    asset.assetGroupDetail ?? "",
+    asset.deviceType,
+    asset.manufacturerBrand,
+    asset.manufacturerModel ?? "",
+    asset.manufacturerSpecification ?? "",
+    asset.serialNumber,
+    asset.operatingSystem,
+    asset.operatingSystemVersion ?? "",
+    asset.windowsLicenseStatus ?? "",
+    asset.privateIp,
+    asset.publicIp,
+    asset.ownerName,
+    asset.locationDetail,
+    asset.currentStatus,
+    asset.purchasePrice ?? "",
+    asset.purchaseDate,
+    asset.purchaseOrderNo,
+    asset.maintenanceStartDate,
+    asset.maintenanceEndDate,
+    asset.installedAt ?? "",
+    asset.usageDescription,
   ]);
 
-  const csvLines = [
-    headers.map(escapeCsv).join(","),
-    ...rows.map((r) => r.map((v) => escapeCsv(String(v ?? ""))).join(",")),
-  ];
-  const csv = "\ufeff" + csvLines.join("\r\n"); // BOM for Thai characters in Excel
-
   const today = new Date().toISOString().slice(0, 10);
-  return new NextResponse(csv, {
-    status: 200,
-    headers: {
-      "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": `attachment; filename="atacs-assets-${today}.csv"`,
-    },
-  });
+  return csvResponse([IMPORT_HEADERS, ...rows], `atacs-assets-${today}.csv`);
 }

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+import { recordAssetStatusHistory } from "@/lib/asset-status-history";
 import { getCurrentUser } from "@/lib/auth";
 import { getAssetById, updateAsset } from "@/lib/assets";
 import { writeAuditLog } from "@/lib/audit";
@@ -54,6 +55,14 @@ export async function disposalAssetAction(_prev: string | null, fd: FormData): P
       usageDescription: note,
       updatedBy: user.fullName,
       lastUpdatedAt: new Date().toISOString().slice(0, 10),
+    });
+    await recordAssetStatusHistory({
+      assetId,
+      fromStatus: asset.currentStatus,
+      toStatus: statusMap[disposalType],
+      note,
+      changedByUserId: user.id,
+      changedBy: user.fullName,
     });
 
     revalidatePath("/assets");

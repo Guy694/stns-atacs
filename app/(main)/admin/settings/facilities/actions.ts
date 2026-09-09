@@ -5,13 +5,14 @@ import { redirect } from "next/navigation";
 
 import { getCurrentUser } from "@/lib/auth";
 import { createFacility, toggleFacilityActive, updateFacility } from "@/lib/assets";
+import { canAccessFacility } from "@/lib/facility-scope";
 import { hasPermission } from "@/lib/role-permissions";
 
 async function requireAdmin() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
   const allowManageFacilities = user.role === "admin" || (await hasPermission(user.role, "facilities.manage"));
-  if (!allowManageFacilities) redirect("/");
+  if (!allowManageFacilities) redirect("/dashboard");
   return user;
 }
 
@@ -36,7 +37,8 @@ const REVALIDATE = () => {
 };
 
 export async function createFacilityAction(_prev: string | null, fd: FormData): Promise<string | null> {
-  await requireAdmin();
+  const user = await requireAdmin();
+  if (user.role !== "admin") return "เฉพาะผู้ดูแลระบบเท่านั้นที่เพิ่มหน่วยงานได้";
   const name = str(fd, "name");
   const typecode = str(fd, "typecode");
   const districtName = str(fd, "districtName");
@@ -60,9 +62,10 @@ export async function createFacilityAction(_prev: string | null, fd: FormData): 
 }
 
 export async function updateFacilityAction(_prev: string | null, fd: FormData): Promise<string | null> {
-  await requireAdmin();
+  const user = await requireAdmin();
   const id = Number(fd.get("id"));
   if (!id) return "ไม่พบ ID หน่วยงาน";
+  if (!canAccessFacility(user, id)) return "คุณไม่มีสิทธิ์แก้ไขหน่วยงานนี้";
   const name = str(fd, "name");
   if (!name) return "กรุณากรอกชื่อหน่วยงาน";
   try {
@@ -82,7 +85,8 @@ export async function updateFacilityAction(_prev: string | null, fd: FormData): 
 }
 
 export async function toggleFacilityActiveAction(id: number, active: boolean): Promise<void> {
-  await requireAdmin();
+  const user = await requireAdmin();
+  if (user.role !== "admin") return;
   await toggleFacilityActive(id, active);
   REVALIDATE();
 }

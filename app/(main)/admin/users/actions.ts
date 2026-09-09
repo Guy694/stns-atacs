@@ -3,18 +3,24 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-import { getCurrentUser, hashPassword } from "@/lib/auth";
+import {
+  decryptThaiCidFromStorage,
+  encryptThaiCidForStorage,
+  getCurrentUser,
+  hashPassword,
+  hashThaiCidForLookup,
+  normalizeThaiCid,
+  splitDisplayName,
+} from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { executeStatement, selectRows } from "@/lib/mysql";
-import { hasPermission } from "@/lib/role-permissions";
 import type { RowDataPacket } from "mysql2/promise";
 
 async function requireAdmin() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
-  const canManageUsers = user.role === "admin" || (await hasPermission(user.role, "users.manage"));
-  if (!canManageUsers) redirect("/");
+  if (user.role !== "admin") redirect("/dashboard");
 
   return user;
 }
@@ -23,6 +29,7 @@ type UserRow = RowDataPacket & {
   id: number;
   thaid_cid: string | null;
   full_name: string;
+  officer_position: string | null;
   email: string | null;
   username: string | null;
   role: "admin" | "officer" | "viewer";
@@ -35,6 +42,7 @@ type UserRowWithoutFacility = RowDataPacket & {
   id: number;
   thaid_cid: string | null;
   full_name: string;
+  officer_position: string | null;
   email: string | null;
   username: string | null;
   role: "admin" | "officer" | "viewer";
@@ -50,7 +58,7 @@ type UserAuditRow = RowDataPacket & {
 
 async function getUserAuditRow(userId: number) {
   const rows = await selectRows<UserAuditRow>(
-    "SELECT id, full_name, role FROM users WHERE id = ? LIMIT 1",
+    "SELECT id, TRIM(CONCAT(first_name, ' ', last_name)) AS full_name, role FROM users WHERE id = ? LIMIT 1",
     [userId]
   );
   return rows[0] ?? null;
@@ -59,16 +67,17 @@ async function getUserAuditRow(userId: number) {
 export async function listUsersAction() {
   await requireAdmin();
   try {
-    return await selectRows<UserRow>(
-      `SELECT id, thaid_cid, full_name, email, username, role, facility_id, is_active, last_login_at
-       FROM users ORDER BY role DESC, full_name ASC`
+    const rows = await selectRows<UserRow>(
+      `SELECT id, thaid_cid, TRIM(CONCAT(first_name, ' ', last_name)) AS full_name, officer_position, email, username, role, facility_id, is_active, last_login_at
+       FROM users ORDER BY role DESC, first_name ASC, last_name ASC`
     );
+    return rows.map((row) => ({ ...row, thaid_cid: decryptThaiCidFromStorage(row.thaid_cid) }));
   } catch {
     const rows = await selectRows<UserRowWithoutFacility>(
-      `SELECT id, thaid_cid, full_name, email, username, role, is_active, last_login_at
-       FROM users ORDER BY role DESC, full_name ASC`
+      `SELECT id, thaid_cid, TRIM(CONCAT(first_name, ' ', last_name)) AS full_name, NULL AS officer_position, email, username, role, is_active, last_login_at
+       FROM users ORDER BY role DESC, first_name ASC, last_name ASC`
     );
-    return rows.map((row) => ({ ...row, facility_id: null }));
+    return rows.map((row) => ({ ...row, thaid_cid: decryptThaiCidFromStorage(row.thaid_cid), facility_id: null }));
   }
 }
 
@@ -76,19 +85,43 @@ export async function createUserAction(_prev: string | null, fd: FormData): Prom
   const actor = await requireAdmin();
 
   const fullName = (fd.get("fullName") as string | null)?.trim() ?? "";
+  const { firstName, lastName } = splitDisplayName(fullName);
+  const officerPosition = (fd.get("officerPosition") as string | null)?.trim() || null;
   const email = (fd.get("email") as string | null)?.trim() || null;
   const username = (fd.get("username") as string | null)?.trim() || null;
   const password = (fd.get("password") as string | null)?.trim() || null;
-  const thaidCid = (fd.get("thaidCid") as string | null)?.trim() || null;
+  const thaidCidRaw = (fd.get("thaidCid") as string | null)?.trim() || null;
+  const thaidCid = thaidCidRaw ? normalizeThaiCid(thaidCidRaw) : null;
+  const encryptedThaiCid = thaidCid ? encryptThaiCidForStorage(thaidCid) : null;
+  const thaidCidHash = thaidCid ? hashThaiCidForLookup(thaidCid) : null;
   const role = (fd.get("role") as string | null)?.trim() ?? "officer";
   const facilityIdRaw = (fd.get("facilityId") as string | null)?.trim() ?? "";
   const facilityId = facilityIdRaw ? Number(facilityIdRaw) : null;
 
   if (!fullName) return "กรุณากรอกชื่อ-นามสกุล";
+  if (!firstName || !lastName) return "กรุณากรอกชื่อและนามสกุลให้ครบ";
   if (!thaidCid && !username) return "ต้องมีอย่างน้อย ThaiD หรือ username";
+  if (thaidCid && thaidCid.length !== 13) return "เลข ThaiD ต้องเป็นตัวเลข 13 หลัก";
   if (username && !password) return "กรุณากรอกรหัสผ่านสำหรับ username";
   if (!["admin", "officer", "viewer"].includes(role)) return "Role ไม่ถูกต้อง";
   if (role === "officer" && (!facilityId || isNaN(facilityId))) return "กรุณาเลือกหน่วยงานสำหรับเจ้าหน้าที่";
+  if (role === "officer" && !officerPosition) return "กรุณากรอกตำแหน่งเจ้าหน้าที่";
+
+  if (username) {
+    const existing = await selectRows<RowDataPacket & { id: number }>(
+      "SELECT id FROM users WHERE username = ? LIMIT 1",
+      [username]
+    );
+    if (existing.length > 0) return "username นี้ถูกใช้งานแล้ว";
+  }
+
+  if (thaidCidHash) {
+    const existingThaiCid = await selectRows<RowDataPacket & { id: number }>(
+      "SELECT id FROM users WHERE thaid_cid_hash = ? LIMIT 1",
+      [thaidCidHash]
+    );
+    if (existingThaiCid.length > 0) return "ThaiD นี้มีในระบบแล้ว";
+  }
 
   let passwordHash: string | null = null;
   if (username && password) {
@@ -100,14 +133,25 @@ export async function createUserAction(_prev: string | null, fd: FormData): Prom
     let createdUserId: number | null = null;
     try {
       await executeStatement(
-        `INSERT INTO users (thaid_cid, full_name, email, username, password_hash, role, facility_id, is_active)
-         VALUES (?, ?, ?, ?, ?, ?, ?, 1)`,
-        [thaidCid, fullName, email, username, passwordHash, role, role === "officer" ? facilityId : null]
+        `INSERT INTO users (thaid_cid, thaid_cid_hash, first_name, last_name, officer_position, email, username, password_hash, role, facility_id, is_active)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+        [
+          encryptedThaiCid,
+          thaidCidHash,
+          firstName,
+          lastName,
+          role === "officer" ? officerPosition : null,
+          email,
+          username,
+          passwordHash,
+          role,
+          role === "officer" ? facilityId : null,
+        ]
       );
       const createdRows = await selectRows<RowDataPacket & { id: number }>(
-        `SELECT id FROM users WHERE (username = ? AND ? IS NOT NULL) OR (thaid_cid = ? AND ? IS NOT NULL)
+        `SELECT id FROM users WHERE (username = ? AND ? IS NOT NULL) OR (thaid_cid_hash = ? AND ? IS NOT NULL)
          ORDER BY id DESC LIMIT 1`,
-        [username, username, thaidCid, thaidCid]
+        [username, username, thaidCidHash, thaidCidHash]
       );
       createdUserId = createdRows[0]?.id ?? null;
     } catch (error) {
@@ -117,9 +161,9 @@ export async function createUserAction(_prev: string | null, fd: FormData): Prom
           return "กรุณารัน migration users.facility_id ก่อนสร้างบัญชีเจ้าหน้าที่";
         }
         const result = await executeStatement(
-          `INSERT INTO users (thaid_cid, full_name, email, username, password_hash, role, is_active)
-           VALUES (?, ?, ?, ?, ?, ?, 1)`,
-          [thaidCid, fullName, email, username, passwordHash, role]
+          `INSERT INTO users (thaid_cid, thaid_cid_hash, first_name, last_name, email, username, password_hash, role, is_active)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+          [encryptedThaiCid, thaidCidHash, firstName, lastName, email, username, passwordHash, role]
         );
         createdUserId = result.insertId;
       } else {
@@ -150,27 +194,62 @@ export async function updateUserProfileAction(_prev: string | null, fd: FormData
 
   const userId = Number(fd.get("userId"));
   const fullName = (fd.get("fullName") as string | null)?.trim() ?? "";
+  const { firstName, lastName } = splitDisplayName(fullName);
+  const officerPosition = (fd.get("officerPosition") as string | null)?.trim() || null;
   const email = (fd.get("email") as string | null)?.trim() || null;
   const username = (fd.get("username") as string | null)?.trim() || null;
-  const thaidCid = (fd.get("thaidCid") as string | null)?.trim() || null;
+  const thaidCidRaw = (fd.get("thaidCid") as string | null)?.trim() || null;
+  const thaidCid = thaidCidRaw ? normalizeThaiCid(thaidCidRaw) : null;
+  const encryptedThaiCid = thaidCid ? encryptThaiCidForStorage(thaidCid) : null;
+  const thaidCidHash = thaidCid ? hashThaiCidForLookup(thaidCid) : null;
   const role = (fd.get("role") as string | null)?.trim() ?? "officer";
   const facilityIdRaw = (fd.get("facilityId") as string | null)?.trim() ?? "";
   const facilityId = facilityIdRaw ? Number(facilityIdRaw) : null;
 
   if (!userId || Number.isNaN(userId)) return "User ID ไม่ถูกต้อง";
   if (!fullName) return "กรุณากรอกชื่อ-นามสกุล";
+  if (!firstName || !lastName) return "กรุณากรอกชื่อและนามสกุลให้ครบ";
   if (!thaidCid && !username) return "ต้องมีอย่างน้อย ThaiD หรือ username";
+  if (thaidCid && thaidCid.length !== 13) return "เลข ThaiD ต้องเป็นตัวเลข 13 หลัก";
   if (!["admin", "officer", "viewer"].includes(role)) return "Role ไม่ถูกต้อง";
   if (role === "officer" && (!facilityId || Number.isNaN(facilityId))) return "กรุณาเลือกหน่วยงานสำหรับเจ้าหน้าที่";
+  if (role === "officer" && !officerPosition) return "กรุณากรอกตำแหน่งเจ้าหน้าที่";
+
+  if (username) {
+    const existing = await selectRows<RowDataPacket & { id: number }>(
+      "SELECT id FROM users WHERE username = ? AND id <> ? LIMIT 1",
+      [username, userId]
+    );
+    if (existing.length > 0) return "username นี้ถูกใช้งานแล้ว";
+  }
+
+  if (thaidCidHash) {
+    const existingThaiCid = await selectRows<RowDataPacket & { id: number }>(
+      "SELECT id FROM users WHERE thaid_cid_hash = ? AND id <> ? LIMIT 1",
+      [thaidCidHash, userId]
+    );
+    if (existingThaiCid.length > 0) return "ThaiD นี้มีในระบบแล้ว";
+  }
 
   try {
     const before = await getUserAuditRow(userId);
     try {
       await executeStatement(
         `UPDATE users
-         SET full_name = ?, email = ?, username = ?, thaid_cid = ?, role = ?, facility_id = ?
+         SET first_name = ?, last_name = ?, officer_position = ?, email = ?, username = ?, thaid_cid = ?, thaid_cid_hash = ?, role = ?, facility_id = ?
          WHERE id = ?`,
-        [fullName, email, username, thaidCid, role, role === "officer" ? facilityId : null, userId]
+        [
+          firstName,
+          lastName,
+          role === "officer" ? officerPosition : null,
+          email,
+          username,
+          encryptedThaiCid,
+          thaidCidHash,
+          role,
+          role === "officer" ? facilityId : null,
+          userId,
+        ]
       );
     } catch (error) {
       const msg = error instanceof Error ? error.message : "";
@@ -178,9 +257,9 @@ export async function updateUserProfileAction(_prev: string | null, fd: FormData
         if (role === "officer") return "กรุณารัน migration users.facility_id ก่อนกำหนดเจ้าหน้าที่";
         await executeStatement(
           `UPDATE users
-           SET full_name = ?, email = ?, username = ?, thaid_cid = ?, role = ?
+           SET first_name = ?, last_name = ?, email = ?, username = ?, thaid_cid = ?, thaid_cid_hash = ?, role = ?
            WHERE id = ?`,
-          [fullName, email, username, thaidCid, role, userId]
+          [firstName, lastName, email, username, encryptedThaiCid, thaidCidHash, role, userId]
         );
       } else {
         throw error;
@@ -208,6 +287,7 @@ export async function updateUserProfileAction(_prev: string | null, fd: FormData
 
 export async function toggleUserActiveAction(userId: number, currentActive: boolean): Promise<void> {
   const actor = await requireAdmin();
+  if (Number(actor.id) === userId) return;
   const target = await getUserAuditRow(userId);
   await executeStatement("UPDATE users SET is_active = ? WHERE id = ?", [currentActive ? 0 : 1, userId]);
   await writeAuditLog({
@@ -219,25 +299,50 @@ export async function toggleUserActiveAction(userId: number, currentActive: bool
     summary: `${currentActive ? "ปิดใช้งาน" : "เปิดใช้งาน"} ผู้ใช้ ${target?.full_name ?? `#${userId}`}`,
   });
   revalidatePath("/admin/users");
+  revalidatePath("/", "layout");
 }
 
 export async function approveUserAction(userId: number): Promise<void> {
+  await approveUsersAction([userId]);
+}
+
+export async function approveUsersAction(userIds: number[]): Promise<void> {
   const actor = await requireAdmin();
-  const target = await getUserAuditRow(userId);
-  await executeStatement("UPDATE users SET is_active = 1 WHERE id = ? AND is_active = 0", [userId]);
+  const uniqueIds = [...new Set(userIds.filter((id) => Number.isInteger(id) && id > 0))].slice(0, 100);
+  if (uniqueIds.length === 0) return;
+
+  const placeholders = uniqueIds.map(() => "?").join(", ");
+  const targets = await selectRows<UserAuditRow>(
+    `SELECT id, TRIM(CONCAT(first_name, ' ', last_name)) AS full_name, role FROM users
+     WHERE id IN (${placeholders}) AND is_active = 0 AND last_login_at IS NULL`,
+    uniqueIds
+  );
+  if (targets.length === 0) return;
+
+  const targetIds = targets.map((target) => target.id);
+  const targetPlaceholders = targetIds.map(() => "?").join(", ");
+  await executeStatement(
+    `UPDATE users SET is_active = 1 WHERE id IN (${targetPlaceholders}) AND is_active = 0 AND last_login_at IS NULL`,
+    targetIds
+  );
   await writeAuditLog({
     userId: actor.id,
     userName: actor.fullName,
     action: "update",
     entity: "users",
-    entityId: userId,
-    summary: `อนุมัติผู้ใช้ ${target?.full_name ?? `#${userId}`}`,
+    entityId: targets.length === 1 ? targets[0].id : null,
+    summary:
+      targets.length === 1
+        ? `อนุมัติผู้ใช้ ${targets[0].full_name}`
+        : `อนุมัติผู้ลงทะเบียน ${targets.length} รายการ: ${targets.map((target) => target.full_name).join(", ")}`,
   });
   revalidatePath("/admin/users");
+  revalidatePath("/", "layout");
 }
 
 export async function updateUserRoleAction(userId: number, newRole: "admin" | "officer" | "viewer"): Promise<void> {
   const actor = await requireAdmin();
+  if (Number(actor.id) === userId) return;
   const before = await getUserAuditRow(userId);
   await executeStatement("UPDATE users SET role = ? WHERE id = ?", [newRole, userId]);
   await writeAuditLog({

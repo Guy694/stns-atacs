@@ -1,6 +1,8 @@
 "use client";
 
 import { useActionState, useRef, useState, useTransition } from "react";
+
+import { StatusBadge, activeTone } from "@/app/_components/ui/status-badge";
 import { createFacilityAction, toggleFacilityActiveAction, updateFacilityAction } from "../actions";
 import type { FacilityAdminRow } from "@/lib/assets";
 
@@ -101,7 +103,7 @@ function FacilityModal({
   );
 }
 
-function FacilityRow({ f }: { f: FacilityAdminRow }) {
+function FacilityRow({ f, canToggleActive }: { f: FacilityAdminRow; canToggleActive: boolean }) {
   const [editOpen, setEditOpen] = useState(false);
   const [togglePending, startToggle] = useTransition();
 
@@ -116,22 +118,24 @@ function FacilityRow({ f }: { f: FacilityAdminRow }) {
         <td className="px-4 py-3 text-xs">{f.district_name}</td>
         <td className="px-4 py-3 text-center text-xs font-medium">{f.asset_count}</td>
         <td className="px-4 py-3">
-          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${f.is_active ? "bg-emerald-100 text-emerald-700" : "bg-stone-100 text-stone-500"}`}>
+          <StatusBadge tone={activeTone(!!f.is_active)}>
             {f.is_active ? "ใช้งาน" : "ปิด"}
-          </span>
+          </StatusBadge>
         </td>
         <td className="px-4 py-3 text-right">
           <div className="inline-flex gap-2">
             <button onClick={() => setEditOpen(true)}
-              className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-700 hover:bg-indigo-100">
+              className="rounded-lg border border-[var(--primary-soft-strong)] bg-[var(--primary-soft)] px-3 py-1 text-xs font-medium text-[var(--primary-text)] hover:bg-[var(--primary-soft-strong)]">
               แก้ไข
             </button>
-            <button
-              onClick={() => startToggle(() => toggleFacilityActiveAction(f.id, !f.is_active))}
-              disabled={togglePending}
-              className={`rounded-lg border px-3 py-1 text-xs font-medium transition disabled:opacity-50 ${f.is_active ? "border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100" : "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"}`}>
-              {togglePending ? "…" : f.is_active ? "ปิด" : "เปิด"}
-            </button>
+            {canToggleActive && (
+              <button
+                onClick={() => startToggle(() => toggleFacilityActiveAction(f.id, !f.is_active))}
+                disabled={togglePending}
+                className={`rounded-lg border px-3 py-1 text-xs font-medium transition disabled:opacity-50 ${f.is_active ? "border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100" : "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"}`}>
+                {togglePending ? "…" : f.is_active ? "ปิด" : "เปิด"}
+              </button>
+            )}
           </div>
         </td>
       </tr>
@@ -140,7 +144,15 @@ function FacilityRow({ f }: { f: FacilityAdminRow }) {
   );
 }
 
-export function FacilitiesClient({ facilities }: { facilities: FacilityAdminRow[] }) {
+export function FacilitiesClient({
+  facilities,
+  canCreate,
+  canToggleActive,
+}: {
+  facilities: FacilityAdminRow[];
+  canCreate: boolean;
+  canToggleActive: boolean;
+}) {
   const [createOpen, setCreateOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [districtFilter, setDistrictFilter] = useState("");
@@ -172,14 +184,16 @@ export function FacilitiesClient({ facilities }: { facilities: FacilityAdminRow[
           {DISTRICTS.map((d) => <option key={d} value={d}>{d}</option>)}
         </select>
         <span className="text-sm text-[var(--muted)]">{filtered.length} หน่วยงาน</span>
-        <div className="ml-auto">
-          <button
-            onClick={() => setCreateOpen(true)}
-            className="inline-flex items-center gap-2 rounded-full bg-[var(--accent-strong)] px-5 py-2 text-sm font-semibold text-white hover:opacity-90"
-          >
-            + เพิ่มหน่วยงาน
-          </button>
-        </div>
+        {canCreate && (
+          <div className="ml-auto">
+            <button
+              onClick={() => setCreateOpen(true)}
+              className="inline-flex items-center gap-2 rounded-full bg-[var(--accent-strong)] px-5 py-2 text-sm font-semibold text-white hover:opacity-90"
+            >
+              + เพิ่มหน่วยงาน
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Table */}
@@ -197,7 +211,7 @@ export function FacilitiesClient({ facilities }: { facilities: FacilityAdminRow[
               </tr>
             </thead>
             <tbody>
-              {filtered.map((f) => <FacilityRow key={f.id} f={f} />)}
+              {filtered.map((f) => <FacilityRow key={f.id} f={f} canToggleActive={canToggleActive} />)}
               {filtered.length === 0 && (
                 <tr><td colSpan={6} className="py-10 text-center text-sm text-[var(--muted)]">ไม่พบหน่วยงาน</td></tr>
               )}

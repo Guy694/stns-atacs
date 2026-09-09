@@ -1,12 +1,16 @@
 "use client";
 
+import type { ReactNode } from "react";
 import Swal from "sweetalert2";
 
 type LogoutConfirmFormProps = {
   buttonClassName: string;
+  buttonContent?: ReactNode;
+  ariaLabel?: string;
+  title?: string;
 };
 
-export function LogoutConfirmForm({ buttonClassName }: LogoutConfirmFormProps) {
+export function LogoutConfirmForm({ buttonClassName, buttonContent, ariaLabel, title }: LogoutConfirmFormProps) {
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
@@ -39,8 +43,8 @@ export function LogoutConfirmForm({ buttonClassName }: LogoutConfirmFormProps) {
 
   return (
     <form action="/logout" method="post" onSubmit={handleSubmit}>
-      <button type="submit" className={buttonClassName}>
-        ออกจากระบบ
+      <button type="submit" className={buttonClassName} aria-label={ariaLabel} title={title}>
+        {buttonContent ?? "ออกจากระบบ"}
       </button>
     </form>
   );

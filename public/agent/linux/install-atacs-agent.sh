@@ -3,7 +3,9 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: install-atacs-agent.sh --api-base-url <url> --enrollment-token <token> [--install-root <path>]
+Usage:
+  install-atacs-agent.sh --api-base-url <url> --enrollment-token <token> [--install-root <path>]
+  install-atacs-agent.sh --api-base-url <url> --install-key <key> --facility-id <id> [--work-group-id <id>] [--work-group-name <name>] [--install-root <path>]
 
 Installs the ATACS Linux agent, performs the first enrollment, and registers
 an automatic refresh job with systemd or cron.
@@ -12,6 +14,10 @@ EOF
 
 api_base_url=""
 enrollment_token=""
+facility_id=""
+work_group_id=""
+work_group_name=""
+install_key=""
 install_root="/opt/atacs-agent"
 config_path="/var/lib/atacs-agent/agent-config.json"
 agent_source="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/atacs-agent.py"
@@ -31,6 +37,22 @@ while [[ $# -gt 0 ]]; do
       enrollment_token="${2:-}"
       shift 2
       ;;
+    --facility-id)
+      facility_id="${2:-}"
+      shift 2
+      ;;
+    --work-group-id)
+      work_group_id="${2:-}"
+      shift 2
+      ;;
+    --work-group-name)
+      work_group_name="${2:-}"
+      shift 2
+      ;;
+    --install-key)
+      install_key="${2:-}"
+      shift 2
+      ;;
     --install-root)
       install_root="${2:-}"
       agent_target="${install_root}/atacs-agent.py"
@@ -48,7 +70,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if [[ -z "$api_base_url" || -z "$enrollment_token" ]]; then
+if [[ -z "$api_base_url" || ( -z "$enrollment_token" && ( -z "$install_key" || -z "$facility_id" ) ) ]]; then
   usage >&2
   exit 1
 fi
@@ -75,7 +97,19 @@ chmod 755 "$agent_target"
 chmod 700 "$(dirname "$config_path")"
 
 echo "Running first enrollment and inventory report..."
-python3 "$agent_target" --api-base-url "$api_base_url" --enrollment-token "$enrollment_token" --config-path "$config_path" --run-once
+enroll_args=(--api-base-url "$api_base_url" --config-path "$config_path" --run-once)
+if [[ -n "$enrollment_token" ]]; then
+  enroll_args+=(--enrollment-token "$enrollment_token")
+else
+  enroll_args+=(--install-key "$install_key" --facility-id "$facility_id")
+  if [[ -n "$work_group_id" ]]; then
+    enroll_args+=(--work-group-id "$work_group_id")
+  fi
+  if [[ -n "$work_group_name" ]]; then
+    enroll_args+=(--work-group-name "$work_group_name")
+  fi
+fi
+python3 "$agent_target" "${enroll_args[@]}"
 
 if command -v systemctl >/dev/null 2>&1; then
   cat > "$service_file" <<EOF

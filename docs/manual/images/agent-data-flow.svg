@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
+  <title id="title">การทำงานของ ATACS Agent</title>
+  <desc id="desc">ผู้ดูแลสร้าง enrollment token ผู้ติดตั้งติดตั้ง Agent บน Windows หรือ Linux และ Agent ส่งข้อมูลเครื่องกับ heartbeat เข้าสู่ ATACS</desc>
+  <defs><marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto"><path d="M0 0l12 6-12 6z" fill="#15803d"/></marker></defs>
+  <rect width="1600" height="900" fill="#f5faf7"/>
+  <text x="100" y="105" fill="#113127" font-family="system-ui,sans-serif" font-size="46" font-weight="700">การทำงานของ ATACS Agent</text>
+  <text x="100" y="150" fill="#4f6b60" font-family="system-ui,sans-serif" font-size="22">Token และ Install Key เป็นข้อมูลลับ ห้ามบันทึกลงภาพคู่มือหรือส่งผ่านช่องทางสาธารณะ</text>
+  <g font-family="system-ui,sans-serif">
+    <g transform="translate(90 270)"><rect width="340" height="300" rx="18" fill="#fff" stroke="#15803d" stroke-width="3"/><circle cx="170" cy="80" r="45" fill="#dcfce7"/><text x="170" y="92" text-anchor="middle" fill="#14532d" font-size="34" font-weight="700">1</text><text x="170" y="160" text-anchor="middle" fill="#113127" font-size="25" font-weight="700">Admin สร้าง Token</text><text x="170" y="205" text-anchor="middle" fill="#4f6b60" font-size="18">เลือกหน่วยงานและกลุ่มงาน</text><text x="170" y="240" text-anchor="middle" fill="#4f6b60" font-size="18">คัดลอกครั้งเดียวและ revoke</text></g>
+    <path d="M430 420h140" stroke="#15803d" stroke-width="5" marker-end="url(#arrow)"/>
+    <g transform="translate(580 270)"><rect width="440" height="300" rx="18" fill="#fff" stroke="#0e7490" stroke-width="3"/><circle cx="220" cy="80" r="45" fill="#e0f2fe"/><text x="220" y="92" text-anchor="middle" fill="#075985" font-size="34" font-weight="700">2</text><text x="220" y="160" text-anchor="middle" fill="#113127" font-size="25" font-weight="700">ติดตั้งบนเครื่องปลายทาง</text><rect x="55" y="200" width="145" height="60" rx="10" fill="#edf2ef"/><text x="127" y="238" text-anchor="middle" fill="#344a40" font-size="21" font-weight="700">Windows</text><rect x="240" y="200" width="145" height="60" rx="10" fill="#edf2ef"/><text x="312" y="238" text-anchor="middle" fill="#344a40" font-size="21" font-weight="700">Linux</text></g>
+    <path d="M1020 420h140" stroke="#15803d" stroke-width="5" marker-end="url(#arrow)"/>
+    <g transform="translate(1170 270)"><rect width="340" height="300" rx="18" fill="#fff" stroke="#15803d" stroke-width="3"/><circle cx="170" cy="80" r="45" fill="#dcfce7"/><text x="170" y="92" text-anchor="middle" fill="#14532d" font-size="34" font-weight="700">3</text><text x="170" y="160" text-anchor="middle" fill="#113127" font-size="25" font-weight="700">ส่งข้อมูลเข้า ATACS</text><text x="170" y="205" text-anchor="middle" fill="#4f6b60" font-size="18">CPU · RAM · Disk · OS · IP</text><text x="170" y="240" text-anchor="middle" fill="#4f6b60" font-size="18">และ Heartbeat ทุก 4 ชั่วโมง</text></g>
+  </g>
+  <rect x="300" y="675" width="1000" height="105" rx="16" fill="#fef3c7" stroke="#fde68a" stroke-width="2"/>
+  <text x="800" y="718" text-anchor="middle" fill="#92400e" font-family="system-ui,sans-serif" font-size="22" font-weight="700">ตัวอย่างในคู่มือต้องใช้ &lt;ENROLLMENT_TOKEN&gt; หรือ &lt;INSTALL_KEY&gt; เท่านั้น</text>
+  <text x="800" y="755" text-anchor="middle" fill="#92400e" font-family="system-ui,sans-serif" font-size="19">การติดตั้ง Windows ต้องใช้ Administrator และ Linux ต้องใช้ sudo/root</text>
+</svg>
