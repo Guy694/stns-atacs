@@ -23,6 +23,8 @@ const STATUS_LABEL: Record<string, string> = {
   Broken: "ชำรุด",
 };
 
+const ALL_DISTRICTS = ["เมืองสตูล", "ควนกาหลง", "ควนโดน", "ท่าแพ", "ละงู", "ทุ่งหว้า", "มะนัง"] as const;
+
 function PctBar({ value, max, color }: { value: number; max: number; color: string }) {
   const w = max > 0 ? Math.round((value / max) * 100) : 0;
   return (
@@ -59,7 +61,8 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
   }
 
   // ── District list for filter ─────────────────────────────────────────────
-  const allDistricts = [...new Set(allAssets.map((a) => a.districtName))].sort();
+  const allDistricts = [...ALL_DISTRICTS];
+  const shownDistricts = districtFilter ? allDistricts.filter((d) => d === districtFilter) : allDistricts;
 
   // ── Apply filters ────────────────────────────────────────────────────────
   let filtered = allAssets;
@@ -73,24 +76,40 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
   const hw = filtered.filter((a) => a.assetGroup === "Hardware").length;
   const sw = filtered.filter((a) => a.assetGroup === "Software").length;
   const facilityCount = new Set(filtered.map((a) => a.facilityId)).size;
-  const districtCount = new Set(filtered.map((a) => a.districtName)).size;
+  const districtCount = shownDistricts.length;
   const safeTotal = Math.max(total, 1);
   const activeRate = Math.round((active / safeTotal) * 100);
 
   // ── By district aggregation ──────────────────────────────────────────────
-  const byDistrict = Object.values(
-    filtered.reduce<Record<string, { name: string; total: number; active: number; broken: number; inactive: number; facilities: Set<number> }>>(
-      (acc, a) => {
-        if (!acc[a.districtName]) acc[a.districtName] = { name: a.districtName, total: 0, active: 0, broken: 0, inactive: 0, facilities: new Set() };
-        acc[a.districtName].total++;
-        acc[a.districtName].facilities.add(a.facilityId);
-        if (a.currentStatus === "Active") acc[a.districtName].active++;
-        if (a.currentStatus === "Broken") acc[a.districtName].broken++;
-        if (a.currentStatus === "Inactive") acc[a.districtName].inactive++;
-        return acc;
-      }, {}
-    )
-  ).map((d) => ({ ...d, facilityCount: d.facilities.size })).sort((a, b) => b.total - a.total);
+  const districtSummary = filtered.reduce<Record<string, { name: string; total: number; active: number; broken: number; inactive: number; facilities: Set<number> }>>(
+    (acc, a) => {
+      if (!acc[a.districtName]) acc[a.districtName] = { name: a.districtName, total: 0, active: 0, broken: 0, inactive: 0, facilities: new Set() };
+      acc[a.districtName].total++;
+      acc[a.districtName].facilities.add(a.facilityId);
+      if (a.currentStatus === "Active") acc[a.districtName].active++;
+      if (a.currentStatus === "Broken") acc[a.districtName].broken++;
+      if (a.currentStatus === "Inactive") acc[a.districtName].inactive++;
+      return acc;
+    },
+    {}
+  );
+
+  const byDistrict = shownDistricts
+    .map((name) => {
+      const summary = districtSummary[name];
+      if (!summary) {
+        return { name, total: 0, active: 0, broken: 0, inactive: 0, facilityCount: 0 };
+      }
+      return {
+        name,
+        total: summary.total,
+        active: summary.active,
+        broken: summary.broken,
+        inactive: summary.inactive,
+        facilityCount: summary.facilities.size,
+      };
+    })
+    .sort((a, b) => b.total - a.total);
 
   // ── By facility aggregation ──────────────────────────────────────────────
   const byFacility = Object.values(

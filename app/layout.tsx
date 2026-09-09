@@ -16,7 +16,7 @@ const monoFont = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "ATACS Satun",
+  title: "ระบบทะเบียนทรัพย์สินสารสนเทศ จังหวัดสตูล (ATACS)",
   description:
     "ระบบติดตามทรัพย์สินสารสนเทศ จังหวัดสตูล สำหรับสำรวจ ตรวจสอบ และสรุปสถานะอุปกรณ์ของหน่วยบริการสาธารณสุข",
 };
