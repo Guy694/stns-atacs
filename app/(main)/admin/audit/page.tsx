@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 
 import { StatusBadge } from "@/app/_components/ui/status-badge";
 import { getCurrentUser } from "@/lib/auth";
-import { listAuditLogs } from "@/lib/audit";
+import { paginateAuditLogs } from "@/lib/audit";
 import { formatThaiDateTime } from "@/lib/date-format";
 import Link from "next/link";
 
@@ -46,13 +46,27 @@ export default async function AuditLogPage({ searchParams }: AuditPageProps) {
   const dateFrom = readParam(params, "dateFrom");
   const dateTo = readParam(params, "dateTo");
 
-  const logs = await listAuditLogs({
-    limit: 300,
+  const { logs, total, totalPages, page, pageSize } = await paginateAuditLogs({
     action: ACTION_LABEL[actionFilter] ? actionFilter : undefined,
     entity: entityFilter || undefined,
     actor: actorFilter || undefined,
     search: search || undefined,
-  });
+    dateFrom: dateFrom || undefined,
+    dateTo: dateTo || undefined,
+  }, Number(readParam(params, "page")));
+
+  function pageHref(targetPage: number) {
+    const query = new URLSearchParams();
+    for (const key of ["search", "actor", "entity", "action", "dateFrom", "dateTo"]) {
+      const value = readParam(params, key);
+      if (value) query.set(key, value);
+    }
+    query.set("page", String(targetPage));
+    return `/admin/audit?${query.toString()}`;
+  }
+  const visiblePages = [...new Set([1, page - 1, page, page + 1, totalPages])]
+    .filter((value) => value >= 1 && value <= totalPages)
+    .sort((a, b) => a - b);
 
   const countsByAction = logs.reduce<Record<string, number>>((acc, log) => {
     acc[log.action] = (acc[log.action] ?? 0) + 1;
@@ -70,6 +84,7 @@ export default async function AuditLogPage({ searchParams }: AuditPageProps) {
         </p>
       </div>
 
+      <p className="text-sm text-[var(--muted)]">สรุปรายการในหน้านี้</p>
       <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <div className="glass-panel rounded-2xl p-4">
           <p className="text-xs text-[var(--muted)]">รายการที่แสดง</p>
@@ -186,6 +201,32 @@ export default async function AuditLogPage({ searchParams }: AuditPageProps) {
           </table>
         )}
       </div>
+      <nav aria-label="แบ่งหน้าประวัติการใช้งาน" className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-[var(--muted)]" aria-live="polite">
+          แสดง {total === 0 ? 0 : (page - 1) * pageSize + 1}–{Math.min(page * pageSize, total)} จาก {total.toLocaleString("th-TH")} รายการ · หน้า {page} จาก {totalPages}
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          {page > 1 ? (
+            <Link href={pageHref(page - 1)} className="rounded-xl border border-black/10 px-3 py-2 text-sm hover:bg-white">ก่อนหน้า</Link>
+          ) : (
+            <span aria-disabled="true" className="rounded-xl border border-black/10 px-3 py-2 text-sm text-[var(--muted)]">ก่อนหน้า</span>
+          )}
+          {visiblePages.map((value, index) => (
+            <span key={value} className="flex items-center gap-2">
+              {index > 0 && value - visiblePages[index - 1] > 1 && <span aria-hidden="true">…</span>}
+              <Link href={pageHref(value)} aria-label={`หน้า ${value}`} aria-current={value === page ? "page" : undefined}
+                className={`rounded-xl border px-3 py-2 text-sm ${value === page ? "border-transparent bg-[var(--accent-strong)] text-white" : "border-black/10 hover:bg-white"}`}>
+                {value}
+              </Link>
+            </span>
+          ))}
+          {page < totalPages ? (
+            <Link href={pageHref(page + 1)} className="rounded-xl border border-black/10 px-3 py-2 text-sm hover:bg-white">ถัดไป</Link>
+          ) : (
+            <span aria-disabled="true" className="rounded-xl border border-black/10 px-3 py-2 text-sm text-[var(--muted)]">ถัดไป</span>
+          )}
+        </div>
+      </nav>
     </main>
   );
 }

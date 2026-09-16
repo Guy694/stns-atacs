@@ -9,6 +9,9 @@ export type AuditAction = "create" | "update" | "delete" | "transfer" | "dispose
 
 export type AuditLogFilter = {
   limit?: number;
+  offset?: number;
+  dateFrom?: string;
+  dateTo?: string;
   action?: AuditAction;
   entity?: string;
   actor?: string;
@@ -87,13 +90,7 @@ export async function writeAuditLog(input: {
   });
 }
 
-export async function listAuditLogs(limitOrFilter: number | AuditLogFilter = 100): Promise<AuditLog[]> {
-  const filter =
-    typeof limitOrFilter === "number"
-      ? { limit: limitOrFilter }
-      : limitOrFilter;
-
-  const limit = Math.max(1, Math.min(500, Number(filter.limit ?? 100)));
+function auditWhere(filter: AuditLogFilter) {
   const conditions: string[] = [];
   const values: unknown[] = [];
 
@@ -118,15 +115,44 @@ export async function listAuditLogs(limitOrFilter: number | AuditLogFilter = 100
     values.push(like, like, like);
   }
 
-  const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+  if (filter.dateFrom) {
+    conditions.push("created_at >= ?");
+    values.push(filter.dateFrom);
+  }
+  if (filter.dateTo) {
+    conditions.push("created_at < DATE_ADD(?, INTERVAL 1 DAY)");
+    values.push(filter.dateTo);
+  }
+
+  return { where: conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "", values };
+}
+
+export async function paginateAuditLogs(filter: AuditLogFilter, requestedPage = 1) {
+  const pageSize = 25;
+  const { where, values } = auditWhere(filter);
+  const [count] = await selectRows<RowDataPacket & { total: number }>(
+    `SELECT COUNT(*) AS total FROM audit_logs ${where}`, values
+  );
+  const total = Number(count.total);
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const page = Math.min(totalPages, Number.isSafeInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1);
+  const logs = await listAuditLogs({ ...filter, limit: pageSize, offset: (page - 1) * pageSize });
+  return { logs, total, totalPages, page, pageSize };
+}
+
+export async function listAuditLogs(limitOrFilter: number | AuditLogFilter = 100): Promise<AuditLog[]> {
+  const filter = typeof limitOrFilter === "number" ? { limit: limitOrFilter } : limitOrFilter;
+  const limit = Number.isSafeInteger(filter.limit) ? Math.max(1, Math.min(500, filter.limit!)) : 100;
+  const offset = Number.isSafeInteger(filter.offset) ? Math.max(0, filter.offset!) : 0;
+  const { where, values } = auditWhere(filter);
 
   const rows = await selectRows<AuditRow>(
     `SELECT id, user_id, user_name, action, entity, entity_id, summary, created_at
      FROM audit_logs
      ${where}
-     ORDER BY created_at DESC
-     LIMIT ?`,
-    [...values, limit]
+     ORDER BY created_at DESC, id DESC
+     LIMIT ? OFFSET ?`,
+    [...values, limit, offset]
   );
   return rows.map((r) => ({
     id: r.id,
