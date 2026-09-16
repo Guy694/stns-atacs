@@ -6,6 +6,7 @@ import { ASSET_STATUS_LABELS } from "@/lib/asset-status";
 import { getCurrentUser } from "@/lib/auth";
 import { listActiveDeviceTypes } from "@/lib/device-types";
 import { listFacilityWorkGroups } from "@/lib/facility-work-groups";
+import { canAccessAssetFacility } from "@/lib/permissions";
 import { hasPermission } from "@/lib/role-permissions";
 
 function Code({ children }: { children: React.ReactNode }) {
@@ -19,7 +20,8 @@ export default async function AssetImportGuidePage() {
   const canViewAssets = await hasPermission(user.role, "assets.view");
   if (!canViewAssets) redirect("/dashboard");
 
-  const [workGroups, deviceTypes] = await Promise.all([listFacilityWorkGroups(), listActiveDeviceTypes()]);
+  const [allWorkGroups, deviceTypes] = await Promise.all([listFacilityWorkGroups(), listActiveDeviceTypes()]);
+  const workGroups = allWorkGroups.filter((workGroup) => canAccessAssetFacility(user, workGroup.facilityId));
   const groupedWorkGroups = workGroups.reduce<Record<string, typeof workGroups>>((groups, workGroup) => {
     (groups[workGroup.facilityName] ??= []).push(workGroup);
     return groups;

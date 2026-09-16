@@ -10,6 +10,8 @@ import { formatThaiDate } from "@/lib/date-format";
 import { listActiveDeviceTypes } from "@/lib/device-types";
 import { listFacilityWorkGroups } from "@/lib/facility-work-groups";
 import { canAccessAssetFacility, canManageAssetRecord } from "@/lib/permissions";
+import { hasPermission } from "@/lib/role-permissions";
+import ImportExcelModal from "@/app/(main)/assets/_components/import-excel-modal";
 import { AssetFormModal } from "@/app/(main)/assets/_components/asset-form-modal";
 import { DeleteAssetButton } from "@/app/(main)/assets/_components/delete-asset-button";
 import { FacilityAssetQrActions } from "@/app/(main)/facilities/[id]/_components/facility-asset-qr-actions";
@@ -95,6 +97,10 @@ export default async function FacilityDetailPage({ params, searchParams }: Props
   const districtName = allAssets[0]?.districtName ?? currentFacility.district_name ?? "";
 
   const canManageAssets = canManageAssetRecord(user, facilityId);
+  const [canCreateAsset, canUpdateAsset] = await Promise.all([
+    hasPermission(user.role, "assets.create"),
+    hasPermission(user.role, "assets.update"),
+  ]);
 
   const totalAssets = allAssets.length;
   const activeCount = allAssets.filter((a) => a.currentStatus === "Active").length;
@@ -177,6 +183,13 @@ export default async function FacilityDetailPage({ params, searchParams }: Props
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
+            {canManageAssets && (canCreateAsset || canUpdateAsset) && (
+              <ImportExcelModal
+                facilities={[{ id: facilityId, name: facilityName, district_name: currentFacility.district_name }]}
+                workGroups={workGroups}
+                fixedFacilityId={facilityId}
+              />
+            )}
             <FacilityAssetQrActions
               facilityName={facilityName}
               assets={allAssets.map((asset) => ({

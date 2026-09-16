@@ -183,7 +183,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  if (!canMutateAssets(user)) {
+  const [canCreate, canUpdate] = await Promise.all([
+    hasPermission(user.role, "assets.create"),
+    hasPermission(user.role, "assets.update"),
+  ]);
+  if (!canMutateAssets(user) || (!canCreate && !canUpdate)) {
     await recordSecurityEvent({
       eventType: "api_forbidden",
       ipAddress: readRequestIp(req.headers),
@@ -194,10 +198,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const formData = await req.formData();
-  const file = formData.get("file") as File | null;
+  let formData: FormData;
+  try {
+    formData = await req.formData();
+  } catch {
+    return NextResponse.json({ error: "รูปแบบข้อมูลอัปโหลดไม่ถูกต้อง" }, { status: 400 });
+  }
+  const file = formData.get("file");
   const facilityId = Number(formData.get("facilityId") ?? 0);
-  if (!file || !Number.isInteger(facilityId) || facilityId <= 0) {
+  if (!(file instanceof File) || !Number.isSafeInteger(facilityId) || facilityId <= 0) {
     return NextResponse.json({ error: "กรุณาเลือกไฟล์และหน่วยบริการ" }, { status: 400 });
   }
   if (!canManageAssetRecord(user, facilityId)) {
@@ -230,14 +239,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "ไม่พบคอลัมน์ asset_name กรุณาใช้ไฟล์ตัวอย่างของระบบ" }, { status: 400 });
   }
 
-  const [canCreate, canUpdate, activeWorkGroups] = await Promise.all([
-    hasPermission(user.role, "assets.create"),
-    hasPermission(user.role, "assets.update"),
-    selectRows<RowDataPacket & { id: number }>(
-      "SELECT id FROM facility_work_groups WHERE facility_id = ? AND is_active = 1",
-      [facilityId]
-    ),
-  ]);
+  const activeWorkGroups = await selectRows<RowDataPacket & { id: number }>(
+    "SELECT id FROM facility_work_groups WHERE facility_id = ? AND is_active = 1",
+    [facilityId]
+  );
   const activeWorkGroupIds = new Set(activeWorkGroups.map((workGroup) => Number(workGroup.id)));
   const surveyId = await findOrCreateSurvey(facilityId);
   let created = 0;

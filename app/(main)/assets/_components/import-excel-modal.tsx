@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useId, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 import { AppIcon } from "@/app/_components/ui/icon";
-import type { FacilityRow } from "@/lib/assets";
 import type { FacilityWorkGroupOption } from "@/lib/facility-work-groups";
 
 type ImportResult = {
@@ -14,15 +15,20 @@ type ImportResult = {
   errors: Array<{ row: number; message: string }>;
 };
 
+type ImportFacility = { id: number; name: string; district_name: string | null };
+
 export default function ImportExcelModal({
   facilities,
   workGroups,
+  fixedFacilityId,
 }: {
-  facilities: FacilityRow[];
+  facilities: ImportFacility[];
   workGroups: FacilityWorkGroupOption[];
+  fixedFacilityId?: number;
 }) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [facilityId, setFacilityId] = useState("");
+  const [facilityId, setFacilityId] = useState(fixedFacilityId ? String(fixedFacilityId) : "");
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);
@@ -30,7 +36,7 @@ export default function ImportExcelModal({
   const fileRef = useRef<HTMLInputElement>(null);
   const titleId = useId();
 
-  const byDistrict = facilities.reduce<Record<string, FacilityRow[]>>((acc, facility) => {
+  const byDistrict = facilities.reduce<Record<string, ImportFacility[]>>((acc, facility) => {
     const district = facility.district_name ?? "อื่นๆ";
     (acc[district] ??= []).push(facility);
     return acc;
@@ -42,6 +48,7 @@ export default function ImportExcelModal({
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
+    if (loading) return;
     if (!file || !facilityId) {
       setError("กรุณาเลือกไฟล์และหน่วยบริการ");
       return;
@@ -62,6 +69,7 @@ export default function ImportExcelModal({
         return;
       }
       setResult(data);
+      if (data.created + data.updated > 0) router.refresh();
     } catch {
       setError("เกิดข้อผิดพลาดในการอัปโหลดไฟล์");
     } finally {
@@ -70,11 +78,12 @@ export default function ImportExcelModal({
   }
 
   function handleClose() {
+    if (loading) return;
     setOpen(false);
     setFile(null);
     setResult(null);
     setError(null);
-    setFacilityId("");
+    setFacilityId(fixedFacilityId ? String(fixedFacilityId) : "");
     if (fileRef.current) fileRef.current.value = "";
   }
 
@@ -88,7 +97,7 @@ export default function ImportExcelModal({
         <AppIcon name="download" className="h-4 w-4" /> นำเข้า CSV
       </button>
 
-      {open && (
+      {open && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(17,49,39,0.42)" }}>
           <div
             role="dialog"
@@ -105,6 +114,7 @@ export default function ImportExcelModal({
               <button
                 type="button"
                 onClick={handleClose}
+                disabled={loading}
                 aria-label="ปิดหน้าต่างนำเข้า CSV"
                 className="min-h-11 min-w-11 rounded-xl text-xl text-gray-500 hover:bg-stone-100 hover:text-gray-700"
               >
@@ -123,10 +133,12 @@ export default function ImportExcelModal({
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-sm font-semibold" style={{ color: "var(--foreground)" }}>
+                  <label htmlFor={`${titleId}-facility`} className="text-sm font-semibold" style={{ color: "var(--foreground)" }}>
                     หน่วยบริการ <span className="text-red-500">*</span>
                   </label>
                   <select
+                    id={`${titleId}-facility`}
+                    disabled={loading || fixedFacilityId !== undefined}
                     value={facilityId}
                     onChange={(event) => setFacilityId(event.target.value)}
                     className="w-full rounded-lg border px-3 py-2 text-sm"
@@ -174,10 +186,12 @@ export default function ImportExcelModal({
                 )}
 
                 <div className="space-y-1">
-                  <label className="text-sm font-semibold" style={{ color: "var(--foreground)" }}>
+                  <label htmlFor={`${titleId}-file`} className="text-sm font-semibold" style={{ color: "var(--foreground)" }}>
                     ไฟล์ CSV หรือ Excel <span className="text-red-500">*</span>
                   </label>
                   <input
+                    id={`${titleId}-file`}
+                    disabled={loading}
                     ref={fileRef}
                     type="file"
                     accept=".csv,.xlsx,.xls,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -211,6 +225,7 @@ export default function ImportExcelModal({
                   <button
                     type="button"
                     onClick={handleClose}
+                    disabled={loading}
                     className="rounded-lg border px-5 py-2 text-sm font-semibold"
                     style={{ borderColor: "var(--line)", color: "var(--muted)" }}
                   >
@@ -221,7 +236,7 @@ export default function ImportExcelModal({
             ) : (
               <div className="space-y-4">
                 <div className="rounded-xl border border-green-200 bg-green-50 p-4 text-sm">
-                  <p className="font-bold text-green-700">นำเข้าไฟล์เสร็จสิ้น</p>
+                  <p className="font-bold text-green-700">{result.created + result.updated === 0 ? "ยังไม่มีรายการที่นำเข้าสำเร็จ" : result.skipped > 0 ? "นำเข้าสำเร็จบางรายการ กรุณาตรวจสอบแถวที่ข้าม" : "นำเข้าไฟล์เสร็จสิ้น"}</p>
                   <div className="mt-2 grid grid-cols-3 gap-2 text-center">
                     <p className="rounded-lg bg-white px-2 py-2 text-green-700">เพิ่มใหม่<br /><strong>{result.created}</strong> รายการ</p>
                     <p className="rounded-lg bg-white px-2 py-2 text-green-700">แก้ไข<br /><strong>{result.updated}</strong> รายการ</p>
@@ -237,16 +252,17 @@ export default function ImportExcelModal({
                   </div>
                 )}
                 <button
-                  onClick={() => { handleClose(); window.location.reload(); }}
+                  onClick={handleClose}
                   className="rounded-lg px-5 py-2 text-sm font-semibold text-white"
                   style={{ background: "var(--accent)" }}
                 >
-                  ปิดและรีโหลด
+                  ปิด
                 </button>
               </div>
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );
