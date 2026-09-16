@@ -33,7 +33,7 @@ Set `ATACS_AGENT_INSTALL_KEY` on the server to allow reusable install commands t
 Example Windows static install command shape:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File install-atacs-agent.ps1 -ApiBaseUrl https://stns-atacs.vercel.app -InstallKey <INSTALL_KEY> -FacilityId 65 -WorkGroupName "กลุ่มงานไอที"
+powershell -ExecutionPolicy Bypass -File install-atacs-agent.ps1 -ApiBaseUrl https:// -InstallKey <INSTALL_KEY> -FacilityId 65 -WorkGroupName "กลุ่มงานไอที"
 ```
 
 Example Linux static install command shape:
