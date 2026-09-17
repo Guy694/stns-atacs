@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
+  <title id="title">บทบาทและขอบเขตการใช้งาน ATACS</title>
+  <desc id="desc">เปรียบเทียบบทบาท Admin Officer และ Viewer พร้อมเตือนว่าสิทธิ์จริงขึ้นกับ Permission Matrix</desc>
+  <rect width="1600" height="900" fill="#f5faf7"/>
+  <text x="100" y="105" fill="#113127" font-family="system-ui,sans-serif" font-size="46" font-weight="700">บทบาทและขอบเขตการใช้งาน</text>
+  <text x="100" y="150" fill="#4f6b60" font-family="system-ui,sans-serif" font-size="22">สิทธิ์ที่เห็นจริงขึ้นอยู่กับบทบาท หน่วยงาน และ Permission Matrix</text>
+  <g font-family="system-ui,sans-serif">
+    <g transform="translate(100 220)">
+      <rect width="430" height="430" rx="18" fill="#fff" stroke="#15803d" stroke-width="3"/>
+      <circle cx="70" cy="72" r="34" fill="#dcfce7"/><text x="70" y="82" text-anchor="middle" fill="#14532d" font-size="28" font-weight="700">A</text>
+      <text x="125" y="75" fill="#113127" font-size="30" font-weight="700">Admin</text>
+      <text x="38" y="145" fill="#14532d" font-size="21" font-weight="600">ขอบเขตทุกหน่วยงาน</text>
+      <g fill="#344a40" font-size="20"><text x="38" y="200">• ดู Dashboard ระดับจังหวัด</text><text x="38" y="245">• จัดการทรัพย์สินและผู้ใช้งาน</text><text x="38" y="290">• ตั้งค่าหน่วยงาน ประเภท และสิทธิ์</text><text x="38" y="335">• ตรวจสอบ Audit Log และรายงาน</text></g>
+    </g>
+    <g transform="translate(585 220)">
+      <rect width="430" height="430" rx="18" fill="#fff" stroke="#0e7490" stroke-width="3"/>
+      <circle cx="70" cy="72" r="34" fill="#e0f2fe"/><text x="70" y="82" text-anchor="middle" fill="#075985" font-size="28" font-weight="700">O</text>
+      <text x="125" y="75" fill="#113127" font-size="30" font-weight="700">Officer</text>
+      <text x="38" y="145" fill="#075985" font-size="21" font-weight="600">ขอบเขตหน่วยงานที่รับผิดชอบ</text>
+      <g fill="#344a40" font-size="20"><text x="38" y="200">• เพิ่มและแก้ไขทรัพย์สิน</text><text x="38" y="245">• ตรวจนับ โอนย้าย และบันทึกสถานะ</text><text x="38" y="290">• ดูรายงานในขอบเขตของตน</text><text x="38" y="335">• ใช้งาน Agent ตามสิทธิ์</text></g>
+    </g>
+    <g transform="translate(1070 220)">
+      <rect width="430" height="430" rx="18" fill="#fff" stroke="#64748b" stroke-width="3"/>
+      <circle cx="70" cy="72" r="34" fill="#edf2ef"/><text x="70" y="82" text-anchor="middle" fill="#344a40" font-size="28" font-weight="700">V</text>
+      <text x="125" y="75" fill="#113127" font-size="30" font-weight="700">Viewer</text>
+      <text x="38" y="145" fill="#344a40" font-size="21" font-weight="600">ดูข้อมูลอย่างเดียว</text>
+      <g fill="#344a40" font-size="20"><text x="38" y="200">• ดูภาพรวมและรายการที่ได้รับอนุญาต</text><text x="38" y="245">• ดูผลตรวจนับและรายงาน</text><text x="38" y="290">• ไม่สามารถเพิ่ม แก้ไข หรือลบ</text><text x="38" y="335">• บางข้อมูลสำคัญอาจถูกซ่อน</text></g>
+    </g>
+  </g>
+  <rect x="260" y="715" width="1080" height="100" rx="16" fill="#fef3c7" stroke="#fde68a" stroke-width="2"/>
+  <text x="800" y="757" text-anchor="middle" fill="#92400e" font-family="system-ui,sans-serif" font-size="22" font-weight="700">ไม่เห็นเมนูหรือปุ่ม?</text>
+  <text x="800" y="792" text-anchor="middle" fill="#92400e" font-family="system-ui,sans-serif" font-size="20">ตรวจสอบบทบาท หน่วยงานที่ผูกกับบัญชี และสิทธิ์กับผู้ดูแลระบบ</text>
+</svg>

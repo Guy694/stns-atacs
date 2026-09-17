@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
+  <title id="title">ดูแลผู้ใช้และตรวจสอบการทำงาน</title>
+  <desc id="desc">1. ตรวจคำขอผู้ใช้ — ชื่อ · อีเมล · ตำแหน่ง · หน่วยงาน — ตรวจข้อมูลก่อนอนุมัติบัญชี; 2. กำหนดขอบเขต — เลือกบทบาทและหน่วยงาน — ให้สิทธิ์ตามงานที่รับผิดชอบ; 3. ตั้งค่าการทำงาน — Permission Matrix: ความสามารถ — การแสดงเมนู: รายการใน sidebar; 4. ติดตามประวัติ — กรองผู้ใช้ การกระทำ และวันที่ — ตรวจว่าใครเปลี่ยนข้อมูลอะไร</desc>
+  <defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0 0L10 5L0 10" fill="none" stroke="#15803d" stroke-width="2"/></marker></defs>
+  <rect width="1600" height="900" fill="#f5faf7"/>
+  <g font-family="Tahoma,system-ui,sans-serif">
+    <text x="80" y="68" fill="#4f6b60" font-size="22">ATACS · ภาพอธิบายขั้นตอน</text>
+    <text x="80" y="135" fill="#113127" font-size="44" font-weight="700">ดูแลผู้ใช้และตรวจสอบการทำงาน</text>
+    <text x="80" y="187" fill="#4f6b60" font-size="27">จัดการตามหน้าที่ และทดสอบหลังปรับสิทธิ์</text>
+    <g transform="translate(80 245)">
+      <rect width="670" height="205" rx="14" fill="#ffffff" stroke="#b8d3c3"/>
+      <circle cx="52" cy="53" r="25" fill="#dcfce7"/>
+      <text x="52" y="62" text-anchor="middle" fill="#14532d" font-size="26" font-weight="700">1</text>
+      <text x="95" y="64" fill="#113127" font-size="32" font-weight="600">ตรวจคำขอผู้ใช้</text>
+      <text x="36" y="121" fill="#344a40" font-size="27">ชื่อ · อีเมล · ตำแหน่ง · หน่วยงาน</text>
+      <text x="36" y="165" fill="#344a40" font-size="27">ตรวจข้อมูลก่อนอนุมัติบัญชี</text>
+    </g>
+<g transform="translate(850 245)">
+      <rect width="670" height="205" rx="14" fill="#ffffff" stroke="#b8d3c3"/>
+      <circle cx="52" cy="53" r="25" fill="#dcfce7"/>
+      <text x="52" y="62" text-anchor="middle" fill="#14532d" font-size="26" font-weight="700">2</text>
+      <text x="95" y="64" fill="#113127" font-size="32" font-weight="600">กำหนดขอบเขต</text>
+      <text x="36" y="121" fill="#344a40" font-size="27">เลือกบทบาทและหน่วยงาน</text>
+      <text x="36" y="165" fill="#344a40" font-size="27">ให้สิทธิ์ตามงานที่รับผิดชอบ</text>
+    </g>
+<g transform="translate(80 520)">
+      <rect width="670" height="205" rx="14" fill="#ffffff" stroke="#b8d3c3"/>
+      <circle cx="52" cy="53" r="25" fill="#dcfce7"/>
+      <text x="52" y="62" text-anchor="middle" fill="#14532d" font-size="26" font-weight="700">3</text>
+      <text x="95" y="64" fill="#113127" font-size="32" font-weight="600">ตั้งค่าการทำงาน</text>
+      <text x="36" y="121" fill="#344a40" font-size="27">Permission Matrix: ความสามารถ</text>
+      <text x="36" y="165" fill="#344a40" font-size="27">การแสดงเมนู: รายการใน sidebar</text>
+    </g>
+<g transform="translate(850 520)">
+      <rect width="670" height="205" rx="14" fill="#ffffff" stroke="#b8d3c3"/>
+      <circle cx="52" cy="53" r="25" fill="#dcfce7"/>
+      <text x="52" y="62" text-anchor="middle" fill="#14532d" font-size="26" font-weight="700">4</text>
+      <text x="95" y="64" fill="#113127" font-size="32" font-weight="600">ติดตามประวัติ</text>
+      <text x="36" y="121" fill="#344a40" font-size="27">กรองผู้ใช้ การกระทำ และวันที่</text>
+      <text x="36" y="165" fill="#344a40" font-size="27">ตรวจว่าใครเปลี่ยนข้อมูลอะไร</text>
+    </g>
+    <path d="M765 347H830" fill="none" stroke="#15803d" stroke-width="3" marker-end="url(#arrow)"/>
+    <path d="M1185 462V482H415V505" fill="none" stroke="#15803d" stroke-width="3" marker-end="url(#arrow)"/>
+    <path d="M765 622H830" fill="none" stroke="#15803d" stroke-width="3" marker-end="url(#arrow)"/>
+    <path d="M80 784H1520" stroke="#b8d3c3"/>
+    <text x="80" y="836" fill="#14532d" font-size="26">ซ่อนเมนูไม่ได้เปลี่ยนสิทธิ์ ควรตรวจทั้งบทบาท สิทธิ์ และหน่วยงานของบัญชี</text>
+  </g>
+</svg>

@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
+  <title id="title">ขั้นตอนตรวจนับทรัพย์สิน</title>
+  <desc id="desc">เปิดรอบตรวจนับ ตรวจทีละรายการ บันทึกผลและสถานะ แล้วติดตามความครบถ้วน</desc>
+  <defs><marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto"><path d="M0 0l12 6-12 6z" fill="#15803d"/></marker></defs>
+  <rect width="1600" height="900" fill="#f5faf7"/>
+  <text x="100" y="105" fill="#113127" font-family="system-ui,sans-serif" font-size="46" font-weight="700">ขั้นตอนตรวจนับทรัพย์สิน</text>
+  <text x="100" y="150" fill="#4f6b60" font-family="system-ui,sans-serif" font-size="22">บันทึกผลรายรายการและติดตามจำนวนที่ตรวจแล้วกับรายการคงเหลือ</text>
+  <g font-family="system-ui,sans-serif">
+    <g transform="translate(110 245)"><rect width="310" height="175" rx="18" fill="#fff" stroke="#15803d" stroke-width="3"/><circle cx="55" cy="55" r="28" fill="#dcfce7"/><text x="55" y="64" text-anchor="middle" fill="#14532d" font-size="24" font-weight="700">1</text><text x="100" y="60" fill="#113127" font-size="24" font-weight="700">เปิดรอบใหม่</text><text x="35" y="115" fill="#4f6b60" font-size="18">เลือกหน่วยบริการ ชื่อรอบ</text><text x="35" y="145" fill="#4f6b60" font-size="18">และช่วงวันที่ตรวจนับ</text></g>
+    <path d="M420 332h120" stroke="#15803d" stroke-width="4" marker-end="url(#arrow)"/>
+    <g transform="translate(550 245)"><rect width="310" height="175" rx="18" fill="#fff" stroke="#15803d" stroke-width="3"/><circle cx="55" cy="55" r="28" fill="#dcfce7"/><text x="55" y="64" text-anchor="middle" fill="#14532d" font-size="24" font-weight="700">2</text><text x="100" y="60" fill="#113127" font-size="24" font-weight="700">เปิดรายละเอียด</text><text x="35" y="115" fill="#4f6b60" font-size="18">ดูรายการทั้งหมด ตรวจแล้ว</text><text x="35" y="145" fill="#4f6b60" font-size="18">และรายการคงเหลือ</text></g>
+    <path d="M860 332h120" stroke="#15803d" stroke-width="4" marker-end="url(#arrow)"/>
+    <g transform="translate(990 245)"><rect width="500" height="175" rx="18" fill="#fff" stroke="#15803d" stroke-width="3"/><circle cx="55" cy="55" r="28" fill="#dcfce7"/><text x="55" y="64" text-anchor="middle" fill="#14532d" font-size="24" font-weight="700">3</text><text x="100" y="60" fill="#113127" font-size="24" font-weight="700">บันทึกผลรายรายการ</text><rect x="35" y="100" width="125" height="48" rx="10" fill="#dcfce7"/><text x="97" y="131" text-anchor="middle" fill="#14532d" font-size="19" font-weight="700">พบ</text><rect x="175" y="100" width="125" height="48" rx="10" fill="#ffe4e6"/><text x="237" y="131" text-anchor="middle" fill="#9f1239" font-size="19" font-weight="700">ไม่พบ</text><text x="330" y="131" fill="#4f6b60" font-size="18">+ สถานะล่าสุด</text></g>
+    <path d="M1240 420v125H800v70" fill="none" stroke="#15803d" stroke-width="4" marker-end="url(#arrow)"/>
+    <g transform="translate(570 630)"><rect width="460" height="135" rx="18" fill="#166534"/><text x="230" y="685" text-anchor="middle" fill="#fff" font-size="26" font-weight="700">ติดตามความครบถ้วน</text><text x="230" y="725" text-anchor="middle" fill="#dcfce7" font-size="19">ตรวจแล้ว · คงเหลือ · พบ · ไม่พบ</text></g>
+  </g>
+</svg>

@@ -138,11 +138,10 @@ export const APP_MENU_ITEMS: AppMenuItem[] = [
   {
     key: "manuals",
     href: "/manuals",
-    label: "คู่มือ",
-    description: "คู่มือการใช้งานระบบ",
+    label: "คู่มือการใช้งาน",
+    description: "คู่มือพร้อมภาพประกอบ แบ่งตามหัวข้อการใช้งานระบบ",
     icon: "file-text",
     group: "manuals",
-    permissionKey: "manuals.view",
   },
 ];
 

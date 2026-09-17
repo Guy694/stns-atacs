@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
+  <title id="title">บันทึกเหตุการณ์และสถานะทรัพย์สิน</title>
+  <desc id="desc">1. ตรวจรายการ — ชื่อ · เลขทะเบียน · หน่วยงาน — ตรวจสถานะปัจจุบันก่อนดำเนินการ; 2. เลือกเหตุการณ์ — ชำรุด · ระงับการใช้งาน — จำหน่ายออก · สูญหาย; 3. ระบุวันที่และเหตุผล — เลือกวันที่ดำเนินการ — กรอกรายละเอียดที่ตรวจสอบได้; 4. บันทึกสถานะ — กดบันทึกการดำเนินการ — ตรวจสถานะและประวัติล่าสุด</desc>
+  <defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0 0L10 5L0 10" fill="none" stroke="#15803d" stroke-width="2"/></marker></defs>
+  <rect width="1600" height="900" fill="#f5faf7"/>
+  <g font-family="Tahoma,system-ui,sans-serif">
+    <text x="80" y="68" fill="#4f6b60" font-size="22">ATACS · ภาพอธิบายขั้นตอน</text>
+    <text x="80" y="135" fill="#113127" font-size="44" font-weight="700">บันทึกเหตุการณ์และสถานะทรัพย์สิน</text>
+    <text x="80" y="187" fill="#4f6b60" font-size="27">จำหน่ายและเหตุผิดปกติ → ดำเนินการ</text>
+    <g transform="translate(80 245)">
+      <rect width="670" height="205" rx="14" fill="#ffffff" stroke="#b8d3c3"/>
+      <circle cx="52" cy="53" r="25" fill="#dcfce7"/>
+      <text x="52" y="62" text-anchor="middle" fill="#14532d" font-size="26" font-weight="700">1</text>
+      <text x="95" y="64" fill="#113127" font-size="32" font-weight="600">ตรวจรายการ</text>
+      <text x="36" y="121" fill="#344a40" font-size="27">ชื่อ · เลขทะเบียน · หน่วยงาน</text>
+      <text x="36" y="165" fill="#344a40" font-size="27">ตรวจสถานะปัจจุบันก่อนดำเนินการ</text>
+    </g>
+<g transform="translate(850 245)">
+      <rect width="670" height="205" rx="14" fill="#ffffff" stroke="#b8d3c3"/>
+      <circle cx="52" cy="53" r="25" fill="#dcfce7"/>
+      <text x="52" y="62" text-anchor="middle" fill="#14532d" font-size="26" font-weight="700">2</text>
+      <text x="95" y="64" fill="#113127" font-size="32" font-weight="600">เลือกเหตุการณ์</text>
+      <text x="36" y="121" fill="#344a40" font-size="27">ชำรุด · ระงับการใช้งาน</text>
+      <text x="36" y="165" fill="#344a40" font-size="27">จำหน่ายออก · สูญหาย</text>
+    </g>
+<g transform="translate(80 520)">
+      <rect width="670" height="205" rx="14" fill="#ffffff" stroke="#b8d3c3"/>
+      <circle cx="52" cy="53" r="25" fill="#dcfce7"/>
+      <text x="52" y="62" text-anchor="middle" fill="#14532d" font-size="26" font-weight="700">3</text>
+      <text x="95" y="64" fill="#113127" font-size="32" font-weight="600">ระบุวันที่และเหตุผล</text>
+      <text x="36" y="121" fill="#344a40" font-size="27">เลือกวันที่ดำเนินการ</text>
+      <text x="36" y="165" fill="#344a40" font-size="27">กรอกรายละเอียดที่ตรวจสอบได้</text>
+    </g>
+<g transform="translate(850 520)">
+      <rect width="670" height="205" rx="14" fill="#ffffff" stroke="#b8d3c3"/>
+      <circle cx="52" cy="53" r="25" fill="#dcfce7"/>
+      <text x="52" y="62" text-anchor="middle" fill="#14532d" font-size="26" font-weight="700">4</text>
+      <text x="95" y="64" fill="#113127" font-size="32" font-weight="600">บันทึกสถานะ</text>
+      <text x="36" y="121" fill="#344a40" font-size="27">กดบันทึกการดำเนินการ</text>
+      <text x="36" y="165" fill="#344a40" font-size="27">ตรวจสถานะและประวัติล่าสุด</text>
+    </g>
+    <path d="M765 347H830" fill="none" stroke="#15803d" stroke-width="3" marker-end="url(#arrow)"/>
+    <path d="M1185 462V482H415V505" fill="none" stroke="#15803d" stroke-width="3" marker-end="url(#arrow)"/>
+    <path d="M765 622H830" fill="none" stroke="#15803d" stroke-width="3" marker-end="url(#arrow)"/>
+    <path d="M80 784H1520" stroke="#b8d3c3"/>
+    <text x="80" y="836" fill="#14532d" font-size="26">เลือกตามข้อเท็จจริง และตรวจรายการให้ถูกต้องก่อนยืนยันการเปลี่ยนสถานะ</text>
+  </g>
+</svg>
