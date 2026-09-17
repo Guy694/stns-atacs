@@ -40,15 +40,6 @@ type AuditRow = RowDataPacket & {
   created_at: Date | string;
 };
 
-const ACTION_LABELS: Record<AuditAction, string> = {
-  create: "สร้างข้อมูล",
-  update: "แก้ไขข้อมูล",
-  delete: "ลบข้อมูล",
-  transfer: "โอนย้ายทรัพย์สิน",
-  dispose: "จำหน่าย/เปลี่ยนสถานะทรัพย์สิน",
-  inspect: "ตรวจนับทรัพย์สิน",
-};
-
 const ENTITY_LABELS: Record<string, string> = {
   information_assets: "ทะเบียนทรัพย์สิน",
   asset_inspections: "รอบตรวจนับทรัพย์สิน",
@@ -64,6 +55,8 @@ export async function writeAuditLog(input: {
   entity: string;
   entityId?: number | null;
   summary?: string;
+  // Import routes send one summary after processing all rows.
+  skipDataAlert?: boolean;
 }) {
   await executeStatement(
     `INSERT INTO audit_logs (user_id, user_name, action, entity, entity_id, summary)
@@ -78,16 +71,41 @@ export async function writeAuditLog(input: {
     ]
   );
 
-  await notifyTelegramSafe({
-    category: "data",
-    title: ACTION_LABELS[input.action],
-    details: {
-      ผู้ดำเนินการ: input.userName ?? "system",
-      ประเภทข้อมูล: ENTITY_LABELS[input.entity] ?? input.entity,
-      รหัสข้อมูล: input.entityId,
-      รายละเอียด: input.summary,
-    },
-  });
+  if (input.action !== "create" || input.skipDataAlert) return;
+
+  const positiveInteger = (value: string | undefined, fallback: number) => {
+    const parsed = Number(value);
+    return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : fallback;
+  };
+  const threshold = positiveInteger(process.env.TELEGRAM_DATA_ALERT_THRESHOLD, 50);
+  const windowMinutes = positiveInteger(process.env.TELEGRAM_DATA_ALERT_WINDOW_MINUTES, 10);
+
+  // Alert failures must not turn a successfully saved record into a failed save.
+  try {
+    const [row] = await selectRows<RowDataPacket & { total: number }>(
+      `SELECT COUNT(*) AS total FROM audit_logs
+       WHERE action = 'create' AND entity = ? AND user_id <=> ?
+         AND created_at >= DATE_SUB(NOW(), INTERVAL ? MINUTE)`,
+      [input.entity, input.userId ?? null, windowMinutes]
+    );
+    const total = Number(row?.total ?? 0);
+    if (total < threshold) return;
+
+    const bucket = Math.floor(Date.now() / (windowMinutes * 60 * 1000));
+    await notifyTelegramSafe({
+      category: "data",
+      title: "มีการเพิ่มข้อมูลจำนวนมากผิดปกติ",
+      eventKey: `data-burst:${input.entity}:${input.userId ?? "system"}:${bucket}`,
+      details: {
+        ผู้ดำเนินการ: input.userName ?? "system",
+        ประเภทข้อมูล: ENTITY_LABELS[input.entity] ?? input.entity,
+        จำนวนข้อมูล: `${total} record ภายใน ${windowMinutes} นาที`,
+        เกณฑ์แจ้งเตือน: `${threshold} record`,
+      },
+    });
+  } catch (error) {
+    console.error(`Data alert failed (${error instanceof Error ? error.name : "unknown"})`);
+  }
 }
 
 function auditWhere(filter: AuditLogFilter) {

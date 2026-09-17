@@ -21,6 +21,8 @@ const officer = { id: 1, fullName: "Officer", role: "officer", facilityId: 10, m
 
 function setup({ user = officer, create = true, update = true, existingFacility = 10 } = {}) {
   const writes = [];
+  const alerts = [];
+  const audits = [];
   const noop = async () => {};
   const route = load("../app/api/import/assets/route.ts", {
     xlsx: XLSX,
@@ -31,7 +33,8 @@ function setup({ user = officer, create = true, update = true, existingFacility 
     "@/lib/permissions": permissions,
     "@/lib/role-permissions": { hasPermission: async (_, key) => key === "assets.create" ? create : update },
     "@/lib/security": { readRequestIp: () => "test", recordSecurityEvent: noop },
-    "@/lib/audit": { writeAuditLog: noop },
+    "@/lib/audit": { writeAuditLog: async (input) => audits.push(input) },
+    "@/lib/telegram": { notifyTelegramSafe: async (input) => alerts.push(input) },
     "@/lib/asset-status-history": { recordAssetStatusHistory: noop },
     "@/lib/windows-license": { isComputerDeviceType: () => false, WINDOWS_LICENSE_STATUS_VALUES: ["Genuine", "Pirated"] },
     "@/lib/mysql": { selectRows: async (sql) => sql.includes("WHERE a.id = ?")
@@ -50,7 +53,7 @@ function setup({ user = officer, create = true, update = true, existingFacility 
       formData: async () => { if (malformed) throw new Error("bad form"); return form; } });
     return { status: response.status, body: await response.json() };
   }
-  return { request, writes };
+  return { request, writes, alerts, audits };
 }
 
 test("officer imports into own and additionally managed facilities", async () => {
@@ -98,5 +101,29 @@ test("malformed form bodies and non-file uploads return 400", async () => {
     const ctx = setup();
     assert.equal((await ctx.request(options)).status, 400);
     assert.equal(ctx.writes.length, 0);
+    assert.equal(ctx.alerts.length, 0);
   }
+});
+
+test("CSV import sends one summary with successful and skipped record counts", async () => {
+  const ctx = setup();
+  await ctx.request({ csv: "id,asset_name\n,New printer\n7,Existing printer\ninvalid,Bad printer" });
+  assert.equal(ctx.alerts.length, 1);
+  assert.equal(ctx.alerts[0].title, "สรุปการนำเข้าข้อมูล CSV");
+  const details = ctx.alerts[0].details;
+  assert.equal(details.จำนวนทั้งหมด, "3 record");
+  assert.equal(details.นำเข้าสำเร็จ, "2 record");
+  assert.equal(details.เพิ่มใหม่, "1 record");
+  assert.equal(details.แก้ไข, "1 record");
+  assert.equal(details.ข้ามหรือไม่สำเร็จ, "1 record");
+  assert.equal(ctx.audits.length, 2);
+  assert.ok(ctx.audits.every((entry) => entry.skipDataAlert));
+});
+
+test("CSV import reports zero successes when all records are rejected", async () => {
+  const ctx = setup();
+  await ctx.request({ csv: "id,asset_name\ninvalid,Bad printer" });
+  assert.equal(ctx.alerts.length, 1);
+  assert.equal(ctx.alerts[0].details.นำเข้าสำเร็จ, "0 record");
+  assert.equal(ctx.alerts[0].details.ข้ามหรือไม่สำเร็จ, "1 record");
 });

@@ -12,6 +12,7 @@ import { selectRows } from "@/lib/mysql";
 import { canManageAssetRecord, canMutateAssets } from "@/lib/permissions";
 import { hasPermission } from "@/lib/role-permissions";
 import { readRequestIp, recordSecurityEvent } from "@/lib/security";
+import { notifyTelegramSafe } from "@/lib/telegram";
 import { isComputerDeviceType, WINDOWS_LICENSE_STATUS_VALUES, type WindowsLicenseStatus } from "@/lib/windows-license";
 
 type ImportRow = Record<string, unknown>;
@@ -294,6 +295,7 @@ export async function POST(req: NextRequest) {
           entity: "information_assets",
           entityId: assetId,
           summary: `นำเข้า CSV เพื่อแก้ไขทรัพย์สิน ${input.assetName}`,
+          skipDataAlert: true,
         });
         updated += 1;
       } else {
@@ -315,6 +317,7 @@ export async function POST(req: NextRequest) {
           entity: "information_assets",
           entityId: result.insertId,
           summary: `นำเข้า CSV เพื่อสร้างทรัพย์สิน ${input.assetName}`,
+          skipDataAlert: true,
         });
         created += 1;
       }
@@ -332,6 +335,21 @@ export async function POST(req: NextRequest) {
     revalidatePath("/");
     revalidatePath(`/facilities/${facilityId}`);
   }
+
+  await notifyTelegramSafe({
+    category: "data",
+    title: `สรุปการนำเข้าข้อมูล ${filename.endsWith(".csv") ? "CSV" : "Excel"}`,
+    details: {
+      ผู้ดำเนินการ: user.fullName,
+      ไฟล์: file.name,
+      รหัสหน่วยบริการ: facilityId,
+      จำนวนทั้งหมด: `${rows.length} record`,
+      นำเข้าสำเร็จ: `${created + updated} record`,
+      เพิ่มใหม่: `${created} record`,
+      แก้ไข: `${updated} record`,
+      ข้ามหรือไม่สำเร็จ: `${skipped} record`,
+    },
+  });
 
   return NextResponse.json({ created, updated, skipped, errors: errors.slice(0, 30) });
 }
