@@ -1,3 +1,4 @@
+import { isItAsset } from "@/lib/asset-policy";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -238,8 +239,8 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
           className="rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
         >
           <option value="">ทุกลักษณะ</option>
-          <option value="Hardware">Hardware</option>
-          <option value="Software">Software</option>
+          <option value="Hardware">IT Hardware</option>
+          <option value="Software">IT Software</option>
         </select>
         <label htmlFor="asset-device-type-filter" className="sr-only">กรองประเภททรัพย์สิน / อุปกรณ์</label>
         <select
@@ -381,7 +382,7 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
                   <tr key={asset.id} className="hover:bg-white/50 transition">
                     <td className="px-4 py-3">
                       <Link href={`/assets/${asset.id}`} className="font-mono text-xs text-[var(--accent)] hover:underline">
-                        {asset.assetRegistrationNo}
+                        {asset.assetRegistrationNo || `#${asset.id}`}
                       </Link>
                     </td>
                     <td className="px-4 py-3 font-medium">{asset.assetName}</td>
@@ -393,7 +394,7 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
                     <td className="px-4 py-3">
                       <div className="flex min-w-44 flex-col gap-1">
                         <StatusBadge tone="primary">{assetClassLabel(asset.assetClass)}</StatusBadge>
-                        <span className="text-xs text-[var(--muted)]">{asset.deviceType || asset.assetGroup}</span>
+                        <span className="text-xs text-[var(--muted)]">{isItAsset(asset) ? asset.deviceType || asset.assetGroup : "ทะเบียนทรัพย์สิน"}</span>
                       </div>
                     </td>
                     <td className="px-4 py-3">
@@ -403,7 +404,7 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
                     </td>
                     {canViewNetworkByPolicy && canSeeSensitiveAssetNetwork(user, asset.facilityId) && (
                       <td className="px-4 py-3 font-mono text-xs text-[var(--muted)]">
-                        {asset.privateIp || "–"}
+                        {isItAsset(asset) ? asset.privateIp || "–" : "–"}
                       </td>
                     )}
                     <td className="px-4 py-3 font-mono text-xs text-[var(--muted)]">

@@ -1,3 +1,4 @@
+import { isItAsset, assetTypeLabel } from "@/lib/asset-policy";
 import "server-only";
 
 import type { RowDataPacket } from "mysql2/promise";
@@ -78,7 +79,7 @@ function buildFallbackPublicData(): PublicDashboardData {
 
   const deviceTypeSummary = Object.entries(
     allAssets.reduce<Record<string, number>>((summary, asset) => {
-      summary[asset.deviceType] = (summary[asset.deviceType] ?? 0) + 1;
+      summary[assetTypeLabel(asset)] = (summary[assetTypeLabel(asset)] ?? 0) + 1;
       return summary;
     }, {})
   )
@@ -92,8 +93,8 @@ function buildFallbackPublicData(): PublicDashboardData {
     totalDistricts: new Set(fallbackFacilitySurveys.map((survey) => survey.districtName)).size,
     activeAssets: allAssets.filter((asset) => asset.currentStatus === "Active").length,
     degradedAssets: allAssets.filter((asset) => asset.currentStatus !== "Active").length,
-    hardwareAssets: allAssets.filter((asset) => asset.assetGroup === "Hardware").length,
-    softwareAssets: allAssets.filter((asset) => asset.assetGroup === "Software").length,
+    hardwareAssets: allAssets.filter((asset) => isItAsset(asset) && asset.assetGroup === "Hardware").length,
+    softwareAssets: allAssets.filter((asset) => isItAsset(asset) && asset.assetGroup === "Software").length,
     districtSummary,
     deviceTypeSummary,
     dataSource: "fallback",
@@ -111,8 +112,8 @@ export async function getPublicDashboardData(): Promise<PublicDashboardData> {
           COUNT(DISTINCT hf.district_name) AS total_districts,
           SUM(CASE WHEN LOWER(COALESCE(a.current_status, '')) NOT IN ('inactive', 'in-active', 'not active', 'ไม่ใช้งาน', 'broken', 'ชำรุด', 'เสีย') THEN 1 ELSE 0 END) AS active_assets,
           SUM(CASE WHEN LOWER(COALESCE(a.current_status, '')) IN ('inactive', 'in-active', 'not active', 'ไม่ใช้งาน', 'broken', 'ชำรุด', 'เสีย') THEN 1 ELSE 0 END) AS degraded_assets,
-          SUM(CASE WHEN a.asset_category = 'Hardware' THEN 1 ELSE 0 END) AS hardware_assets,
-          SUM(CASE WHEN a.asset_category = 'Software' THEN 1 ELSE 0 END) AS software_assets
+          SUM(CASE WHEN COALESCE(NULLIF(TRIM(a.asset_class), ''), 'IT') = 'IT' AND a.asset_category = 'Hardware' THEN 1 ELSE 0 END) AS hardware_assets,
+          SUM(CASE WHEN COALESCE(NULLIF(TRIM(a.asset_class), ''), 'IT') = 'IT' AND a.asset_category = 'Software' THEN 1 ELSE 0 END) AS software_assets
         FROM information_asset_surveys s
         LEFT JOIN health_facilities hf ON hf.id = s.facility_id
         LEFT JOIN information_assets a ON a.survey_id = s.id
@@ -147,11 +148,11 @@ export async function getPublicDashboardData(): Promise<PublicDashboardData> {
     const deviceTypeRows = await selectRows<PublicDeviceTypeRow>(
       `
         SELECT
-          COALESCE(NULLIF(a.device_type, ''), 'ไม่ระบุ') AS device_type,
+          CASE WHEN COALESCE(NULLIF(TRIM(a.asset_class), ''), 'IT') = 'IT' THEN COALESCE(NULLIF(a.device_type, ''), 'ไม่ระบุ') ELSE a.asset_class END AS device_type,
           COUNT(*) AS count
         FROM information_assets a
         INNER JOIN information_asset_surveys s ON s.id = a.survey_id
-        GROUP BY COALESCE(NULLIF(a.device_type, ''), 'ไม่ระบุ')
+        GROUP BY CASE WHEN COALESCE(NULLIF(TRIM(a.asset_class), ''), 'IT') = 'IT' THEN COALESCE(NULLIF(a.device_type, ''), 'ไม่ระบุ') ELSE a.asset_class END
         ORDER BY count DESC, device_type ASC
         LIMIT 6
       `

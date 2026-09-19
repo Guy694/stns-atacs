@@ -4,6 +4,7 @@ import crypto from "node:crypto";
 
 import type { RowDataPacket } from "mysql2/promise";
 
+import { supportsAgentAsset } from "@/lib/asset-policy";
 import { createAsset, findOrCreateSurvey, updateAsset } from "@/lib/assets";
 import { findActiveFacilityWorkGroup, getActiveFacilityWorkGroupForFacility, getFacilityAgentContext, normalizeWorkGroupName } from "@/lib/facility-work-groups";
 import { executeStatement, selectRows } from "@/lib/mysql";
@@ -228,31 +229,46 @@ function buildAssetName(payload: AgentReportPayload) {
   return "Computer (ATACS Agent)";
 }
 
+type AgentAssetRow = AssetLinkRow & {
+  facility_id: number;
+  survey_id: number;
+  asset_class: string | null;
+  asset_category: string;
+  device_type: string | null;
+};
+
+function isAgentAssetRow(row: AgentAssetRow) {
+  return supportsAgentAsset({ assetClass: row.asset_class, assetCategory: row.asset_category, deviceType: row.device_type });
+}
+
+async function requireAgentAsset(assetId: number, facilityId: number) {
+  const rows = await selectRows<AgentAssetRow>(
+    `SELECT a.id, a.survey_id, a.asset_class, a.asset_category, a.device_type, s.facility_id
+     FROM information_assets a JOIN information_asset_surveys s ON s.id = a.survey_id
+     WHERE a.id = ? LIMIT 1`, [assetId]
+  );
+  if (!rows[0] || Number(rows[0].facility_id) !== Number(facilityId) || !isAgentAssetRow(rows[0])) {
+    throw new Error("Agent เชื่อมได้เฉพาะคอมพิวเตอร์หรือเซิร์ฟเวอร์ IT Hardware ในหน่วยงานเดียวกัน");
+  }
+  return rows[0];
+}
+
 async function findAssetCandidate(facilityId: number, serialNumber?: string | null, hostname?: string | null) {
-  if (serialNumber?.trim()) {
-    const rows = await selectRows<AssetLinkRow>(
-      `SELECT a.id
-       FROM information_assets a
-       JOIN information_asset_surveys s ON s.id = a.survey_id
-       WHERE s.facility_id = ? AND a.serial_number = ?
-       LIMIT 1`,
-      [facilityId, serialNumber.trim()]
+  for (const [column, value] of [["serial_number", serialNumber], ["asset_name", hostname]] as const) {
+    if (!value?.trim()) continue;
+    const rows = await selectRows<AgentAssetRow>(
+      `SELECT a.id, a.asset_class, a.asset_category, a.device_type, s.facility_id
+       FROM information_assets a JOIN information_asset_surveys s ON s.id = a.survey_id
+       WHERE s.facility_id = ? AND a.${column} = ?
+         AND COALESCE(NULLIF(TRIM(a.asset_class), ''), 'IT') = 'IT'
+         AND a.asset_category = 'Hardware'
+         AND NOT EXISTS (SELECT 1 FROM agent_devices ad WHERE ad.linked_asset_id = a.id)
+       ORDER BY a.id`, [facilityId, value.trim()]
     );
-    if (rows[0]) return rows[0].id;
+    const eligible = rows.filter(isAgentAssetRow);
+    if (eligible.length > 1) throw new Error("พบทะเบียน IT ที่ตรงกันมากกว่าหนึ่งรายการ กรุณาผูก Agent กับทะเบียนที่ถูกต้อง");
+    if (eligible[0]) return eligible[0].id;
   }
-
-  if (hostname?.trim()) {
-    const rows = await selectRows<AssetLinkRow>(
-      `SELECT a.id
-       FROM information_assets a
-       JOIN information_asset_surveys s ON s.id = a.survey_id
-       WHERE s.facility_id = ? AND a.asset_name = ?
-       LIMIT 1`,
-      [facilityId, hostname.trim()]
-    );
-    if (rows[0]) return rows[0].id;
-  }
-
   return null;
 }
 
@@ -588,6 +604,12 @@ export async function reportAgentInventory(input: {
     throw new Error("INVALID_FINGERPRINT");
   }
 
+  let linkedAsset = deviceRow.linked_asset_id ? await requireAgentAsset(deviceRow.linked_asset_id, deviceRow.facility_id) : null;
+  const reportedDeviceType = payload.deviceType?.trim() || "Computer";
+  if (!supportsAgentAsset({ assetClass: "IT", assetCategory: "Hardware", deviceType: reportedDeviceType })) {
+    throw new Error("ประเภทอุปกรณ์ไม่รองรับ ATACS Agent");
+  }
+
   const lastReportedAt = payload.collectedAt?.trim() || new Date().toISOString().slice(0, 19).replace("T", " ");
   await executeStatement(
     `UPDATE agent_devices
@@ -642,11 +664,12 @@ export async function reportAgentInventory(input: {
     ]
   );
 
-  const surveyId = await findOrCreateSurvey(deviceRow.facility_id);
   let linkedAssetId = deviceRow.linked_asset_id;
   if (!linkedAssetId) {
     linkedAssetId = await findAssetCandidate(deviceRow.facility_id, payload.serialNumber, payload.hostname);
+    if (linkedAssetId) linkedAsset = await requireAgentAsset(linkedAssetId, deviceRow.facility_id);
   }
+  const surveyId = linkedAsset?.survey_id ?? await findOrCreateSurvey(deviceRow.facility_id);
 
   const commonAssetFields = {
     surveyId,
@@ -654,7 +677,7 @@ export async function reportAgentInventory(input: {
     usageDescription: "Auto collected by ATACS Agent",
     ownerName: payload.currentUser?.trim() || undefined,
     assetCategory: "Hardware" as const,
-    deviceType: payload.deviceType?.trim() || "Computer",
+    deviceType: reportedDeviceType,
     operatingSystem: payload.operatingSystem?.trim() || undefined,
     operatingSystemVersion: payload.operatingSystemVersion?.trim() || undefined,
     privateIp: payload.privateIp?.trim() || undefined,
@@ -682,6 +705,7 @@ export async function reportAgentInventory(input: {
   } else {
     const result = await createAsset({
       ...commonAssetFields,
+      assetClass: "IT",
       assetRegistrationNo: autoRegistrationNo(deviceRow.facility_id, deviceRow.id),
     });
     linkedAssetId = result.insertId;
@@ -704,6 +728,10 @@ export async function reportAgentInventory(input: {
 }
 
 export async function linkAgentDeviceToAsset(deviceId: number, assetId: number | null) {
+  if (!Number.isSafeInteger(deviceId) || deviceId <= 0 || (assetId !== null && (!Number.isSafeInteger(assetId) || assetId <= 0))) throw new Error("ID ไม่ถูกต้อง");
+  const facilityId = await getAgentDeviceFacilityId(deviceId);
+  if (!facilityId) throw new Error("ไม่พบ Agent Device");
+  if (assetId !== null) await requireAgentAsset(assetId, facilityId);
   await executeStatement(
     `UPDATE agent_devices SET linked_asset_id = ? WHERE id = ?`,
     [assetId ?? null, deviceId]

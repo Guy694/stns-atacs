@@ -1,3 +1,4 @@
+import { isItAsset, assetTypeLabel } from "@/lib/asset-policy";
 import Link from "next/link";
 
 import { ExpiringMaintenanceTable, type ExpiringMaintenanceRow } from "@/app/(main)/_components/expiring-maintenance-table";
@@ -54,6 +55,7 @@ type ComputerLicenseSummary = {
 
 function summarizeComputerLicenses(
   assets: Array<{
+    assetClass?: string;
     assetGroup: "Hardware" | "Software";
     deviceType: string;
     windowsLicenseStatus?: "Genuine" | "Pirated" | null;
@@ -61,7 +63,7 @@ function summarizeComputerLicenses(
 ): ComputerLicenseSummary {
   return assets.reduce<ComputerLicenseSummary>(
     (summary, asset) => {
-      if (asset.assetGroup !== "Hardware" || !isComputerDeviceType(asset.deviceType)) return summary;
+      if (!isItAsset(asset) || asset.assetGroup !== "Hardware" || !isComputerDeviceType(asset.deviceType)) return summary;
 
       summary.computers += 1;
       if (asset.windowsLicenseStatus === "Genuine") summary.genuine += 1;
@@ -153,8 +155,8 @@ export default async function Home({ searchParams }: HomeProps) {
   const activeAssets = allAssets.filter((a) => a.currentStatus === "Active").length;
   const brokenAssets = allAssets.filter((a) => a.currentStatus === "Broken").length;
   const inactiveAssets = allAssets.filter((a) => a.currentStatus === "Inactive").length;
-  const hardwareCount = allAssets.filter((a) => a.assetGroup === "Hardware").length;
-  const softwareCount = allAssets.filter((a) => a.assetGroup === "Software").length;
+  const hardwareCount = allAssets.filter((a) => isItAsset(a) && a.assetGroup === "Hardware").length;
+  const softwareCount = allAssets.filter((a) => isItAsset(a) && a.assetGroup === "Software").length;
   const computerLicenseSummary = summarizeComputerLicenses(allAssets);
   const computerDistrictRows = uniqueSorted(facilitySurveys.map((survey) => survey.districtName)).map((districtName) => {
     const districtSurveys = facilitySurveys.filter((survey) => survey.districtName === districtName);
@@ -186,7 +188,7 @@ export default async function Home({ searchParams }: HomeProps) {
 
   const deviceTypes = Object.entries(
     allAssets.reduce<Record<string, number>>((acc, asset) => {
-      acc[asset.deviceType] = (acc[asset.deviceType] ?? 0) + 1;
+      acc[assetTypeLabel(asset)] = (acc[assetTypeLabel(asset)] ?? 0) + 1;
       return acc;
     }, {})
   ).sort((a, b) => b[1] - a[1]);
@@ -358,6 +360,7 @@ export default async function Home({ searchParams }: HomeProps) {
     id: asset.id,
     assetName: asset.assetName,
     assetRegistrationNo: asset.assetRegistrationNo,
+    assetClass: asset.assetClass,
     assetGroup: asset.assetGroup,
     currentStatus: asset.currentStatus,
     daysRemaining: asset.daysRemaining,
@@ -389,7 +392,7 @@ export default async function Home({ searchParams }: HomeProps) {
             <h1 className="section-title mt-1 text-2xl font-semibold sm:text-3xl">
               {scopeFacilityName
                 ? `ภาพรวม · ${scopeFacilityName}`
-                : "ภาพรวม ทะเบียนทรัพย์สินสารสนเทศ สังกัด สป. จังหวัดสตูล"}
+                : "ภาพรวม ทะเบียนทรัพย์สินและครุภัณฑ์ สังกัด สป. จังหวัดสตูล"}
             </h1>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -666,17 +669,18 @@ export default async function Home({ searchParams }: HomeProps) {
 
             <div className="mt-4 grid grid-cols-2 gap-3">
               <div className="rounded-xl bg-[var(--accent-strong)] p-4 text-white">
-                <p className="text-xs text-white/60">Hardware</p>
+                <p className="text-xs text-white/60">IT Hardware</p>
                 <p className="mt-1.5 text-3xl font-semibold">{hardwareCount}</p>
                 <p className="mt-0.5 text-xs text-white/60">{Math.round((hardwareCount / safeTotalAssets) * 100)}%</p>
               </div>
               <div className="rounded-xl border border-black/8 bg-white/80 p-4">
-                <p className="text-xs text-[var(--muted)]">Software</p>
+                <p className="text-xs text-[var(--muted)]">IT Software</p>
                 <p className="mt-1.5 text-3xl font-semibold">{softwareCount}</p>
                 <p className="mt-0.5 text-xs text-[var(--muted)]">{Math.round((softwareCount / safeTotalAssets) * 100)}%</p>
               </div>
             </div>
 
+            <p className="mt-3 text-sm text-[var(--foreground)]">ทรัพย์สิน IT รวม {hardwareCount + softwareCount} รายการ · กลุ่มอื่น {totalAssets - hardwareCount - softwareCount} รายการ</p>
             <div className="mt-5 space-y-3">
               {topDeviceTypes.map(([type, count]) => (
                 <div key={type}>

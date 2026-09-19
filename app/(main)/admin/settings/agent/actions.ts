@@ -120,6 +120,10 @@ export async function linkAgentDeviceAction(formData: FormData) {
     const asset = await getAssetById(parsedAssetId);
     if (!asset || !canAccessFacility(user, asset.facilityId) || asset.facilityId !== deviceFacilityId) return;
   }
-  await linkAgentDeviceToAsset(deviceId, parsedAssetId);
+  try {
+    await linkAgentDeviceToAsset(deviceId, parsedAssetId);
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "ไม่สามารถเชื่อม Agent ได้" };
+  }
   revalidatePath("/admin/settings/agent");
 }

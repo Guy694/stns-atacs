@@ -4,6 +4,7 @@ import type { RowDataPacket } from "mysql2/promise";
 
 import { facilitySurveys as fallbackSurveys, type AssetRecord } from "@/app/atacs-data";
 import { normalizeAssetClass } from "@/lib/asset-classes";
+import { isItAsset, parseAssetClass, supportsAgentAsset } from "@/lib/asset-policy";
 import { executeStatement, selectRows } from "@/lib/mysql";
 import type { WindowsLicenseStatus } from "@/lib/windows-license";
 
@@ -151,12 +152,12 @@ export type AssetInput = {
   manufacturerSpecification?: string;
   serialNumber?: string;
   purchasePrice?: number | null;
-  purchaseDate?: string;
+  purchaseDate?: string | null;
   purchaseOrderNo?: string;
-  maintenanceStartDate?: string;
-  maintenanceEndDate?: string;
-  installedAt?: string;
-  lastUpdatedAt?: string;
+  maintenanceStartDate?: string | null;
+  maintenanceEndDate?: string | null;
+  installedAt?: string | null;
+  lastUpdatedAt?: string | null;
   assetImage1Url?: string | null;
   assetImage2Url?: string | null;
   rowNo?: number;
@@ -228,11 +229,11 @@ function buildAssetFilter(filter?: AssetListFilter) {
     values.push(filter.district);
   }
   if (filter?.assetClass) {
-    conditions.push("COALESCE(a.asset_class, 'IT') = ?");
+    conditions.push("COALESCE(NULLIF(TRIM(a.asset_class), ''), 'IT') = ?");
     values.push(filter.assetClass);
   }
   if (filter?.assetGroup) {
-    conditions.push("a.asset_category = ?");
+    conditions.push("COALESCE(NULLIF(TRIM(a.asset_class), ''), 'IT') = 'IT' AND a.asset_category = ?");
     values.push(filter.assetGroup);
   }
   if (filter?.deviceType) {
@@ -302,7 +303,7 @@ function filterFallbackAssets(filter?: AssetListFilter) {
   if (filter?.status) assets = assets.filter((asset) => asset.currentStatus === filter.status);
   if (filter?.district) assets = assets.filter((asset) => asset.districtName === filter.district);
   if (filter?.assetClass) assets = assets.filter((asset) => asset.assetClass === normalizeAssetClass(filter.assetClass));
-  if (filter?.assetGroup) assets = assets.filter((asset) => asset.assetGroup === filter.assetGroup);
+  if (filter?.assetGroup) assets = assets.filter((asset) => isItAsset(asset) && asset.assetGroup === filter.assetGroup);
   if (filter?.deviceType) assets = assets.filter((asset) => asset.deviceType === filter.deviceType);
   if (filter?.search) {
     const q = filter.search.toLowerCase();
@@ -431,7 +432,7 @@ export async function createAsset(input: AssetInput) {
       input.usageDescription ?? null,
       input.ownerName ?? null,
       input.workGroupId ?? null,
-      normalizeAssetClass(input.assetClass),
+      parseAssetClass(input.assetClass),
       input.assetCategory,
       input.assetGroup ?? null,
       input.deviceType ?? null,
@@ -462,6 +463,21 @@ export async function createAsset(input: AssetInput) {
 
 /** แก้ไขทรัพย์สิน */
 export async function updateAsset(id: number, input: Partial<AssetInput>) {
+  if (input.assetClass !== undefined) parseAssetClass(input.assetClass);
+  // Any classification change on a linked record must leave it eligible for Agent updates.
+  if (input.assetClass !== undefined || input.assetCategory !== undefined || input.deviceType !== undefined || input.surveyId !== undefined) {
+    const linked = await selectRows<RowDataPacket & { asset_class: string | null; asset_category: string; device_type: string | null; survey_id: number }>(
+      "SELECT a.asset_class, a.asset_category, a.device_type, a.survey_id FROM information_assets a WHERE a.id = ? AND EXISTS (SELECT 1 FROM agent_devices ad WHERE ad.linked_asset_id = a.id)", [id]
+    );
+    const current = linked[0];
+    if (current && (!supportsAgentAsset({
+      assetClass: input.assetClass === undefined ? current.asset_class : input.assetClass,
+      assetCategory: input.assetCategory ?? current.asset_category,
+      deviceType: input.deviceType === undefined ? current.device_type : input.deviceType,
+    }) || (input.surveyId !== undefined && input.surveyId !== current.survey_id))) {
+      throw new Error("ทรัพย์สินนี้ผูกกับ Agent อยู่ กรุณายกเลิกการเชื่อมก่อนเปลี่ยนกลุ่ม ประเภท หรือหน่วยงาน");
+    }
+  }
   const sets: string[] = [];
   const values: unknown[] = [];
 
@@ -472,7 +488,7 @@ export async function updateAsset(id: number, input: Partial<AssetInput>) {
     asset_name: input.assetName,
     usage_description: input.usageDescription,
     owner_name: input.ownerName,
-    asset_class: input.assetClass === undefined ? undefined : normalizeAssetClass(input.assetClass),
+    asset_class: input.assetClass === undefined ? undefined : parseAssetClass(input.assetClass),
     asset_category: input.assetCategory,
     asset_group: input.assetGroup,
     device_type: input.deviceType,
@@ -489,12 +505,12 @@ export async function updateAsset(id: number, input: Partial<AssetInput>) {
     manufacturer_specification: input.manufacturerSpecification,
     serial_number: input.serialNumber,
     purchase_price: input.purchasePrice,
-    purchase_date: input.purchaseDate ?? null,
+    purchase_date: input.purchaseDate,
     purchase_order_no: input.purchaseOrderNo,
-    maintenance_start_date: input.maintenanceStartDate ?? null,
-    maintenance_end_date: input.maintenanceEndDate ?? null,
-    installed_at: input.installedAt ?? null,
-    last_updated_at: input.lastUpdatedAt ?? null,
+    maintenance_start_date: input.maintenanceStartDate,
+    maintenance_end_date: input.maintenanceEndDate,
+    installed_at: input.installedAt,
+    last_updated_at: input.lastUpdatedAt,
     asset_image_1_url: input.assetImage1Url,
     asset_image_2_url: input.assetImage2Url,
   };
@@ -524,6 +540,8 @@ export type AssetSelectOption = {
   assetName: string;
   deviceType: string | null;
   serialNumber: string | null;
+  assetClass: string | null;
+  assetCategory: "Hardware" | "Software";
 };
 
 export async function listAssetsForFacilityIds(facilityIds: number[]): Promise<AssetSelectOption[]> {
@@ -532,7 +550,8 @@ export async function listAssetsForFacilityIds(facilityIds: number[]): Promise<A
   try {
     const rows = await selectRows<RowDataPacket & AssetSelectOption>(
       `SELECT a.id, s.facility_id AS facilityId, a.asset_registration_no AS assetRegistrationNo,
-              a.asset_name AS assetName, a.device_type AS deviceType, a.serial_number AS serialNumber
+              a.asset_name AS assetName, a.device_type AS deviceType, a.serial_number AS serialNumber,
+              a.asset_class AS assetClass, a.asset_category AS assetCategory
        FROM information_assets a
        JOIN information_asset_surveys s ON s.id = a.survey_id
        WHERE s.facility_id IN (${placeholders})
@@ -546,6 +565,8 @@ export async function listAssetsForFacilityIds(facilityIds: number[]): Promise<A
       assetName: r.assetName,
       deviceType: r.deviceType ?? null,
       serialNumber: r.serialNumber ?? null,
+      assetClass: r.assetClass,
+      assetCategory: r.assetCategory,
     }));
   } catch {
     return [];
@@ -630,8 +651,8 @@ export async function listFacilities(filter?: { facilityId?: number; facilityIds
         hf.lon,
         hf.is_active,
         COUNT(DISTINCT a.id)                                          AS asset_count,
-        SUM(CASE WHEN a.asset_category = 'Hardware' THEN 1 ELSE 0 END) AS hw_count,
-        SUM(CASE WHEN a.asset_category = 'Software' THEN 1 ELSE 0 END) AS sw_count,
+        SUM(CASE WHEN COALESCE(NULLIF(TRIM(a.asset_class), ''), 'IT') = 'IT' AND a.asset_category = 'Hardware' THEN 1 ELSE 0 END) AS hw_count,
+        SUM(CASE WHEN COALESCE(NULLIF(TRIM(a.asset_class), ''), 'IT') = 'IT' AND a.asset_category = 'Software' THEN 1 ELSE 0 END) AS sw_count,
         COUNT(DISTINCT s.id)                                          AS has_survey
       FROM health_facilities hf
       LEFT JOIN information_asset_surveys s ON s.facility_id = hf.id
@@ -658,8 +679,8 @@ export async function getFacilityById(id: number): Promise<FacilityRow | null> {
         hf.lon,
         hf.is_active,
         COUNT(DISTINCT a.id)                                          AS asset_count,
-        SUM(CASE WHEN a.asset_category = 'Hardware' THEN 1 ELSE 0 END) AS hw_count,
-        SUM(CASE WHEN a.asset_category = 'Software' THEN 1 ELSE 0 END) AS sw_count,
+        SUM(CASE WHEN COALESCE(NULLIF(TRIM(a.asset_class), ''), 'IT') = 'IT' AND a.asset_category = 'Hardware' THEN 1 ELSE 0 END) AS hw_count,
+        SUM(CASE WHEN COALESCE(NULLIF(TRIM(a.asset_class), ''), 'IT') = 'IT' AND a.asset_category = 'Software' THEN 1 ELSE 0 END) AS sw_count,
         COUNT(DISTINCT s.id)                                          AS has_survey
       FROM health_facilities hf
       LEFT JOIN information_asset_surveys s ON s.facility_id = hf.id

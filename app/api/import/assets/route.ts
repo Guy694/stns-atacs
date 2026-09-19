@@ -3,7 +3,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import type { RowDataPacket } from "mysql2/promise";
 
-import { ASSET_CLASS_VALUE_SET, normalizeAssetClass } from "@/lib/asset-classes";
+import { parseAssetFields, type AssetFields, type ExistingAssetFields } from "@/lib/asset-input";
+import { isItAsset, parseAssetClass } from "@/lib/asset-policy";
 import { writeAuditLog } from "@/lib/audit";
 import { getCurrentUser } from "@/lib/auth";
 import { createAsset, findOrCreateSurvey, updateAsset, type AssetInput } from "@/lib/assets";
@@ -13,7 +14,6 @@ import { canManageAssetRecord, canMutateAssets } from "@/lib/permissions";
 import { hasPermission } from "@/lib/role-permissions";
 import { readRequestIp, recordSecurityEvent } from "@/lib/security";
 import { notifyTelegramSafe } from "@/lib/telegram";
-import { isComputerDeviceType, WINDOWS_LICENSE_STATUS_VALUES, type WindowsLicenseStatus } from "@/lib/windows-license";
 
 type ImportRow = Record<string, unknown>;
 
@@ -21,6 +21,9 @@ type ExistingAssetRow = RowDataPacket & {
   id: number;
   facility_id: number;
   current_status: string | null;
+  asset_class: string | null;
+  work_group_id: number | null;
+  survey_id: number;
 };
 
 type ImportError = {
@@ -28,8 +31,6 @@ type ImportError = {
   message: string;
 };
 
-const IPV4_REGEX = /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
-const DATE_ONLY_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 
 function cell(row: ImportRow, key: string) {
   const value = row[key];
@@ -50,13 +51,6 @@ function parsePositiveId(value: string, fieldLabel: string) {
   return parsed;
 }
 
-function isValidDateOnly(value: string | undefined) {
-  if (!value) return true;
-  if (!DATE_ONLY_REGEX.test(value)) return false;
-  const parsed = new Date(`${value}T00:00:00Z`);
-  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
-}
-
 function normalizeCategory(value: string | undefined, legacyGroup: string | undefined): "Hardware" | "Software" {
   const raw = (value || legacyGroup || "Hardware").trim().toLowerCase();
   if (["software", "system", "application", "app", "os"].includes(raw)) return "Software";
@@ -64,82 +58,37 @@ function normalizeCategory(value: string | undefined, legacyGroup: string | unde
   throw new Error("asset_category ต้องเป็น Hardware หรือ Software");
 }
 
-function buildInput(row: ImportRow, surveyId: number, workGroupId: number | undefined, updatedBy: string): AssetInput {
-  const assetName = cell(row, "asset_name");
-  if (!assetName) throw new Error("กรุณาระบุ asset_name");
+const COLUMN_FIELDS = {
+  asset_name: "assetName", asset_registration_no: "assetRegistrationNo", asset_class: "assetClass",
+  asset_category: "assetCategory", asset_group: "assetGroup", device_type: "deviceType",
+  usage_description: "usageDescription", owner_name: "ownerName", operating_system: "operatingSystem",
+  operating_system_version: "operatingSystemVersion", windows_license_status: "windowsLicenseStatus",
+  private_ip: "privateIp", public_ip: "publicIp", location_detail: "locationDetail", current_status: "currentStatus",
+  manufacturer_brand: "manufacturerBrand", manufacturer_model: "manufacturerModel",
+  manufacturer_specification: "manufacturerSpecification", serial_number: "serialNumber",
+  purchase_price: "purchasePrice", purchase_date: "purchaseDate", purchase_order_no: "purchaseOrderNo",
+  maintenance_start_date: "maintenanceStartDate", maintenance_end_date: "maintenanceEndDate", installed_at: "installedAt",
+} as const;
 
-  const assetClassInput = optionalCell(row, "asset_class") ?? "IT";
-  if (!ASSET_CLASS_VALUE_SET.has(assetClassInput)) {
-    throw new Error("asset_class ไม่ถูกต้อง");
+function buildInput(row: ImportRow, surveyId: number, workGroupId: number | undefined, updatedBy: string, existingRow?: ExistingAssetRow): AssetInput {
+  if (!cell(row, "asset_name")) throw new Error("กรุณาระบุ asset_name");
+  const fields: AssetFields = {};
+  const existing: Record<string, unknown> = {};
+  for (const [column, field] of Object.entries(COLUMN_FIELDS)) {
+    fields[field] = optionalCell(row, column);
+    if (existingRow) {
+      const value = existingRow[column];
+      existing[field] = value instanceof Date ? value.toISOString().slice(0, 10) : value;
+    }
   }
-
-  const assetCategory = normalizeCategory(optionalCell(row, "asset_category"), optionalCell(row, "asset_group"));
-  const deviceType = optionalCell(row, "device_type");
-  const windowsLicenseStatusInput = optionalCell(row, "windows_license_status");
-  const requiresWindowsLicenseStatus = assetCategory === "Hardware" && isComputerDeviceType(deviceType);
-
-  if (requiresWindowsLicenseStatus && !windowsLicenseStatusInput) {
-    throw new Error("ครุภัณฑ์คอมพิวเตอร์ต้องระบุ windows_license_status เป็น Genuine หรือ Pirated");
+  const assetClass = parseAssetClass(fields.assetClass, existingRow?.asset_class);
+  if (isItAsset({ assetClass }) && (fields.assetCategory || fields.assetGroup)) {
+    fields.assetCategory = normalizeCategory(fields.assetCategory, fields.assetGroup);
   }
-  if (windowsLicenseStatusInput && !WINDOWS_LICENSE_STATUS_VALUES.includes(windowsLicenseStatusInput as WindowsLicenseStatus)) {
-    throw new Error("windows_license_status ต้องเป็น Genuine หรือ Pirated");
-  }
-
-  const publicIp = optionalCell(row, "public_ip");
-  if (publicIp && !IPV4_REGEX.test(publicIp)) {
-    throw new Error("public_ip ไม่ถูกต้อง");
-  }
-
-  const purchasePriceText = optionalCell(row, "purchase_price");
-  const purchasePrice = purchasePriceText === undefined ? undefined : Number(purchasePriceText.replace(/,/g, ""));
-  if (purchasePrice !== undefined && (!Number.isFinite(purchasePrice) || purchasePrice < 0)) {
-    throw new Error("purchase_price ต้องเป็นตัวเลขที่ไม่ติดลบ");
-  }
-
-  const purchaseDate = optionalCell(row, "purchase_date");
-  const maintenanceStartDate = optionalCell(row, "maintenance_start_date");
-  const maintenanceEndDate = optionalCell(row, "maintenance_end_date");
-  const installedAt = optionalCell(row, "installed_at");
-  for (const [label, value] of Object.entries({ purchase_date: purchaseDate, maintenance_start_date: maintenanceStartDate, maintenance_end_date: maintenanceEndDate, installed_at: installedAt })) {
-    if (!isValidDateOnly(value)) throw new Error(`${label} ต้องอยู่ในรูปแบบ YYYY-MM-DD`);
-  }
-
-  const today = new Date().toISOString().slice(0, 10);
-  if (purchaseDate && purchaseDate > today) throw new Error("purchase_date ต้องไม่เกินวันที่ปัจจุบัน");
-  if (maintenanceStartDate && maintenanceEndDate && maintenanceEndDate < maintenanceStartDate) {
-    throw new Error("maintenance_end_date ต้องไม่ก่อน maintenance_start_date");
-  }
-
+  const parsed = parseAssetFields(fields, existingRow ? existing as ExistingAssetFields : undefined);
   return {
-    surveyId,
-    workGroupId: workGroupId ?? null,
-    assetRegistrationNo: optionalCell(row, "asset_registration_no") ?? null,
-    assetName,
-    assetClass: normalizeAssetClass(assetClassInput),
-    assetCategory,
-    assetGroup: optionalCell(row, "asset_group"),
-    deviceType,
-    usageDescription: optionalCell(row, "usage_description"),
-    ownerName: optionalCell(row, "owner_name"),
-    operatingSystem: optionalCell(row, "operating_system"),
-    operatingSystemVersion: optionalCell(row, "operating_system_version"),
-    windowsLicenseStatus: requiresWindowsLicenseStatus ? (windowsLicenseStatusInput as WindowsLicenseStatus) : null,
-    privateIp: optionalCell(row, "private_ip"),
-    publicIp,
-    locationDetail: optionalCell(row, "location_detail"),
-    currentStatus: optionalCell(row, "current_status") ?? "Active",
-    manufacturerBrand: optionalCell(row, "manufacturer_brand"),
-    manufacturerModel: optionalCell(row, "manufacturer_model"),
-    manufacturerSpecification: optionalCell(row, "manufacturer_specification"),
-    serialNumber: optionalCell(row, "serial_number"),
-    purchasePrice,
-    purchaseDate,
-    purchaseOrderNo: optionalCell(row, "purchase_order_no"),
-    maintenanceStartDate,
-    maintenanceEndDate,
-    installedAt,
-    lastUpdatedAt: today,
-    updatedBy,
+    ...parsed, surveyId: existingRow?.survey_id ?? surveyId, workGroupId: workGroupId ?? existingRow?.work_group_id ?? null,
+    lastUpdatedAt: new Date().toISOString().slice(0, 10), updatedBy,
   };
 }
 
@@ -255,35 +204,32 @@ export async function POST(req: NextRequest) {
     const rowNumber = index + 2;
     try {
       const assetId = parsePositiveId(cell(row, "id"), "id");
-      const workGroupId = parsePositiveId(cell(row, "work_group_id"), "work_group_id");
-      if (activeWorkGroupIds.size > 0 && !workGroupId) {
-        throw new Error("หน่วยบริการนี้ต้องระบุ work_group_id");
-      }
-      if (workGroupId && !activeWorkGroupIds.has(workGroupId)) {
-        throw new Error("work_group_id ไม่อยู่ในหน่วยบริการที่เลือกหรือถูกปิดใช้งาน");
-      }
-
-      const input = buildInput(row, surveyId, workGroupId, user.fullName);
+      let existingAsset: ExistingAssetRow | undefined;
       if (assetId) {
         if (!canUpdate) throw new Error("บัญชีนี้ไม่มีสิทธิ์แก้ไขทรัพย์สิน");
         const existing = await selectRows<ExistingAssetRow>(
-          `SELECT a.id, s.facility_id, a.current_status
+          `SELECT a.*, s.facility_id
            FROM information_assets a
            JOIN information_asset_surveys s ON s.id = a.survey_id
            WHERE a.id = ?
-           LIMIT 1`,
-          [assetId]
+           LIMIT 1`, [assetId]
         );
-        if (!existing[0]) throw new Error("ไม่พบครุภัณฑ์ตาม id ที่ระบุ");
-        if (Number(existing[0].facility_id) !== facilityId) throw new Error("id นี้ไม่ได้อยู่ในหน่วยบริการที่เลือก");
-        if (!canManageAssetRecord(user, existing[0].facility_id)) throw new Error("คุณไม่มีสิทธิ์แก้ไขครุภัณฑ์รายการนี้");
-
+        existingAsset = existing[0];
+        if (!existingAsset) throw new Error("ไม่พบครุภัณฑ์ตาม id ที่ระบุ");
+        if (Number(existingAsset.facility_id) !== facilityId) throw new Error("id นี้ไม่ได้อยู่ในหน่วยบริการที่เลือก");
+        if (!canManageAssetRecord(user, existingAsset.facility_id)) throw new Error("คุณไม่มีสิทธิ์แก้ไขครุภัณฑ์รายการนี้");
+      } else if (!canCreate) throw new Error("บัญชีนี้ไม่มีสิทธิ์เพิ่มทรัพย์สิน");
+      const workGroupId = parsePositiveId(cell(row, "work_group_id"), "work_group_id") ?? existingAsset?.work_group_id ?? undefined;
+      if (activeWorkGroupIds.size > 0 && !workGroupId) throw new Error("หน่วยบริการนี้ต้องระบุ work_group_id");
+      if (workGroupId && !activeWorkGroupIds.has(workGroupId)) throw new Error("work_group_id ไม่อยู่ในหน่วยบริการที่เลือกหรือถูกปิดใช้งาน");
+      const input = buildInput(row, surveyId, workGroupId, user.fullName, existingAsset);
+      if (assetId && existingAsset) {
         await validateUniqueValues(input, facilityId, assetId);
         await updateAsset(assetId, input);
         await recordAssetStatusHistory({
           assetId,
-          fromStatus: existing[0].current_status ?? "Active",
-          toStatus: input.currentStatus ?? "Active",
+          fromStatus: existingAsset.current_status ?? "Active",
+          toStatus: input.currentStatus ?? existingAsset.current_status ?? "Active",
           note: "นำเข้าข้อมูลจาก CSV",
           changedByUserId: user.id,
           changedBy: user.fullName,
@@ -294,7 +240,7 @@ export async function POST(req: NextRequest) {
           action: "update",
           entity: "information_assets",
           entityId: assetId,
-          summary: `นำเข้า CSV เพื่อแก้ไขทรัพย์สิน ${input.assetName}`,
+          summary: `นำเข้า CSV เพื่อแก้ไขทรัพย์สิน ${input.assetName}${(existingAsset.asset_class || "IT") !== input.assetClass ? ` (เปลี่ยนกลุ่ม ${existingAsset.asset_class || "IT"} → ${input.assetClass})` : ""}`,
           skipDataAlert: true,
         });
         updated += 1;

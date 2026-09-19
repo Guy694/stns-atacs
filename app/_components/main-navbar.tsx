@@ -26,8 +26,8 @@ export function MainNavbar({ user }: MainNavbarProps) {
           />
           <div className="min-w-0">
             <p className="truncate text-[10px] font-semibold tracking-[0.18em] text-[var(--muted)] uppercase">ATACS</p>
-            <p className="truncate text-sm font-semibold text-[var(--foreground)] sm:hidden">ทะเบียนทรัพย์สินสารสนเทศ</p>
-            <p className="hidden truncate text-sm font-semibold text-[var(--foreground)] sm:block sm:text-base">ทะเบียนทรัพย์สินสารสนเทศ สป. จังหวัดสตูล</p>
+            <p className="truncate text-sm font-semibold text-[var(--foreground)] sm:hidden">ทะเบียนทรัพย์สินและครุภัณฑ์</p>
+            <p className="hidden truncate text-sm font-semibold text-[var(--foreground)] sm:block sm:text-base">ทะเบียนทรัพย์สินและครุภัณฑ์ สป. จังหวัดสตูล</p>
           </div>
         </div>
 

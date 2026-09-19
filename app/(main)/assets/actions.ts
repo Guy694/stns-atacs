@@ -8,7 +8,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { RowDataPacket } from "mysql2/promise";
 
-import { ASSET_CLASS_VALUE_SET, normalizeAssetClass } from "@/lib/asset-classes";
+import { parseAssetFields, type AssetFields } from "@/lib/asset-input";
 import { getCurrentUser } from "@/lib/auth";
 import { recordAssetStatusHistory } from "@/lib/asset-status-history";
 import { createAsset, deleteAsset, findOrCreateSurvey, getAssetById, updateAsset, type AssetInput, type AssetWithFacility } from "@/lib/assets";
@@ -16,7 +16,6 @@ import { writeAuditLog } from "@/lib/audit";
 import { selectRows } from "@/lib/mysql";
 import { canManageAssetRecord, canMutateAssets } from "@/lib/permissions";
 import { hasPermission } from "@/lib/role-permissions";
-import { isComputerDeviceType, WINDOWS_LICENSE_STATUS_VALUES, type WindowsLicenseStatus } from "@/lib/windows-license";
 
 async function requireAuth() {
   const user = await getCurrentUser();
@@ -43,7 +42,7 @@ const ASSET_IMAGE_TYPES: Record<string, string> = {
   "image/webp": "webp",
 };
 
-function parseDateOnly(value?: string) {
+function parseDateOnly(value?: string | null) {
   if (!value) return null;
   const parsed = new Date(`${value}T00:00:00`);
   return Number.isNaN(parsed.getTime()) ? null : parsed;
@@ -160,74 +159,20 @@ async function validateAssetBusinessRules(input: AssetFormInput, assetId?: numbe
   }
 }
 
-async function buildInput(fd: FormData, updaterName: string): Promise<AssetFormInput> {
+async function buildInput(fd: FormData, updaterName: string, currentAsset?: AssetWithFacility): Promise<AssetFormInput> {
   const facilityId = Number(fd.get("facilityId"));
-  if (!facilityId || isNaN(facilityId)) throw new Error("กรุณาเลือกหน่วยงาน");
-  const surveyId = await findOrCreateSurvey(facilityId);
-
-  const assetRegistrationNo = readOptional(fd, "assetRegistrationNo") ?? null;
-
-  const assetName = readStr(fd, "assetName");
-  if (!assetName) throw new Error("กรุณากรอกชื่อทรัพย์สิน");
-
-  const assetClassInput = readOptional(fd, "assetClass") ?? "IT";
-  if (!ASSET_CLASS_VALUE_SET.has(assetClassInput)) throw new Error("กลุ่มครุภัณฑ์ไม่ถูกต้อง");
-  const assetClass = normalizeAssetClass(assetClassInput);
-
-  const assetCategory = readStr(fd, "assetCategory") as "Hardware" | "Software";
-  if (!["Hardware", "Software"].includes(assetCategory)) throw new Error("ลักษณะทรัพย์สินไม่ถูกต้อง");
-  const deviceType = readOptional(fd, "deviceType");
-  const requiresWindowsLicenseStatus = assetCategory === "Hardware" && isComputerDeviceType(deviceType);
-  const windowsLicenseStatusInput = readOptional(fd, "windowsLicenseStatus");
-  if (requiresWindowsLicenseStatus && !windowsLicenseStatusInput) {
-    throw new Error("กรุณาระบุว่า Windows เป็นของแท้หรือเถื่อน");
-  }
-  if (
-    windowsLicenseStatusInput &&
-    !WINDOWS_LICENSE_STATUS_VALUES.includes(windowsLicenseStatusInput as WindowsLicenseStatus)
-  ) {
-    throw new Error("สถานะลิขสิทธิ์ Windows ไม่ถูกต้อง");
-  }
+  if (!Number.isSafeInteger(facilityId) || facilityId <= 0) throw new Error("กรุณาเลือกหน่วยงาน");
+  const fields: AssetFields = {};
+  for (const [key, value] of fd.entries()) if (typeof value === "string") fields[key] = value.trim();
+  const parsed = parseAssetFields(fields, currentAsset);
   const workGroupIdRaw = readOptional(fd, "workGroupId");
-  let parsedWorkGroupId: number | null = null;
-  if (workGroupIdRaw) {
-    const value = Number(workGroupIdRaw);
-    if (!Number.isInteger(value) || value <= 0) throw new Error("กลุ่มงานไม่ถูกต้อง");
-    parsedWorkGroupId = value;
+  let workGroupId = currentAsset?.workGroupId ?? null;
+  if (fd.has("workGroupId")) {
+    workGroupId = workGroupIdRaw ? Number(workGroupIdRaw) : null;
+    if (workGroupId !== null && (!Number.isSafeInteger(workGroupId) || workGroupId <= 0)) throw new Error("กลุ่มงานไม่ถูกต้อง");
   }
-
-  return {
-    surveyId,
-    workGroupId: parsedWorkGroupId,
-    assetRegistrationNo,
-    assetName,
-    assetClass,
-    assetCategory,
-    usageDescription: readOptional(fd, "usageDescription"),
-    ownerName: readOptional(fd, "ownerName"),
-    deviceType,
-    operatingSystem: readOptional(fd, "operatingSystem"),
-    operatingSystemVersion: readOptional(fd, "operatingSystemVersion"),
-    windowsLicenseStatus: requiresWindowsLicenseStatus
-      ? (windowsLicenseStatusInput as WindowsLicenseStatus)
-      : null,
-    privateIp: readOptional(fd, "privateIp"),
-    publicIp: readOptional(fd, "publicIp"),
-    locationDetail: readOptional(fd, "locationDetail"),
-    currentStatus: readOptional(fd, "currentStatus") ?? "Active",
-    updatedBy: updaterName,
-    manufacturerBrand: readOptional(fd, "manufacturerBrand"),
-    manufacturerModel: readOptional(fd, "manufacturerModel"),
-    serialNumber: readOptional(fd, "serialNumber"),
-    purchasePrice: (() => { const v = readOptional(fd, "purchasePrice"); return v ? Number(v) : undefined; })(),
-    purchaseDate: readOptional(fd, "purchaseDate"),
-    purchaseOrderNo: readOptional(fd, "purchaseOrderNo"),
-    maintenanceStartDate: readOptional(fd, "maintenanceStartDate"),
-    maintenanceEndDate: readOptional(fd, "maintenanceEndDate"),
-    installedAt: readOptional(fd, "installedAt"),
-    lastUpdatedAt: new Date().toISOString().slice(0, 10),
-    facilityId,
-  };
+  const surveyId = currentAsset?.facilityId === facilityId ? currentAsset.surveyId : await findOrCreateSurvey(facilityId);
+  return { ...parsed, surveyId, workGroupId, facilityId, updatedBy: updaterName, lastUpdatedAt: new Date().toISOString().slice(0, 10) };
 }
 
 export async function createAssetAction(_prev: string | null, fd: FormData): Promise<string | null> {
@@ -276,7 +221,8 @@ export async function updateAssetAction(_prev: string | null, fd: FormData): Pro
     const requestedFacilityId = Number(fd.get("facilityId"));
     if (!requestedFacilityId || isNaN(requestedFacilityId)) return "กรุณาเลือกหน่วยงาน";
     if (!canManageAssetRecord(user, requestedFacilityId)) return "คุณไม่มีสิทธิ์ดำเนินการกับหน่วยงานนี้";
-    const input = await buildInput(fd, user.fullName);
+    const input = await buildInput(fd, user.fullName, currentAsset);
+    if (input.assetClass !== currentAsset.assetClass && readStr(fd, "confirmClassChange") !== "1") return "กรุณายืนยันการเปลี่ยนกลุ่มทรัพย์สิน";
     await validateAssetBusinessRules(input, id);
     const imageUrls = await buildAssetImageUrls(fd, currentAsset);
     await updateAsset(id, { ...input, ...imageUrls });
@@ -288,7 +234,7 @@ export async function updateAssetAction(_prev: string | null, fd: FormData): Pro
       changedByUserId: user.id,
       changedBy: user.fullName,
     });
-    await writeAuditLog({ userId: user.id, userName: user.fullName, action: "update", entity: "information_assets", entityId: id, summary: `แก้ไขทรัพย์สิน ${input.assetName}` });
+    await writeAuditLog({ userId: user.id, userName: user.fullName, action: "update", entity: "information_assets", entityId: id, summary: `แก้ไขทรัพย์สิน ${input.assetName}${currentAsset.assetClass !== input.assetClass ? ` (เปลี่ยนกลุ่ม ${currentAsset.assetClass} → ${input.assetClass})` : ""}` });
     revalidatePath("/assets");
     revalidatePath(`/assets/${id}`);
     revalidatePath("/");

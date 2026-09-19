@@ -4,6 +4,7 @@ import test from "node:test";
 import vm from "node:vm";
 import ts from "typescript";
 import * as XLSX from "xlsx";
+import { loadTs } from "./helpers/load-ts.mjs";
 
 function load(file, dependencies) {
   const exports = {};
@@ -19,7 +20,7 @@ function load(file, dependencies) {
 const permissions = load("../lib/permissions.ts", { "server-only": {} });
 const officer = { id: 1, fullName: "Officer", role: "officer", facilityId: 10, managedAssetFacilityIds: [20] };
 
-function setup({ user = officer, create = true, update = true, existingFacility = 10 } = {}) {
+function setup({ user = officer, create = true, update = true, existingFacility = 10, existingAsset = {} } = {}) {
   const writes = [];
   const alerts = [];
   const audits = [];
@@ -28,7 +29,8 @@ function setup({ user = officer, create = true, update = true, existingFacility 
     xlsx: XLSX,
     "next/server": { NextResponse: Response },
     "next/cache": { revalidatePath: () => {} },
-    "@/lib/asset-classes": { ASSET_CLASS_VALUE_SET: new Set(["IT"]), normalizeAssetClass: (v) => v },
+    "@/lib/asset-input": loadTs("lib/asset-input.ts"),
+    "@/lib/asset-policy": loadTs("lib/asset-policy.ts"),
     "@/lib/auth": { getCurrentUser: async () => user },
     "@/lib/permissions": permissions,
     "@/lib/role-permissions": { hasPermission: async (_, key) => key === "assets.create" ? create : update },
@@ -38,7 +40,7 @@ function setup({ user = officer, create = true, update = true, existingFacility 
     "@/lib/asset-status-history": { recordAssetStatusHistory: noop },
     "@/lib/windows-license": { isComputerDeviceType: () => false, WINDOWS_LICENSE_STATUS_VALUES: ["Genuine", "Pirated"] },
     "@/lib/mysql": { selectRows: async (sql) => sql.includes("WHERE a.id = ?")
-      ? [{ id: 7, facility_id: existingFacility, current_status: "Active" }] : [] },
+      ? [{ id: 7, facility_id: existingFacility, current_status: "Active", asset_class: "IT", asset_category: "Hardware", asset_name: "Existing printer", ...existingAsset }] : [] },
     "@/lib/assets": {
       findOrCreateSurvey: async (id) => { writes.push(["survey", id]); return 1; },
       createAsset: async (input) => { writes.push(["create", input]); return { insertId: 8 }; },
@@ -126,4 +128,33 @@ test("CSV import reports zero successes when all records are rejected", async ()
   assert.equal(ctx.alerts.length, 1);
   assert.equal(ctx.alerts[0].details.นำเข้าสำเร็จ, "0 record");
   assert.equal(ctx.alerts[0].details.ข้ามหรือไม่สำเร็จ, "1 record");
+});
+
+test("legacy CSV creates IT and updates non-IT without resetting its class or omitted fields", async () => {
+  const ctx = setup({ existingAsset: { asset_class: "Vehicle", current_status: "Broken", asset_registration_no: "CAR-1", purchase_date: "2025-01-01", device_type: "Legacy car" } });
+  const { body } = await ctx.request({ csv: "id,asset_name\n,New printer\n7,Renamed car" });
+  assert.equal(body.created, 1);
+  assert.equal(body.updated, 1);
+  assert.equal(ctx.writes.find(([action]) => action === "create")[1].assetClass, "IT");
+  const patch = ctx.writes.find(([action]) => action === "update")[2];
+  assert.equal(patch.assetClass, "Vehicle");
+  assert.equal(patch.assetRegistrationNo, "CAR-1");
+  for (const field of ["currentStatus", "purchaseDate", "deviceType", "windowsLicenseStatus"]) assert.equal(patch[field], undefined);
+});
+
+test("CSV accepts every non-IT class without OS or license but rejects unknown explicit classes", async () => {
+  const ctx = setup();
+  const { body } = await ctx.request({ csv: "asset_name,asset_class\nDesk,Office\nECG,Medical\nCar,Vehicle\nBuilding,Building\nPump,Utility\nOther,Other\nWrong,Typo" });
+  assert.equal(body.created, 6);
+  assert.equal(body.skipped, 1);
+  assert.equal(body.errors[0].row, 8);
+});
+
+test("CSV computer update preserves stored license when omitted; new computers still require one", async () => {
+  const ctx = setup({ existingAsset: { device_type: "Desktop", windows_license_status: "Genuine" } });
+  const { body } = await ctx.request({ csv: "id,asset_name,device_type\n7,Renamed PC,\n,New PC,Desktop" });
+  assert.equal(body.updated, 1);
+  assert.equal(body.created, 0);
+  assert.equal(body.skipped, 1);
+  assert.equal(ctx.writes.find(([action]) => action === "update")[2].windowsLicenseStatus, undefined);
 });

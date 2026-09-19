@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 
 import { createAssetAction, updateAssetAction } from "@/app/(main)/assets/actions";
 import { ASSET_CLASS_OPTIONS } from "@/lib/asset-classes";
+import { isItAsset, requiresWindowsLicense } from "@/lib/asset-policy";
 import type { AssetWithFacility } from "@/lib/assets";
 import { isComputerDeviceType, type WindowsLicenseStatus } from "@/lib/windows-license";
 
@@ -180,6 +181,9 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
   const [open, setOpen] = useState(false);
   const [selectedFacilityId, setSelectedFacilityId] = useState<number | null>(fixedFacilityId ?? asset?.facilityId ?? null);
   const [selectedWorkGroupId, setSelectedWorkGroupId] = useState(asset?.workGroupId?.toString() ?? "");
+  const [assetClass, setAssetClass] = useState(asset?.assetClass ?? "IT");
+  const isIt = isItAsset({ assetClass });
+  const classChanged = mode === "edit" && assetClass !== asset?.assetClass;
   const [assetCategory, setAssetCategory] = useState<"Hardware" | "Software">(asset?.assetGroup ?? "Hardware");
   const [deviceType, setDeviceType] = useState(asset?.deviceType?.trim() ?? "");
   const [windowsLicenseStatus, setWindowsLicenseStatus] = useState<WindowsLicenseStatus | "">(
@@ -190,7 +194,7 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
   const formRef = useRef<HTMLFormElement>(null);
   const today = new Date().toISOString().slice(0, 10);
   const selectedDeviceType = asset?.deviceType?.trim() ?? "";
-  const requiresWindowsLicenseStatus = assetCategory === "Hardware" && isComputerDeviceType(deviceType);
+  const requiresWindowsLicenseStatus = requiresWindowsLicense({ assetClass, assetCategory, deviceType });
   const hasSelectedDeviceType = Boolean(
     selectedDeviceType && !deviceTypes.some((t) => t.name === selectedDeviceType)
   );
@@ -213,6 +217,7 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
   function openModal() {
     setSelectedFacilityId(fixedFacilityId ?? asset?.facilityId ?? null);
     setSelectedWorkGroupId(asset?.workGroupId?.toString() ?? "");
+    setAssetClass(asset?.assetClass ?? "IT");
     setAssetCategory(asset?.assetGroup ?? "Hardware");
     setDeviceType(asset?.deviceType?.trim() ?? "");
     setWindowsLicenseStatus(asset?.windowsLicenseStatus ?? "");
@@ -263,12 +268,13 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
               </div>
 
               {error && (
-                <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>
+                <div role="alert" className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>
               )}
 
               <form ref={formRef} action={formAction} className="mt-5 space-y-4">
                 {mode === "edit" && <input type="hidden" name="assetId" value={asset?.id} />}
 
+              <h3 className="text-base font-semibold">ข้อมูลทั่วไป</h3>
               {/* Survey / หน่วยงาน */}
               <div>
                 <label className="block text-sm font-medium">หน่วยงาน <span className="text-rose-500">*</span></label>
@@ -334,7 +340,7 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
                     name="assetName"
                     defaultValue={asset?.assetName ?? ""}
                     required
-                    placeholder="เช่น Core Firewall"
+                    placeholder="เช่น คอมพิวเตอร์สำนักงาน โต๊ะทำงาน หรือรถยนต์"
                     className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
                   />
                 </div>
@@ -343,10 +349,12 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
               <div className="grid gap-4 sm:grid-cols-2">
                 {/* หมวด */}
                 <div>
-                  <label className="block text-sm font-medium">กลุ่มครุภัณฑ์ <span className="text-rose-500">*</span></label>
+                  <label htmlFor={`${titleId}-class`} className="block text-sm font-medium">กลุ่มทรัพย์สิน <span className="text-rose-500">*</span></label>
                   <select
+                    id={`${titleId}-class`}
                     name="assetClass"
-                    defaultValue={asset?.assetClass ?? "IT"}
+                    value={assetClass}
+                    onChange={(event) => setAssetClass(event.target.value)}
                     className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
                   >
                     {ASSET_CLASS_OPTIONS.map((option) => (
@@ -354,8 +362,8 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
                     ))}
                   </select>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium">ลักษณะทรัพย์สิน <span className="text-rose-500">*</span></label>
+                <fieldset hidden={!isIt} disabled={!isIt}>
+                  <label className="block text-sm font-medium">ลักษณะทรัพย์สิน IT <span className="text-rose-500">*</span></label>
                   <select
                     name="assetCategory"
                     value={assetCategory}
@@ -369,10 +377,10 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
                     <option value="Hardware">Hardware</option>
                     <option value="Software">Software</option>
                   </select>
-                </div>
+                </fieldset>
                 {/* ประเภททรัพย์สิน */}
-                <div className="sm:col-span-2">
-                  <label className="block text-sm font-medium">ประเภททรัพย์สิน / อุปกรณ์</label>
+                <fieldset hidden={!isIt} disabled={!isIt} className="sm:col-span-2">
+                  <label className="block text-sm font-medium">ประเภทอุปกรณ์ IT</label>
                   <select
                     name="deviceType"
                     value={deviceType}
@@ -396,7 +404,7 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
                       </optgroup>
                     )}
                   </select>
-                </div>
+                </fieldset>
                 {requiresWindowsLicenseStatus && (
                   <div className="sm:col-span-2">
                     <label className="block text-sm font-medium">
@@ -421,7 +429,15 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
                 )}
               </div>
 
-              <div className="grid gap-4 sm:grid-cols-2">
+              {classChanged && (
+                <label className="flex items-start gap-2 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
+                  <input key={assetClass} type="checkbox" name="confirmClassChange" value="1" required className="mt-1" />
+                  ยืนยันการเปลี่ยนกลุ่มทรัพย์สิน ข้อมูลเดิมจะถูกเก็บไว้ รายการที่ผูก Agent ต้องยกเลิกการเชื่อมก่อนเปลี่ยนเป็นกลุ่มอื่น
+                </label>
+              )}
+              {!isIt && <p className="text-sm text-[var(--foreground)]">บันทึกข้อมูลทะเบียน การจัดซื้อ และรายละเอียดทั่วไปของทรัพย์สินได้โดยไม่ต้องระบุข้อมูลคอมพิวเตอร์</p>}
+              <fieldset disabled={!isIt} className={isIt ? "grid gap-4 sm:grid-cols-2" : "hidden"}>
+                <legend className="mb-3 text-base font-semibold">ข้อมูล IT</legend>
                 {/* OS */}
                 <div>
                   <label className="block text-sm font-medium">ระบบปฏิบัติการ</label>
@@ -441,7 +457,7 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
                     className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 font-mono text-sm outline-none focus:border-[var(--accent)]"
                   />
                 </div>
-              </div>
+              </fieldset>
 
               <div className="grid gap-4 sm:grid-cols-2">
                 {/* Owner */}
@@ -464,6 +480,22 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
                 </div>
               </div>
 
+              <div className="grid gap-4 sm:grid-cols-2">
+                {([
+                  ["manufacturerBrand", "ยี่ห้อ", asset?.manufacturerBrand],
+                  ["manufacturerModel", "รุ่น", asset?.manufacturerModel],
+                ] as const).map(([name, label, value]) => (
+                  <div key={name}>
+                    <label htmlFor={titleId + name} className="block text-sm font-medium">{label}</label>
+                    <input id={titleId + name} name={name} defaultValue={value ?? ""} className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]" />
+                  </div>
+                ))}
+              </div>
+              <div>
+                <label htmlFor={titleId + "specification"} className="block text-sm font-medium">รายละเอียด / คุณลักษณะ</label>
+                <textarea id={titleId + "specification"} name="manufacturerSpecification" defaultValue={asset?.manufacturerSpecification ?? ""} rows={3} className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]" />
+              </div>
+              <h3 className="pt-2 text-base font-semibold">การจัดซื้อและการบำรุงรักษา</h3>
               <div className="grid gap-4 sm:grid-cols-3">
                 {/* Serial */}
                 <div>
@@ -557,6 +589,25 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
                 />
               </div>
 
+              <fieldset className="space-y-3">
+                <legend className="mb-2 text-base font-semibold">รูปภาพทรัพย์สิน</legend>
+                <p className="text-sm text-[var(--muted)]">JPG, PNG หรือ WebP ไม่เกิน 5 MB ต่อภาพ</p>
+                {([1, 2] as const).map((slot) => {
+                  const imageUrl = slot === 1 ? asset?.assetImage1Url : asset?.assetImage2Url;
+                  return (
+                    <div key={slot}>
+                      <label htmlFor={titleId + "image" + slot} className="block text-sm font-medium">รูปภาพที่ {slot}</label>
+                      <input id={titleId + "image" + slot} name={"assetImage" + slot} type="file" accept="image/jpeg,image/png,image/webp" className="mt-1 block w-full text-sm" />
+                      {imageUrl && (
+                        <div className="mt-2 flex flex-wrap items-center gap-4 text-sm">
+                          <a href={imageUrl} target="_blank" rel="noreferrer" className="underline">ดูรูปปัจจุบัน</a>
+                          <label className="flex items-center gap-2"><input type="checkbox" name={"removeAssetImage" + slot} value="1" />ลบรูปปัจจุบัน</label>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </fieldset>
                 <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-end">
                   <button
                     type="button"

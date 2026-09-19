@@ -82,8 +82,8 @@ export default async function FacilitiesPage() {
                   <th className="px-5 py-3 text-left font-medium">ชื่อหน่วยบริการ</th>
                   <th className="px-4 py-3 text-left font-medium">ประเภท</th>
                   <th className="px-4 py-3 text-center font-medium">ทรัพย์สิน</th>
-                  <th className="px-4 py-3 text-center font-medium">ฮาร์ดแวร์</th>
-                  <th className="px-4 py-3 text-center font-medium">ซอฟต์แวร์</th>
+                  <th className="px-4 py-3 text-center font-medium">IT Hardware</th>
+                  <th className="px-4 py-3 text-center font-medium">IT Software</th>
                   <th className="px-4 py-3 text-center font-medium">สถานะข้อมูล</th>
                   <th className="px-4 py-3 text-right font-medium">รายละเอียด</th>
                 </tr>

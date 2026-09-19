@@ -1,3 +1,4 @@
+import { isItAsset, assetTypeLabel } from "@/lib/asset-policy";
 import Link from "next/link";
 
 import { StatusBadge } from "@/app/_components/ui/status-badge";
@@ -63,14 +64,14 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
   // ── Apply filters ────────────────────────────────────────────────────────
   let filtered = allAssets;
   if (districtFilter) filtered = filtered.filter((a) => a.districtName === districtFilter);
-  if (groupFilter) filtered = filtered.filter((a) => a.assetGroup === groupFilter);
+  if (groupFilter) filtered = filtered.filter((a) => isItAsset(a) && a.assetGroup === groupFilter);
 
   const total = filtered.length;
   const active = filtered.filter((a) => a.currentStatus === "Active").length;
   const broken = filtered.filter((a) => a.currentStatus === "Broken").length;
   const inactive = filtered.filter((a) => a.currentStatus === "Inactive").length;
-  const hw = filtered.filter((a) => a.assetGroup === "Hardware").length;
-  const sw = filtered.filter((a) => a.assetGroup === "Software").length;
+  const hw = filtered.filter((a) => isItAsset(a) && a.assetGroup === "Hardware").length;
+  const sw = filtered.filter((a) => isItAsset(a) && a.assetGroup === "Software").length;
   const facilityCount = new Set(filtered.map((a) => a.facilityId)).size;
   const districtCount = districtFilter ? (allDistricts.includes(districtFilter) ? 1 : 0) : allDistricts.length;
   const safeTotal = Math.max(total, 1);
@@ -143,7 +144,7 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
   // ── By device type ───────────────────────────────────────────────────────
   const byType = Object.entries(
     filtered.reduce<Record<string, { total: number; active: number; broken: number; inactive: number }>>((acc, a) => {
-      const k = a.deviceType || a.assetGroup;
+      const k = assetTypeLabel(a);
       if (!acc[k]) acc[k] = { total: 0, active: 0, broken: 0, inactive: 0 };
       acc[k].total++;
       if (a.currentStatus === "Active") acc[k].active++;
@@ -186,7 +187,7 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
               ATACS · PUBLIC DASHBOARD · จ.สตูล
             </div>
             <h1 className="section-title mt-4 text-4xl font-semibold leading-tight sm:text-5xl">
-              ทะเบียนทรัพย์สิน<br className="hidden sm:block" />สารสนเทศ จ.สตูล
+              ทะเบียนทรัพย์สินและครุภัณฑ์<br className="hidden sm:block" />จ.สตูล
             </h1>
             <p className="mt-3 max-w-lg text-sm leading-7 text-white">
               ข้อมูลสรุประดับจังหวัดและอำเภอ
@@ -217,8 +218,8 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
             { label: "พร้อมใช้งาน", value: active, accent: true },
             { label: "ชำรุด", value: broken, warn: broken > 0 },
             { label: "ไม่ใช้งาน", value: inactive },
-            { label: "Hardware", value: hw },
-            { label: "Software", value: sw },
+            { label: "IT Hardware", value: hw },
+            { label: "IT Software", value: sw },
             { label: "หน่วยงาน", value: facilityCount },
             { label: "อำเภอ", value: districtCount },
           ].map((k) => (
@@ -283,7 +284,7 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
 	                        <tr key={`${a.assetRegistrationNo}-${a.assetName}-${a.facilityName}`} className="hover:bg-white/50">
 	                          <td className="py-2.5 pr-4 font-mono text-xs">{a.assetRegistrationNo}</td>
 	                          <td className="py-2.5 pr-4 font-medium">{a.assetName}</td>
-	                          <td className="py-2.5 pr-4"><StatusBadge tone="primary">{a.deviceType || a.assetGroup}</StatusBadge></td>
+	                          <td className="py-2.5 pr-4"><StatusBadge tone="primary">{assetTypeLabel(a)}</StatusBadge></td>
 	                          <td className="py-2.5 pr-4 text-[var(--muted)]">{a.facilityName}</td>
 	                          <td className="py-2.5 text-center">
 	                            <StatusBadge tone={assetStatusTone(a.currentStatus)}>
@@ -347,7 +348,7 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
             {/* Donut chart */}
             <div className="glass-panel rounded-2xl p-6">
               <p className="text-xs font-medium uppercase tracking-[0.22em] text-[var(--muted)]">สถานะทรัพย์สิน</p>
-              <h2 className="section-title mt-1 text-xl font-semibold">สัดส่วนสถานะทรัพย์สินสารสนเทศ</h2>
+              <h2 className="section-title mt-1 text-xl font-semibold">สัดส่วนสถานะทรัพย์สินและครุภัณฑ์</h2>
               <div className="mt-5 flex items-center gap-6">
                 {/* donut */}
                 <div className="relative shrink-0" style={{ width: 160, height: 160 }}>
@@ -378,29 +379,33 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
 
             {/* HW/SW + status bars */}
             <div className="glass-panel rounded-2xl p-6">
-              <p className="text-xs font-medium uppercase tracking-[0.22em] text-[var(--muted)]">สัดส่วน ฮาร์ดแวร์ / ซอฟต์แวร์</p>
+              <p className="text-xs font-medium uppercase tracking-[0.22em] text-[var(--muted)]">สัดส่วนทรัพย์สิน IT และกลุ่มอื่น</p>
               <h2 className="section-title mt-1 text-xl font-semibold">สัดส่วน ฮาร์ดแวร์ / ซอฟต์แวร์</h2>
               {/* stacked bar */}
               <div className="mt-5 flex h-8 overflow-hidden rounded-xl text-xs font-semibold text-white">
                 <div className="flex items-center justify-center bg-[var(--primary)]" style={{ width: `${Math.round((hw / safeTotal) * 100)}%` }}>
                   {hw > 0 && `${Math.round((hw / safeTotal) * 100)}%`}
                 </div>
-                <div className="flex flex-1 items-center justify-center bg-emerald-400 text-emerald-900">
+                <div className="flex items-center justify-center bg-emerald-400 text-emerald-900" style={{ width: `${(sw / safeTotal) * 100}%` }}>
                   {sw > 0 && `${Math.round((sw / safeTotal) * 100)}%`}
+                </div>
+                <div className="flex items-center justify-center bg-slate-600" style={{ width: `${((total - hw - sw) / safeTotal) * 100}%` }}>
+                  {total - hw - sw > 0 && `${Math.round(((total - hw - sw) / safeTotal) * 100)}%`}
                 </div>
               </div>
               <div className="mt-3 grid grid-cols-2 gap-3">
                 <div className="rounded-xl bg-[var(--primary-soft)] p-4">
-                  <div className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-[var(--primary)]" /><span className="text-xs text-[var(--muted)]">Hardware</span></div>
+                  <div className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-[var(--primary)]" /><span className="text-xs text-[var(--muted)]">IT Hardware</span></div>
                   <p className="mt-2 text-2xl font-bold text-[var(--primary-text)]">{hw}</p>
                   <p className="text-xs text-[var(--muted)]">{Math.round((hw / safeTotal) * 100)}% ของทั้งหมด</p>
                 </div>
                 <div className="rounded-xl bg-emerald-50 p-4">
-                  <div className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-emerald-500" /><span className="text-xs text-[var(--muted)]">Software</span></div>
+                  <div className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-emerald-500" /><span className="text-xs text-[var(--muted)]">IT Software</span></div>
                   <p className="mt-2 text-2xl font-bold text-emerald-700">{sw}</p>
                   <p className="text-xs text-[var(--muted)]">{Math.round((sw / safeTotal) * 100)}% ของทั้งหมด</p>
                 </div>
               </div>
+              <p className="mt-3 text-sm text-[var(--foreground)]">IT รวม {hw + sw} รายการ · ทรัพย์สินกลุ่มอื่น {total - hw - sw} รายการ</p>
               {/* status quick bars */}
               <div className="mt-4 space-y-3 border-t border-black/6 pt-4">
                 {[

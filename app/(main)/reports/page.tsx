@@ -1,3 +1,4 @@
+import { isItAsset, assetTypeLabel } from "@/lib/asset-policy";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -52,8 +53,8 @@ export default async function ReportsPage({ searchParams }: Props) {
   const active = assets.filter((a) => a.currentStatus === "Active").length;
   const broken = assets.filter((a) => a.currentStatus === "Broken").length;
   const inactive = assets.filter((a) => a.currentStatus === "Inactive").length;
-  const hw = assets.filter((a) => a.assetGroup === "Hardware").length;
-  const sw = assets.filter((a) => a.assetGroup === "Software").length;
+  const hw = assets.filter((a) => isItAsset(a) && a.assetGroup === "Hardware").length;
+  const sw = assets.filter((a) => isItAsset(a) && a.assetGroup === "Software").length;
   const facilities = new Set(assets.map((a) => a.facilityId)).size;
   const districts = new Set(assets.map((a) => a.districtName)).size;
 
@@ -78,7 +79,7 @@ export default async function ReportsPage({ searchParams }: Props) {
   const byType = Object.entries(
     assets.reduce<Record<string, { total: number; active: number; broken: number }>>(
       (acc, a) => {
-        const key = a.deviceType || a.assetGroup;
+        const key = assetTypeLabel(a);
         if (!acc[key]) acc[key] = { total: 0, active: 0, broken: 0 };
         acc[key].total++;
         if (a.currentStatus === "Active") acc[key].active++;
@@ -139,8 +140,9 @@ export default async function ReportsPage({ searchParams }: Props) {
           { label: "ใช้งานอยู่", value: active, color: "text-emerald-600" },
           { label: "ชำรุด", value: broken, color: "text-rose-600" },
           { label: "ไม่ใช้งาน", value: inactive, color: "text-amber-600" },
-          { label: "Hardware", value: hw, color: "text-green-600" },
-          { label: "Software", value: sw, color: "text-lime-600" },
+          { label: "IT Hardware", value: hw, color: "text-green-600" },
+          { label: "IT Software", value: sw, color: "text-lime-600" },
+          { label: "ทรัพย์สินกลุ่มอื่น", value: total - hw - sw, color: "text-slate-700" },
           { label: "หน่วยงาน", value: facilities, color: "text-emerald-600" },
           { label: "อำเภอ", value: districts, color: "text-emerald-600" },
         ].map((k) => (
@@ -354,7 +356,7 @@ export default async function ReportsPage({ searchParams }: Props) {
                       </td>
                       <td className="px-4 py-3 text-[var(--muted)]">{a.facilityName}</td>
                       <td className="px-4 py-3">
-                        <StatusBadge tone="neutral">{a.deviceType || a.assetGroup}</StatusBadge>
+                        <StatusBadge tone="neutral">{assetTypeLabel(a)}</StatusBadge>
                       </td>
                       <td className="px-4 py-3 text-center">
                         <StatusBadge tone={assetStatusTone(a.currentStatus)}>

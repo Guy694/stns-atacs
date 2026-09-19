@@ -5,6 +5,7 @@ import { StatusBadge, activeTone } from "@/app/_components/ui/status-badge";
 import { AgentDeviceLinkCell } from "@/app/(main)/admin/settings/agent/_components/agent-device-link-cell";
 import { AgentEnrollmentPanel } from "@/app/(main)/admin/settings/agent/_components/agent-enrollment-panel";
 import { revokeAgentEnrollmentAction } from "@/app/(main)/admin/settings/agent/actions";
+import { supportsAgentAsset } from "@/lib/asset-policy";
 import { listAgentDevices, listAgentEnrollments } from "@/lib/agent";
 import { getPrimaryAgentInstallKey } from "@/lib/agent-install-key";
 import { getCurrentUser } from "@/lib/auth";
@@ -54,7 +55,7 @@ export default async function AgentSettingsPage() {
       listFacilityWorkGroups(facilityScopeId || undefined),
     ]);
     const facilityIds = [...new Set(devices.map((d) => d.facilityId))];
-    assetOptions = await listAssetsForFacilityIds(facilityIds);
+    assetOptions = (await listAssetsForFacilityIds(facilityIds)).filter(supportsAgentAsset);
   } catch {
     dbError = "ยังไม่พบโครงสร้าง Agent หรือกลุ่มงาน กรุณารัน database/agent_inventory.sql และ database/add_facility_work_groups.sql ก่อน";
   }

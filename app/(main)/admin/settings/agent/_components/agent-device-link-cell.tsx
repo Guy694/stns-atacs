@@ -23,6 +23,7 @@ export function AgentDeviceLinkCell({
   assets,
 }: Props) {
   const [open, setOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [pending, startTransition] = useTransition();
 
@@ -40,8 +41,15 @@ export function AgentDeviceLinkCell({
     const fd = new FormData();
     fd.set("deviceId", String(deviceId));
     if (assetId !== null) fd.set("assetId", String(assetId));
-    startTransition(() => {
-      linkAgentDeviceAction(fd).then(() => setOpen(false));
+    setError(null);
+    startTransition(async () => {
+      try {
+        const result = await linkAgentDeviceAction(fd);
+        if (result?.error) setError(result.error);
+        else setOpen(false);
+      } catch {
+        setError("ไม่สามารถเชื่อม Agent ได้ กรุณาลองใหม่");
+      }
     });
   }
 
@@ -91,6 +99,7 @@ export function AgentDeviceLinkCell({
               </button>
             </div>
 
+            {error && <p role="alert" className="mb-3 text-sm text-rose-700">{error}</p>}
             <input
               type="text"
               placeholder="ค้นหาชื่อ, รหัส, S/N..."

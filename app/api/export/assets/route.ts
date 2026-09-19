@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { getCurrentUser } from "@/lib/auth";
 import { listAssets } from "@/lib/assets";
+import { parseAssetListQuery } from "@/lib/asset-list-query";
+import { isItAsset } from "@/lib/asset-policy";
+import { canSeeSensitiveAssetNetwork } from "@/lib/permissions";
 import { resolveFacilityFilter } from "@/lib/facility-scope";
 import { hasPermission } from "@/lib/role-permissions";
 import { readRequestIp, recordSecurityEvent } from "@/lib/security";
@@ -123,12 +126,14 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "No facility scope" }, { status: 403 });
   }
 
-  const assets = await listAssets({
-    facilityId,
-    status: searchParams.get("status") ?? undefined,
-    search: searchParams.get("q") ?? undefined,
-    assetClass: searchParams.get("assetClass") ?? undefined,
-  });
+  let filter;
+  try {
+    filter = parseAssetListQuery(searchParams);
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : "ตัวกรองไม่ถูกต้อง" }, { status: 400 });
+  }
+  const assets = await listAssets({ ...filter, facilityId });
+  const canViewNetwork = await hasPermission(user.role, "assets.network.view");
 
   const rows = assets.map((asset) => [
     asset.id,
@@ -146,8 +151,8 @@ export async function GET(req: NextRequest) {
     asset.operatingSystem,
     asset.operatingSystemVersion ?? "",
     asset.windowsLicenseStatus ?? "",
-    asset.privateIp,
-    asset.publicIp,
+    canViewNetwork && isItAsset(asset) && canSeeSensitiveAssetNetwork(user, asset.facilityId) ? asset.privateIp : "",
+    canViewNetwork && isItAsset(asset) && canSeeSensitiveAssetNetwork(user, asset.facilityId) ? asset.publicIp : "",
     asset.ownerName,
     asset.locationDetail,
     asset.currentStatus,

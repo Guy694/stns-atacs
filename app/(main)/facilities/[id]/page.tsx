@@ -1,3 +1,4 @@
+import { isItAsset } from "@/lib/asset-policy";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
@@ -104,10 +105,10 @@ export default async function FacilityDetailPage({ params, searchParams }: Props
 
   const totalAssets = allAssets.length;
   const activeCount = allAssets.filter((a) => a.currentStatus === "Active").length;
-  const hardwareCount = allAssets.filter((a) => a.assetGroup === "Hardware").length;
-  const softwareCount = allAssets.filter((a) => a.assetGroup === "Software").length;
+  const hardwareCount = allAssets.filter((a) => isItAsset(a) && a.assetGroup === "Hardware").length;
+  const softwareCount = allAssets.filter((a) => isItAsset(a) && a.assetGroup === "Software").length;
   const referenceDate = new Date();
-  const deviceTypeOptions = [...new Set(allAssets.map((asset) => asset.deviceType).filter(Boolean))].sort((a, b) =>
+  const deviceTypeOptions = [...new Set(allAssets.filter(isItAsset).map((asset) => asset.deviceType).filter(Boolean))].sort((a, b) =>
     a.localeCompare(b, "th")
   );
   const hasActiveFilters = Boolean(search || statusFilter || assetClassFilter || groupFilter || workGroupFilter || deviceTypeFilter || maExpiringDays || normalizedSort);
@@ -144,8 +145,8 @@ export default async function FacilityDetailPage({ params, searchParams }: Props
           {[
             { label: "ทรัพย์สินรวม", value: totalAssets },
             { label: "พร้อมใช้งาน", value: activeCount, green: true },
-            { label: "ลักษณะฮาร์ดแวร์", value: hardwareCount },
-            { label: "ลักษณะซอฟต์แวร์", value: softwareCount },
+            { label: "IT Hardware", value: hardwareCount },
+            { label: "IT Software", value: softwareCount },
           ].map((kpi) => (
             <div key={kpi.label} className="px-5 py-4">
               <p className="text-xs text-[var(--muted)]">{kpi.label}</p>
@@ -367,8 +368,8 @@ export default async function FacilityDetailPage({ params, searchParams }: Props
                     </td>
                     <td className="px-4 py-3">
                       <StatusBadge tone="primary">{assetClassLabel(asset.assetClass)}</StatusBadge>
-                      <p className="mt-1 text-xs">{asset.deviceType || "–"}</p>
-                      <p className="text-xs text-[var(--muted)]">{asset.assetGroup}</p>
+                      {isItAsset(asset) && <><p className="mt-1 text-xs">{asset.deviceType || "–"}</p>
+                      <p className="text-xs text-[var(--muted)]">{asset.assetGroup}</p></>}
                     </td>
                     <td className="px-4 py-3">
                       <StatusBadge tone={STATUS_TONE[asset.currentStatus as keyof typeof STATUS_TONE] ?? "neutral"}>
@@ -377,7 +378,7 @@ export default async function FacilityDetailPage({ params, searchParams }: Props
                     </td>
                     {canManageAssets && (
                       <td className="px-4 py-3 font-mono text-xs">
-                        <p>{asset.privateIp || "–"}</p>
+                        <p>{isItAsset(asset) ? asset.privateIp || "–" : "–"}</p>
                         <p className="text-[var(--muted)]">{asset.locationDetail || ""}</p>
                       </td>
                     )}

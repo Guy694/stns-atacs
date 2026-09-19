@@ -156,7 +156,9 @@ export default async function AssetImportGuidePage() {
 
         <div className="mt-5 grid gap-3 text-sm leading-6 text-[var(--muted)] sm:grid-cols-2 lg:grid-cols-3">
           <p><Code>asset_name</Code> ต้องมีทุกแถว</p>
-          <p>คอมพิวเตอร์ต้องระบุ <Code>windows_license_status</Code> เป็น Genuine หรือ Pirated</p>
+          <p>เฉพาะคอมพิวเตอร์กลุ่ม IT Hardware ต้องระบุ <Code>windows_license_status</Code> เป็น Genuine หรือ Pirated; การแก้ไขที่เว้นว่างจะรักษาค่าเดิม</p>
+          <p>ทรัพย์สินกลุ่มอื่นไม่ต้องกรอก OS, IP หรือประเภทอุปกรณ์ IT และบันทึกข้อมูลทั่วไปได้ตามปกติ</p>
+          <p>ไฟล์เก่าที่ไม่มี <Code>asset_class</Code>: เพิ่มใหม่เป็น IT; แก้ไขโดยรักษากลุ่มเดิม ช่องว่างในการแก้ไข CSV จะไม่ล้างข้อมูลเดิม</p>
           <p>วันที่ใช้รูปแบบ <Code>YYYY-MM-DD</Code></p>
           <p>ระบบตรวจสอบเลขทะเบียนและ Serial Number ที่ซ้ำภายในหน่วยบริการ</p>
           <p><Code>work_group_id</Code> ต้องเป็น id ของหน่วยบริการที่เลือก</p>

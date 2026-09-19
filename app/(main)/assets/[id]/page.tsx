@@ -1,3 +1,4 @@
+import { isItAsset, supportsAgentAsset } from "@/lib/asset-policy";
 import Link from "next/link";
 import Image from "next/image";
 import { headers } from "next/headers";
@@ -79,21 +80,6 @@ function formatStorage(gb?: number | null) {
   return `${gb.toLocaleString("th-TH")} GB`;
 }
 
-function isComputerAsset(asset: Awaited<ReturnType<typeof getAssetById>>, agentDevice: AgentDevice | null) {
-  const text = [
-    asset?.assetName,
-    asset?.deviceType,
-    asset?.operatingSystem,
-    agentDevice?.deviceType,
-    agentDevice?.operatingSystem,
-  ]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase();
-
-  return /(computer|desktop|laptop|notebook|workstation|pc|windows|ubuntu|linux|macos|server)/i.test(text);
-}
-
 function ComputerSpecPanel({ device }: { device: AgentDevice | null }) {
   if (!device) {
     return (
@@ -163,6 +149,7 @@ export default async function AssetDetailPage({ params }: Props) {
   if (!canAccessAssetFacility(user, asset.facilityId)) {
     redirect(user.facilityId ? "/facilities" : "/profile");
   }
+  const isIt = isItAsset(asset);
   const requestHeaders = await headers();
   const host = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host") ?? "";
   const protocol = requestHeaders.get("x-forwarded-proto") ?? (host.includes("localhost") ? "http" : "https");
@@ -211,10 +198,8 @@ export default async function AssetDetailPage({ params }: Props) {
             <StatusBadge tone="primary">
               {assetClassLabel(asset.assetClass)}
             </StatusBadge>
-            <StatusBadge tone="neutral">
-              {asset.assetGroup}
-            </StatusBadge>
-            {asset.deviceType && (
+            {isIt && <StatusBadge tone="neutral">{asset.assetGroup}</StatusBadge>}
+            {isIt && asset.deviceType && (
               <StatusBadge tone="neutral">{asset.deviceType}</StatusBadge>
             )}
           </div>
@@ -261,19 +246,21 @@ export default async function AssetDetailPage({ params }: Props) {
           <div className="glass-panel rounded-2xl p-5">
             <h2 className="mb-4 text-sm font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">ข้อมูลทรัพย์สิน</h2>
             <AssetImageGallery images={asset.assetImages} assetName={asset.assetName} />
-            {isComputerAsset(asset, agentDevice) && <ComputerSpecPanel device={agentDevice} />}
+            {supportsAgentAsset(asset) && <ComputerSpecPanel device={agentDevice} />}
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               <Field label="กลุ่มครุภัณฑ์" value={assetClassLabel(asset.assetClass)} />
-              <Field label="ลักษณะทรัพย์สิน" value={asset.assetGroup} />
-              <Field label="ประเภททรัพย์สิน / อุปกรณ์" value={asset.deviceType} />
+              {isIt && <Field label="ลักษณะทรัพย์สิน IT" value={asset.assetGroup} />}
+              {isIt && <Field label="ประเภทอุปกรณ์ IT" value={asset.deviceType} />}
               <Field label="ยี่ห้อ (Brand)" value={asset.manufacturerBrand} />
+              <Field label="รุ่น" value={asset.manufacturerModel} />
+              <Field label="รายละเอียด / คุณลักษณะ" value={asset.manufacturerSpecification} />
               <Field label="Serial Number" value={asset.serialNumber} />
-              <Field label="ระบบปฏิบัติการ" value={asset.operatingSystem} />
-              {asset.windowsLicenseStatus && (
+              {isIt && <Field label="ระบบปฏิบัติการ" value={asset.operatingSystem} />}
+              {isIt && asset.windowsLicenseStatus && (
                 <Field label="สถานะลิขสิทธิ์ Windows" value={windowsLicenseStatusLabel(asset.windowsLicenseStatus)} />
               )}
-              <Field label="Private IP" value={canViewNetwork ? (asset.privateIp || "–") : "ซ่อนข้อมูล"} />
-              <Field label="Public IP" value={canViewNetwork ? (asset.publicIp || "–") : "ซ่อนข้อมูล"} />
+              {isIt && <Field label="Private IP" value={canViewNetwork ? (asset.privateIp || "–") : "ซ่อนข้อมูล"} />}
+              {isIt && <Field label="Public IP" value={canViewNetwork ? (asset.publicIp || "–") : "ซ่อนข้อมูล"} />}
             </div>
           </div>
 
@@ -425,14 +412,14 @@ export default async function AssetDetailPage({ params }: Props) {
                 <span className="text-[var(--muted)]">หมวด</span>
                 <span className="text-[var(--foreground)]">{assetClassLabel(asset.assetClass)}</span>
               </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-[var(--muted)]">ลักษณะ</span>
+              {isIt && <><div className="flex items-center justify-between text-sm">
+                <span className="text-[var(--muted)]">ลักษณะ IT</span>
                 <span className="text-[var(--foreground)]">{asset.assetGroup}</span>
               </div>
               <div className="flex items-center justify-between gap-3 text-sm">
                 <span className="text-[var(--muted)]">ประเภท</span>
                 <span className="break-words text-right text-[var(--foreground)]">{asset.deviceType || "–"}</span>
-              </div>
+              </div></>}
               <div className="flex items-center justify-between text-sm">
                 <span className="text-[var(--muted)]">อัปเดตล่าสุด</span>
                 <span className="text-xs text-[var(--foreground)]">{formatThaiDate(asset.updatedAt)}</span>

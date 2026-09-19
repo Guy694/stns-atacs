@@ -127,7 +127,7 @@ export function Sidebar({ user, grantedPermissions, pendingRegistrationCount, me
       {/* Brand */}
       <div className="border-b border-white/10 px-5 py-5">
         <p className="font-mono text-xs font-semibold tracking-[0.18em] text-white/70">ATACS</p>
-        <p className="mt-1 text-sm font-semibold text-white">ทะเบียนทรัพย์สินสารสนเทศ</p>
+        <p className="mt-1 text-sm font-semibold text-white">ทะเบียนทรัพย์สินและครุภัณฑ์</p>
         <p className="mt-0.5 text-xs text-white/70">สป. จังหวัดสตูล</p>
       </div>
 

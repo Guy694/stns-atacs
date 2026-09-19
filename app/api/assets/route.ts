@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { getCurrentUser } from "@/lib/auth";
 import { listAssets } from "@/lib/assets";
+import { parseAssetListQuery } from "@/lib/asset-list-query";
+import { assetTypeLabel } from "@/lib/asset-policy";
 import { resolveFacilityFilter } from "@/lib/facility-scope";
 import { readRequestIp, recordSecurityEvent } from "@/lib/security";
 
@@ -25,7 +27,13 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "No facility scope" }, { status: 403 });
   }
 
-  const assets = await listAssets({ facilityId });
+  let filter;
+  try {
+    filter = parseAssetListQuery(req.nextUrl.searchParams);
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : "ตัวกรองไม่ถูกต้อง" }, { status: 400 });
+  }
+  const assets = await listAssets({ ...filter, facilityId });
 
   return NextResponse.json(
     assets.map((a) => ({
@@ -35,6 +43,7 @@ export async function GET(req: NextRequest) {
       deviceType: a.deviceType,
       assetClass: a.assetClass,
       assetGroup: a.assetGroup,
+      displayType: assetTypeLabel(a),
       currentStatus: a.currentStatus,
     }))
   );

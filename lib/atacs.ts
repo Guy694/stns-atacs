@@ -8,6 +8,8 @@ import {
   type AssetRecord,
   type FacilitySurvey,
 } from "@/app/atacs-data";
+import { normalizeAssetClass } from "@/lib/asset-classes";
+import { isItAsset } from "@/lib/asset-policy";
 import { selectRows } from "@/lib/mysql";
 
 type SurveyRow = RowDataPacket & {
@@ -35,6 +37,7 @@ type AssetRow = RowDataPacket & {
   asset_name: string;
   usage_description: string | null;
   owner_name: string | null;
+  asset_class: string | null;
   asset_category: "Hardware" | "Software" | null;
   asset_group: string | null;
   device_type: string | null;
@@ -124,8 +127,7 @@ function calculateCompletionRate(survey: Omit<FacilitySurvey, "completionRate">)
       const fields = [
         asset.assetRegistrationNo,
         asset.assetName,
-        asset.assetGroup,
-        asset.deviceType,
+        ...(isItAsset(asset) ? [asset.assetGroup, asset.deviceType] : [asset.assetClass]),
         asset.locationDetail,
         asset.currentStatus,
         asset.ownerName,
@@ -221,6 +223,7 @@ export async function getDashboardData(): Promise<DashboardData> {
           asset_name,
           usage_description,
           owner_name,
+          asset_class,
           asset_category,
           asset_group,
           device_type,
@@ -249,6 +252,7 @@ export async function getDashboardData(): Promise<DashboardData> {
         assetRegistrationNo: asset.asset_registration_no ?? "",
         assetName: asset.asset_name,
         usageDescription: asset.usage_description ?? "-",
+        assetClass: normalizeAssetClass(asset.asset_class),
         assetGroup: asset.asset_category ?? normalizeAssetGroup(asset.asset_group),
         deviceType: asset.device_type ?? "ไม่ระบุ",
         operatingSystem: asset.operating_system ?? "ไม่ระบุ",

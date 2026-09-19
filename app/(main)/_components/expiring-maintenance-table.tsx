@@ -3,6 +3,7 @@
 import { useEffect, useId, useState } from "react";
 import { createPortal } from "react-dom";
 
+import { assetTypeLabel, isItAsset } from "@/lib/asset-policy";
 import { StatusBadge } from "@/app/_components/ui/status-badge";
 import { assetStatusLabel, assetStatusTone } from "@/lib/asset-status";
 import { formatThaiDate, formatThaiDateTime } from "@/lib/date-format";
@@ -11,6 +12,7 @@ export type ExpiringMaintenanceRow = {
   id: number;
   assetName: string;
   assetRegistrationNo: string;
+  assetClass?: string;
   assetGroup: "Hardware" | "Software";
   currentStatus: string;
   daysRemaining: number;
@@ -145,8 +147,8 @@ export function ExpiringMaintenanceTable({
                       <p className="mt-0.5 truncate text-xs text-[var(--muted)]">{row.districtName}</p>
                     </td>
                     <td className="px-4 py-3">
-                      <p className="font-medium text-[var(--foreground)]">{row.deviceType}</p>
-                      <p className="mt-0.5 text-xs text-[var(--muted)]">{row.assetGroup}</p>
+                      <p className="font-medium text-[var(--foreground)]">{assetTypeLabel(row)}</p>
+                      {isItAsset(row) && <p className="mt-0.5 text-xs text-[var(--muted)]">{row.assetGroup}</p>}
                     </td>
                     <td className="px-4 py-3 text-xs text-[var(--foreground)]">{formatThaiDate(row.maintenanceEndDate)}</td>
                     <td className="px-4 py-3">
@@ -209,7 +211,7 @@ export function ExpiringMaintenanceTable({
               <dl className="mt-4 grid gap-x-6 sm:grid-cols-2">
                 <DetailField label="เลขทะเบียนทรัพย์สิน" value={selectedRow.assetRegistrationNo} />
                 <DetailField label="วันสิ้นสุดสัญญา MA" value={formatThaiDate(selectedRow.maintenanceEndDate)} />
-                <DetailField label="ประเภททรัพย์สิน / อุปกรณ์" value={`${selectedRow.deviceType} · ${selectedRow.assetGroup}`} />
+                <DetailField label="ประเภททรัพย์สิน / อุปกรณ์" value={assetTypeLabel(selectedRow)} />
                 <DetailField label="สถานะปัจจุบัน" value={assetStatusLabel(selectedRow.currentStatus)} />
                 <DetailField label="ยี่ห้อ / รุ่น" value={selectedRow.manufacturerBrand} />
                 <DetailField label="ระบบปฏิบัติการ" value={selectedRow.operatingSystem} />
