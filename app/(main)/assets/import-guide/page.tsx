@@ -1,3 +1,5 @@
+import { ASSET_DETAIL_FIELDS } from "@/lib/asset-details";
+import { listAssetSubtypes } from "@/lib/asset-extensions";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -20,6 +22,7 @@ export default async function AssetImportGuidePage() {
   const canViewAssets = await hasPermission(user.role, "assets.view");
   if (!canViewAssets) redirect("/dashboard");
 
+  const subtypes = await listAssetSubtypes();
   const [allWorkGroups, deviceTypes] = await Promise.all([listFacilityWorkGroups(), listActiveDeviceTypes()]);
   const workGroups = allWorkGroups.filter((workGroup) => canAccessAssetFacility(user, workGroup.facilityId));
   const groupedWorkGroups = workGroups.reduce<Record<string, typeof workGroups>>((groups, workGroup) => {
@@ -49,6 +52,15 @@ export default async function AssetImportGuidePage() {
         </div>
       </header>
 
+      <section className="space-y-4 rounded-xl border border-black/10 bg-white p-5">
+        <h2 className="text-lg font-semibold">ข้อมูลเฉพาะครุภัณฑ์นอกกลุ่ม IT</h2>
+        <p className="text-sm">ระบุ asset_class และ subtype_id จากรายการด้านล่าง กรอกเฉพาะคอลัมน์ของกลุ่มนั้น วันที่ใช้ YYYY-MM-DD ตัวเลขไม่ต้องใส่หน่วย การแก้ไขที่เว้นช่องว่างจะเก็บค่าเดิม หากต้องการล้างประเภทย่อยหรือข้อมูลเฉพาะ ให้ใส่ __CLEAR__</p>
+        {Object.entries(ASSET_DETAIL_FIELDS).map(([group, fields]) => <div key={group} className="space-y-1 text-sm">
+          <h3 className="font-semibold">{ASSET_CLASS_OPTIONS.find(o => o.value === group)?.label} ({group})</h3>
+          <p className="break-words">{fields.map(f => `${f.key}: ${f.label}`).join(" · ")}</p>
+          <p>ประเภทย่อยที่เลือกได้: {subtypes.filter(s => s.assetClass === group && s.isActive).map(s => `${s.id} = ${s.name}`).join(" · ") || "ยังไม่มี"}</p>
+        </div>)}
+      </section>
       <section className="grid gap-4 lg:grid-cols-3" aria-label="ขั้นตอนนำเข้าแบบย่อ">
         {[
           ["1", "ดาวน์โหลดและกรอกไฟล์", "ใช้ไฟล์ตัวอย่างของระบบ และคงชื่อคอลัมน์แถวแรกไว้"],

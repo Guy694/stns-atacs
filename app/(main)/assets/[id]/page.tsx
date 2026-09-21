@@ -1,3 +1,4 @@
+import { ASSET_DETAIL_FIELDS } from "@/lib/asset-details";
 import { isItAsset, supportsAgentAsset } from "@/lib/asset-policy";
 import Link from "next/link";
 import Image from "next/image";
@@ -333,6 +334,13 @@ export default async function AssetDetailPage({ params }: Props) {
             )}
           </div>
 
+          {!isIt && <section className="rounded-xl border border-black/10 p-5">
+            <h2 className="mb-4 text-base font-semibold">รายละเอียด{assetClassLabel(asset.assetClass)}</h2>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="ประเภทย่อย" value={asset.extensions[asset.assetClass]?.subtypeName} />
+              {(ASSET_DETAIL_FIELDS[asset.assetClass] ?? []).map(field => <Field key={field.key} label={field.label} value={asset.extensions[asset.assetClass]?.details[field.key]} />)}
+            </div>
+          </section>}
           {/* ข้อมูลการจัดซื้อ */}
           <div className="glass-panel rounded-2xl p-5">
             <h2 className="mb-4 text-sm font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">ข้อมูลการจัดซื้อ</h2>

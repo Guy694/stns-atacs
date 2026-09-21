@@ -7,6 +7,7 @@ function setup(linked = []) {
   const repository = loadTs("lib/assets.ts", {
     "@/app/atacs-data": { facilitySurveys: [] },
     "@/lib/mysql": {
+      withTransaction: async work => work(),
       selectRows: async (sql, values) => { reads.push({ sql, values }); return sql.includes("EXISTS (SELECT 1 FROM agent_devices") ? linked : []; },
       executeStatement: async (sql, values) => { writes.push({ sql, values }); return { insertId: 1 }; },
     },

@@ -1,3 +1,4 @@
+import { DETAIL_COLUMNS } from "@/lib/asset-details";
 import { NextRequest, NextResponse } from "next/server";
 
 import { getCurrentUser } from "@/lib/auth";
@@ -37,6 +38,8 @@ const IMPORT_HEADERS = [
   "maintenance_end_date",
   "installed_at",
   "usage_description",
+  "subtype_id",
+  ...DETAIL_COLUMNS,
 ];
 
 const IMPORT_SAMPLE_ROWS = [
@@ -68,6 +71,8 @@ const IMPORT_SAMPLE_ROWS = [
     "2029-01-14",
     "2026-01-20",
     "สำหรับงานธุรการ",
+    "",
+    ...DETAIL_COLUMNS.map(() => ""),
   ],
 ];
 
@@ -163,6 +168,8 @@ export async function GET(req: NextRequest) {
     asset.maintenanceEndDate,
     asset.installedAt ?? "",
     asset.usageDescription,
+    asset.extensions?.[asset.assetClass]?.subtypeId ?? "",
+    ...DETAIL_COLUMNS.map(key => asset.extensions?.[asset.assetClass]?.details[key] ?? ""),
   ]);
 
   const today = new Date().toISOString().slice(0, 10);

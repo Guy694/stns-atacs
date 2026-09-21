@@ -1,11 +1,13 @@
 import "server-only";
+import { loadAssetExtensions, saveAssetExtension } from "@/lib/asset-extensions";
+import type { AssetDetails, AssetExtensions } from "@/lib/asset-details";
 
 import type { RowDataPacket } from "mysql2/promise";
 
 import { facilitySurveys as fallbackSurveys, type AssetRecord } from "@/app/atacs-data";
 import { normalizeAssetClass } from "@/lib/asset-classes";
 import { isItAsset, parseAssetClass, supportsAgentAsset } from "@/lib/asset-policy";
-import { executeStatement, selectRows } from "@/lib/mysql";
+import { executeStatement, selectRows, withTransaction } from "@/lib/mysql";
 import type { WindowsLicenseStatus } from "@/lib/windows-license";
 
 // ── DB Row types ───────────────────────────────────────────────────────────
@@ -82,6 +84,7 @@ function normalizeGroup(v: string | null): AssetRecord["assetGroup"] {
 
 function rowToAsset(row: AssetRow) {
   return {
+    extensions: {} as AssetExtensions,
     id: row.id,
     surveyId: row.survey_id,
     workGroupId: row.work_group_id ?? null,
@@ -129,6 +132,8 @@ function rowToAsset(row: AssetRow) {
 export type AssetWithFacility = ReturnType<typeof rowToAsset>;
 
 export type AssetInput = {
+  subtypeId?: number | null;
+  details?: AssetDetails;
   surveyId: number;
   workGroupId?: number | null;
   assetRegistrationNo: string | null;
@@ -220,9 +225,9 @@ function buildAssetFilter(filter?: AssetListFilter) {
     values.push(filter.status);
   }
   if (filter?.search) {
-    conditions.push("(a.asset_name LIKE ? OR a.asset_registration_no LIKE ? OR a.device_type LIKE ? OR a.serial_number LIKE ?)");
+    conditions.push("(a.asset_name LIKE ? OR a.asset_registration_no LIKE ? OR a.device_type LIKE ? OR a.serial_number LIKE ? OR EXISTS (SELECT 1 FROM asset_extensions ex LEFT JOIN asset_subtypes st ON st.id = ex.subtype_id WHERE ex.asset_id = a.id AND ex.asset_class = a.asset_class AND (CAST(ex.details AS CHAR) LIKE ? OR st.name LIKE ?)))");
     const like = `%${filter.search}%`;
-    values.push(like, like, like, like);
+    values.push(like, like, like, like, like, like);
   }
   if (filter?.district) {
     conditions.push("hf.district_name = ?");
@@ -272,6 +277,7 @@ function filterFallbackAssets(filter?: AssetListFilter) {
   let assets = fallbackSurveys.flatMap((s) =>
     s.assets.map((a) => ({
       ...a,
+      extensions: {} as AssetExtensions,
       rowNo: null,
       surveyId: 0,
       workGroupId: null,
@@ -336,13 +342,16 @@ export async function listAssets(filter?: AssetListFilter): Promise<AssetWithFac
   const sql = `${ASSET_JOIN_SQL} ${where} ORDER BY ${orderBy}${pageSql}`;
   const queryValues = limit ? [...values, limit, offset] : values;
 
+  let rows: AssetRow[];
   try {
-    const rows = await selectRows<AssetRow>(sql, queryValues);
-    return rows.map(rowToAsset);
-  } catch {
+    rows = await selectRows<AssetRow>(sql, queryValues);
+  } catch (error) {
+    if (filter?.search) throw error; // A missing extension schema must not look like sample search results.
     const fallback = filterFallbackAssets(filter);
     return limit ? fallback.slice(offset, offset + limit) : fallback;
   }
+  const extensions = await loadAssetExtensions(rows.map(row => row.id));
+  return rows.map(row => ({ ...rowToAsset(row), extensions: extensions.get(row.id) ?? {} }));
 }
 
 export async function countAssets(filter?: AssetListFilter): Promise<number> {
@@ -354,19 +363,18 @@ export async function countAssets(filter?: AssetListFilter): Promise<number> {
       values
     );
     return Number(rows[0]?.total ?? 0);
-  } catch {
+  } catch (error) {
+    if (filter?.search) throw error;
     return filterFallbackAssets(filter).length;
   }
 }
 
 /** ดึงทรัพย์สินเดี่ยว */
 export async function getAssetById(id: number): Promise<AssetWithFacility | null> {
-  try {
-    const rows = await selectRows<AssetRow>(`${ASSET_JOIN_SQL} WHERE a.id = ? LIMIT 1`, [id]);
-    return rows[0] ? rowToAsset(rows[0]) : null;
-  } catch {
-    return null;
-  }
+  const rows = await selectRows<AssetRow>(`${ASSET_JOIN_SQL} WHERE a.id = ? LIMIT 1`, [id]);
+  if (!rows[0]) return null;
+  const extensions = await loadAssetExtensions([id]);
+  return { ...rowToAsset(rows[0]), extensions: extensions.get(id) ?? {} };
 }
 
 /** ดึง survey list (เพื่อใช้ใน dropdown เลือกหน่วยงานตอน add asset) */
@@ -409,122 +417,131 @@ export async function getSurveyById(id: number): Promise<SurveyLookup | null> {
 
 /** เพิ่มทรัพย์สินใหม่ */
 export async function createAsset(input: AssetInput) {
-  return executeStatement(
-    `INSERT INTO information_assets
-      (survey_id, row_no, asset_registration_no, asset_name, usage_description, owner_name,
-       work_group_id, asset_class, asset_category, asset_group, device_type, operating_system, operating_system_version, windows_license_status,
-       private_ip, public_ip, location_detail, current_status, updated_by,
-       manufacturer_brand, manufacturer_model, manufacturer_specification,
-       serial_number, purchase_price, purchase_date, purchase_order_no,
-       maintenance_start_date, maintenance_end_date, installed_at, last_updated_at,
-       asset_image_1_url, asset_image_2_url)
-     VALUES (
-       ?, ?, ?, ?, ?, ?, ?, ?,
-       ?, ?, ?, ?, ?, ?, ?, ?,
-       ?, ?, ?, ?, ?, ?, ?, ?,
-       ?, ?, ?, ?, ?, ?, ?, ?
-     )`,
-    [
-      input.surveyId,
-      input.rowNo ?? null,
-      input.assetRegistrationNo ?? null,
-      input.assetName,
-      input.usageDescription ?? null,
-      input.ownerName ?? null,
-      input.workGroupId ?? null,
-      parseAssetClass(input.assetClass),
-      input.assetCategory,
-      input.assetGroup ?? null,
-      input.deviceType ?? null,
-      input.operatingSystem ?? null,
-      input.operatingSystemVersion ?? null,
-      input.windowsLicenseStatus ?? null,
-      input.privateIp ?? null,
-      input.publicIp ?? null,
-      input.locationDetail ?? null,
-      input.currentStatus ?? "Active",
-      input.updatedBy ?? null,
-      input.manufacturerBrand ?? null,
-      input.manufacturerModel ?? null,
-      input.manufacturerSpecification ?? null,
-      input.serialNumber ?? null,
-      input.purchasePrice ?? null,
-      input.purchaseDate ?? null,
-      input.purchaseOrderNo ?? null,
-      input.maintenanceStartDate ?? null,
-      input.maintenanceEndDate ?? null,
-      input.installedAt ?? null,
-      input.lastUpdatedAt ?? null,
-      input.assetImage1Url ?? null,
-      input.assetImage2Url ?? null,
-    ]
-  );
+  return withTransaction(async () => {
+    const result = await executeStatement(
+      `INSERT INTO information_assets
+        (survey_id, row_no, asset_registration_no, asset_name, usage_description, owner_name,
+         work_group_id, asset_class, asset_category, asset_group, device_type, operating_system, operating_system_version, windows_license_status,
+         private_ip, public_ip, location_detail, current_status, updated_by,
+         manufacturer_brand, manufacturer_model, manufacturer_specification,
+         serial_number, purchase_price, purchase_date, purchase_order_no,
+         maintenance_start_date, maintenance_end_date, installed_at, last_updated_at,
+         asset_image_1_url, asset_image_2_url)
+       VALUES (
+         ?, ?, ?, ?, ?, ?, ?, ?,
+         ?, ?, ?, ?, ?, ?, ?, ?,
+         ?, ?, ?, ?, ?, ?, ?, ?,
+         ?, ?, ?, ?, ?, ?, ?, ?
+       )`,
+      [
+        input.surveyId,
+        input.rowNo ?? null,
+        input.assetRegistrationNo ?? null,
+        input.assetName,
+        input.usageDescription ?? null,
+        input.ownerName ?? null,
+        input.workGroupId ?? null,
+        parseAssetClass(input.assetClass),
+        input.assetCategory,
+        input.assetGroup ?? null,
+        input.deviceType ?? null,
+        input.operatingSystem ?? null,
+        input.operatingSystemVersion ?? null,
+        input.windowsLicenseStatus ?? null,
+        input.privateIp ?? null,
+        input.publicIp ?? null,
+        input.locationDetail ?? null,
+        input.currentStatus ?? "Active",
+        input.updatedBy ?? null,
+        input.manufacturerBrand ?? null,
+        input.manufacturerModel ?? null,
+        input.manufacturerSpecification ?? null,
+        input.serialNumber ?? null,
+        input.purchasePrice ?? null,
+        input.purchaseDate ?? null,
+        input.purchaseOrderNo ?? null,
+        input.maintenanceStartDate ?? null,
+        input.maintenanceEndDate ?? null,
+        input.installedAt ?? null,
+        input.lastUpdatedAt ?? null,
+        input.assetImage1Url ?? null,
+        input.assetImage2Url ?? null,
+      ]
+    );
+    await saveAssetExtension(result.insertId, parseAssetClass(input.assetClass), input.subtypeId, input.details);
+    return result;
+  });
 }
 
 /** แก้ไขทรัพย์สิน */
 export async function updateAsset(id: number, input: Partial<AssetInput>) {
-  if (input.assetClass !== undefined) parseAssetClass(input.assetClass);
-  // Any classification change on a linked record must leave it eligible for Agent updates.
-  if (input.assetClass !== undefined || input.assetCategory !== undefined || input.deviceType !== undefined || input.surveyId !== undefined) {
-    const linked = await selectRows<RowDataPacket & { asset_class: string | null; asset_category: string; device_type: string | null; survey_id: number }>(
-      "SELECT a.asset_class, a.asset_category, a.device_type, a.survey_id FROM information_assets a WHERE a.id = ? AND EXISTS (SELECT 1 FROM agent_devices ad WHERE ad.linked_asset_id = a.id)", [id]
-    );
-    const current = linked[0];
-    if (current && (!supportsAgentAsset({
-      assetClass: input.assetClass === undefined ? current.asset_class : input.assetClass,
-      assetCategory: input.assetCategory ?? current.asset_category,
-      deviceType: input.deviceType === undefined ? current.device_type : input.deviceType,
-    }) || (input.surveyId !== undefined && input.surveyId !== current.survey_id))) {
-      throw new Error("ทรัพย์สินนี้ผูกกับ Agent อยู่ กรุณายกเลิกการเชื่อมก่อนเปลี่ยนกลุ่ม ประเภท หรือหน่วยงาน");
+  return withTransaction(async () => {
+    const locked = await selectRows<RowDataPacket>("SELECT asset_class FROM information_assets WHERE id = ? FOR UPDATE", [id]);
+    if (input.assetClass !== undefined) parseAssetClass(input.assetClass);
+    // Any classification change on a linked record must leave it eligible for Agent updates.
+    if (input.assetClass !== undefined || input.assetCategory !== undefined || input.deviceType !== undefined || input.surveyId !== undefined) {
+      const linked = await selectRows<RowDataPacket & { asset_class: string | null; asset_category: string; device_type: string | null; survey_id: number }>(
+        "SELECT a.asset_class, a.asset_category, a.device_type, a.survey_id FROM information_assets a WHERE a.id = ? AND EXISTS (SELECT 1 FROM agent_devices ad WHERE ad.linked_asset_id = a.id)", [id]
+      );
+      const current = linked[0];
+      if (current && (!supportsAgentAsset({
+        assetClass: input.assetClass === undefined ? current.asset_class : input.assetClass,
+        assetCategory: input.assetCategory ?? current.asset_category,
+        deviceType: input.deviceType === undefined ? current.device_type : input.deviceType,
+      }) || (input.surveyId !== undefined && input.surveyId !== current.survey_id))) {
+        throw new Error("ทรัพย์สินนี้ผูกกับ Agent อยู่ กรุณายกเลิกการเชื่อมก่อนเปลี่ยนกลุ่ม ประเภท หรือหน่วยงาน");
+      }
     }
-  }
-  const sets: string[] = [];
-  const values: unknown[] = [];
+    const sets: string[] = [];
+    const values: unknown[] = [];
 
-  const fieldMap: Record<string, unknown> = {
-    survey_id: input.surveyId,
-    work_group_id: input.workGroupId,
-    asset_registration_no: input.assetRegistrationNo,
-    asset_name: input.assetName,
-    usage_description: input.usageDescription,
-    owner_name: input.ownerName,
-    asset_class: input.assetClass === undefined ? undefined : parseAssetClass(input.assetClass),
-    asset_category: input.assetCategory,
-    asset_group: input.assetGroup,
-    device_type: input.deviceType,
-    operating_system: input.operatingSystem,
-    operating_system_version: input.operatingSystemVersion,
-    windows_license_status: input.windowsLicenseStatus,
-    private_ip: input.privateIp,
-    public_ip: input.publicIp,
-    location_detail: input.locationDetail,
-    current_status: input.currentStatus,
-    updated_by: input.updatedBy,
-    manufacturer_brand: input.manufacturerBrand,
-    manufacturer_model: input.manufacturerModel,
-    manufacturer_specification: input.manufacturerSpecification,
-    serial_number: input.serialNumber,
-    purchase_price: input.purchasePrice,
-    purchase_date: input.purchaseDate,
-    purchase_order_no: input.purchaseOrderNo,
-    maintenance_start_date: input.maintenanceStartDate,
-    maintenance_end_date: input.maintenanceEndDate,
-    installed_at: input.installedAt,
-    last_updated_at: input.lastUpdatedAt,
-    asset_image_1_url: input.assetImage1Url,
-    asset_image_2_url: input.assetImage2Url,
-  };
+    const fieldMap: Record<string, unknown> = {
+      survey_id: input.surveyId,
+      work_group_id: input.workGroupId,
+      asset_registration_no: input.assetRegistrationNo,
+      asset_name: input.assetName,
+      usage_description: input.usageDescription,
+      owner_name: input.ownerName,
+      asset_class: input.assetClass === undefined ? undefined : parseAssetClass(input.assetClass),
+      asset_category: input.assetCategory,
+      asset_group: input.assetGroup,
+      device_type: input.deviceType,
+      operating_system: input.operatingSystem,
+      operating_system_version: input.operatingSystemVersion,
+      windows_license_status: input.windowsLicenseStatus,
+      private_ip: input.privateIp,
+      public_ip: input.publicIp,
+      location_detail: input.locationDetail,
+      current_status: input.currentStatus,
+      updated_by: input.updatedBy,
+      manufacturer_brand: input.manufacturerBrand,
+      manufacturer_model: input.manufacturerModel,
+      manufacturer_specification: input.manufacturerSpecification,
+      serial_number: input.serialNumber,
+      purchase_price: input.purchasePrice,
+      purchase_date: input.purchaseDate,
+      purchase_order_no: input.purchaseOrderNo,
+      maintenance_start_date: input.maintenanceStartDate,
+      maintenance_end_date: input.maintenanceEndDate,
+      installed_at: input.installedAt,
+      last_updated_at: input.lastUpdatedAt,
+      asset_image_1_url: input.assetImage1Url,
+      asset_image_2_url: input.assetImage2Url,
+    };
 
-  for (const [col, val] of Object.entries(fieldMap)) {
-    if (val !== undefined) {
-      sets.push(`${col} = ?`);
-      values.push(val === "" ? null : val);
+    for (const [col, val] of Object.entries(fieldMap)) {
+      if (val !== undefined) {
+        sets.push(`${col} = ?`);
+        values.push(val === "" ? null : val);
+      }
     }
-  }
 
-  if (sets.length === 0) return null;
-  values.push(id);
-  return executeStatement(`UPDATE information_assets SET ${sets.join(", ")} WHERE id = ?`, values);
+    if ((input.details !== undefined || input.subtypeId !== undefined) && !locked[0]) throw new Error("ไม่พบทรัพย์สิน");
+    await saveAssetExtension(id, parseAssetClass(input.assetClass, locked[0]?.asset_class), input.subtypeId, input.details);
+    if (sets.length === 0) return null;
+    values.push(id);
+    return executeStatement(`UPDATE information_assets SET ${sets.join(", ")} WHERE id = ?`, values);
+  });
 }
 
 /** ลบทรัพย์สิน */

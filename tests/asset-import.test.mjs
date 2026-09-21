@@ -11,7 +11,7 @@ function load(file, dependencies) {
   const source = ts.transpileModule(fs.readFileSync(new URL(file, import.meta.url), "utf8"), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
   }).outputText;
-  vm.runInNewContext(source, { exports, Buffer, File, require(id) {
+  vm.runInNewContext(source, { exports, Buffer, File, Error, require(id) {
     if (!(id in dependencies)) throw new Error(`Unexpected dependency: ${id}`);
     return dependencies[id];
   } });
@@ -27,6 +27,7 @@ function setup({ user = officer, create = true, update = true, existingFacility 
   const noop = async () => {};
   const route = load("../app/api/import/assets/route.ts", {
     xlsx: XLSX,
+    "@/lib/asset-details": loadTs("lib/asset-details.ts"),
     "next/server": { NextResponse: Response },
     "next/cache": { revalidatePath: () => {} },
     "@/lib/asset-input": loadTs("lib/asset-input.ts"),
@@ -157,4 +158,17 @@ test("CSV computer update preserves stored license when omitted; new computers s
   assert.equal(body.created, 0);
   assert.equal(body.skipped, 1);
   assert.equal(ctx.writes.find(([action]) => action === "update")[2].windowsLicenseStatus, undefined);
+});
+
+test("CSV specific fields preserve omissions, support explicit clear and reject mismatched classes", async () => {
+  const ctx = setup({ existingAsset: { asset_class: "Vehicle" } });
+  const { body } = await ctx.request({ csv: "id,asset_name,asset_class,license_plate,engine_number,subtype_id\n7,Car,Vehicle,กข1234,,\n7,Car,Vehicle,__CLEAR__,,__CLEAR__\n,Desk,Office,invalid,," });
+  assert.equal(body.updated, 2);
+  assert.equal(body.skipped, 1);
+  const patches = ctx.writes.filter(([action]) => action === "update").map(row => row[2]);
+  assert.equal(patches[0].details.license_plate, "กข1234");
+  assert.equal(patches[0].details.engine_number, undefined);
+  assert.equal(patches[0].subtypeId, undefined);
+  assert.equal(patches[1].details.license_plate, "");
+  assert.equal(patches[1].subtypeId, null);
 });

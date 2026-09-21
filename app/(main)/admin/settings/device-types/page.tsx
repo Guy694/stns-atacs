@@ -27,6 +27,7 @@ export default async function AdminDeviceTypesPage() {
         <p className="mt-1 text-sm text-[var(--muted)]">ประเภทอุปกรณ์ที่ปรากฏใน dropdown ฟอร์มเพิ่มทรัพย์สิน</p>
       </div>
 
+      <Link href="/assets/subtypes" className="text-sm underline">จัดการประเภทย่อยครุภัณฑ์นอกกลุ่ม IT</Link>
       <DeviceTypesClient items={items} />
     </div>
   );

@@ -153,6 +153,7 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
     : workGroups;
 
   const facilitiesForForm = facilitiesForSelect;
+  const canManageSubtypes = await hasPermission(user.role, "device-types.manage");
   const canCreateAssetByPolicy = await hasPermission(user.role, "assets.create");
   const canCreateAsset = canCreateAssetByPolicy && isAdmin;
   const canViewNetworkByPolicy = await hasPermission(user.role, "assets.network.view");
@@ -179,6 +180,7 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
             )}
           </p>
         </div>
+        {canManageSubtypes && <Link href="/assets/subtypes" className="text-sm underline">จัดการประเภทย่อย</Link>}
         {canCreateAsset && (
           <div className="flex gap-2">
             {isAdmin && <ImportExcelModal facilities={facilities} workGroups={workGroups} />}
@@ -204,7 +206,7 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
           id="asset-search"
           name="search"
           defaultValue={search}
-          placeholder="ค้นหาชื่อ / เลขทะเบียน / ประเภท…"
+          placeholder="ค้นหาชื่อ / เลขทะเบียน / รายละเอียดเฉพาะ…"
           className="min-w-0 flex-1 rounded-xl border border-black/10 bg-white/80 px-4 py-2 text-sm outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/20"
         />
         <label htmlFor="asset-status-filter" className="sr-only">กรองสถานะทรัพย์สิน</label>

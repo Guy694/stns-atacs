@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import vm from "node:vm";
+import path from "node:path";
 import { createRequire } from "node:module";
 import ts from "typescript";
 
@@ -17,11 +18,15 @@ export function loadTs(file, dependencies = {}, globals = {}) {
     const exports = {};
     cache.set(relative, exports);
     vm.runInNewContext(source, {
-      exports, Buffer, File, FormData, URL, Date, console, ...globals,
+      exports, Buffer, File, FormData, URL, Date, Error, console, ...globals,
       require(id) {
         if (Object.hasOwn(dependencies, id)) return dependencies[id];
         if (id === "server-only") return {};
         if (id === "@/lib/mysql") throw new Error("A database mock is required");
+        if (id.startsWith(".")) {
+          const resolved = path.posix.join(path.posix.dirname(relative), id);
+          return load(fs.existsSync(new URL(`${resolved}.ts`, root)) ? `${resolved}.ts` : `${resolved}.tsx`);
+        }
         if (id.startsWith("@/")) {
           const path = id.slice(2);
           return load(fs.existsSync(new URL(`${path}.ts`, root)) ? `${path}.ts` : `${path}.tsx`);

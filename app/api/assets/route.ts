@@ -42,6 +42,7 @@ export async function GET(req: NextRequest) {
       assetRegistrationNo: a.assetRegistrationNo,
       deviceType: a.deviceType,
       assetClass: a.assetClass,
+      subtype: a.extensions[a.assetClass] ?? null,
       assetGroup: a.assetGroup,
       displayType: assetTypeLabel(a),
       currentStatus: a.currentStatus,

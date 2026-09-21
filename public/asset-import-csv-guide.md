@@ -70,3 +70,11 @@ asset_name,asset_class,manufacturer_brand,manufacturer_model,manufacturer_specif
 เครื่องตรวจคลื่นไฟฟ้าหัวใจ,Medical,Example,ECG-1,เครื่องตรวจประจำห้องตรวจ,Active
 รถยนต์ส่วนกลาง,Vehicle,Example,Car-1,รถใช้ปฏิบัติงานของหน่วยบริการ,Active
 ```
+
+## ข้อมูลเฉพาะครุภัณฑ์นอกกลุ่ม IT
+
+ดาวน์โหลด template ล่าสุดจากระบบเพื่อรับคอลัมน์ใหม่ ระบุ `subtype_id` จากหน้า `/assets/import-guide` (ประเภทย่อยต้องอยู่ในกลุ่มเดียวกับ `asset_class` และเปิดใช้งาน)
+
+ตัวอย่างคอลัมน์: Vehicle ใช้ `license_plate`, `chassis_number`, `odometer_km`, `insurance_expiry`; Medical ใช้ `medical_device_no`, `calibration_date`, `next_calibration_date`; Building ใช้ `floor_area_sqm`, `floor_count`; Office ใช้ `material`, `dimensions`; Utility ใช้ `utility_system`, `capacity`, `meter_number`, `next_service_date`; Other ใช้ `specific_description`
+
+กรอกเฉพาะช่องของกลุ่มที่เลือก วันที่ใช้ YYYY-MM-DD ตัวเลขไม่ใส่หน่วย/เครื่องหมายคั่นหลัก เมื่อแก้ไขรายการเดิม ช่องว่างจะรักษาค่าเดิม หากต้องการล้าง `subtype_id` หรือรายละเอียดเฉพาะ ให้ใส่ `__CLEAR__`

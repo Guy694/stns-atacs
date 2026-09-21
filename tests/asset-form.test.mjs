@@ -7,6 +7,7 @@ import { loadTs } from "./helpers/load-ts.mjs";
 function renderForm(assetClass) {
   let stateCalls = 0;
   const { AssetFormModal } = loadTs("app/(main)/assets/_components/asset-form-modal.tsx", {
+    "@/app/(main)/assets/subtype-actions": { getAssetSubtypeOptions: async () => [] },
     react: {
       ...React,
       useState: initial => React.useState(stateCalls++ === 0 ? true : initial),

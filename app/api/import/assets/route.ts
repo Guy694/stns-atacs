@@ -1,3 +1,4 @@
+import { DETAIL_COLUMNS } from "@/lib/asset-details";
 import * as XLSX from "xlsx";
 import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
@@ -80,6 +81,12 @@ function buildInput(row: ImportRow, surveyId: number, workGroupId: number | unde
       const value = existingRow[column];
       existing[field] = value instanceof Date ? value.toISOString().slice(0, 10) : value;
     }
+  }
+  fields.subtypeId = optionalCell(row, "subtype_id");
+  if (fields.subtypeId === "__CLEAR__") fields.subtypeId = "";
+  for (const column of DETAIL_COLUMNS) {
+    const value = optionalCell(row, column);
+    fields[`detail_${column}`] = value === "__CLEAR__" ? "" : value;
   }
   const assetClass = parseAssetClass(fields.assetClass, existingRow?.asset_class);
   if (isItAsset({ assetClass }) && (fields.assetCategory || fields.assetGroup)) {

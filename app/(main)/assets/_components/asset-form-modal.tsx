@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useEffect, useId, useMemo, useRef, useState } from "react";
+import { AssetSpecificFields } from "./asset-specific-fields";
 import { createPortal } from "react-dom";
 
 import { createAssetAction, updateAssetAction } from "@/app/(main)/assets/actions";
@@ -435,6 +436,7 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
                   ยืนยันการเปลี่ยนกลุ่มทรัพย์สิน ข้อมูลเดิมจะถูกเก็บไว้ รายการที่ผูก Agent ต้องยกเลิกการเชื่อมก่อนเปลี่ยนเป็นกลุ่มอื่น
                 </label>
               )}
+              {!isIt && <AssetSpecificFields assetClass={assetClass} extensions={asset?.extensions} />}
               {!isIt && <p className="text-sm text-[var(--foreground)]">บันทึกข้อมูลทะเบียน การจัดซื้อ และรายละเอียดทั่วไปของทรัพย์สินได้โดยไม่ต้องระบุข้อมูลคอมพิวเตอร์</p>}
               <fieldset disabled={!isIt} className={isIt ? "grid gap-4 sm:grid-cols-2" : "hidden"}>
                 <legend className="mb-3 text-base font-semibold">ข้อมูล IT</legend>

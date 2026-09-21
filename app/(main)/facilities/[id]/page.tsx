@@ -222,7 +222,7 @@ export default async function FacilityDetailPage({ params, searchParams }: Props
             <input
               name="search"
               defaultValue={search}
-              placeholder="ค้นหาชื่อ / เลขทะเบียน / Serial"
+              placeholder="ค้นหาชื่อ / เลขทะเบียน / รายละเอียดเฉพาะ"
               className="min-h-11 w-full rounded-xl border border-black/10 bg-white/85 px-4 py-2 text-sm outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/20"
             />
           </label>

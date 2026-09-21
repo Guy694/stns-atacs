@@ -1,9 +1,10 @@
+import { validateAssetDetails, type AssetExtensions } from "@/lib/asset-details";
 import type { AssetInput } from "@/lib/assets";
 import { isItAsset, parseAssetClass, requiresWindowsLicense } from "@/lib/asset-policy";
 import { WINDOWS_LICENSE_STATUS_VALUES, type WindowsLicenseStatus } from "@/lib/windows-license";
 
 export type AssetFields = Record<string, string | undefined>;
-export type ExistingAssetFields = Partial<Omit<AssetInput, "rowNo">>;
+export type ExistingAssetFields = Partial<Omit<AssetInput, "rowNo">> & { extensions?: AssetExtensions };
 
 const IT_FIELDS = ["deviceType", "assetGroup", "operatingSystem", "operatingSystemVersion", "privateIp", "publicIp"] as const;
 const COMMON_TEXT_FIELDS = ["usageDescription", "ownerName", "locationDetail", "manufacturerBrand", "manufacturerModel", "manufacturerSpecification", "serialNumber", "purchaseOrderNo"] as const;
@@ -74,5 +75,20 @@ export function parseAssetFields(fields: AssetFields, existing?: ExistingAssetFi
     if (!["Active", "Inactive", "Broken"].includes(fields.currentStatus)) throw new Error("สถานะทรัพย์สินไม่ถูกต้อง");
     result.currentStatus = fields.currentStatus;
   } else if (!existing) result.currentStatus = "Active";
+  if (fields.subtypeId !== undefined) {
+    result.subtypeId = fields.subtypeId === "" ? null : Number(fields.subtypeId);
+    if (isIt || (result.subtypeId !== null && (!Number.isSafeInteger(result.subtypeId) || result.subtypeId <= 0))) throw new Error("ประเภทย่อยไม่ถูกต้อง");
+  }
+  const detailPatch: Record<string, string> = {};
+  for (const [key, value] of Object.entries(fields)) {
+    if (!key.startsWith("detail_") || value === undefined) continue;
+    detailPatch[key.slice(7)] = value;
+  }
+  if (Object.keys(detailPatch).length) {
+    validateAssetDetails(assetClass, detailPatch);
+    const prior = existing?.extensions?.[assetClass]?.details ?? {};
+    validateAssetDetails(assetClass, { ...prior, ...detailPatch });
+    result.details = detailPatch;
+  }
   return result;
 }
