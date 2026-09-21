@@ -2,6 +2,7 @@ import { isItAsset, assetTypeLabel } from "@/lib/asset-policy";
 import Link from "next/link";
 
 import { ExpiringMaintenanceTable, type ExpiringMaintenanceRow } from "@/app/(main)/_components/expiring-maintenance-table";
+import { AppIcon } from "@/app/_components/ui/icon";
 import { StatusBadge } from "@/app/_components/ui/status-badge";
 import { assetStatusLabel } from "@/lib/asset-status";
 import { getDashboardData } from "@/lib/atacs";
@@ -19,7 +20,6 @@ import { isComputerDeviceType } from "@/lib/windows-license";
 type HomeProps = { searchParams: Promise<Record<string, string | undefined>> };
 
 const DISTRICT_CHART_COLORS = ["#047857", "#0e7490", "#b45309", "#dc2626", "#0f766e", "#475569", "#2563eb"];
-const TEST_SYSTEM_EMBED_URL = "https://satunhealth-srykdxrz.manus.space/";
 const FACILITY_GROUP_OPTIONS: Array<{ value: DashboardFacilityGroup; label: string; description: string }> = [
   { value: "province", label: "สสจ", description: "สำนักงานสาธารณสุขจังหวัด" },
   { value: "primary-office", label: "สสอ", description: "สำนักงานสาธารณสุขอำเภอ" },
@@ -319,8 +319,8 @@ export default async function Home({ searchParams }: HomeProps) {
       unit: "รายการ",
       detail: quickScopeLabel,
       marker: "รวม",
-      className: "border-slate-200/80 bg-white text-[var(--foreground)] hover:border-slate-300 hover:bg-slate-50",
-      markerClassName: "bg-slate-100 text-slate-700",
+      className: "border-[var(--line)] bg-white text-[var(--foreground)] hover:border-sky-300 hover:bg-sky-50/30",
+      markerClassName: "bg-sky-50 text-sky-700",
     },
     {
       href: brokenQuickLink,
@@ -329,8 +329,8 @@ export default async function Home({ searchParams }: HomeProps) {
       unit: "รายการ",
       detail: brokenAssets > 0 ? "ควรตรวจสอบหรือส่งซ่อม" : "ยังไม่มีรายการชำรุดในตัวกรองนี้",
       marker: "ซ่อม",
-      className: "border-rose-200 bg-rose-50/80 text-rose-900 hover:border-rose-300 hover:bg-rose-100/80",
-      markerClassName: "bg-white text-rose-700",
+      className: "border-[var(--line)] bg-white text-[var(--foreground)] hover:border-rose-300 hover:bg-rose-50/30",
+      markerClassName: "bg-rose-50 text-rose-700",
     },
     {
       href: "/reports?view=expiring",
@@ -342,8 +342,8 @@ export default async function Home({ searchParams }: HomeProps) {
           ? `${criticalExpiringCount} วิกฤต · ${warningExpiringCount} เฝ้าระวัง`
           : "ยังไม่มีสัญญาใกล้หมดอายุ",
       marker: "MA",
-      className: "border-amber-200 bg-amber-50/85 text-amber-900 hover:border-amber-300 hover:bg-amber-100/80",
-      markerClassName: "bg-white text-amber-700",
+      className: "border-[var(--line)] bg-white text-[var(--foreground)] hover:border-amber-300 hover:bg-amber-50/30",
+      markerClassName: "bg-amber-50 text-amber-700",
     },
     {
       href: activeQuickLink,
@@ -352,8 +352,8 @@ export default async function Home({ searchParams }: HomeProps) {
       unit: "รายการ",
       detail: `${activeRate}% ของทรัพย์สินตามตัวกรอง`,
       marker: "OK",
-      className: "border-emerald-200 bg-emerald-50/85 text-emerald-900 hover:border-emerald-300 hover:bg-emerald-100/80",
-      markerClassName: "bg-white text-emerald-700",
+      className: "border-[var(--line)] bg-white text-[var(--foreground)] hover:border-emerald-300 hover:bg-emerald-50/30",
+      markerClassName: "bg-emerald-50 text-emerald-700",
     },
   ];
   const expiringMaintenanceRows: ExpiringMaintenanceRow[] = expiringSoon.map((asset) => ({
@@ -381,32 +381,54 @@ export default async function Home({ searchParams }: HomeProps) {
   }));
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6">
+    <div className="mx-auto flex w-full max-w-[1600px] flex-1 flex-col gap-6">
 
         {/* ── Page heading ─────────────────────────────────────────────────── */}
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-xs font-medium uppercase tracking-[0.22em] text-[var(--muted)]">
-              ATACS · Asset Tracking and Control System
-            </p>
-            <h1 className="section-title mt-1 text-2xl font-semibold sm:text-3xl">
-              {scopeFacilityName
-                ? `ภาพรวม · ${scopeFacilityName}`
-                : "ภาพรวม ทะเบียนทรัพย์สินและครุภัณฑ์ สังกัด สป. จังหวัดสตูล"}
-            </h1>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-white/80 px-3 py-1.5 text-xs text-[var(--muted)]">
-              <span
-                className={`h-2 w-2 rounded-full ${dataSource === "database" ? "bg-emerald-500" : "bg-amber-400"}`}
-              />
-              {connectionMessage}
+        <section className="dashboard-hero relative isolate min-h-[240px] overflow-hidden rounded-[18px] px-5 py-6 text-white sm:px-8 sm:py-8 lg:px-10" aria-labelledby="dashboard-heading">
+          <div className="relative z-10 flex h-full items-center">
+            <div className="max-w-3xl xl:max-w-[58%]">
+              <p className="text-xs font-semibold tracking-[0.14em] text-sky-100">ATACS · ASSET MANAGEMENT SYSTEM</p>
+              <h1 id="dashboard-heading" className="section-title mt-3 max-w-2xl text-2xl font-semibold leading-tight text-balance sm:text-3xl lg:text-4xl">
+                {scopeFacilityName ? `ภาพรวมครุภัณฑ์ ${scopeFacilityName}` : "ยินดีต้อนรับสู่ระบบทะเบียนครุภัณฑ์"}
+              </h1>
+              <p className="mt-3 max-w-2xl text-sm leading-6 text-sky-50/90 sm:text-base">
+                จัดการทะเบียนทรัพย์สิน ตรวจสอบสถานะ บำรุงรักษา และติดตามครุภัณฑ์ของหน่วยงานได้จากระบบเดียว
+              </p>
+              <div className="mt-6 flex flex-wrap gap-3">
+                <Link href={assetQuickLink} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-[#15548f] transition hover:bg-sky-50">
+                  <AppIcon name="package" className="h-4 w-4" />
+                  จัดการครุภัณฑ์
+                </Link>
+                <Link href="/assets" className="inline-flex min-h-11 items-center rounded-xl border border-white/40 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-white/10">
+                  ดูทะเบียนทั้งหมด <span className="ml-2" aria-hidden="true">→</span>
+                </Link>
+              </div>
             </div>
-            <div className="rounded-full border border-black/10 bg-white/80 px-3 py-1.5 font-mono text-xs text-[var(--accent-strong)]">
-              ข้อมูลวันที่ {renderedAt}
+          </div>
+
+          <div className="pointer-events-none absolute inset-y-0 right-0 hidden w-[38%] xl:block" aria-hidden="true">
+            <div className="absolute right-10 top-9 w-56 rotate-2 rounded-2xl bg-white/95 p-4 text-[#18324a] shadow-lg">
+              <div className="flex items-center gap-3">
+                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-100 text-sky-700"><AppIcon name="monitor" /></span>
+                <div><p className="text-xs text-slate-500">ครุภัณฑ์ในระบบ</p><p className="text-xl font-bold">{numberFormat.format(totalAssets)}</p></div>
+              </div>
+              <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-sky-500" style={{ width: `${activeRate}%` }} /></div>
+            </div>
+            <div className="absolute bottom-7 right-52 -rotate-3 rounded-2xl bg-white/90 p-4 text-[#176c9e] shadow-lg">
+              <AppIcon name="database" className="h-7 w-7" />
+              <p className="mt-2 text-xs font-semibold">ข้อมูลเชื่อมต่อแล้ว</p>
+            </div>
+            <div className="absolute bottom-10 right-8 rounded-xl bg-sky-950/25 p-3 text-white ring-1 ring-white/30">
+              <AppIcon name="activity" className="h-6 w-6" />
             </div>
           </div>
-        </div>
+
+          <div className="relative z-10 mt-6 flex flex-wrap gap-2 border-t border-white/20 pt-4 text-xs text-sky-50 xl:absolute xl:bottom-5 xl:left-10 xl:mt-0 xl:border-0 xl:pt-0">
+            <span className="inline-flex items-center gap-2"><span className={`h-2 w-2 rounded-full ${dataSource === "database" ? "bg-emerald-300" : "bg-amber-300"}`} />{connectionMessage}</span>
+            <span className="text-white/45">•</span>
+            <span>ข้อมูลวันที่ {renderedAt}</span>
+          </div>
+        </section>
 
         {isViewer && (
           <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-700">
@@ -420,7 +442,7 @@ export default async function Home({ searchParams }: HomeProps) {
           </div>
         )}
 
-        <form method="GET" className="glass-panel rounded-2xl p-4" aria-label="ตัวกรองข้อมูลภาพรวม">
+        <form method="GET" className="glass-panel rounded-2xl p-4 sm:p-5" aria-label="ตัวกรองข้อมูลภาพรวม">
           <input type="hidden" name="computerView" value={computerView} />
           <div className="flex flex-col gap-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -447,7 +469,7 @@ export default async function Home({ searchParams }: HomeProps) {
                 <select
                   name="group"
                   defaultValue={selectedGroup}
-                  className="mt-1 w-full rounded-xl border border-black/10 bg-white/85 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+                  className="mt-1 min-h-11 w-full rounded-[10px] border border-[var(--line)] bg-white px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
                 >
                   <option value="">{dashboardScope.officerScopeKind === "district-primary" ? "ทั้งหมดในสังกัด" : "ทุกกลุ่ม"}</option>
                   {groupOptions.map((option) => (
@@ -463,7 +485,7 @@ export default async function Home({ searchParams }: HomeProps) {
                 <select
                   name="district"
                   defaultValue={selectedDistrict}
-                  className="mt-1 w-full rounded-xl border border-black/10 bg-white/85 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+                  className="mt-1 min-h-11 w-full rounded-[10px] border border-[var(--line)] bg-white px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
                 >
                   <option value="">ทุกอำเภอ</option>
                   {districtOptions.map((district) => (
@@ -479,7 +501,7 @@ export default async function Home({ searchParams }: HomeProps) {
                 <select
                   name="facility"
                   defaultValue={selectedFacilityId?.toString() ?? ""}
-                  className="mt-1 w-full rounded-xl border border-black/10 bg-white/85 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+                  className="mt-1 min-h-11 w-full rounded-[10px] border border-[var(--line)] bg-white px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
                 >
                   <option value="">ทุกหน่วยงาน</option>
                   {facilityOptions.map((facility) => (
@@ -492,7 +514,7 @@ export default async function Home({ searchParams }: HomeProps) {
 
               <button
                 type="submit"
-                className="rounded-xl bg-[var(--accent-strong)] px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90 md:mb-0"
+                className="min-h-11 rounded-[10px] bg-[var(--accent-strong)] px-5 py-2 text-sm font-semibold text-white transition hover:bg-[#125b86] md:mb-0"
               >
                 กรองข้อมูล
               </button>
@@ -508,11 +530,12 @@ export default async function Home({ searchParams }: HomeProps) {
           )}
         </form>
 
-        <div className="glass-panel rounded-2xl p-4 sm:p-5">
+        <section className="pt-2" aria-labelledby="asset-overview-heading">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <h2 className="text-base font-semibold text-[var(--foreground)]">ทางลัดการทำงาน</h2>
-              <p className="mt-1 text-sm text-[var(--muted)]">เปิดงานต่อจากภาพรวม โดยอิงตัวกรองปัจจุบัน: {quickScopeLabel}</p>
+              <p className="text-xs font-semibold tracking-[0.12em] text-[var(--accent-strong)]">ASSET OVERVIEW</p>
+              <h2 id="asset-overview-heading" className="section-title mt-1 text-2xl font-semibold text-[var(--foreground)]">ภาพรวมครุภัณฑ์</h2>
+              <p className="mt-1 text-sm text-[var(--muted)]">ข้อมูลสถานะครุภัณฑ์ตามขอบเขต: {quickScopeLabel}</p>
             </div>
             <span className="inline-flex w-fit rounded-full bg-[var(--primary-soft)] px-3 py-1 text-xs font-medium text-[var(--primary-text)]">
               {activeFilterCount > 0 ? `${activeFilterCount} เงื่อนไข` : "ไม่จำกัดตัวกรอง"}
@@ -525,7 +548,7 @@ export default async function Home({ searchParams }: HomeProps) {
                 key={action.title}
                 href={action.href}
                 aria-label={`เปิด${action.title}`}
-                className={`group flex min-h-36 flex-col justify-between rounded-2xl border p-4 transition duration-200 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] ${action.className}`}
+                className={`group flex min-h-36 flex-col justify-between rounded-2xl border p-5 transition duration-200 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] ${action.className}`}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
@@ -548,7 +571,7 @@ export default async function Home({ searchParams }: HomeProps) {
               </Link>
             ))}
           </div>
-        </div>
+        </section>
 
         {isScopedUser && !missingFacilityAssignment && !hasScopedData && (
           <div className="glass-panel rounded-2xl p-8 text-center">
@@ -585,38 +608,38 @@ export default async function Home({ searchParams }: HomeProps) {
 
         {/* ── KPI Strip ────────────────────────────────────────────────────── */}
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="rounded-2xl bg-gradient-to-br from-emerald-500 to-green-600 p-5 text-white shadow-lg shadow-emerald-900/20">
-            <p className="text-xs font-medium uppercase tracking-[0.2em] text-white/70">{scopeFacilityName ? "หน่วยงาน" : "หน่วยงาน"}</p>
-            <p className="mt-3 text-4xl font-semibold tracking-tight">{facilitySurveys.length}</p>
-            <div className="mt-2 flex items-center gap-1.5 text-xs text-white/70">
-              <span className="h-1.5 w-1.5 rounded-full bg-white" />
+          <div className="rounded-2xl border border-[var(--line)] bg-white p-5">
+            <p className="text-xs font-medium text-[var(--muted)]">{scopeFacilityName ? "หน่วยงาน" : "หน่วยงาน"}</p>
+            <p className="mt-3 text-3xl font-semibold tracking-tight text-[var(--foreground)]">{facilitySurveys.length}</p>
+            <div className="mt-2 flex items-center gap-1.5 text-xs text-[var(--muted)]">
+              <span className="h-1.5 w-1.5 rounded-full bg-sky-500" />
               {scopeFacilityName ? scopeFacilityName : `${totalDistricts} อำเภอ`}
             </div>
           </div>
 
-          <div className="rounded-2xl bg-gradient-to-br from-green-500 to-emerald-600 p-5 text-white shadow-lg shadow-green-900/20">
-            <p className="text-xs font-medium uppercase tracking-[0.2em] text-white/70">ทรัพย์สินรวม</p>
-            <p className="mt-3 text-4xl font-semibold tracking-tight">{totalAssets}</p>
-            <div className="mt-2 flex items-center gap-2 text-xs text-white/70">
+          <div className="rounded-2xl border border-[var(--line)] bg-white p-5">
+            <p className="text-xs font-medium text-[var(--muted)]">ทรัพย์สินรวม</p>
+            <p className="mt-3 text-3xl font-semibold tracking-tight text-[var(--foreground)]">{totalAssets}</p>
+            <div className="mt-2 flex items-center gap-2 text-xs text-[var(--muted)]">
               <span>{hardwareCount}  ฮาร์ดแวร์</span>
-              <span className="text-white/30">·</span>
+              <span className="text-slate-300">·</span>
               <span>{softwareCount} ซอฟต์แวร์</span>
             </div>
           </div>
 
-          <div className="rounded-2xl bg-gradient-to-br from-teal-500 to-emerald-700 p-5 text-white shadow-lg shadow-teal-900/20">
-            <p className="text-xs font-medium uppercase tracking-[0.2em] text-white/60">พร้อมใช้งาน</p>
-            <p className="mt-3 text-4xl font-semibold tracking-tight">{activeAssets}</p>
-            <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/20">
-              <div className="h-full rounded-full bg-white/80" style={{ width: `${activeRate}%` }} />
+          <div className="rounded-2xl border border-[var(--line)] bg-white p-5">
+            <p className="text-xs font-medium text-[var(--muted)]">พร้อมใช้งาน</p>
+            <p className="mt-3 text-3xl font-semibold tracking-tight text-emerald-700">{activeAssets}</p>
+            <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-emerald-100">
+              <div className="h-full rounded-full bg-emerald-500" style={{ width: `${activeRate}%` }} />
             </div>
-            <p className="mt-1.5 text-xs text-white/60">{activeRate}% ของทั้งหมด</p>
+            <p className="mt-1.5 text-xs text-[var(--muted)]">{activeRate}% ของทั้งหมด</p>
           </div>
 
           <div className={`glass-panel rounded-2xl p-5 ${expiringSoon.length > 0 ? "border-amber-300/50" : ""}`}>
-            <p className="text-xs font-medium uppercase tracking-[0.2em] text-[var(--muted)]">MA ใกล้หมดอายุ</p>
+            <p className="text-xs font-medium text-[var(--muted)]">MA ใกล้หมดอายุ</p>
             <p
-              className={`mt-3 text-4xl font-semibold tracking-tight ${expiringSoon.length > 0 ? "text-[var(--danger)]" : ""}`}
+              className={`mt-3 text-3xl font-semibold tracking-tight ${expiringSoon.length > 0 ? "text-[var(--danger)]" : ""}`}
             >
               {expiringSoon.length}
             </p>

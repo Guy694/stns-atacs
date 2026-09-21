@@ -22,7 +22,7 @@ export default async function AdminDeviceTypesPage() {
       </div>
 
       <div>
-        <p className="text-xs font-medium uppercase tracking-[0.22em] text-[var(--muted)]">Admin · ตั้งค่าระบบ</p>
+        <p className="text-xs font-semibold tracking-[0.12em] text-[var(--accent-strong)]">ADMIN · ตั้งค่าระบบ</p>
         <h1 className="section-title mt-1 text-3xl font-semibold">จัดการประเภทอุปกรณ์</h1>
         <p className="mt-1 text-sm text-[var(--muted)]">ประเภทอุปกรณ์ที่ปรากฏใน dropdown ฟอร์มเพิ่มทรัพย์สิน</p>
       </div>

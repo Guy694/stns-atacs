@@ -39,7 +39,7 @@ export default async function FacilitiesPage() {
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-xs font-medium uppercase tracking-[0.22em] text-[var(--muted)]">ATACS · หน่วยบริการ</p>
+          <p className="text-xs font-semibold tracking-[0.12em] text-[var(--accent-strong)]">ATACS · หน่วยบริการ</p>
           <h1 className="section-title mt-1 text-3xl font-semibold">หน่วยบริการสาธารณสุข</h1>
           <p className="mt-1 text-sm text-[var(--muted)]">จังหวัดสตูล · {totalFacilities} หน่วยงาน</p>
         </div>

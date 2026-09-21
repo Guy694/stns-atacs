@@ -47,7 +47,7 @@ export default async function WorkGroupsPage() {
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <p className="text-xs font-medium uppercase tracking-[0.22em] text-[var(--muted)]">ATACS Agent</p>
+          <p className="text-xs font-semibold tracking-[0.12em] text-[var(--accent-strong)]">ATACS AGENT</p>
           <h1 className="section-title mt-1 text-3xl font-semibold">จัดการกลุ่มงาน</h1>
           <p className="mt-1 max-w-2xl text-sm text-[var(--muted)]">
             สร้างกลุ่มงานของ สสจ, สสอ และโรงพยาบาล เพื่อใช้ระบุตอนติดตั้ง ATACS Agent

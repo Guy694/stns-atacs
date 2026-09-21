@@ -211,7 +211,7 @@ export function WorkGroupsClient({ facilities, workGroups }: WorkGroupsClientPro
           type="button"
           onClick={() => setCreateOpen(true)}
           disabled={facilities.length === 0}
-          className="rounded-full bg-[var(--accent-strong)] px-5 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+          className="primary-action"
         >
           + สร้างกลุ่มงาน
         </button>

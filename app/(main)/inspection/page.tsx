@@ -65,7 +65,7 @@ export default async function InspectionPage({
   const hasActiveFilters = Boolean(search || statusFilter);
 
   return (
-    <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 p-6">
+    <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
@@ -79,8 +79,7 @@ export default async function InspectionPage({
         {canMutate && view !== "new" && (
           <Link
             href="/inspection?view=new"
-            className="px-4 py-2 rounded-lg text-sm font-semibold text-white"
-            style={{ background: "var(--accent)" }}
+            className="primary-action"
           >
             + เริ่มรอบตรวจนับใหม่
           </Link>
@@ -233,6 +232,6 @@ export default async function InspectionPage({
           )}
         </div>
       )}
-    </main>
+    </div>
   );
 }

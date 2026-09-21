@@ -33,7 +33,7 @@ export default async function MapPage() {
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6">
       <div>
-        <p className="text-xs font-medium uppercase tracking-[0.22em] text-[var(--muted)]">ATACS · แผนที่ทรัพย์สิน</p>
+        <p className="text-xs font-semibold tracking-[0.12em] text-[var(--accent-strong)]">ATACS · แผนที่ทรัพย์สิน</p>
         <h1 className="section-title mt-1 text-3xl font-semibold">แผนที่หน่วยบริการ จ.สตูล</h1>
       </div>
 

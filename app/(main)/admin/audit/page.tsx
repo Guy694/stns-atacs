@@ -75,9 +75,9 @@ export default async function AuditLogPage({ searchParams }: AuditPageProps) {
   const uniqueUsers = new Set(logs.map((log) => log.userName).filter(Boolean)).size;
 
   return (
-    <main className="mx-auto max-w-7xl space-y-6 p-6">
+    <div className="mx-auto w-full max-w-7xl space-y-6">
       <div>
-        <p className="text-xs font-medium uppercase tracking-[0.22em] text-[var(--muted)]">Admin · Security & Tracking</p>
+        <p className="text-xs font-semibold tracking-[0.12em] text-[var(--accent-strong)]">ADMIN · SECURITY &amp; TRACKING</p>
         <h1 className="section-title mt-1 text-3xl font-semibold">ประวัติการใช้งาน (Audit Log)</h1>
         <p className="mt-1 text-sm" style={{ color: "var(--muted)" }}>
           บันทึกการดำเนินการล่าสุด พร้อมค้นหาและกรองเชิงลึก
@@ -148,7 +148,7 @@ export default async function AuditLogPage({ searchParams }: AuditPageProps) {
         </button>
         <a
           href={`/api/export/audit?search=${encodeURIComponent(search)}&actor=${encodeURIComponent(actorFilter)}&entity=${encodeURIComponent(entityFilter)}&action=${encodeURIComponent(actionFilter)}&dateFrom=${encodeURIComponent(dateFrom)}&dateTo=${encodeURIComponent(dateTo)}`}
-          className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-100"
+          className="secondary-action"
         >
           Export CSV
         </a>
@@ -227,6 +227,6 @@ export default async function AuditLogPage({ searchParams }: AuditPageProps) {
           )}
         </div>
       </nav>
-    </main>
+    </div>
   );
 }

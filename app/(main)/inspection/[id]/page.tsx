@@ -127,7 +127,7 @@ export default async function InspectionDetailPage({ params }: InspectionDetailP
   const missing = items.filter((item) => item.inspectionStatus === "Missing");
 
   return (
-    <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 p-6">
+    <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6">
       <nav className="flex flex-wrap items-center gap-2 text-sm text-[var(--muted)]">
         <Link href="/inspection" className="text-[var(--accent)] hover:underline">ตรวจนับทรัพย์สิน</Link>
         <span>/</span>
@@ -278,6 +278,6 @@ export default async function InspectionDetailPage({ params }: InspectionDetailP
           </table>
         </div>
       </div>
-    </main>
+    </div>
   );
 }

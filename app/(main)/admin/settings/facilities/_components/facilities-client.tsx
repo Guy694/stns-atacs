@@ -188,7 +188,7 @@ export function FacilitiesClient({
           <div className="ml-auto">
             <button
               onClick={() => setCreateOpen(true)}
-              className="inline-flex items-center gap-2 rounded-full bg-[var(--accent-strong)] px-5 py-2 text-sm font-semibold text-white hover:opacity-90"
+              className="primary-action"
             >
               + เพิ่มหน่วยงาน
             </button>

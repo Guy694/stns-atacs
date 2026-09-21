@@ -28,7 +28,7 @@ export default async function MenuSettingsPage({ searchParams }: MenuSettingsPag
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6">
       <div>
-        <p className="text-xs font-medium uppercase tracking-[0.22em] text-[var(--muted)]">Admin · Navigation</p>
+        <p className="text-xs font-semibold tracking-[0.12em] text-[var(--accent-strong)]">ADMIN · NAVIGATION</p>
         <h1 className="section-title mt-1 text-3xl font-semibold">ตั้งค่าการแสดงเมนู</h1>
         <p className="mt-1 text-sm text-[var(--muted)]">
           เปิดหรือปิดเมนูหลักของระบบ โดยยังคงตรวจสิทธิ์ผู้ใช้จาก Permission Matrix เหมือนเดิม

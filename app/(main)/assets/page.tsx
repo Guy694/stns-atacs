@@ -171,7 +171,7 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-xs font-medium uppercase tracking-[0.22em] text-[var(--muted)]">ATACS · ทะเบียนทรัพย์สิน</p>
+          <p className="text-xs font-semibold tracking-[0.12em] text-[var(--accent-strong)]">ATACS · ทะเบียนทรัพย์สิน</p>
           <h1 className="section-title mt-1 text-3xl font-semibold">รายการครุภัณฑ์และทรัพย์สิน</h1>
           <p className="mt-1 text-sm text-[var(--muted)]">
             {totalAssets.toLocaleString("th-TH")} รายการ
@@ -191,7 +191,7 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
               updaterName={user.fullName}
               mode="create"
             >
-              <button className="inline-flex items-center gap-2 rounded-full bg-[var(--accent-strong)] px-5 py-2.5 text-sm font-semibold text-white transition hover:opacity-90">
+              <button className="primary-action">
                 + เพิ่มทรัพย์สิน
               </button>
             </AssetFormModal>

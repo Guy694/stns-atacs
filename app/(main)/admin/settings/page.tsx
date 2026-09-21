@@ -129,7 +129,7 @@ export default async function AdminSettingsPage() {
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6">
       <div>
-        <p className="text-xs font-medium uppercase tracking-[0.22em] text-[var(--muted)]">Admin · ตั้งค่าระบบ</p>
+        <p className="text-xs font-semibold tracking-[0.12em] text-[var(--accent-strong)]">ADMIN · ตั้งค่าระบบ</p>
         <h1 className="section-title mt-1 text-3xl font-semibold">ตั้งค่าระบบ</h1>
       </div>
 

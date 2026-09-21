@@ -45,7 +45,7 @@ export default async function AdminPermissionsPage() {
       </div>
 
       <div>
-        <p className="text-xs font-medium uppercase tracking-[0.22em] text-[var(--muted)]">Admin · Security</p>
+        <p className="text-xs font-semibold tracking-[0.12em] text-[var(--accent-strong)]">ADMIN · SECURITY</p>
         <h1 className="section-title mt-1 text-3xl font-semibold">จัดการ Permission Matrix</h1>
         <p className="mt-1 text-sm text-[var(--muted)]">
           ปรับสิทธิ์รายบทบาทแบบละเอียด โดยไม่ต้องยึดค่าตายตัวตาม role เดิม
@@ -53,7 +53,7 @@ export default async function AdminPermissionsPage() {
         <div className="mt-3">
           <a
             href="/api/export/permissions"
-            className="inline-flex items-center rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-100"
+            className="secondary-action"
           >
             Export Policy JSON
           </a>

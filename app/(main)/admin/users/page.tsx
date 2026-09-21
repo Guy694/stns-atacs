@@ -75,7 +75,7 @@ export default async function AdminUsersPage() {
           </p>
         </div>
         <CreateUserModal facilities={facilities}>
-          <button className="inline-flex items-center gap-2 rounded-full bg-[var(--accent-strong)] px-5 py-2.5 text-sm font-semibold text-white transition hover:opacity-90">
+          <button className="primary-action">
             + เพิ่มผู้ใช้งาน
           </button>
         </CreateUserModal>

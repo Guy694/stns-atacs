@@ -118,7 +118,7 @@ export default async function ReportsPage({ searchParams }: Props) {
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-xs font-medium uppercase tracking-[0.22em] text-[var(--muted)]">ATACS · รายงาน</p>
+          <p className="text-xs font-semibold tracking-[0.12em] text-[var(--accent-strong)]">ATACS · รายงาน</p>
           <h1 className="section-title mt-1 text-3xl font-semibold">รายงาน</h1>
           <p className="mt-1 text-sm text-[var(--muted)]">แสดงข้อมูล: {reportScopeLabel}</p>
         </div>
@@ -136,15 +136,15 @@ export default async function ReportsPage({ searchParams }: Props) {
       {/* KPI strip */}
       <div className="grid gap-3 sm:grid-cols-4 lg:grid-cols-8">
         {[
-          { label: "ทรัพย์สินรวม", value: total, color: "text-emerald-600" },
+          { label: "ทรัพย์สินรวม", value: total, color: "text-[var(--accent-strong)]" },
           { label: "ใช้งานอยู่", value: active, color: "text-emerald-600" },
           { label: "ชำรุด", value: broken, color: "text-rose-600" },
           { label: "ไม่ใช้งาน", value: inactive, color: "text-amber-600" },
-          { label: "IT Hardware", value: hw, color: "text-green-600" },
-          { label: "IT Software", value: sw, color: "text-lime-600" },
+          { label: "IT Hardware", value: hw, color: "text-sky-700" },
+          { label: "IT Software", value: sw, color: "text-indigo-600" },
           { label: "ทรัพย์สินกลุ่มอื่น", value: total - hw - sw, color: "text-slate-700" },
-          { label: "หน่วยงาน", value: facilities, color: "text-emerald-600" },
-          { label: "อำเภอ", value: districts, color: "text-emerald-600" },
+          { label: "หน่วยงาน", value: facilities, color: "text-[var(--accent-strong)]" },
+          { label: "อำเภอ", value: districts, color: "text-[var(--accent-strong)]" },
         ].map((k) => (
           <div key={k.label} className="glass-panel rounded-2xl p-4 text-center">
             <p className={`text-2xl font-bold ${k.color}`}>{k.value}</p>
@@ -303,7 +303,7 @@ export default async function ReportsPage({ searchParams }: Props) {
                   {expiring.map((a) => (
                     <tr key={a.id} className="transition hover:bg-white/50">
                       <td className="px-4 py-3">
-                        <Link href={`/assets/${a.id}`} className="font-medium hover:text-emerald-600 hover:underline">{a.assetName}</Link>
+                        <Link href={`/assets/${a.id}`} className="font-medium hover:text-[var(--accent-strong)] hover:underline">{a.assetName}</Link>
                         <p className="font-mono text-xs text-[var(--muted)]">{a.assetRegistrationNo}</p>
                       </td>
                       <td className="px-4 py-3 text-[var(--muted)]">{a.facilityName}</td>
@@ -351,7 +351,7 @@ export default async function ReportsPage({ searchParams }: Props) {
                   {brokenList.map((a) => (
                     <tr key={a.id} className="transition hover:bg-white/50">
                       <td className="px-4 py-3">
-                        <Link href={`/assets/${a.id}`} className="font-medium hover:text-emerald-600 hover:underline">{a.assetName}</Link>
+                        <Link href={`/assets/${a.id}`} className="font-medium hover:text-[var(--accent-strong)] hover:underline">{a.assetName}</Link>
                         <p className="font-mono text-xs text-[var(--muted)]">{a.assetRegistrationNo}</p>
                       </td>
                       <td className="px-4 py-3 text-[var(--muted)]">{a.facilityName}</td>

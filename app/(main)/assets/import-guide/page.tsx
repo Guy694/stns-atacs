@@ -12,7 +12,7 @@ import { canAccessAssetFacility } from "@/lib/permissions";
 import { hasPermission } from "@/lib/role-permissions";
 
 function Code({ children }: { children: React.ReactNode }) {
-  return <code className="rounded bg-stone-100 px-1.5 py-0.5 font-mono text-[0.9em] font-semibold text-stone-800">{children}</code>;
+  return <code className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[0.9em] font-semibold text-slate-800">{children}</code>;
 }
 
 export default async function AssetImportGuidePage() {
@@ -42,13 +42,13 @@ export default async function AssetImportGuidePage() {
         <span className="text-[var(--foreground)]">คู่มือนำเข้า CSV</span>
       </nav>
 
-      <header className="overflow-hidden rounded-3xl border border-emerald-900/10 bg-gradient-to-br from-emerald-950 to-emerald-800 px-6 py-8 text-white shadow-sm sm:px-8">
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-200">ATACS · Asset Import</p>
+      <header className="dashboard-hero overflow-hidden rounded-[18px] px-6 py-8 text-white sm:px-8">
+        <p className="text-xs font-semibold tracking-[0.12em] text-sky-100">ATACS · ASSET IMPORT</p>
         <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">คู่มือนำเข้าครุภัณฑ์ด้วย CSV</h1>
-        <p className="mt-3 max-w-3xl text-sm leading-6 text-emerald-100 sm:text-base">ใช้หน้านี้เพื่อเตรียมไฟล์ CSV สำหรับเพิ่มหรือแก้ไขครุภัณฑ์ ตรวจสอบการใช้ <Code>id</Code> และค้นหา <Code>work_group_id</Code> ของแต่ละหน่วยบริการก่อนนำเข้า</p>
+        <p className="mt-3 max-w-3xl text-sm leading-6 text-sky-50 sm:text-base">ใช้หน้านี้เพื่อเตรียมไฟล์ CSV สำหรับเพิ่มหรือแก้ไขครุภัณฑ์ ตรวจสอบการใช้ <Code>id</Code> และค้นหา <Code>work_group_id</Code> ของแต่ละหน่วยบริการก่อนนำเข้า</p>
         <div className="mt-5 flex flex-wrap gap-3">
-          <Link href="/api/export/assets?template=csv" className="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-emerald-900 transition hover:bg-emerald-50">ดาวน์โหลดไฟล์ CSV ตัวอย่าง</Link>
-          <Link href="/assets" className="rounded-xl border border-emerald-200/50 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/10">กลับไปรายการทรัพย์สิน</Link>
+          <Link href="/api/export/assets?template=csv" className="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-[#15548f] transition hover:bg-sky-50">ดาวน์โหลดไฟล์ CSV ตัวอย่าง</Link>
+          <Link href="/assets" className="rounded-xl border border-white/40 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/10">กลับไปรายการทรัพย์สิน</Link>
         </div>
       </header>
 
@@ -68,7 +68,7 @@ export default async function AssetImportGuidePage() {
           ["3", "อัปโหลดและตรวจผล", "ระบบสรุปจำนวนรายการที่เพิ่มใหม่ แก้ไข และข้าม พร้อมสาเหตุ"],
         ].map(([number, title, detail]) => (
           <div key={number} className="rounded-2xl border border-black/10 bg-white p-5 shadow-sm">
-            <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100 text-sm font-bold text-emerald-800">{number}</span>
+            <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[var(--primary-soft)] text-sm font-bold text-[var(--primary-text)]">{number}</span>
             <h2 className="mt-3 font-semibold text-[var(--foreground)]">{title}</h2>
             <p className="mt-1 text-sm leading-6 text-[var(--muted)]">{detail}</p>
           </div>
@@ -153,13 +153,13 @@ export default async function AssetImportGuidePage() {
             <div className="overflow-x-auto"><table className="min-w-full text-left text-sm"><thead className="border-y border-rose-100 text-xs text-[var(--muted)]"><tr><th className="px-4 py-2 font-semibold">ค่าที่กรอก</th><th className="px-4 py-2 font-semibold">ความหมาย</th></tr></thead><tbody>{Object.entries(ASSET_STATUS_LABELS).map(([value, label]) => <tr key={value} className="border-b border-rose-50 last:border-0"><td className="px-4 py-2.5"><Code>{value}</Code></td><td className="px-4 py-2.5 text-[var(--foreground)]">{label}</td></tr>)}</tbody></table></div>
           </article>
 
-          <article className="overflow-hidden rounded-xl border border-emerald-200">
-            <div className="bg-emerald-50 px-4 py-3"><h3 className="font-semibold text-emerald-950">ประเภททรัพย์สิน / อุปกรณ์ <Code>device_type</Code></h3><p className="mt-1 text-xs text-emerald-900">เลือกจากรายการที่ระบบเปิดใช้งานอยู่ในปัจจุบัน</p></div>
+          <article className="overflow-hidden rounded-xl border border-sky-200">
+            <div className="bg-sky-50 px-4 py-3"><h3 className="font-semibold text-sky-950">ประเภททรัพย์สิน / อุปกรณ์ <Code>device_type</Code></h3><p className="mt-1 text-xs text-sky-900">เลือกจากรายการที่ระบบเปิดใช้งานอยู่ในปัจจุบัน</p></div>
             <div className="space-y-4 p-4">
               {(["Hardware", "Software"] as const).map((category) => (
                 <div key={category}>
-                  <p className="text-xs font-bold uppercase tracking-[0.14em] text-emerald-800">{category}</p>
-                  {deviceTypesByCategory[category].length > 0 ? <div className="mt-2 flex flex-wrap gap-2">{deviceTypesByCategory[category].map((deviceType) => <span key={deviceType.id || deviceType.name} className="rounded-lg border border-emerald-100 bg-white px-2.5 py-1 text-xs font-medium text-emerald-950">{deviceType.name}</span>)}</div> : <p className="mt-2 text-sm text-[var(--muted)]">ยังไม่มีประเภทที่เปิดใช้งาน</p>}
+                  <p className="text-xs font-bold uppercase tracking-[0.14em] text-sky-800">{category}</p>
+                  {deviceTypesByCategory[category].length > 0 ? <div className="mt-2 flex flex-wrap gap-2">{deviceTypesByCategory[category].map((deviceType) => <span key={deviceType.id || deviceType.name} className="rounded-lg border border-sky-100 bg-white px-2.5 py-1 text-xs font-medium text-sky-950">{deviceType.name}</span>)}</div> : <p className="mt-2 text-sm text-[var(--muted)]">ยังไม่มีประเภทที่เปิดใช้งาน</p>}
                 </div>
               ))}
             </div>

@@ -27,7 +27,7 @@ export default async function AdminFacilitiesPage() {
       </div>
 
       <div>
-        <p className="text-xs font-medium uppercase tracking-[0.22em] text-[var(--muted)]">Admin · ตั้งค่าระบบ</p>
+        <p className="text-xs font-semibold tracking-[0.12em] text-[var(--accent-strong)]">ADMIN · ตั้งค่าระบบ</p>
         <h1 className="section-title mt-1 text-3xl font-semibold">จัดการหน่วยงาน</h1>
         <p className="mt-1 text-sm text-[var(--muted)]">เพิ่ม/แก้ไข/ปิดใช้งาน หน่วยบริการสาธารณสุขในจังหวัดสตูล</p>
       </div>
