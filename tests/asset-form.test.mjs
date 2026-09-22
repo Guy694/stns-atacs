@@ -7,7 +7,7 @@ import { loadTs } from "./helpers/load-ts.mjs";
 function renderForm(assetClass) {
   let stateCalls = 0;
   const { AssetFormModal } = loadTs("app/(main)/assets/_components/asset-form-modal.tsx", {
-    "@/app/(main)/assets/subtype-actions": { getAssetSubtypeOptions: async () => [] },
+    "@/app/(main)/assets/subtype-actions": { getAssetSubtypeEditor: async () => ({ items: [], canManage: false }) },
     react: {
       ...React,
       useState: initial => React.useState(stateCalls++ === 0 ? true : initial),
@@ -42,5 +42,25 @@ test("non-IT forms disable hidden IT fields and keep common data and image contr
     assert.match(html, /name="purchaseDate"[^>]*value="2025-01-01"/);
     assert.match(html, /name="assetImage1"/);
     assert.match(html, /name="assetImage2"/);
+  }
+});
+
+test("specific fields offer inline creation only to managers without nesting a form", () => {
+  for (const canManage of [true, false]) {
+    let state = 0;
+    const { AssetSpecificFields } = loadTs("app/(main)/assets/_components/asset-specific-fields.tsx", {
+      "@/app/(main)/assets/subtype-actions": {},
+      react: { ...React, useState: initial => {
+        const index = state++;
+        return React.useState(index === 0 ? [] : index === 1 ? canManage : index === 4 ? true : initial);
+      } },
+    });
+    const html = renderToStaticMarkup(React.createElement(AssetSpecificFields, { assetClass: "Office" }));
+    assert.equal(html.includes("+ เพิ่มประเภทย่อย"), canManage);
+    assert.equal(html.includes("เพิ่มและเลือกใช้"), canManage);
+    assert.equal(html.includes("ติดต่อผู้ดูแลระบบ"), !canManage);
+    assert.ok(!html.includes("<form"));
+    assert.ok(!html.includes('type="submit"'));
+    assert.ok(html.includes('name="subtypeId"'));
   }
 });

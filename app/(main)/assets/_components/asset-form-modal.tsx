@@ -180,6 +180,7 @@ function FacilityCombobox({
 
 export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], fixedFacilityId, mode, asset, children }: Props) {
   const [open, setOpen] = useState(false);
+  const [subtypePending, setSubtypePending] = useState(false);
   const [selectedFacilityId, setSelectedFacilityId] = useState<number | null>(fixedFacilityId ?? asset?.facilityId ?? null);
   const [selectedWorkGroupId, setSelectedWorkGroupId] = useState(asset?.workGroupId?.toString() ?? "");
   const [assetClass, setAssetClass] = useState(asset?.assetClass ?? "IT");
@@ -436,7 +437,7 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
                   ยืนยันการเปลี่ยนกลุ่มทรัพย์สิน ข้อมูลเดิมจะถูกเก็บไว้ รายการที่ผูก Agent ต้องยกเลิกการเชื่อมก่อนเปลี่ยนเป็นกลุ่มอื่น
                 </label>
               )}
-              {!isIt && <AssetSpecificFields assetClass={assetClass} extensions={asset?.extensions} />}
+              {!isIt && <AssetSpecificFields assetClass={assetClass} extensions={asset?.extensions} onBusyChange={setSubtypePending} />}
               {!isIt && <p className="text-sm text-[var(--foreground)]">บันทึกข้อมูลทะเบียน การจัดซื้อ และรายละเอียดทั่วไปของทรัพย์สินได้โดยไม่ต้องระบุข้อมูลคอมพิวเตอร์</p>}
               <fieldset disabled={!isIt} className={isIt ? "grid gap-4 sm:grid-cols-2" : "hidden"}>
                 <legend className="mb-3 text-base font-semibold">ข้อมูล IT</legend>
@@ -620,7 +621,7 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
                   </button>
                   <button
                     type="submit"
-                    disabled={pending}
+                    disabled={pending || subtypePending}
                     className="rounded-xl bg-[var(--accent-strong)] px-6 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
                   >
                     {pending ? "กำลังบันทึก…" : mode === "create" ? "เพิ่มทรัพย์สิน" : "บันทึกการแก้ไข"}

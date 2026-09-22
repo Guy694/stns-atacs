@@ -30,3 +30,23 @@ test("subtype management validates classes and disables without deleting", async
   assert.match(ctx.writes[0][0], /UPDATE.*is_active.*asset_class/);
   assert.deepEqual(Array.from(ctx.writes[0][1]), ["Desk", 0, 7, "Office"]);
 });
+
+test("inline creation returns the new active subtype and still enforces permissions", async () => {
+  const denied = setup({ role: "officer" });
+  assert.match((await denied.actions.createInlineAssetSubtype("Office", "เก้าอี้ใหม่")).error, /สิทธิ์/);
+  assert.equal(denied.writes.length, 0);
+  const ctx = setup({ id: 1, role: "admin", fullName: "Admin" }, true);
+  const result = await ctx.actions.createInlineAssetSubtype("Office", " เก้าอี้สำนักงาน ");
+  assert.equal(result.error, null);
+  assert.deepEqual(JSON.parse(JSON.stringify(result.item)), { id: 1, assetClass: "Office", name: "เก้าอี้สำนักงาน", isActive: true });
+  assert.match(ctx.writes[0][0], /^INSERT/);
+  assert.ok((await ctx.actions.createInlineAssetSubtype("IT", "Invalid")).error);
+  assert.ok((await ctx.actions.createInlineAssetSubtype("Office", " ")).error);
+  assert.equal(ctx.writes.length, 1);
+});
+
+test("editor exposes management capability alongside options", async () => {
+  const ctx = setup({ role: "admin" }, true);
+  assert.equal((await ctx.actions.getAssetSubtypeEditor()).canManage, true);
+  await assert.rejects(setup(null).actions.getAssetSubtypeEditor());
+});
