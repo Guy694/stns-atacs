@@ -90,6 +90,15 @@ export const APP_MENU_ITEMS: AppMenuItem[] = [
     permissionKey: "repairs.view",
   },
   {
+    key: "loans",
+    href: "/loans",
+    label: "ยืม-คืนครุภัณฑ์",
+    description: "บันทึกการยืม กำหนดคืน และการรับคืนครุภัณฑ์",
+    icon: "repeat",
+    group: "assets",
+    permissionKey: "loans.view",
+  },
+  {
     key: "agent-download",
     href: "/agent-download",
     label: "ดาวน์โหลด Agent",
@@ -143,6 +152,15 @@ export const APP_MENU_ITEMS: AppMenuItem[] = [
     icon: "file-text",
     group: "reports",
     permissionKey: "reports.view",
+  },
+  {
+    key: "data-quality",
+    href: "/data-quality",
+    label: "ความครบถ้วนของข้อมูล",
+    description: "คะแนนความครบถ้วนของทะเบียนรายหน่วยงาน รายการที่ต้องเติม และ Serial ซ้ำ",
+    icon: "check",
+    group: "reports",
+    permissionKey: "assets.view",
   },
   {
     key: "manuals",

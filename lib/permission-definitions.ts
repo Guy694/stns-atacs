@@ -13,6 +13,8 @@ export const PERMISSION_DEFINITIONS = [
   { key: "disposal.approve", label: "อนุมัติคำขอจำหน่าย/สูญหาย", area: "Operations" },
   { key: "repairs.view", label: "ดูงานซ่อมบำรุง", area: "Operations" },
   { key: "repairs.manage", label: "แจ้งซ่อมและปรับสถานะงานซ่อม", area: "Operations" },
+  { key: "loans.view", label: "ดูรายการยืม-คืน", area: "Operations" },
+  { key: "loans.manage", label: "บันทึกการยืมและรับคืน", area: "Operations" },
   { key: "inspection.view", label: "ดูผลตรวจนับ", area: "Operations" },
   { key: "inspection.create", label: "สร้างรอบตรวจนับ", area: "Operations" },
   { key: "reports.view", label: "ดูรายงาน", area: "Reporting" },

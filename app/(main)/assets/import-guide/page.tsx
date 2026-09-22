@@ -1,4 +1,5 @@
 import { ASSET_DETAIL_FIELDS } from "@/lib/asset-details";
+import { ACQUISITION_METHODS, FUNDING_SOURCES } from "@/lib/acquisition-options";
 import { listAssetSubtypes } from "@/lib/asset-extensions";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -56,6 +57,7 @@ export default async function AssetImportGuidePage() {
         <h2 className="text-lg font-semibold">ข้อมูลเฉพาะครุภัณฑ์นอกกลุ่ม IT</h2>
         <p className="text-sm">ระบุ asset_class และ subtype_id จากรายการด้านล่าง กรอกเฉพาะคอลัมน์ของกลุ่มนั้น วันที่ใช้ YYYY-MM-DD ตัวเลขไม่ต้องใส่หน่วย การแก้ไขที่เว้นช่องว่างจะเก็บค่าเดิม หากต้องการล้างประเภทย่อยหรือข้อมูลเฉพาะ ให้ใส่ __CLEAR__</p>
         <p className="text-sm">คอลัมน์ <Code>useful_life_years</Code> (ต่อท้ายไฟล์ ไม่บังคับ) ใช้ระบุอายุการใช้งานสำหรับคิดค่าเสื่อมเป็นจำนวนเต็ม 1–100 ปี เฉพาะกรณีต่างจากตารางอายุการใช้งาน เว้นว่างเพื่อใช้ตามประเภททรัพย์สิน คอลัมน์ <Code>asset_code_prefix</Code> คือรหัสหน่วยงานนำหน้า (เช่น สสจ.) และ <Code>asset_registration_no</Code> คือเลขครุภัณฑ์ ระบบแสดงรวมกันเป็น สสจ.7440-001-0006/120 ถ้าเลขเดิมมีรหัสนำหน้าอยู่แล้วจะไม่ซ้ำ <Code>asset_accounting_code</Code> คือรหัสสินทรัพย์ สถานะ <Code>Disposed</Code>/<Code>Lost</Code> นำเข้าไม่ได้ ต้องบันทึกผ่านคำขอจำหน่ายที่ได้รับอนุมัติ</p>
+        <p className="text-sm">ข้อมูลการได้มา (ต่อท้ายไฟล์ ไม่บังคับ): <Code>funding_source</Code> แหล่งเงิน ใช้รหัส {FUNDING_SOURCES.map((o, i) => <span key={o.value}>{i ? ", " : ""}<Code>{o.value}</Code> {o.label}</span>)} · <Code>acquisition_method</Code> วิธีการได้มา ใช้รหัส {ACQUISITION_METHODS.map((o, i) => <span key={o.value}>{i ? ", " : ""}<Code>{o.value}</Code> {o.label}</span>)} (พิมพ์ชื่อภาษาไทยแทนรหัสก็ได้) · <Code>vendor_name</Code> ผู้ขาย/ผู้รับจ้าง/ผู้บริจาค · <Code>warranty_end_date</Code> วันสิ้นสุดการรับประกัน (YYYY-MM-DD) · <Code>unit_name</Code> หน่วยนับ เช่น เครื่อง ตัว ชุด · ใส่ <Code>__CLEAR__</Code> เพื่อล้างค่าเดิม</p>
         {Object.entries(ASSET_DETAIL_FIELDS).map(([group, fields]) => <div key={group} className="space-y-1 text-sm">
           <h3 className="font-semibold">{ASSET_CLASS_OPTIONS.find(o => o.value === group)?.label} ({group})</h3>
           <p className="break-words">{fields.map(f => `${f.key}: ${f.label}`).join(" · ")}</p>

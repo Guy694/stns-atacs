@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-import { cancelDisposalRequest, createDisposalRequest, decideDisposalRequest, getDisposalRequest } from "@/lib/asset-disposals";
+import { cancelDisposalRequest, createDisposalRequest, decideDisposalRequest, getDisposalRequest, recordDisposalExecution } from "@/lib/asset-disposals";
 import { isTerminalAssetStatus } from "@/lib/asset-status";
 import { recordAssetStatusHistory } from "@/lib/asset-status-history";
 import { valueAsset } from "@/lib/asset-valuation";
@@ -15,8 +15,9 @@ import { hasPermission } from "@/lib/role-permissions";
 import { friendlyLifecycleError } from "@/lib/schema-errors";
 import { getInspectionById, getInspectionItems } from "@/lib/inspection";
 import { itemOutcome } from "@/lib/inspection-report";
-import { isDisposalMethod } from "@/lib/disposal-options";
 import { canManageFacility } from "@/lib/permissions";
+import { notifyTelegramSafe } from "@/lib/telegram";
+import { DISPOSAL_REQUEST_TYPE_LABELS, disposalMethodLabel, isDisposalMethod } from "@/lib/disposal-options";
 
 export type DisposalType = "Broken" | "Inactive" | "Disposed" | "Lost";
 
@@ -67,10 +68,23 @@ export async function disposalAssetAction(_prev: string | null, fd: FormData): P
         reason,
         eventDate: noteDate,
         bookValue: valuation.status === "ok" || valuation.status === "below-threshold" ? valuation.bookValue : null,
+        factFindingNote: disposalType === "Lost" ? text(fd, "factFindingNote") : null,
         userId: user.id,
         userName: user.fullName,
       });
       await writeAuditLog({ userId: user.id, userName: user.fullName, action: "dispose", entity: "asset_disposal_requests", entityId: result.requestId, summary: result.note });
+      await notifyTelegramSafe({
+        category: "lifecycle",
+        title: `คำขอ${DISPOSAL_REQUEST_TYPE_LABELS[disposalType]} #${result.requestId} รออนุมัติ`,
+        eventKey: `disposal-request:${result.requestId}`,
+        details: {
+          หน่วยงาน: asset.facilityName,
+          ครุภัณฑ์: [asset.assetNumber, asset.assetName].filter(Boolean).join(" "),
+          วิธีจำหน่าย: disposalType === "Disposed" ? disposalMethodLabel(text(fd, "disposalMethod")) : null,
+          เหตุผล: reason,
+          ผู้เสนอ: user.fullName,
+        },
+      });
       redirectTo = `/disposal?requestId=${result.requestId}`;
     } else {
       const label = disposalType === "Broken" ? "บันทึกชำรุด" : "ระงับการใช้งาน";
@@ -116,8 +130,53 @@ export async function decideDisposalAction(_prev: string | null, fd: FormData): 
     });
     await writeAuditLog({ userId: user.id, userName: user.fullName, action: "dispose", entity: "asset_disposal_requests", entityId: requestId, summary: result.note });
     revalidateAsset(result.assetId, result.facilityId);
+    await notifyTelegramSafe({
+      category: "lifecycle",
+      title: `${decision === "Approved" ? "อนุมัติ" : "ไม่อนุมัติ"}คำขอ${DISPOSAL_REQUEST_TYPE_LABELS[request.requestType]} #${requestId}`,
+      eventKey: `disposal-decision:${requestId}`,
+      details: {
+        หน่วยงาน: request.facilityName,
+        ครุภัณฑ์: [request.assetRegistrationNo, request.assetName].filter(Boolean).join(" "),
+        หนังสืออนุมัติ: text(fd, "approvalDocumentNo") || null,
+        หมายเหตุ: text(fd, "decisionNote") || null,
+        ผู้พิจารณา: user.fullName,
+      },
+    });
   } catch (err) {
     return friendlyLifecycleError(err);
+  }
+  redirect(`/disposal?requestId=${requestId}`);
+}
+
+/** Records the actual sale/exchange/transfer/destruction of an approved disposal. */
+export async function recordExecutionAction(_prev: string | null, fd: FormData): Promise<string | null> {
+  const user = await getCurrentUser();
+  if (!user) redirect("/login");
+  if (!canMutateAssets(user)) return "คุณไม่มีสิทธิ์ดำเนินการนี้";
+  const [canRequest, canApprove] = await Promise.all([hasPermission(user.role, "disposal.manage"), hasPermission(user.role, "disposal.approve")]);
+  if (!canRequest && !canApprove) return "คุณไม่มีสิทธิ์บันทึกผลการจำหน่าย";
+  const requestId = Number(fd.get("requestId"));
+  if (!Number.isSafeInteger(requestId) || requestId <= 0) return "ไม่พบคำขอ";
+  const proceedsRaw = text(fd, "proceedsAmount").replace(/,/g, "");
+  const proceedsAmount = proceedsRaw ? Number(proceedsRaw) : null;
+  if (proceedsAmount !== null && (!Number.isFinite(proceedsAmount) || proceedsAmount < 0)) return "จำนวนเงินที่ได้รับต้องเป็นตัวเลขไม่ติดลบ";
+  try {
+    const request = await getDisposalRequest(requestId);
+    if (!request) return "ไม่พบคำขอ";
+    if (!canManageAsset(user, request.facilityId)) return "คุณไม่มีสิทธิ์บันทึกผลของหน่วยงานนี้";
+    const result = await recordDisposalExecution({
+      requestId,
+      executedOn: text(fd, "executedOn"),
+      documentNo: text(fd, "executionDocumentNo"),
+      proceedsAmount,
+      note: text(fd, "executionNote"),
+      userId: user.id,
+      userName: user.fullName,
+    });
+    await writeAuditLog({ userId: user.id, userName: user.fullName, action: "dispose", entity: "asset_disposal_requests", entityId: requestId, summary: result.note });
+    revalidateAsset(result.assetId, result.facilityId);
+  } catch (err) {
+    return friendlyLifecycleError(err).replace("add_asset_lifecycle.sql", "add_registry_completeness.sql");
   }
   redirect(`/disposal?requestId=${requestId}`);
 }
@@ -202,6 +261,14 @@ export async function bulkDisposalFromInspectionAction(_prev: BulkDisposalResult
   }
   revalidatePath("/disposal");
   revalidatePath(`/inspection/${inspectionId}`);
+  if (created.length) {
+    await notifyTelegramSafe({
+      category: "lifecycle",
+      title: `คำขอจำหน่าย/สูญหายจากผลตรวจนับ ${created.length} รายการ รออนุมัติ`,
+      eventKey: `disposal-bulk:${created.join(",").slice(0, 180)}`,
+      details: { หน่วยงาน: inspection.facilityName, รอบตรวจนับ: inspection.roundName, คำขอ: created.map((id) => `#${id}`).join(" "), ผู้เสนอ: user.fullName },
+    });
+  }
   return {
     ok: created.length > 0,
     message: created.length ? `สร้างคำขอ ${created.length} รายการ รอผู้มีสิทธิ์อนุมัติที่เมนูจำหน่ายและเหตุผิดปกติ` : "ไม่ได้สร้างคำขอ",

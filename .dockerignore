@@ -1,0 +1,24 @@
+.git
+.next
+node_modules
+npm-debug.log*
+.env*
+!docker/env.example
+*.sql.gz
+backup-*.sql
+database-check-report.txt
+lint-results.json
+Claude outputs
+.vscode
+.gemini
+.kiro
+.impeccable
+.agents
+public/uploads
+tests
+ref
+coverage
+storage
+backups
+docker/initdb/*.sql
+.github

@@ -48,6 +48,8 @@ export async function GET(req: NextRequest, { params }: Context) {
         workGroupName: inspection.workGroupName,
         filterLabel: "",
         committee: committee.members,
+        committeeOrderNo: inspection.committeeOrderNo,
+        committeeOrderDate: inspection.committeeOrderDate,
         startDate: inspection.startDate,
         endDate: inspection.endDate,
         closedAt: inspection.closedAt,

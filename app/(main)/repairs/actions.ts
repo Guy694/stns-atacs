@@ -11,6 +11,8 @@ import { canManageAssetRecord, canMutateAssets } from "@/lib/permissions";
 import { REPAIR_STATUS_LABELS, type RepairStatus } from "@/lib/repair-options";
 import { hasPermission } from "@/lib/role-permissions";
 import { friendlyLifecycleError } from "@/lib/schema-errors";
+import { notifyTelegramSafe } from "@/lib/telegram";
+import { REPAIR_PRIORITY_LABELS } from "@/lib/repair-options";
 
 const text = (fd: FormData, key: string) => (fd.get(key) as string | null)?.trim() ?? "";
 
@@ -46,6 +48,19 @@ export async function createRepairAction(_prev: string | null, fd: FormData): Pr
     repairId = result.repairId;
     await writeAuditLog({ userId: user.id, userName: user.fullName, action: "create", entity: "asset_repairs", entityId: repairId, summary: `แจ้งซ่อม #${repairId} ${asset.assetName}${asset.assetRegistrationNo ? ` (${asset.assetRegistrationNo})` : ""}` });
     revalidateRepair(assetId, repairId);
+    const priority = text(fd, "priority") || "Normal";
+    await notifyTelegramSafe({
+      category: "lifecycle",
+      title: `แจ้งซ่อมใหม่ #${repairId}`,
+      eventKey: `repair-created:${repairId}`,
+      details: {
+        หน่วยงาน: asset.facilityName,
+        ครุภัณฑ์: [asset.assetNumber, asset.assetName].filter(Boolean).join(" "),
+        ความเร่งด่วน: REPAIR_PRIORITY_LABELS[priority as keyof typeof REPAIR_PRIORITY_LABELS] ?? priority,
+        อาการ: text(fd, "problem"),
+        ผู้แจ้ง: user.fullName,
+      },
+    });
   } catch (err) {
     return friendlyLifecycleError(err);
   }

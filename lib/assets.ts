@@ -52,6 +52,11 @@ type AssetRow = RowDataPacket & {
   maintenance_start_date: Date | string | null;
   maintenance_end_date: Date | string | null;
   useful_life_years?: number | null;
+  funding_source?: string | null;
+  acquisition_method?: string | null;
+  vendor_name?: string | null;
+  warranty_end_date?: Date | string | null;
+  unit_name?: string | null;
   asset_image_1_url: string | null;
   asset_image_2_url: string | null;
 };
@@ -132,6 +137,11 @@ function rowToAsset(row: AssetRow) {
     purchaseDate: toDateOnly(row.purchase_date),
     purchaseOrderNo: row.purchase_order_no ?? "",
     usefulLifeYears: row.useful_life_years ?? null,
+    fundingSource: row.funding_source ?? "",
+    acquisitionMethod: row.acquisition_method ?? "",
+    vendorName: row.vendor_name ?? "",
+    warrantyEndDate: toDateOnly(row.warranty_end_date),
+    unitName: row.unit_name ?? "",
     assetImage1Url: row.asset_image_1_url ?? "",
     assetImage2Url: row.asset_image_2_url ?? "",
     assetImages: [row.asset_image_1_url, row.asset_image_2_url].filter((url): url is string => Boolean(url)),
@@ -176,6 +186,11 @@ export type AssetInput = {
   maintenanceEndDate?: string | null;
   installedAt?: string | null;
   usefulLifeYears?: number | null;
+  fundingSource?: string | null;
+  acquisitionMethod?: string | null;
+  vendorName?: string | null;
+  warrantyEndDate?: string | null;
+  unitName?: string | null;
   lastUpdatedAt?: string | null;
   assetImage1Url?: string | null;
   assetImage2Url?: string | null;
@@ -321,6 +336,11 @@ function filterFallbackAssets(filter?: AssetListFilter) {
       purchaseDate: a.purchaseDate ?? "",
       purchaseOrderNo: a.purchaseOrderNo ?? "",
       usefulLifeYears: null,
+      fundingSource: "",
+      acquisitionMethod: "",
+      vendorName: "",
+      warrantyEndDate: "",
+      unitName: "",
       assetCodePrefix: "",
       assetNumber: a.assetRegistrationNo,
       assetAccountingCode: "",
@@ -408,6 +428,22 @@ export async function getAssetById(id: number): Promise<AssetWithFacility | null
   if (!rows[0]) return null;
   const extensions = await loadAssetExtensions([id]);
   return { ...rowToAsset(rows[0]), extensions: extensions.get(id) ?? {} };
+}
+
+/** Several assets by id (sticker sheets, bulk actions), in register order. Unknown ids are skipped. */
+export async function listAssetsByIds(ids: number[]): Promise<AssetWithFacility[]> {
+  const clean = [...new Set(ids.filter((id) => Number.isSafeInteger(id) && id > 0))];
+  if (!clean.length) return [];
+  const rows: AssetRow[] = [];
+  // Chunked so a long selection never builds a huge IN list.
+  for (let start = 0; start < clean.length; start += 500) {
+    const chunk = clean.slice(start, start + 500);
+    rows.push(...(await selectRows<AssetRow>(`${ASSET_JOIN_SQL} WHERE a.id IN (${chunk.map(() => "?").join(",")})`, chunk)));
+  }
+  const order = new Map(clean.map((id, index) => [id, index]));
+  rows.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
+  const extensions = await loadAssetExtensions(rows.map((row) => row.id));
+  return rows.map((row) => ({ ...rowToAsset(row), extensions: extensions.get(row.id) ?? {} }));
 }
 
 /** ดึง survey list (เพื่อใช้ใน dropdown เลือกหน่วยงานตอน add asset) */
@@ -501,7 +537,12 @@ export async function createAsset(input: AssetInput) {
         input.assetImage2Url ?? null,
       ]
     );
-    const codeColumns: Array<[string, string | null | undefined]> = [["asset_code_prefix", input.assetCodePrefix], ["asset_accounting_code", input.assetAccountingCode]];
+    // Columns from later migrations are written separately and only when provided, so creating assets keeps working before them.
+    const codeColumns: Array<[string, string | null | undefined]> = [
+      ["asset_code_prefix", input.assetCodePrefix], ["asset_accounting_code", input.assetAccountingCode],
+      ["funding_source", input.fundingSource], ["acquisition_method", input.acquisitionMethod], ["vendor_name", input.vendorName],
+      ["warranty_end_date", input.warrantyEndDate], ["unit_name", input.unitName],
+    ];
     const providedCodes = codeColumns.filter(([, value]) => value);
     if (providedCodes.length) {
       await executeStatement(
@@ -516,6 +557,10 @@ export async function createAsset(input: AssetInput) {
     await saveAssetExtension(result.insertId, parseAssetClass(input.assetClass), input.subtypeId, input.details);
     return result;
   });
+}
+
+function optionalColumns(current: RowDataPacket | undefined, values: Record<string, string | null | undefined>) {
+  return Object.fromEntries(Object.entries(values).map(([column, value]) => [column, !value && current && !(column in current) ? undefined : value]));
 }
 
 /** แก้ไขทรัพย์สิน */
@@ -577,6 +622,14 @@ export async function updateAsset(id: number, input: Partial<AssetInput>) {
       // Clearing is a no-op on databases without the asset-code migration; setting a value requires it.
       asset_code_prefix: !input.assetCodePrefix && locked[0] && !("asset_code_prefix" in locked[0]) ? undefined : input.assetCodePrefix,
       asset_accounting_code: !input.assetAccountingCode && locked[0] && !("asset_accounting_code" in locked[0]) ? undefined : input.assetAccountingCode,
+      // Acquisition details (add_registry_completeness.sql): clearing is a no-op before the migration.
+      ...optionalColumns(locked[0], {
+        funding_source: input.fundingSource,
+        acquisition_method: input.acquisitionMethod,
+        vendor_name: input.vendorName,
+        warranty_end_date: input.warrantyEndDate,
+        unit_name: input.unitName,
+      }),
     };
 
     for (const [col, val] of Object.entries(fieldMap)) {

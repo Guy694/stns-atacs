@@ -6,7 +6,8 @@ import { StatusBadge } from "@/app/_components/ui/status-badge";
 import { assetStatusLabel, assetStatusTone } from "@/lib/asset-status";
 import { getCurrentUser } from "@/lib/auth";
 import { getAssetById, listAssets } from "@/lib/assets";
-import { getDisposalRequest, listDisposalRequests, type DisposalRequest } from "@/lib/asset-disposals";
+import { getDisposalRequest, listAwaitingExecution, listDisposalRequests, type DisposalRequest } from "@/lib/asset-disposals";
+import { fiscalYearOf } from "@/lib/asset-valuation";
 import { isTerminalAssetStatus } from "@/lib/asset-status";
 import { formatThaiDate, formatThaiDateTime } from "@/lib/date-format";
 import { DISPOSAL_REQUEST_TYPE_LABELS, DISPOSAL_STATUS_LABELS, DISPOSAL_STATUS_TONES, disposalMethodLabel } from "@/lib/disposal-options";
@@ -14,7 +15,7 @@ import { getFacilityScopeId } from "@/lib/facility-scope";
 import { canManageAsset, canMutateAssets } from "@/lib/permissions";
 import { hasPermission } from "@/lib/role-permissions";
 import { DisposalForm } from "./_components/disposal-form";
-import { CancelDisposalForm, DisposalDecisionForm } from "./_components/disposal-decision-form";
+import { CancelDisposalForm, DisposalDecisionForm, DisposalExecutionForm } from "./_components/disposal-decision-form";
 
 const baht = (value: number | null) => (value === null ? "-" : value.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
 
@@ -114,7 +115,30 @@ export default async function DisposalPage({ searchParams }: Props) {
           {request.approvalDocumentNo && <div><p className="text-xs text-[var(--muted)]">เลขที่หนังสืออนุมัติ</p><p>{request.approvalDocumentNo}</p></div>}
           {request.proceedsAmount !== null && <div><p className="text-xs text-[var(--muted)]">เงินที่ได้รับ</p><p className="tabular-nums">{baht(request.proceedsAmount)}</p></div>}
           {request.decisionNote && <div className="sm:col-span-2"><p className="text-xs text-[var(--muted)]">ความเห็นผู้พิจารณา</p><p className="whitespace-pre-line">{request.decisionNote}</p></div>}
+          {request.factFindingNote && <div className="sm:col-span-2"><p className="text-xs text-[var(--muted)]">ผลการสอบหาข้อเท็จจริง</p><p className="whitespace-pre-line">{request.factFindingNote}</p></div>}
+          {request.executedOn && (
+            <div className="sm:col-span-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+              <p className="text-xs font-semibold text-emerald-800">ดำเนินการจำหน่ายแล้ว</p>
+              <p className="mt-1">วันที่ {formatThaiDate(request.executedOn)}{request.executionDocumentNo ? ` · หลักฐาน ${request.executionDocumentNo}` : ""}{request.proceedsAmount !== null ? ` · เงินที่ได้รับ ${baht(request.proceedsAmount)} บาท` : ""}</p>
+              {request.executionNote && <p className="mt-1 whitespace-pre-line text-[var(--muted)]">{request.executionNote}</p>}
+              <p className="mt-1 text-xs text-[var(--muted)]">บันทึกโดย {request.executedBy || "-"}</p>
+            </div>
+          )}
         </section>
+        {request.status === "Approved" && request.requestType === "Disposed" && (canRequest || canApprove) && (
+          request.executedOn ? (
+            <details className="glass-panel rounded-2xl p-6">
+              <summary className="cursor-pointer font-semibold">แก้ไขผลการจำหน่าย</summary>
+              <div className="mt-3"><DisposalExecutionForm requestId={request.id} defaults={{ executedOn: request.executedOn, documentNo: request.executionDocumentNo, proceedsAmount: request.proceedsAmount, note: request.executionNote }} /></div>
+            </details>
+          ) : (
+            <section className="glass-panel rounded-2xl p-6">
+              <h2 className="mb-1 font-semibold">บันทึกผลการจำหน่าย</h2>
+              <p className="mb-3 text-xs text-[var(--muted)]">เมื่อขาย แลกเปลี่ยน โอน หรือทำลายเรียบร้อยแล้ว ให้บันทึกวันที่ หลักฐาน และเงินที่ได้รับ (นำส่งเป็นรายได้ตามระเบียบ)</p>
+              <DisposalExecutionForm requestId={request.id} defaults={{ proceedsAmount: request.proceedsAmount }} />
+            </section>
+          )
+        )}
         {pendingRequest && canApprove && !isOwn && (
           <section className="glass-panel rounded-2xl p-6">
             <h2 className="mb-3 font-semibold">พิจารณาคำขอ</h2>
@@ -191,11 +215,13 @@ export default async function DisposalPage({ searchParams }: Props) {
   }
 
   // ── View: search ───────────────────────────────────────────────────────
-  const [results, pendingList, decidedList] = await Promise.all([
+  const [results, pendingList, decidedList, awaiting] = await Promise.all([
     q ? listAssets({ search: q, facilityId: facilityScopeId }) : Promise.resolve([]),
     listDisposalRequests({ facilityIds: scopeIds, status: "Pending", limit: 200 }),
     listDisposalRequests({ facilityIds: scopeIds, limit: 30 }),
+    listAwaitingExecution(scopeIds),
   ]);
+  const currentFy = fiscalYearOf(new Date().toISOString().slice(0, 10));
   const decided = decidedList.rows.filter((row) => row.status !== "Pending");
 
   return (
@@ -279,6 +305,35 @@ export default async function DisposalPage({ searchParams }: Props) {
               {canApprove && <p className="mt-0.5 text-xs text-[var(--muted)]">เลือกหมายเลขคำขอเพื่อพิจารณาอนุมัติหรือไม่อนุมัติ</p>}
             </div>
             <RequestTable rows={pendingList.rows} empty="ไม่มีคำขอรออนุมัติ" />
+          </section>
+          {awaiting.length > 0 && (
+            <section id="awaiting-execution" className="glass-panel overflow-hidden rounded-2xl">
+              <div className="border-b border-black/6 px-5 py-3">
+                <h2 className="font-semibold">อนุมัติแล้ว รอบันทึกผลการจำหน่าย <span className="ml-1 text-sm font-normal text-[var(--muted)]">{awaiting.length} รายการ</span></h2>
+                <p className="mt-0.5 text-xs text-[var(--muted)]">เลือกหมายเลขคำขอเพื่อบันทึกวันที่ขาย/โอน/ทำลาย เลขที่หลักฐาน และเงินที่ได้รับ</p>
+              </div>
+              <RequestTable rows={awaiting} empty="" />
+            </section>
+          )}
+          <section className="glass-panel rounded-2xl p-5">
+            <h2 className="font-semibold">เอกสารจำหน่าย (Excel)</h2>
+            <p className="mt-0.5 text-xs text-[var(--muted)]">พิมพ์แนบบันทึกขออนุมัติ หรือรายงานผลการจำหน่ายประจำปี{facilityScopeId ? "" : " (ทุกหน่วยงาน)"}</p>
+            <div className="mt-3 flex flex-wrap items-end gap-3">
+              <a href="/api/export/disposal?type=pending" className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[var(--primary-soft-strong)] bg-[var(--primary-soft)] px-4 text-sm font-semibold text-[var(--primary-text)] hover:bg-[var(--primary-soft-strong)]">
+                <AppIcon name="download" className="h-4 w-4" /> รายการขออนุมัติจำหน่าย ({pendingList.rows.length})
+              </a>
+              <form method="GET" action="/api/export/disposal" className="flex items-end gap-2">
+                <input type="hidden" name="type" value="annual" />
+                <label className="text-xs text-[var(--muted)]">ปีงบประมาณ
+                  <select name="fy" defaultValue={String(currentFy)} className="mt-1 block min-h-11 rounded-xl border border-[var(--line)] bg-white px-3 text-sm text-[var(--foreground)]">
+                    {Array.from({ length: 5 }, (_, index) => currentFy - index).map((year) => <option key={year} value={year}>{year}</option>)}
+                  </select>
+                </label>
+                <button type="submit" className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[var(--line)] bg-white px-4 text-sm font-semibold hover:bg-[var(--primary-soft)]">
+                  <AppIcon name="download" className="h-4 w-4" /> รายงานการจำหน่ายประจำปี
+                </button>
+              </form>
+            </div>
           </section>
           <section className="glass-panel overflow-hidden rounded-2xl">
             <div className="flex items-center justify-between border-b border-black/6 px-5 py-3">

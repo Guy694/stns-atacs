@@ -36,7 +36,7 @@ test("summarizeInspection counts and values per category and proposes broken/unu
 test("report workbook: summary + proposal sheets, draft marker until closed", () => {
   const meta = { roundName: "การตรวจสอบพัสดุประจำปี 2569", facilityName: "สสจ.สตูล", districtName: "", workGroupName: "", filterLabel: "", committee: [{ seq: 1, role: "chair", fullName: "นายประธาน ใจดี", position: "" }], startDate: "2026-10-01", endDate: "2026-10-31", closedAt: "", roundStatus: "Open" };
   const open = XLSX.read(report.buildInspectionReportWorkbook(items, meta).buffer, { type: "buffer" });
-  assert.equal(open.SheetNames.length, 2);
+  assert.equal(open.SheetNames.length, 3);
   const text = wb => wb.SheetNames.map(n => XLSX.utils.sheet_to_csv(wb.Sheets[n])).join("\n");
   assert.match(text(open), /ฉบับร่าง/);
   assert.match(text(open), /นายประธาน ใจดี/);
@@ -52,4 +52,38 @@ test("assetIdFromScan reads asset URLs only", () => {
   assert.equal(scan.assetIdFromScan("/assets/7#check-in-heading"), 7);
   assert.equal(scan.assetIdFromScan("https://atacs.example/assets/12abc"), null);
   assert.equal(scan.assetIdFromScan("hello"), null);
+});
+
+test("report prints the committee appointment order when recorded", () => {
+  const sheetLib = loadTs("lib/inspection-sheet.ts", {}, globals);
+  assert.equal(sheetLib.committeeOrderText({}), "");
+  assert.equal(sheetLib.committeeOrderText({ committeeOrderNo: "125/2570", committeeOrderDate: "2026-10-01" }), "ตามคำสั่งแต่งตั้งคณะกรรมการตรวจสอบพัสดุ ที่ 125/2570 ลงวันที่ 1 ต.ค. 2569");
+  const meta = { roundName: "รอบ", facilityName: "สสจ.", districtName: "", workGroupName: "", filterLabel: "", committee: [], startDate: "2026-10-01", endDate: "", closedAt: "", roundStatus: "Closed", committeeOrderNo: "125/2570" };
+  const wb = XLSX.read(report.buildInspectionReportWorkbook(items, meta).buffer, { type: "buffer" });
+  assert.match(XLSX.utils.sheet_to_csv(wb.Sheets[wb.SheetNames[0]]), /ตามคำสั่งแต่งตั้งคณะกรรมการตรวจสอบพัสดุ ที่ 125\/2570/);
+});
+
+test("items found in another work group are reported with the register first", () => {
+  const sheetLib = loadTs("lib/inspection-sheet.ts", {}, globals);
+  const base = item(20, { workGroupId: 1, workGroupName: "กลุ่มงานบริหาร", locationDetail: "ห้อง 101" });
+  assert.equal(sheetLib.isFoundElsewhere({ ...base, foundWorkGroupId: 1, registeredWorkGroupId: 1 }), false);
+  const moved = { ...base, foundWorkGroupId: 2, foundWorkGroupName: "กลุ่มงานควบคุมโรค", foundLocation: "ห้อง 205", registeredWorkGroupId: 1, registeredWorkGroupName: "กลุ่มงานบริหาร" };
+  assert.equal(sheetLib.isFoundElsewhere(moved), true);
+  assert.equal(sheetLib.registeredLocation(moved), "กลุ่มงานบริหาร (ห้อง 101)");
+  assert.equal(sheetLib.foundLocationText(moved), "กลุ่มงานควบคุมโรค (ห้อง 205)");
+  // same group, different room
+  assert.equal(sheetLib.isFoundElsewhere({ ...base, foundWorkGroupId: 1, foundLocation: "ห้อง 102" }), true);
+  // missing items are never "moved"
+  assert.equal(sheetLib.isFoundElsewhere({ ...moved, inspectionStatus: "Missing" }), false);
+  // the register was updated afterwards: the snapshot still shows where it was registered
+  assert.equal(sheetLib.isFoundElsewhere({ ...moved, workGroupId: 2, workGroupName: "กลุ่มงานควบคุมโรค" }), true);
+
+  const summary = report.summarizeInspection([...items, moved]);
+  assert.equal(summary.moved.length, 1);
+  const meta = { roundName: "รอบ", facilityName: "สสจ.", districtName: "", workGroupName: "", filterLabel: "", committee: [], startDate: "2026-10-01", endDate: "", closedAt: "", roundStatus: "Closed" };
+  const wb = XLSX.read(report.buildInspectionReportWorkbook([...items, moved], meta).buffer, { type: "buffer" });
+  const text = XLSX.utils.sheet_to_csv(wb.Sheets["พบต่างสถานที่"]);
+  assert.match(text, /กลุ่มงานบริหาร \(ห้อง 101\)/);
+  assert.match(text, /กลุ่มงานควบคุมโรค \(ห้อง 205\)/);
+  assert.match(XLSX.utils.sheet_to_csv(wb.Sheets[wb.SheetNames[0]]), /พบต่างจากกลุ่มงาน\/สถานที่ในทะเบียน 1 รายการ/);
 });

@@ -22,7 +22,7 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
-AGENT_VERSION = "1.0.1"
+AGENT_VERSION = "1.1.0"
 DEFAULT_CONFIG_PATH = "/var/lib/atacs-agent/agent-config.json"
 
 
@@ -363,6 +363,12 @@ def main() -> int:
         f"Inventory report sent successfully. DeviceId={result.get('deviceId')} "
         f"AssetId={result.get('linkedAssetId')}"
     )
+    # The server announces its current address after a move (e.g. Vercel -> own server); follow it once.
+    new_base = normalize(result.get("apiBaseUrl"))
+    if new_base and new_base.rstrip("/") != str(config.get("apiBaseUrl", "")).rstrip("/") and new_base.startswith(("https://", "http://")):
+        config["apiBaseUrl"] = new_base.rstrip("/")
+        save_config(args.config_path, config)
+        print(f"Server address changed; apiBaseUrl updated to {config['apiBaseUrl']}")
     return 0
 
 

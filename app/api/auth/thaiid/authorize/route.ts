@@ -3,6 +3,7 @@ import crypto from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 
 import { getThaiIdConfig } from "@/lib/thaiid";
+import { secureCookiesEnabled } from "@/lib/cookie-security";
 
 const STATE_COOKIE_NAME = "atacs_thaid_state";
 
@@ -39,7 +40,7 @@ export async function GET(req: NextRequest) {
   response.cookies.set(STATE_COOKIE_NAME, state, {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure: secureCookiesEnabled(),
     path: "/",
     maxAge: 10 * 60,
   });

@@ -3,29 +3,25 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-import { isTerminalAssetStatus, OPERATIONAL_ASSET_STATUSES } from "@/lib/asset-status";
-import { recordAssetStatusHistory } from "@/lib/asset-status-history";
+import { isTerminalAssetStatus } from "@/lib/asset-status";
 import { writeAuditLog } from "@/lib/audit";
 import {
   COMMITTEE_SIZE,
   createInspection,
   deleteInspection,
   getInspectionById,
-  getInspectionItemContext,
   normalizeCommittee,
+  saveCommitteeOrder,
   saveInspectionCommittee,
   setInspectionRoundStatus,
-  updateInspectionItem,
 } from "@/lib/inspection";
 import { listFacilityWorkGroups } from "@/lib/facility-work-groups";
-import { friendlyLifecycleError } from "@/lib/schema-errors";
+import { InspectionResultError, recordInspectionResult } from "@/lib/inspection-results";
+import { friendlyLifecycleError, isMissingSchemaError } from "@/lib/schema-errors";
 import { getCurrentUser } from "@/lib/auth";
-import { listAssets, updateAsset } from "@/lib/assets";
+import { listAssets } from "@/lib/assets";
 import { canManageFacility, canMutateAssets } from "@/lib/permissions";
 import { hasPermission } from "@/lib/role-permissions";
-
-// Inspections record condition only; disposal/loss requires an approved request.
-const VALID_ASSET_STATUSES = new Set<string>(OPERATIONAL_ASSET_STATUSES);
 
 function readDate(value: FormDataEntryValue | null) {
   const text = String(value ?? "").trim();
@@ -121,7 +117,18 @@ export async function saveCommitteeAction(_prev: string | null, formData: FormDa
   if (inspection.roundStatus === "Closed") return "รอบนี้ปิดแล้ว ต้องเปิดรอบก่อนแก้ไขคณะกรรมการ";
   try {
     const members = readCommittee(formData);
+    const orderNo = String(formData.get("committeeOrderNo") ?? "").trim();
+    const orderDate = String(formData.get("committeeOrderDate") ?? "").trim();
+    if (orderDate && !/^\d{4}-\d{2}-\d{2}$/.test(orderDate)) return "วันที่คำสั่งไม่ถูกต้อง";
     await saveInspectionCommittee(inspectionId, members);
+    if (orderNo || orderDate || inspection.committeeOrderNo || inspection.committeeOrderDate) {
+      try {
+        await saveCommitteeOrder(inspectionId, orderNo, orderDate);
+      } catch (error) {
+        if (!isMissingSchemaError(error)) throw error;
+        return "บันทึกคณะกรรมการแล้ว แต่ยังบันทึกเลขที่คำสั่งไม่ได้ กรุณาให้ผู้ดูแลระบบรัน database/add_registry_completeness.sql";
+      }
+    }
     await writeAuditLog({ userId: user.id, userName: user.fullName, action: "update", entity: "asset_inspections", entityId: inspectionId, summary: `แก้ไขคณะกรรมการตรวจนับ ${inspection.roundName}: ${members.map((m) => m.fullName).join(", ") || "-"}` });
   } catch (error) {
     return friendlyLifecycleError(error).replace("add_asset_lifecycle.sql", "add_asset_codes_and_inspection_committee.sql");
@@ -145,61 +152,31 @@ export async function updateInspectionItemAction(formData: FormData) {
   if (!canMutateAssets(user)) redirect("/inspection");
   if (!(await hasPermission(user.role, "inspection.create"))) redirect("/inspection");
 
-  const itemId = Number(formData.get("itemId"));
-  const inspectionStatus = String(formData.get("inspectionStatus") ?? "").trim();
-  const assetStatus = String(formData.get("assetStatus") ?? "").trim();
-  const conditionNote = String(formData.get("conditionNote") ?? "").trim();
-
-  if (!itemId || (inspectionStatus !== "Found" && inspectionStatus !== "Missing") || !VALID_ASSET_STATUSES.has(assetStatus)) {
-    redirect("/inspection");
+  // Forms that show the work group send foundWorkGroupId ("" = no group); others leave the location alone.
+  const rawGroup = formData.has("foundWorkGroupId") ? String(formData.get("foundWorkGroupId") ?? "").trim() : undefined;
+  let result: Awaited<ReturnType<typeof recordInspectionResult>>;
+  try {
+    result = await recordInspectionResult(user, {
+      itemId: Number(formData.get("itemId")),
+      inspectionStatus: String(formData.get("inspectionStatus") ?? ""),
+      assetStatus: String(formData.get("assetStatus") ?? ""),
+      conditionNote: String(formData.get("conditionNote") ?? ""),
+      foundWorkGroupId: rawGroup === undefined ? undefined : rawGroup ? Number(rawGroup) : null,
+      foundLocation: String(formData.get("foundLocation") ?? ""),
+      updateRegistry: String(formData.get("updateRegistry") ?? "") === "1",
+    });
+  } catch (error) {
+    if (!(error instanceof InspectionResultError)) throw error;
+    if (!error.inspectionId) redirect("/inspection");
+    redirect(error.code === "closed" ? `/inspection/${error.inspectionId}?locked=1` : `/inspection/${error.inspectionId}`);
   }
 
-  const item = await getInspectionItemContext(itemId);
-  if (!item) redirect("/inspection");
-  const round = await getInspectionById(item.inspectionId);
-  if (round?.roundStatus === "Closed") redirect(`/inspection/${item.inspectionId}?locked=1`);
-  if (isTerminalAssetStatus(item.currentStatus)) redirect(`/inspection/${item.inspectionId}`);
-  if (!canManageFacility(user, item.facilityId)) redirect(`/inspection/${item.inspectionId}`);
-
-  await updateInspectionItem({
-    itemId,
-    inspectionStatus,
-    assetStatus,
-    conditionNote,
-    checkedBy: user.fullName,
-  });
-
-  if ((item.currentStatus ?? "") !== assetStatus) {
-    await updateAsset(item.assetId, {
-      currentStatus: assetStatus,
-      updatedBy: user.fullName,
-      lastUpdatedAt: new Date().toISOString().slice(0, 10),
-    });
-    await recordAssetStatusHistory({
-      assetId: item.assetId,
-      fromStatus: item.currentStatus,
-      toStatus: assetStatus,
-      note: conditionNote || `อัปเดตจากรอบตรวจนับ #${item.inspectionId}`,
-      changedByUserId: user.id,
-      changedBy: user.fullName,
-    });
-  }
-
-  await writeAuditLog({
-    userId: user.id,
-    userName: user.fullName,
-    action: "inspect",
-    entity: "asset_inspection_items",
-    entityId: itemId,
-    summary: `ตรวจครุภัณฑ์ ${item.assetId}: ${inspectionStatus}, สถานะ ${assetStatus}`,
-  });
-
-  revalidatePath(`/inspection/${item.inspectionId}`);
-  revalidatePath(`/assets/${item.assetId}`);
+  revalidatePath(`/inspection/${result.inspectionId}`);
+  revalidatePath(`/assets/${result.assetId}`);
   // Check-in from the asset page (after scanning a QR) returns there; only same-site asset paths are allowed.
   const returnTo = String(formData.get("returnTo") ?? "");
-  if (returnTo === `/assets/${item.assetId}`) redirect(`${returnTo}?checked=${item.inspectionId}`);
-  redirect(`/inspection/${item.inspectionId}`);
+  if (returnTo === `/assets/${result.assetId}`) redirect(`${returnTo}?checked=${result.inspectionId}`);
+  redirect(`/inspection/${result.inspectionId}`);
 }
 
 /** Permanently deletes one round and its results; asset statuses are not changed. */

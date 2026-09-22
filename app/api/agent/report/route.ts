@@ -4,6 +4,13 @@ import { reportAgentInventory, type AgentReportPayload } from "@/lib/agent";
 import { notifyTelegramSafe } from "@/lib/telegram";
 import { readRequestIp, recordSecurityEvent } from "@/lib/security";
 
+// When the server moves (e.g. Vercel → own Docker server), set AGENT_API_BASE_URL on the OLD
+// deployment: agents v1.1+ save the announced address and report there from the next round.
+function announcedApiBaseUrl() {
+  const value = process.env.AGENT_API_BASE_URL?.trim().replace(/\/+$/, "") ?? "";
+  return /^https?:\/\/[^\s]+$/i.test(value) ? value : undefined;
+}
+
 function readAgentCredentials(req: NextRequest) {
   const agentId = req.headers.get("x-agent-id")?.trim() ?? "";
   const agentKey = req.headers.get("x-agent-key")?.trim() ?? "";
@@ -47,7 +54,8 @@ export async function POST(req: NextRequest) {
         },
       });
     }
-    return NextResponse.json({ ok: true, ...result });
+    const apiBaseUrl = announcedApiBaseUrl();
+    return NextResponse.json({ ok: true, ...result, ...(apiBaseUrl ? { apiBaseUrl } : {}) });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     if (message === "INVALID_AGENT_CREDENTIALS") {

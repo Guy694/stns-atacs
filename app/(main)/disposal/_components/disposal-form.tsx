@@ -143,6 +143,20 @@ export function DisposalForm({ asset, defaultType = "", hasPendingRequest = fals
         />
       </div>
 
+      {type === "Lost" && (
+        <div>
+          <label className="mb-1 block text-sm font-medium" htmlFor="factFindingNote">ผลการสอบหาข้อเท็จจริง</label>
+          <textarea
+            id="factFindingNote"
+            name="factFindingNote"
+            rows={3}
+            placeholder="สรุปผลของคณะกรรมการสอบหาข้อเท็จจริง: สาเหตุ ผู้ต้องรับผิด (ถ้ามี) และข้อเสนอ เช่น ให้จำหน่ายเป็นสูญ"
+            className="w-full rounded-xl border border-[var(--line)] bg-white/80 px-3 py-2.5 text-sm outline-none focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/15"
+          />
+          <p className="mt-1 text-xs text-[var(--muted)]">กรณีสูญหาย ควรแต่งตั้งคณะกรรมการสอบหาข้อเท็จจริงก่อน และแนบผลไว้เพื่อประกอบการพิจารณา</p>
+        </div>
+      )}
+
       {/* Actions */}
       <div className="flex items-center justify-between pt-2">
         <Link

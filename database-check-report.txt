@@ -1,0 +1,68 @@
+ATACS database check · 2026-09-22T13:38:04.925Z
+Server: 10.4.22-MariaDB (MariaDB) · database: stn_atacs
+Charset: utf8mb4 / utf8mb4_general_ci
+
+1) Migration
+  [OK]   information_assets.sql / inspection_audit.sql (ฐานเดิม)
+  [OK]   migrate_purchase_fields.sql
+  [OK]   add_asset_work_group.sql / add_facility_work_groups.sql
+  [OK]   add_asset_status_history.sql
+  [OK]   add_inspection_workflow.sql
+  [OK]   add_role_permissions_and_indexes.sql
+  [OK]   add_asset_extensions.sql
+  [OK]   add_asset_lifecycle.sql
+  [OK]   add_asset_codes_and_inspection_committee.sql
+  [OK]   add_inspection_close.sql
+  [OK]   add_registry_completeness.sql
+
+2) จำนวนข้อมูล
+  health_facilities            74
+  information_asset_surveys    37
+  information_assets           451
+  asset_inspections            0
+  asset_inspection_items       0
+  asset_transfers              0
+  asset_disposal_requests      0
+  asset_repairs                0
+  asset_loans                  0
+  asset_status_history         508
+  audit_logs                   613
+  users                        38
+
+3) ความถูกต้องของข้อมูล (อ่านอย่างเดียว)
+  [OK]   ครุภัณฑ์ที่ survey_id ไม่มีอยู่จริง
+  [OK]   แบบสำรวจที่หน่วยงานไม่มีอยู่จริง
+  สถานะที่พบ: Active=426, Broken=13, Inactive=12
+  [OK]   สถานะครุภัณฑ์เป็นรหัสมาตรฐานทั้งหมด
+  [OK]   วันที่ได้มาอยู่ในอนาคต
+  [OK]   ราคาติดลบ
+  [OK]   เลขครุภัณฑ์ซ้ำภายในหน่วยงานเดียวกัน
+  [OK]   Serial Number ซ้ำภายในหน่วยงานเดียวกัน
+  [OK]   กลุ่มงานของครุภัณฑ์ไม่อยู่ในหน่วยงานเดียวกัน
+  [OK]   รายการตรวจนับที่ครุภัณฑ์ถูกลบไปแล้ว
+  [OK]   รายการตรวจนับที่รอบถูกลบไปแล้ว
+  [OK]   สถานะรอบตรวจนับไม่ถูกต้อง
+  [OK]   รอบตรวจนับที่มีประธานกรรมการมากกว่า 1 คน
+  [OK]   ครุภัณฑ์ที่มีคำขอจำหน่ายรออนุมัติมากกว่า 1 คำขอ
+  [OK]   สถานะจำหน่าย/สูญหายที่ไม่มีคำขออนุมัติ (ข้อมูลก่อนมีระบบอนุมัติ)
+  [OK]   คำขอที่อนุมัติแล้วแต่ครุภัณฑ์ไม่อยู่ในสถานะจำหน่าย/สูญหาย
+  [OK]   ผู้เสนออนุมัติคำขอของตนเอง
+  [OK]   อนุมัติจำหน่ายแล้วแต่ยังไม่บันทึกผลการจำหน่าย
+  [OK]   ครุภัณฑ์ที่มีงานซ่อมเปิดอยู่มากกว่า 1 งาน
+  [OK]   งานซ่อมเปิดอยู่ของครุภัณฑ์ที่จำหน่าย/สูญหายแล้ว
+  [OK]   ครุภัณฑ์ที่ถูกยืมอยู่มากกว่า 1 รายการ
+  [OK]   การยืมที่เกินกำหนดคืน
+  [OK]   ประวัติโอนย้ายที่หน่วยงานปลายทางไม่ตรงกับหน่วยงานปัจจุบัน (โอนล่าสุด)
+
+4) Foreign key ที่ระบบใช้
+  [OK]   information_assets → information_asset_surveys
+  [OK]   asset_inspection_items → asset_inspections
+  [OK]   asset_inspection_items → information_assets
+  [OK]   asset_disposal_requests → information_assets
+  [OK]   asset_repairs → information_assets
+  [OK]   asset_transfers → information_assets
+  [OK]   asset_loans → information_assets
+  [OK]   asset_inspection_committee → asset_inspections
+
+สรุป: migration ครบทุกไฟล์
+ขั้นก่อนรัน migration: สำรองฐานข้อมูล (phpMyAdmin → Export หรือ mysqldump) และเปิดดูว่าไฟล์สำรองไม่ใช่ 0 ไบต์

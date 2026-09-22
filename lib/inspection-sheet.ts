@@ -23,6 +23,13 @@ export type SheetItem = {
   assetNumber?: string;
   assetAccountingCode?: string;
   inspectionAssetStatus?: string;
+  /** Where the item was found during the check, if recorded (see add_inspection_found_location.sql). */
+  foundWorkGroupId?: number | null;
+  foundWorkGroupName?: string;
+  foundLocation?: string;
+  /** Work group on the register when it was checked (the register may be updated afterwards). */
+  registeredWorkGroupId?: number | null;
+  registeredWorkGroupName?: string;
 };
 
 export type InspectionItemFilters = { category: string; location: string; result: string };
@@ -60,6 +67,34 @@ export function itemLocation(item: SheetItem) {
   const location = item.locationDetail && item.locationDetail !== "ไม่ระบุ" ? item.locationDetail.trim() : "";
   if (item.workGroupName) return location ? `${item.workGroupName} (${location})` : item.workGroupName;
   return location || "ไม่ระบุกลุ่มงาน";
+}
+
+const cleanLocation = (value?: string) => (value && value.trim() !== "ไม่ระบุ" ? value.trim() : "");
+
+/** The register's work group at check time (falls back to the current one when not snapshotted). */
+export function registeredLocation(item: SheetItem) {
+  const snapshot = item.registeredWorkGroupId != null && item.registeredWorkGroupName;
+  const group = snapshot ? item.registeredWorkGroupName! : item.workGroupName;
+  const location = cleanLocation(item.locationDetail);
+  if (group) return location ? `${group} (${location})` : group;
+  return location || "ไม่ระบุกลุ่มงาน";
+}
+
+/** True when the item was found in a different work group or place than the register says. */
+export function isFoundElsewhere(item: SheetItem) {
+  if (item.inspectionStatus !== "Found") return false;
+  const registeredGroup = item.registeredWorkGroupId ?? item.workGroupId ?? null;
+  if (item.foundWorkGroupId != null && item.foundWorkGroupId !== registeredGroup) return true;
+  const found = cleanLocation(item.foundLocation);
+  return Boolean(found && found !== cleanLocation(item.locationDetail));
+}
+
+/** "กลุ่มงาน (ที่ตั้ง)" where it was found, or "" when nothing different was recorded. */
+export function foundLocationText(item: SheetItem) {
+  if (!isFoundElsewhere(item)) return "";
+  const group = item.foundWorkGroupId != null ? item.foundWorkGroupName || "กลุ่มงานอื่น" : item.registeredWorkGroupName || item.workGroupName;
+  const place = cleanLocation(item.foundLocation);
+  return [group, place && `(${place})`].filter(Boolean).join(" ") || place;
 }
 
 export function filterInspectionItems<T extends SheetItem>(items: T[], filters: InspectionItemFilters) {
@@ -119,7 +154,10 @@ export function sheetRows(items: SheetItem[]) {
       name: item.assetName,
       quantity: 1,
       unitValue: item.purchasePrice,
-      location: item.workGroupName || itemLocation(item),
+      // Register first; where it was actually found is added below when different.
+      location: isFoundElsewhere(item)
+        ? `${item.registeredWorkGroupName || item.workGroupName || itemLocation(item)}\nพบที่: ${foundLocationText(item)}`
+        : item.workGroupName || itemLocation(item),
       // Left blank for the committee unless this round already recorded a result.
       status: item.inspectionStatus === "Missing" ? "ไม่พบ" : item.inspectionStatus === "Found" ? assetStatusLabel(item.inspectionAssetStatus || item.currentStatus || "Active") : "",
     }));
@@ -132,7 +170,18 @@ export type SheetMeta = {
   workGroupName: string;
   filterLabel: string;
   committee: Array<{ seq: number; role?: "chair" | "member"; fullName: string; position: string }>;
+  /** เลขที่และวันที่คำสั่งแต่งตั้งคณะกรรมการ (optional). */
+  committeeOrderNo?: string;
+  committeeOrderDate?: string;
 };
+
+/** "ตามคำสั่งแต่งตั้งคณะกรรมการ ที่ 12/2570 ลงวันที่ 1 ต.ค. 2569" or "" when nothing was recorded. */
+export function committeeOrderText(meta: Pick<SheetMeta, "committeeOrderNo" | "committeeOrderDate">) {
+  const no = meta.committeeOrderNo?.trim();
+  const date = meta.committeeOrderDate ? thaiDate(meta.committeeOrderDate) : "";
+  if (!no && !date) return "";
+  return `ตามคำสั่งแต่งตั้งคณะกรรมการตรวจสอบพัสดุ${no ? ` ที่ ${no}` : ""}${date ? ` ลงวันที่ ${date}` : ""}`;
+}
 
 const COLS = [7, 13, 30, 17, 46, 9, 14, 14, 24, 14];
 const LAST_COL = "J";

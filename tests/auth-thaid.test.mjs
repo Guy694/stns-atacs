@@ -53,9 +53,10 @@ function setup(initialRows, beforeUpdate) {
     process: { env: { THAID_CID_ENCRYPTION_KEY: key, AUTH_SECRET: "test-only" } },
     require(id) {
       if (id === "server-only") return {};
-      if (id === "node:crypto") return { default: crypto };
+      if (id === "node:crypto") return { __esModule: true, default: crypto };
       if (id === "next/headers") return {};
       if (id === "@/lib/mysql") return db;
+      if (id === "@/lib/cookie-security") return { secureCookiesEnabled: () => false };
       throw new Error(`Unexpected dependency: ${id}`);
     },
   });

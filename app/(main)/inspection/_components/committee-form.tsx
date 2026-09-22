@@ -9,13 +9,15 @@ const ROLE_LABELS = { chair: "ประธานกรรมการ", member: 
 const SLOTS = 4;
 
 /** Committee printed as the signature block on the count sheet (chair + 3 members). */
-export function CommitteeForm({ inspectionId, members, canEdit }: { inspectionId: number; members: Member[]; canEdit: boolean }) {
+export function CommitteeForm({ inspectionId, members, canEdit, orderNo = "", orderDate = "", orderLabel = "" }: { inspectionId: number; members: Member[]; canEdit: boolean; orderNo?: string; orderDate?: string; orderLabel?: string }) {
   const [result, formAction, pending] = useActionState(saveCommitteeAction, null);
 
   if (!canEdit) {
     return members.length === 0 ? (
       <p className="text-sm text-[var(--muted)]">ยังไม่ได้กำหนดคณะกรรมการ</p>
     ) : (
+      <>
+      {orderLabel && <p className="mb-2 text-sm text-[var(--muted)]">{orderLabel}</p>}
       <dl className="grid gap-2 text-sm sm:grid-cols-2">
         {members.map((member) => (
           <div key={member.seq}>
@@ -24,13 +26,24 @@ export function CommitteeForm({ inspectionId, members, canEdit }: { inspectionId
           </div>
         ))}
       </dl>
+      </>
     );
   }
 
   return (
     <form action={formAction} className="space-y-2">
       <input type="hidden" name="inspectionId" value={inspectionId} />
-      <p className="text-xs text-[var(--muted)]">เลือกประธานกรรมการ 1 คน ที่เหลือเป็นกรรมการ แถวที่ไม่กรอกชื่อจะไม่ถูกบันทึก</p>
+      <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_12rem]">
+        <label className="text-sm">
+          <span className="mb-1 block text-xs text-[var(--muted)]">เลขที่คำสั่งแต่งตั้งคณะกรรมการ</span>
+          <input name="committeeOrderNo" defaultValue={orderNo} maxLength={100} placeholder="เช่น 125/2570" className="min-h-10 w-full rounded-lg border border-[var(--line)] bg-white px-3 py-2 text-sm" />
+        </label>
+        <label className="text-sm">
+          <span className="mb-1 block text-xs text-[var(--muted)]">ลงวันที่</span>
+          <input type="date" name="committeeOrderDate" defaultValue={orderDate} className="min-h-10 w-full rounded-lg border border-[var(--line)] bg-white px-3 py-2 text-sm" />
+        </label>
+      </div>
+      <p className="text-xs text-[var(--muted)]">เลือกประธานกรรมการ 1 คน ที่เหลือเป็นกรรมการ แถวที่ไม่กรอกชื่อจะไม่ถูกบันทึก เลขที่คำสั่งจะพิมพ์ในรายงานผลการตรวจสอบ</p>
       {Array.from({ length: SLOTS }, (_, index) => {
         const member = members[index];
         const defaultRole = member?.role ?? (index === 0 ? "chair" : "member");

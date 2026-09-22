@@ -198,6 +198,7 @@ export default async function FacilityDetailPage({ params, searchParams }: Props
               />
             )}
             <FacilityAssetQrActions
+              facilityId={facilityId}
               facilityName={facilityName}
               assets={allAssets.map((asset) => ({
                 id: asset.id,

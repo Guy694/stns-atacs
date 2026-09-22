@@ -1,0 +1,73 @@
+# ATACS CI: lint, unit tests, integration tests against MariaDB, production build and the Docker image.
+# Integration tests create/drop their own databases (atacs_*_test) in the throwaway service container.
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      mariadb:
+        image: mariadb:10.11
+        env:
+          MARIADB_ROOT_PASSWORD: ci-root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=10s --health-timeout=5s --health-retries=10
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+      # Build-time placeholders only; nothing connects to a real database during the build.
+      AUTH_SECRET: ci-build-secret-not-used-in-production-000000
+      MYSQL_HOST: 127.0.0.1
+      MYSQL_PORT: "3306"
+      MYSQL_USER: root
+      MYSQL_PASSWORD: ci-root
+      MYSQL_DATABASE: atacs_ci_build
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Lint
+        run: npm run lint
+      - name: Type check
+        run: npx tsc --noEmit
+      - name: Unit + integration tests
+        run: npm test
+        env:
+          ATACS_TEST_MYSQL_PORT: "3306"
+          ATACS_TEST_MYSQL_USER: root
+          ATACS_TEST_MYSQL_PASSWORD: ci-root
+      - name: Production build
+        run: npm run build
+
+  docker-image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build image (not pushed)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          tags: atacs-app:ci
+          build-args: NEXT_PUBLIC_APP_URL=https://atacs.example.go.th
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Validate docker-compose.yml
+        run: |
+          cp docker/env.example .env.docker
+          sed -i 's/^MYSQL_PASSWORD=.*/MYSQL_PASSWORD=x/; s/^MYSQL_ROOT_PASSWORD=.*/MYSQL_ROOT_PASSWORD=y/' .env.docker
+          docker compose --env-file .env.docker config -q
+          bash -n docker/backup.sh

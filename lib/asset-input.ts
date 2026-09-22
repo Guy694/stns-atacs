@@ -3,6 +3,7 @@ import type { AssetInput } from "@/lib/assets";
 import { isItAsset, parseAssetClass, requiresWindowsLicense } from "@/lib/asset-policy";
 import { ASSET_ACCOUNTING_CODE_MAX, ASSET_CODE_PREFIX_MAX } from "@/lib/asset-number";
 import { isTerminalAssetStatus, OPERATIONAL_ASSET_STATUSES } from "@/lib/asset-status";
+import { parseAcquisitionMethod, parseFundingSource, UNIT_NAME_MAX, VENDOR_NAME_MAX } from "@/lib/acquisition-options";
 import { WINDOWS_LICENSE_STATUS_VALUES, type WindowsLicenseStatus } from "@/lib/windows-license";
 
 export type AssetFields = Record<string, string | undefined>;
@@ -10,7 +11,7 @@ export type ExistingAssetFields = Partial<Omit<AssetInput, "rowNo">> & { extensi
 
 const IT_FIELDS = ["deviceType", "assetGroup", "operatingSystem", "operatingSystemVersion", "privateIp", "publicIp"] as const;
 const COMMON_TEXT_FIELDS = ["usageDescription", "ownerName", "locationDetail", "manufacturerBrand", "manufacturerModel", "manufacturerSpecification", "serialNumber", "purchaseOrderNo"] as const;
-const DATE_FIELDS = ["purchaseDate", "maintenanceStartDate", "maintenanceEndDate", "installedAt"] as const;
+const DATE_FIELDS = ["purchaseDate", "maintenanceStartDate", "maintenanceEndDate", "installedAt", "warrantyEndDate"] as const;
 
 /** Forms send empty strings to clear fields. CSV adapters omit blank cells to preserve existing data. */
 export function parseAssetFields(fields: AssetFields, existing?: ExistingAssetFields): Omit<AssetInput, "surveyId"> {
@@ -45,6 +46,18 @@ export function parseAssetFields(fields: AssetFields, existing?: ExistingAssetFi
     const code = fields.assetAccountingCode.trim();
     if (code.length > ASSET_ACCOUNTING_CODE_MAX) throw new Error(`รหัสสินทรัพย์ต้องไม่เกิน ${ASSET_ACCOUNTING_CODE_MAX} ตัวอักษร`);
     result.assetAccountingCode = code;
+  }
+  if (fields.fundingSource !== undefined) result.fundingSource = parseFundingSource(fields.fundingSource);
+  if (fields.acquisitionMethod !== undefined) result.acquisitionMethod = parseAcquisitionMethod(fields.acquisitionMethod);
+  if (fields.vendorName !== undefined) {
+    const vendor = fields.vendorName.trim();
+    if (vendor.length > VENDOR_NAME_MAX) throw new Error(`ชื่อผู้ขาย/ผู้รับจ้างต้องไม่เกิน ${VENDOR_NAME_MAX} ตัวอักษร`);
+    result.vendorName = vendor;
+  }
+  if (fields.unitName !== undefined) {
+    const unit = fields.unitName.trim();
+    if (unit.length > UNIT_NAME_MAX) throw new Error(`หน่วยนับต้องไม่เกิน ${UNIT_NAME_MAX} ตัวอักษร`);
+    result.unitName = unit;
   }
   // Hidden IT fields are never cleared or overwritten while editing a non-IT record.
   if (isIt) for (const key of IT_FIELDS) if (fields[key] !== undefined) result[key] = fields[key];

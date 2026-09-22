@@ -22,7 +22,7 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
-AGENT_VERSION = "1.0.1"
+AGENT_VERSION = "1.1.0"
 DEFAULT_CONFIG_PATH = "/var/lib/atacs-agent/agent-config.json"
 
 
@@ -262,6 +262,7 @@ def enroll_agent(
     token: str | None,
     config_path: str,
     facility_id: int | None = None,
+    work_group_id: int | None = None,
     work_group_name: str | None = None,
     install_key: str | None = None,
 ) -> dict[str, Any]:
@@ -283,7 +284,10 @@ def enroll_agent(
     else:
         body["installKey"] = install_key
         body["facilityId"] = facility_id
-        body["workGroupName"] = work_group_name
+        if work_group_id:
+            body["workGroupId"] = work_group_id
+        elif work_group_name:
+            body["workGroupName"] = work_group_name
 
     response = post_json(
         f"{base_url.rstrip('/')}/api/agent/enroll",
@@ -316,6 +320,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--api-base-url", dest="api_base_url")
     parser.add_argument("--enrollment-token", dest="enrollment_token")
     parser.add_argument("--facility-id", dest="facility_id", type=int)
+    parser.add_argument("--work-group-id", dest="work_group_id", type=int)
     parser.add_argument("--work-group-name", dest="work_group_name")
     parser.add_argument("--install-key", dest="install_key")
     parser.add_argument("--config-path", dest="config_path", default=DEFAULT_CONFIG_PATH)
@@ -342,6 +347,7 @@ def main() -> int:
             args.enrollment_token,
             args.config_path,
             args.facility_id,
+            args.work_group_id,
             args.work_group_name,
             args.install_key,
         )
@@ -357,6 +363,12 @@ def main() -> int:
         f"Inventory report sent successfully. DeviceId={result.get('deviceId')} "
         f"AssetId={result.get('linkedAssetId')}"
     )
+    # The server announces its current address after a move (e.g. Vercel -> own server); follow it once.
+    new_base = normalize(result.get("apiBaseUrl"))
+    if new_base and new_base.rstrip("/") != str(config.get("apiBaseUrl", "")).rstrip("/") and new_base.startswith(("https://", "http://")):
+        config["apiBaseUrl"] = new_base.rstrip("/")
+        save_config(args.config_path, config)
+        print(f"Server address changed; apiBaseUrl updated to {config['apiBaseUrl']}")
     return 0
 
 

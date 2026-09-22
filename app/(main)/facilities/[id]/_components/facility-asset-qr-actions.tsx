@@ -12,6 +12,7 @@ type AssetQrItem = {
 
 type FacilityAssetQrActionsProps = {
   assets: AssetQrItem[];
+  facilityId: number;
   facilityName: string;
 };
 
@@ -23,7 +24,7 @@ function sanitizeDownloadName(value: string) {
     .slice(0, 100);
 }
 
-export function FacilityAssetQrActions({ assets, facilityName }: FacilityAssetQrActionsProps) {
+export function FacilityAssetQrActions({ assets, facilityId, facilityName }: FacilityAssetQrActionsProps) {
   const [isPickerOpen, setIsPickerOpen] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [selectedIds, setSelectedIds] = useState<number[]>(() => assets.map((asset) => asset.id));
@@ -104,6 +105,12 @@ export function FacilityAssetQrActions({ assets, facilityName }: FacilityAssetQr
         >
           <AppIcon name="check" className="h-4 w-4" /> เลือกดาวน์โหลด QR
         </button>
+        <a
+          href={`/print/stickers?facility=${facilityId}`}
+          className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-black/10 bg-white/85 px-4 py-2 text-xs font-semibold text-[var(--foreground)] transition hover:bg-white"
+        >
+          <AppIcon name="printer" className="h-4 w-4" /> พิมพ์สติ๊กเกอร์ A4 / PDF
+        </a>
       </div>
 
       {isPickerOpen && (
@@ -179,6 +186,14 @@ export function FacilityAssetQrActions({ assets, facilityName }: FacilityAssetQr
               >
                 ยกเลิก
               </button>
+              <a
+                href={`/print/stickers?ids=${selectedAssets.map((asset) => asset.id).join(",")}`}
+                aria-disabled={selectedAssets.length === 0}
+                onClick={(event) => { if (selectedAssets.length === 0) event.preventDefault(); }}
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-[var(--primary-soft-strong)] bg-[var(--primary-soft)] px-4 py-2 text-sm font-semibold text-[var(--primary-text)] hover:bg-[var(--primary-soft-strong)] aria-disabled:pointer-events-none aria-disabled:opacity-50"
+              >
+                <AppIcon name="printer" className="h-4 w-4" /> พิมพ์ที่เลือก (A4)
+              </a>
               <button
                 type="button"
                 onClick={() => downloadAssets(selectedAssets)}

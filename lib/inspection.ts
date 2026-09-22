@@ -39,6 +39,8 @@ export type Inspection = {
   roundStatus: "Open" | "Closed";
   closedAt: string;
   closedBy: string;
+  committeeOrderNo: string;
+  committeeOrderDate: string;
 };
 
 export type CommitteeMember = { seq: number; role: "chair" | "member"; fullName: string; position: string };
@@ -70,6 +72,12 @@ export type InspectionItem = {
   assetCodePrefix: string;
   assetNumber: string;
   assetAccountingCode: string;
+  /** Where the item was actually found (null = not recorded). Registered work group is snapshotted at check time. */
+  foundWorkGroupId: number | null;
+  foundWorkGroupName: string;
+  foundLocation: string;
+  registeredWorkGroupId: number | null;
+  registeredWorkGroupName: string;
 };
 
 export type CreateInspectionInput = {
@@ -90,6 +98,8 @@ export type InspectionItemContext = {
   facilityId: number;
   assetId: number;
   currentStatus: string | null;
+  workGroupId: number | null;
+  locationDetail: string;
 };
 
 export type UpdateInspectionItemInput = {
@@ -98,6 +108,10 @@ export type UpdateInspectionItemInput = {
   assetStatus: string;
   conditionNote?: string | null;
   checkedBy: string;
+  /** undefined = not part of this form; null = found but no work group. */
+  foundWorkGroupId?: number | null;
+  foundLocation?: string;
+  registeredWorkGroupId?: number | null;
 };
 
 // ── DB Row types ──────────────────────────────────────────────────────────
@@ -122,6 +136,8 @@ type InspectionRow = RowDataPacket & {
   round_status?: string | null;
   closed_at?: Date | string | null;
   closed_by?: string | null;
+  committee_order_no?: string | null;
+  committee_order_date?: Date | string | null;
 };
 
 type InspectionItemRow = RowDataPacket & {
@@ -149,6 +165,11 @@ type InspectionItemRow = RowDataPacket & {
   purchase_price: string | number | null;
   asset_code_prefix?: string | null;
   asset_accounting_code?: string | null;
+  found_work_group_id?: number | null;
+  found_work_group_name?: string | null;
+  found_location?: string | null;
+  registered_work_group_id?: number | null;
+  registered_work_group_name?: string | null;
 };
 
 type InspectionItemContextRow = RowDataPacket & {
@@ -157,6 +178,8 @@ type InspectionItemContextRow = RowDataPacket & {
   facility_id: number;
   asset_id: number;
   current_status: string | null;
+  work_group_id: number | null;
+  location_detail: string | null;
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────
@@ -200,6 +223,8 @@ function mapInspection(row: InspectionRow): Inspection {
     roundStatus: row.round_status === "Closed" ? "Closed" : "Open",
     closedAt: toDateTimeStr(row.closed_at),
     closedBy: row.closed_by ?? "",
+    committeeOrderNo: row.committee_order_no ?? "",
+    committeeOrderDate: toDateStr(row.committee_order_date),
   };
 }
 
@@ -213,6 +238,7 @@ const INSPECTION_SUMMARY_SELECT = `
 // Columns added by later migrations (read with fallbacks so older databases keep working).
 const WORK_GROUP_COLUMNS = "ai.work_group_id, fwg.work_group_name,";
 const CLOSE_COLUMNS = "ai.round_status, ai.closed_at, ai.closed_by,";
+const ORDER_COLUMNS = "ai.committee_order_no, ai.committee_order_date,";
 
 // ── Queries ───────────────────────────────────────────────────────────────
 
@@ -249,12 +275,12 @@ export async function listInspections(facilityId?: number): Promise<Inspection[]
 }
 
 export async function getInspectionById(id: number): Promise<Inspection | null> {
-  const query = (level: 0 | 1 | 2) => selectRows<InspectionRow>(
+  const query = (level: 0 | 1 | 2 | 3) => selectRows<InspectionRow>(
     `SELECT ai.id, ai.facility_id,
        COALESCE(hf.name,'') AS facility_name,
        COALESCE(hf.district_name,'') AS district_name,
        ai.round_name, ai.inspected_by, ai.inspected_at, ai.start_date, ai.end_date,
-       COALESCE(ai.note,'') AS note,${level >= 1 ? ` ${WORK_GROUP_COLUMNS}` : ""}${level === 2 ? ` ${CLOSE_COLUMNS}` : ""}
+       COALESCE(ai.note,'') AS note,${level >= 1 ? ` ${WORK_GROUP_COLUMNS}` : ""}${level >= 2 ? ` ${CLOSE_COLUMNS}` : ""}${level === 3 ? ` ${ORDER_COLUMNS}` : ""}
        ${INSPECTION_SUMMARY_SELECT}
      FROM asset_inspections ai
      LEFT JOIN health_facilities hf ON hf.id = ai.facility_id${level >= 1 ? "\n     LEFT JOIN facility_work_groups fwg ON fwg.id = ai.work_group_id" : ""}
@@ -263,14 +289,18 @@ export async function getInspectionById(id: number): Promise<Inspection | null> 
      GROUP BY ai.id`,
     [id]
   );
-  const rows = await withSchemaFallback(() => query(2), () => withSchemaFallback(() => query(1), () => query(0)));
+  const rows = await withSchemaFallback(
+    () => query(3),
+    () => withSchemaFallback(() => query(2), () => withSchemaFallback(() => query(1), () => query(0)))
+  );
   if (!rows[0]) return null;
   return mapInspection(rows[0]);
 }
 
 export async function getInspectionItems(inspectionId: number): Promise<InspectionItem[]> {
-  const query = (withCodes: boolean) => selectRows<InspectionItemRow>(
-    `SELECT aii.id, aii.inspection_id, aii.asset_id,${withCodes ? " ia.asset_code_prefix, ia.asset_accounting_code," : ""}
+  // level 2: asset codes + found location, 1: asset codes, 0: base schema.
+  const query = (level: 0 | 1 | 2) => selectRows<InspectionItemRow>(
+    `SELECT aii.id, aii.inspection_id, aii.asset_id,${level >= 1 ? " ia.asset_code_prefix, ia.asset_accounting_code," : ""}${level === 2 ? " aii.found_work_group_id, ffwg.work_group_name AS found_work_group_name, aii.found_location, aii.registered_work_group_id, rfwg.work_group_name AS registered_work_group_name," : ""}
        ia.asset_name, ia.asset_registration_no, ia.device_type, ia.current_status,
        aii.found, COALESCE(aii.inspection_status, 'Pending') AS inspection_status,
        COALESCE(aii.asset_status, '') AS asset_status,
@@ -284,12 +314,14 @@ export async function getInspectionItems(inspectionId: number): Promise<Inspecti
         WHERE ex.asset_id = ia.id AND ex.asset_class = ia.asset_class LIMIT 1) AS subtype_name
      FROM asset_inspection_items aii
      JOIN information_assets ia ON ia.id = aii.asset_id
-     LEFT JOIN facility_work_groups fwg ON fwg.id = ia.work_group_id
+     LEFT JOIN facility_work_groups fwg ON fwg.id = ia.work_group_id${level === 2 ? `
+     LEFT JOIN facility_work_groups ffwg ON ffwg.id = aii.found_work_group_id
+     LEFT JOIN facility_work_groups rfwg ON rfwg.id = aii.registered_work_group_id` : ""}
      WHERE aii.inspection_id = ?
      ORDER BY COALESCE(aii.inspection_status, 'Pending') = 'Pending' DESC, ia.asset_registration_no`,
     [inspectionId]
   );
-  const rows = await withSchemaFallback(() => query(true), () => query(false));
+  const rows = await withSchemaFallback(() => query(2), () => withSchemaFallback(() => query(1), () => query(0)));
   return rows.map((r) => ({
     id: r.id,
     inspectionId: r.inspection_id,
@@ -316,6 +348,11 @@ export async function getInspectionItems(inspectionId: number): Promise<Inspecti
     assetCodePrefix: r.asset_code_prefix ?? "",
     assetNumber: formatAssetNumber(r.asset_code_prefix, r.asset_registration_no),
     assetAccountingCode: r.asset_accounting_code ?? "",
+    foundWorkGroupId: r.found_work_group_id ?? null,
+    foundWorkGroupName: r.found_work_group_name ?? "",
+    foundLocation: r.found_location ?? "",
+    registeredWorkGroupId: r.registered_work_group_id ?? null,
+    registeredWorkGroupName: r.registered_work_group_name ?? "",
   }));
 }
 
@@ -382,6 +419,14 @@ export async function saveInspectionCommittee(inspectionId: number, members: Com
   return withTransaction(() => writeCommittee(inspectionId, members));
 }
 
+/** เลขที่/วันที่คำสั่งแต่งตั้งคณะกรรมการ (printed on the report). Requires add_registry_completeness.sql. */
+export async function saveCommitteeOrder(inspectionId: number, orderNo: string, orderDate: string) {
+  await executeStatement(
+    "UPDATE asset_inspections SET committee_order_no = ?, committee_order_date = ? WHERE id = ?",
+    [orderNo.trim().slice(0, 100) || null, orderDate || null, inspectionId]
+  );
+}
+
 export async function getInspectionCommittee(inspectionId: number): Promise<{ members: CommitteeMember[]; schemaReady: boolean }> {
   try {
     const rows = await selectRows<RowDataPacket & { seq: number; role: CommitteeMember["role"]; full_name: string; position: string | null }>(
@@ -397,7 +442,7 @@ export async function getInspectionCommittee(inspectionId: number): Promise<{ me
 
 export async function getInspectionItemContext(itemId: number): Promise<InspectionItemContext | null> {
   const rows = await selectRows<InspectionItemContextRow>(
-    `SELECT aii.id, aii.inspection_id, ai.facility_id, aii.asset_id, ia.current_status
+    `SELECT aii.id, aii.inspection_id, ai.facility_id, aii.asset_id, ia.current_status, ia.work_group_id, ia.location_detail
      FROM asset_inspection_items aii
      JOIN asset_inspections ai ON ai.id = aii.inspection_id
      JOIN information_assets ia ON ia.id = aii.asset_id
@@ -412,6 +457,8 @@ export async function getInspectionItemContext(itemId: number): Promise<Inspecti
     facilityId: rows[0].facility_id,
     assetId: rows[0].asset_id,
     currentStatus: rows[0].current_status,
+    workGroupId: rows[0].work_group_id ?? null,
+    locationDetail: rows[0].location_detail ?? "",
   };
 }
 
@@ -434,6 +481,20 @@ export async function updateInspectionItem(input: UpdateInspectionItemInput) {
       input.itemId,
     ]
   );
+  if (input.foundWorkGroupId === undefined) return { foundSaved: false };
+  try {
+    await executeStatement(
+      "UPDATE asset_inspection_items SET found_work_group_id = ?, found_location = ?, registered_work_group_id = ? WHERE id = ?",
+      input.inspectionStatus === "Found"
+        ? [input.foundWorkGroupId, input.foundLocation?.trim().slice(0, 255) || null, input.registeredWorkGroupId ?? null, input.itemId]
+        : [null, null, input.registeredWorkGroupId ?? null, input.itemId]
+    );
+    return { foundSaved: true };
+  } catch (error) {
+    // Before add_inspection_found_location.sql the result is still saved, without the found location.
+    if (isMissingSchemaError(error)) return { foundSaved: false };
+    throw error;
+  }
 }
 
 /**
@@ -470,13 +531,15 @@ export type OpenInspectionForAsset = {
   assetStatus: string;
   checkedBy: string;
   checkedAt: string;
+  foundWorkGroupId: number | null;
+  foundLocation: string;
 };
 
 /** Open rounds that include this asset, newest first — used for one-tap check-in after scanning its QR. */
 export async function listOpenInspectionsForAsset(assetId: number): Promise<OpenInspectionForAsset[]> {
-  type Row = RowDataPacket & { id: number; inspection_id: number; facility_id: number; round_name: string; inspection_status: string | null; asset_status: string | null; checked_by: string | null; checked_at: Date | string | null };
-  const query = (withStatus: boolean) => selectRows<Row>(
-    `SELECT aii.id, aii.inspection_id, ai.facility_id, ai.round_name, aii.inspection_status, aii.asset_status, aii.checked_by, aii.checked_at
+  type Row = RowDataPacket & { id: number; inspection_id: number; facility_id: number; round_name: string; inspection_status: string | null; asset_status: string | null; checked_by: string | null; checked_at: Date | string | null; found_work_group_id?: number | null; found_location?: string | null };
+  const query = (withStatus: boolean, withFound = withStatus) => selectRows<Row>(
+    `SELECT aii.id, aii.inspection_id, ai.facility_id, ai.round_name, aii.inspection_status, aii.asset_status, aii.checked_by, aii.checked_at${withFound ? ", aii.found_work_group_id, aii.found_location" : ""}
      FROM asset_inspection_items aii
      JOIN asset_inspections ai ON ai.id = aii.inspection_id
      WHERE aii.asset_id = ?${withStatus ? " AND ai.round_status = 'Open'" : ""}
@@ -486,7 +549,7 @@ export async function listOpenInspectionsForAsset(assetId: number): Promise<Open
     [assetId]
   );
   try {
-    const rows = await withSchemaFallback(() => query(true), () => query(false));
+    const rows = await withSchemaFallback(() => query(true, true), () => withSchemaFallback(() => query(true, false), () => query(false, false)));
     return rows.map((row) => ({
       itemId: row.id,
       inspectionId: row.inspection_id,
@@ -496,6 +559,49 @@ export async function listOpenInspectionsForAsset(assetId: number): Promise<Open
       assetStatus: row.asset_status ?? "",
       checkedBy: row.checked_by ?? "",
       checkedAt: toDateTimeStr(row.checked_at),
+      foundWorkGroupId: row.found_work_group_id ?? null,
+      foundLocation: row.found_location ?? "",
+    }));
+  } catch (error) {
+    if (isMissingSchemaError(error)) return [];
+    throw error;
+  }
+}
+
+export type AssetInspectionHistory = {
+  inspectionId: number;
+  roundName: string;
+  startDate: string;
+  inspectionStatus: InspectionItem["inspectionStatus"];
+  assetStatus: string;
+  conditionNote: string;
+  checkedBy: string;
+  checkedAt: string;
+};
+
+/** Every round that included this asset, newest first (for the asset card). */
+export async function listInspectionHistoryForAsset(assetId: number): Promise<AssetInspectionHistory[]> {
+  type Row = RowDataPacket & { inspection_id: number; round_name: string; start_date: Date | string | null; inspected_at: Date | string; inspection_status: string | null; asset_status: string | null; condition_note: string | null; checked_by: string | null; checked_at: Date | string | null };
+  try {
+    const rows = await selectRows<Row>(
+      `SELECT aii.inspection_id, ai.round_name, ai.start_date, ai.inspected_at, aii.inspection_status, aii.asset_status, aii.condition_note, aii.checked_by, aii.checked_at
+       FROM asset_inspection_items aii JOIN asset_inspections ai ON ai.id = aii.inspection_id
+       WHERE aii.asset_id = ?
+       ORDER BY COALESCE(ai.start_date, DATE(ai.inspected_at)) DESC, ai.id DESC
+       LIMIT 50`,
+      [assetId]
+    );
+    return rows.map((row) => ({
+      inspectionId: row.inspection_id,
+      roundName: row.round_name,
+      startDate: toDateStr(row.start_date) || toDateStr(row.inspected_at),
+      inspectionStatus: normalizeInspectionStatus(row.inspection_status),
+      assetStatus: row.asset_status ?? "",
+      conditionNote: row.condition_note ?? "",
+      checkedBy: row.checked_by ?? "",
+      checkedAt: toDateTimeStr(row.checked_at),
+      foundWorkGroupId: row.found_work_group_id ?? null,
+      foundLocation: row.found_location ?? "",
     }));
   } catch (error) {
     if (isMissingSchemaError(error)) return [];

@@ -15,6 +15,9 @@ import {
 import { executeStatement, selectRows, withTransaction } from "@/lib/mysql";
 import { isMissingSchemaError } from "@/lib/schema-errors";
 import type { LifecycleList } from "@/lib/asset-transfers";
+import { formatAssetNumber } from "@/lib/asset-number";
+import { fiscalYearRange } from "@/lib/asset-valuation";
+import type { DisposalReportRow } from "@/lib/disposal-report";
 
 export type DisposalRequest = {
   id: number;
@@ -39,6 +42,13 @@ export type DisposalRequest = {
   decisionNote: string;
   approvalDocumentNo: string;
   proceedsAmount: number | null;
+  /** ผลการสอบหาข้อเท็จจริง (Lost requests). */
+  factFindingNote: string;
+  /** Recorded after approval, when the item has actually been sold/transferred/destroyed. */
+  executedOn: string;
+  executionDocumentNo: string;
+  executionNote: string;
+  executedBy: string;
 };
 
 type RequestRow = RowDataPacket & {
@@ -48,6 +58,11 @@ type RequestRow = RowDataPacket & {
   status: DisposalRequestStatus; requested_by_user_id: number | null; requested_by: string | null; requested_at: Date | string;
   decided_by: string | null; decided_at: Date | string | null; decision_note: string | null; approval_document_no: string | null;
   proceeds_amount: string | number | null;
+  fact_finding_note?: string | null;
+  executed_on?: Date | string | null;
+  execution_document_no?: string | null;
+  execution_note?: string | null;
+  executed_by?: string | null;
 };
 
 const dateOnly = (value: Date | string | null) => (value ? (value instanceof Date ? value.toISOString() : String(value)).slice(0, 10) : "");
@@ -78,6 +93,11 @@ function toRequest(row: RequestRow): DisposalRequest {
     decisionNote: row.decision_note ?? "",
     approvalDocumentNo: row.approval_document_no ?? "",
     proceedsAmount: money(row.proceeds_amount),
+    factFindingNote: row.fact_finding_note ?? "",
+    executedOn: dateOnly(row.executed_on ?? null),
+    executionDocumentNo: row.execution_document_no ?? "",
+    executionNote: row.execution_note ?? "",
+    executedBy: row.executed_by ?? "",
   };
 }
 
@@ -94,6 +114,8 @@ export type CreateDisposalInput = {
   reason: string;
   eventDate: string;
   bookValue?: number | null;
+  /** ผลการสอบหาข้อเท็จจริง — only kept for Lost requests. */
+  factFindingNote?: string | null;
   userId?: number | null;
   userName: string;
 };
@@ -133,6 +155,17 @@ export async function createDisposalRequest(input: CreateDisposalInput) {
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [input.assetId, asset.facility_id, input.requestType, method, input.reason.trim(), input.eventDate, money(asset.purchase_price), input.bookValue ?? null, input.userId ?? null, input.userName]
       );
+
+    const factFinding = input.requestType === "Lost" ? input.factFindingNote?.trim() : "";
+    if (factFinding) {
+      try {
+        await executeStatement("UPDATE asset_disposal_requests SET fact_finding_note = ? WHERE id = ?", [factFinding, insertId]);
+      } catch (error) {
+        // Before add_registry_completeness.sql the finding is kept with the reason instead of being lost.
+        if (!isMissingSchemaError(error)) throw error;
+        await executeStatement("UPDATE asset_disposal_requests SET reason = CONCAT(reason, ?) WHERE id = ?", [`\nผลการสอบหาข้อเท็จจริง: ${factFinding}`, insertId]);
+      }
+    }
 
     const note = `[เสนอ${DISPOSAL_REQUEST_TYPE_LABELS[input.requestType]}] คำขอ #${insertId}${method ? ` วิธี: ${disposalMethodLabel(method)}` : ""} — ${input.reason.trim()}`;
     await insertAssetStatusHistory({ assetId: input.assetId, fromStatus: asset.current_status, toStatus: asset.current_status ?? "Active", note, changedByUserId: input.userId ?? null, changedBy: input.userName });
@@ -209,6 +242,64 @@ export async function decideDisposalRequest(input: DecideDisposalInput) {
   });
 }
 
+export type RecordExecutionInput = {
+  requestId: number;
+  executedOn: string;
+  documentNo?: string;
+  proceedsAmount?: number | null;
+  note?: string;
+  userId: number;
+  userName: string;
+};
+
+/**
+ * Records that an approved disposal was carried out (sale, exchange, transfer or destruction):
+ * date, receipt/evidence number and money received. Can be corrected later; the history keeps each change.
+ */
+export async function recordDisposalExecution(input: RecordExecutionInput) {
+  const today = new Date().toISOString().slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.executedOn) || input.executedOn > today) throw new Error("วันที่ดำเนินการไม่ถูกต้องหรือเกินวันที่ปัจจุบัน");
+  if (input.proceedsAmount != null && (!Number.isFinite(input.proceedsAmount) || input.proceedsAmount < 0)) throw new Error("จำนวนเงินที่ได้รับต้องไม่ติดลบ");
+  await ensureAssetStatusHistoryTable();
+  return withTransaction(async () => {
+    const [request] = await selectRows<RowDataPacket & { id: number; asset_id: number; facility_id: number; request_type: DisposalRequestType; disposal_method: string | null; status: DisposalRequestStatus; decided_at: Date | string | null }>(
+      "SELECT id, asset_id, facility_id, request_type, disposal_method, status, decided_at FROM asset_disposal_requests WHERE id = ? FOR UPDATE",
+      [input.requestId]
+    );
+    if (!request) throw new Error("ไม่พบคำขอ");
+    if (request.status !== "Approved" || request.request_type !== "Disposed") throw new Error("บันทึกผลการจำหน่ายได้เฉพาะคำขอจำหน่ายที่อนุมัติแล้ว");
+    if (request.decided_at && input.executedOn < dateOnly(request.decided_at)) throw new Error("วันที่ดำเนินการต้องไม่ก่อนวันที่อนุมัติ");
+    await executeStatement(
+      `UPDATE asset_disposal_requests
+       SET executed_on = ?, execution_document_no = ?, execution_note = ?, proceeds_amount = ?,
+           executed_by_user_id = ?, executed_by = ?, executed_recorded_at = NOW()
+       WHERE id = ?`,
+      [input.executedOn, input.documentNo?.trim() || null, input.note?.trim() || null, input.proceedsAmount ?? null, input.userId, input.userName, input.requestId]
+    );
+    const [asset] = await selectRows<RowDataPacket & { current_status: string | null }>("SELECT current_status FROM information_assets WHERE id = ?", [request.asset_id]);
+    const note = `[ดำเนินการจำหน่ายแล้ว] คำขอ #${request.id} ${disposalMethodLabel(request.disposal_method)} วันที่ ${input.executedOn}${input.documentNo ? ` หลักฐาน ${input.documentNo.trim()}` : ""}${input.proceedsAmount != null ? ` เงินที่ได้รับ ${input.proceedsAmount.toLocaleString("th-TH", { minimumFractionDigits: 2 })} บาท` : ""}`;
+    await insertAssetStatusHistory({ assetId: request.asset_id, fromStatus: asset?.current_status ?? null, toStatus: asset?.current_status ?? "Disposed", note, changedByUserId: input.userId, changedBy: input.userName });
+    return { assetId: request.asset_id, facilityId: Number(request.facility_id), note };
+  });
+}
+
+/** Approved disposals whose actual sale/transfer/destruction has not been recorded yet. */
+export async function listAwaitingExecution(facilityIds?: number[], limit = 200): Promise<DisposalRequest[]> {
+  if (facilityIds && facilityIds.length === 0) return [];
+  const scope = facilityIds ? ` AND r.facility_id IN (${facilityIds.map(() => "?").join(",")})` : "";
+  try {
+    const rows = await selectRows<RequestRow>(
+      `${REQUEST_SELECT} WHERE r.status = 'Approved' AND r.request_type = 'Disposed' AND r.executed_on IS NULL${scope}
+       ORDER BY r.decided_at, r.id LIMIT ${Math.min(Math.max(Math.floor(limit), 1), 1000)}`,
+      facilityIds ?? []
+    );
+    return rows.map(toRequest);
+  } catch (error) {
+    if (isMissingSchemaError(error)) return [];
+    throw error;
+  }
+}
+
 export async function cancelDisposalRequest(input: { requestId: number; userId: number; userName: string; canCancelOthers: boolean }) {
   await ensureAssetStatusHistoryTable();
   return withTransaction(async () => {
@@ -244,4 +335,74 @@ export async function listDisposalRequests(filter: { facilityIds?: number[]; sta
     if (isMissingSchemaError(error)) return { rows: [], schemaReady: false };
     throw error;
   }
+}
+
+/** Rows for the disposal documents: pending requests, or approvals decided within a fiscal year. */
+export async function listDisposalReportRows(filter: { kind: "pending" | "annual"; facilityIds?: number[]; fiscalYear?: number }): Promise<{ rows: DisposalReportRow[]; schemaReady: boolean }> {
+  if (filter.facilityIds && filter.facilityIds.length === 0) return { rows: [], schemaReady: true };
+  const conditions = [filter.kind === "pending" ? "r.status = 'Pending'" : "r.status = 'Approved'"];
+  const values: unknown[] = [];
+  if (filter.kind === "annual" && filter.fiscalYear) {
+    const range = fiscalYearRange(filter.fiscalYear);
+    conditions.push("r.decided_at BETWEEN ? AND ?");
+    values.push(`${range.start} 00:00:00`, `${range.end} 23:59:59`);
+  }
+  if (filter.facilityIds) {
+    conditions.push(`r.facility_id IN (${filter.facilityIds.map(() => "?").join(",")})`);
+    values.push(...filter.facilityIds);
+  }
+  type Row = RequestRow & { asset_purchase_date: Date | string | null; asset_installed_at: Date | string | null };
+  let rows: Row[];
+  try {
+    rows = await selectRows<Row>(
+      `SELECT r.*, a.asset_name, a.asset_registration_no, a.current_status, a.purchase_date AS asset_purchase_date, a.installed_at AS asset_installed_at, hf.name AS facility_name
+       FROM asset_disposal_requests r
+       JOIN information_assets a ON a.id = r.asset_id
+       LEFT JOIN health_facilities hf ON hf.id = r.facility_id
+       WHERE ${conditions.join(" AND ")}
+       ORDER BY hf.name, r.${filter.kind === "pending" ? "requested_at" : "decided_at"}, r.id
+       LIMIT 5000`,
+      values
+    );
+  } catch (error) {
+    if (isMissingSchemaError(error)) return { rows: [], schemaReady: false };
+    throw error;
+  }
+  const prefixes = new Map<number, string | null>();
+  if (rows.length) {
+    try {
+      const ids = [...new Set(rows.map((row) => row.asset_id))];
+      const found = await selectRows<RowDataPacket & { id: number; asset_code_prefix: string | null }>(
+        `SELECT id, asset_code_prefix FROM information_assets WHERE id IN (${ids.map(() => "?").join(",")})`,
+        ids
+      );
+      for (const row of found) prefixes.set(row.id, row.asset_code_prefix);
+    } catch (error) {
+      if (!isMissingSchemaError(error)) throw error;
+    }
+  }
+  return {
+    schemaReady: true,
+    rows: rows.map((row) => {
+      const request = toRequest(row);
+      return {
+        id: request.id,
+        assetNumber: formatAssetNumber(prefixes.get(row.asset_id), row.asset_registration_no) || "-",
+        assetName: request.assetName,
+        acquiredOn: dateOnly(row.asset_purchase_date) || dateOnly(row.asset_installed_at),
+        requestType: request.requestType,
+        disposalMethod: request.disposalMethod,
+        reason: [request.reason, request.factFindingNote && `ผลการสอบหาข้อเท็จจริง: ${request.factFindingNote}`].filter(Boolean).join("\n"),
+        purchasePrice: request.purchasePrice,
+        bookValue: request.bookValue,
+        requestedBy: request.requestedBy,
+        requestedAt: request.requestedAt,
+        decidedAt: request.decidedAt,
+        approvalDocumentNo: request.approvalDocumentNo,
+        executedOn: request.executedOn,
+        executionDocumentNo: request.executionDocumentNo,
+        proceedsAmount: request.proceedsAmount,
+      };
+    }),
+  };
 }

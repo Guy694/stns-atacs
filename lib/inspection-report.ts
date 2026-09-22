@@ -1,8 +1,12 @@
 import { assetStatusLabel } from "@/lib/asset-status";
 import {
   appendSignatures,
+  committeeOrderText,
+  foundLocationText,
+  isFoundElsewhere,
   itemCategory,
   itemLocation,
+  registeredLocation,
   sheetStyle as style,
   thaiDate,
   type SheetItem,
@@ -14,7 +18,7 @@ import { safeSheetName, writeWorkbook, type Cell, type CellStyle } from "@/lib/x
  * Annual inspection result (รายงานผลการตรวจสอบพัสดุประจำปี): counts and value by category and outcome,
  * plus the items the committee should put forward for disposal or loss (broken, deteriorated/unused, not found).
  */
-export type ReportItem = SheetItem & { inspectionAssetStatus?: string; conditionNote?: string; checkedAt?: string };
+export type ReportItem = SheetItem & { inspectionAssetStatus?: string; conditionNote?: string; checkedAt?: string; checkedBy?: string };
 export type Outcome = "usable" | "broken" | "unused" | "missing" | "pending";
 
 export const OUTCOME_LABELS: Record<Outcome, string> = {
@@ -63,6 +67,8 @@ export function summarizeInspection(items: ReportItem[]) {
     rows: rows.map((row) => ({ ...row, value: round(row.value) })),
     totals: { ...totals, value: round(totals.value) },
     proposed,
+    // Found somewhere other than the register says — the register may need a transfer/update.
+    moved: items.filter((item) => isFoundElsewhere(item)),
   };
 }
 
@@ -92,7 +98,8 @@ export function buildInspectionReportWorkbook(items: ReportItem[], meta: ReportM
   if (meta.roundStatus !== "Closed") full("ฉบับร่าง — รอบตรวจนับยังไม่ปิด ตัวเลขอาจเปลี่ยนแปลง", { ...style.note, color: "C00000" });
   rows.push([]);
   const period = [thaiDate(meta.startDate), thaiDate(meta.endDate)].filter(Boolean).join(" ถึง ");
-  para(`คณะกรรมการตรวจสอบพัสดุได้ดำเนินการตรวจสอบพัสดุ${period ? ` ระหว่างวันที่ ${period}` : ""} จำนวนทั้งสิ้น ${summary.totals.total.toLocaleString("th-TH")} รายการ มูลค่ารวม ${summary.totals.value.toLocaleString("th-TH", { minimumFractionDigits: 2 })} บาท ผลการตรวจสอบปรากฏดังนี้`, 36);
+  const order = committeeOrderText(meta);
+  para(`${order ? `${order} ` : ""}คณะกรรมการตรวจสอบพัสดุได้ดำเนินการตรวจสอบพัสดุ${period ? ` ระหว่างวันที่ ${period}` : ""} จำนวนทั้งสิ้น ${summary.totals.total.toLocaleString("th-TH")} รายการ มูลค่ารวม ${summary.totals.value.toLocaleString("th-TH", { minimumFractionDigits: 2 })} บาท ผลการตรวจสอบปรากฏดังนี้`, order ? 52 : 36);
   rows.push([]);
 
   const header = ["ประเภทครุภัณฑ์", "", "จำนวน (รายการ)", "มูลค่าการได้มา (บาท)", ...OUTCOMES.map((o) => OUTCOME_LABELS[o]), ""];
@@ -120,7 +127,9 @@ export function buildInspectionReportWorkbook(items: ReportItem[], meta: ReportM
   para(`1. พัสดุอยู่ในสภาพใช้งานได้ ${c.usable.toLocaleString("th-TH")} รายการ`);
   para(`2. พัสดุชำรุด ${c.broken.toLocaleString("th-TH")} รายการ และเสื่อมสภาพหรือไม่จำเป็นต้องใช้ในหน่วยงาน ${c.unused.toLocaleString("th-TH")} รายการ เห็นควรพิจารณาดำเนินการจำหน่ายตามระเบียบกระทรวงการคลังว่าด้วยการจัดซื้อจัดจ้างและการบริหารพัสดุภาครัฐ พ.ศ. 2560`, 36);
   para(`3. พัสดุที่ตรวจไม่พบ ${c.missing.toLocaleString("th-TH")} รายการ เห็นควรพิจารณาแต่งตั้งคณะกรรมการสอบหาข้อเท็จจริงก่อนดำเนินการตามระเบียบ`, 36);
-  if (c.pending) para(`4. พัสดุที่ยังไม่ได้ตรวจสอบ ${c.pending.toLocaleString("th-TH")} รายการ`);
+  let next = 4;
+  if (summary.moved.length) para(`${next++}. พัสดุที่พบต่างจากกลุ่มงาน/สถานที่ในทะเบียน ${summary.moved.length.toLocaleString("th-TH")} รายการ เห็นควรปรับปรุงทะเบียนหรือดำเนินการโอนย้ายให้ถูกต้อง (รายละเอียดในแผ่นงาน “พบต่างสถานที่”)`, 36);
+  if (c.pending) para(`${next++}. พัสดุที่ยังไม่ได้ตรวจสอบ ${c.pending.toLocaleString("th-TH")} รายการ`);
   para("รายละเอียดรายการที่เสนอให้พิจารณาอยู่ในแผ่นงาน “รายการชำรุด-ไม่พบ”", 20);
   rows.push([], []);
   appendSignatures(rows, merges, heights, meta.committee);
@@ -159,7 +168,7 @@ export function buildInspectionReportWorkbook(items: ReportItem[], meta: ReportM
       { v: item.purchasePrice, s: style.money },
       { v: OUTCOME_LABELS[itemOutcome(item)], s: style.center },
       { v: assetStatusLabel(item.currentStatus), s: style.center },
-      { v: itemLocation(item), s: style.small },
+      { v: isFoundElsewhere(item) ? `${registeredLocation(item)}\nพบที่: ${foundLocationText(item)}` : itemLocation(item), s: style.small },
       { v: item.conditionNote ?? "", s: style.small },
     ]);
   });
@@ -181,5 +190,46 @@ export function buildInspectionReportWorkbook(items: ReportItem[], meta: ReportM
     footer: "&Cหน้า &P / &N",
   };
 
-  return { buffer: writeWorkbook([summarySheet, detailSheet]), summary };
+  // ── Sheet 3: items found in a different work group / place than the register ──
+  const mrows: Cell[][] = [];
+  const mmerges: string[] = [];
+  const mheights: Record<number, number> = {};
+  const mfull = (value: string, s: CellStyle, height?: number) => {
+    mrows.push([{ v: value, s }, ...Array.from({ length: 7 }, () => ({ s }))]);
+    mmerges.push(`A${mrows.length}:H${mrows.length}`);
+    if (height) mheights[mrows.length] = height;
+  };
+  mfull(`รายการพัสดุที่พบต่างจากกลุ่มงาน/สถานที่ในทะเบียน — ${meta.roundName}`, style.title, 24);
+  mfull(meta.facilityName + (meta.workGroupName ? ` · ${meta.workGroupName}` : ""), style.subtitle, 20);
+  mrows.push([]);
+  mrows.push(["ลำดับที่", "เลขครุภัณฑ์", "รายการ", "กลุ่มงาน/ที่ตั้งในทะเบียน", "พบที่", "สภาพ", "ผู้ตรวจ", "หมายเหตุ"].map((v) => ({ v, s: style.header })));
+  const movedHeader = mrows.length;
+  mheights[movedHeader] = 30;
+  summary.moved.forEach((item, index) => {
+    mrows.push([
+      { v: index + 1, s: style.center },
+      { v: item.assetNumber || item.assetRegistrationNo, s: style.text },
+      { v: item.assetName, s: style.wrapText },
+      { v: registeredLocation(item), s: style.small },
+      { v: foundLocationText(item), s: { ...style.small, bold: true } },
+      { v: assetStatusLabel(item.inspectionAssetStatus || item.currentStatus), s: style.center },
+      { v: item.checkedBy ?? "", s: style.small },
+      { v: item.conditionNote ?? "", s: style.small },
+    ]);
+  });
+  if (!summary.moved.length) {
+    mrows.push([{ v: "ไม่มีรายการที่พบต่างจากทะเบียน", s: style.center }, ...Array.from({ length: 7 }, () => ({ s: style.center }))]);
+    mmerges.push(`A${mrows.length}:H${mrows.length}`);
+  }
+  const movedSheet = {
+    name: safeSheetName("พบต่างสถานที่", used),
+    rows: mrows, merges: mmerges, rowHeights: mheights,
+    cols: [7, 26, 36, 28, 28, 12, 18, 24],
+    freezeRows: movedHeader,
+    printTitleRows: [movedHeader, movedHeader] as [number, number],
+    landscape: true,
+    footer: "&Cหน้า &P / &N",
+  };
+
+  return { buffer: writeWorkbook([summarySheet, detailSheet, movedSheet]), summary };
 }

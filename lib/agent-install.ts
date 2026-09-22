@@ -1,4 +1,5 @@
-export const AGENT_INSTALL_API_BASE_URL = "https://stns-atacs.vercel.app";
+// Public URL the agents call. Set NEXT_PUBLIC_APP_URL at build time when the app is not on Vercel.
+export const AGENT_INSTALL_API_BASE_URL = (process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://stns-atacs.vercel.app").replace(/\/+$/, "");
 export const AGENT_INSTALL_KEY_PLACEHOLDER = "<INSTALL_KEY>";
 
 function powerShellSingleQuote(value: string) {

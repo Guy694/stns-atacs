@@ -6,6 +6,10 @@ type ScanAssetPageProps = {
   params: Promise<{ id: string }>;
 };
 
+/**
+ * Target of the QR sticker. Nothing about the asset is shown without signing in: anonymous visitors go to
+ * the login page and come back to the asset (with its check-in panel) afterwards.
+ */
 export default async function ScanAssetPage({ params }: ScanAssetPageProps) {
   const { id } = await params;
   const assetId = Number(id);
@@ -18,7 +22,7 @@ export default async function ScanAssetPage({ params }: ScanAssetPageProps) {
   const user = await getCurrentUser();
 
   if (!user) {
-    redirect(`/login?next=${encodeURIComponent(target)}&notice=${encodeURIComponent("กรุณาเข้าสู่ระบบก่อนแก้ไขข้อมูลทรัพย์สิน")}`);
+    redirect(`/login?next=${encodeURIComponent(target)}&notice=${encodeURIComponent("กรุณาเข้าสู่ระบบก่อนสแกนตรวจนับหรือดูข้อมูลครุภัณฑ์")}`);
   }
 
   redirect(target);

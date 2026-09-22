@@ -44,6 +44,11 @@ const IMPORT_HEADERS = [
   "useful_life_years",
   "asset_code_prefix",
   "asset_accounting_code",
+  "funding_source",
+  "acquisition_method",
+  "vendor_name",
+  "warranty_end_date",
+  "unit_name",
 ];
 
 const IMPORT_SAMPLE_ROWS = [
@@ -80,6 +85,11 @@ const IMPORT_SAMPLE_ROWS = [
     "",
     "สสจ.",
     "110000490204",
+    "Budget",
+    "EMarket",
+    "บริษัท ตัวอย่าง จำกัด",
+    "2029-01-14",
+    "เครื่อง",
   ],
 ];
 
@@ -180,6 +190,11 @@ export async function GET(req: NextRequest) {
     asset.usefulLifeYears ?? "",
     asset.assetCodePrefix,
     asset.assetAccountingCode,
+    asset.fundingSource,
+    asset.acquisitionMethod,
+    asset.vendorName,
+    asset.warrantyEndDate,
+    asset.unitName,
   ]);
 
   const today = new Date().toISOString().slice(0, 10);

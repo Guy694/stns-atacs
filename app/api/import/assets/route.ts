@@ -71,6 +71,8 @@ const COLUMN_FIELDS = {
   maintenance_start_date: "maintenanceStartDate", maintenance_end_date: "maintenanceEndDate", installed_at: "installedAt",
   useful_life_years: "usefulLifeYears",
   asset_code_prefix: "assetCodePrefix", asset_accounting_code: "assetAccountingCode",
+  funding_source: "fundingSource", acquisition_method: "acquisitionMethod", vendor_name: "vendorName",
+  warranty_end_date: "warrantyEndDate", unit_name: "unitName",
 } as const;
 
 function buildInput(row: ImportRow, surveyId: number, workGroupId: number | undefined, updatedBy: string, existingRow?: ExistingAssetRow): AssetInput {
@@ -86,7 +88,7 @@ function buildInput(row: ImportRow, surveyId: number, workGroupId: number | unde
   }
   fields.subtypeId = optionalCell(row, "subtype_id");
   if (fields.subtypeId === "__CLEAR__") fields.subtypeId = "";
-  for (const key of ["usefulLifeYears", "assetCodePrefix", "assetAccountingCode"] as const) if (fields[key] === "__CLEAR__") fields[key] = "";
+  for (const key of ["usefulLifeYears", "assetCodePrefix", "assetAccountingCode", "fundingSource", "acquisitionMethod", "vendorName", "warrantyEndDate", "unitName"] as const) if (fields[key] === "__CLEAR__") fields[key] = "";
   for (const column of DETAIL_COLUMNS) {
     const value = optionalCell(row, column);
     fields[`detail_${column}`] = value === "__CLEAR__" ? "" : value;

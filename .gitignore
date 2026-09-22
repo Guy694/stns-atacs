@@ -39,3 +39,11 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# docker
+/docker/initdb/*.sql
+/docker/initdb/*.sql.gz
+
+# runtime data (asset photos, nightly backups)
+/storage/
+/backups/

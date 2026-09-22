@@ -1,0 +1,21 @@
+# SITE_ADDRESS examples:
+#   atacs.example.go.th   → HTTPS with an automatic Let's Encrypt certificate (ports 80/443 open to the internet)
+#   :80                   → plain HTTP inside the hospital network (then set AUTH_COOKIE_SECURE=false)
+{$SITE_ADDRESS}
+
+encode gzip zstd
+
+# Everything (including asset photos under /uploads/assets/, which require login) goes to the app.
+handle {
+	reverse_proxy app:3000
+}
+
+request_body {
+	max_size 20MB
+}
+
+header {
+	X-Content-Type-Options nosniff
+	Referrer-Policy strict-origin-when-cross-origin
+	-Server
+}

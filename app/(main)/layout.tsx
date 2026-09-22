@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 import { MainNavbar } from "@/app/_components/main-navbar";
 import { Sidebar } from "@/app/_components/sidebar";
 import { IdleLogoutGuard } from "@/app/_components/idle-logout-guard";
+import { SplashScreen } from "@/app/_components/splash-screen";
+import { SPLASH_SEEN_SCRIPT } from "@/lib/splash";
 import { getMenuVisibility } from "@/lib/app-settings";
 import { getCurrentUser } from "@/lib/auth";
 import { getFacilityAgentContext } from "@/lib/facility-work-groups";
@@ -40,6 +42,9 @@ export default async function MainLayout({ children }: { children: React.ReactNo
 
   return (
     <div className="app-shell flex min-h-screen bg-[var(--background)]">
+      <SplashScreen />
+      {/* Must follow the splash: hides it before first paint when this session has already seen it. */}
+      <script dangerouslySetInnerHTML={{ __html: SPLASH_SEEN_SCRIPT }} />
       <IdleLogoutGuard />
       <Sidebar
         user={user}

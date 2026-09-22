@@ -6,6 +6,7 @@ import type { RowDataPacket } from "mysql2/promise";
 import { cookies } from "next/headers";
 
 import { executeStatement, selectRows } from "@/lib/mysql";
+import { secureCookiesEnabled } from "@/lib/cookie-security";
 
 const SESSION_COOKIE_NAME = "atacs_session";
 const REGISTRATION_COOKIE_NAME = "atacs_registration_claim";
@@ -456,7 +457,7 @@ async function setPendingRegistrationClaim(claim: RegistrationClaim) {
   cookieStore.set(REGISTRATION_COOKIE_NAME, token, {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure: secureCookiesEnabled(),
     path: "/",
     maxAge: 10 * 60,
   });
@@ -624,7 +625,7 @@ export async function createSession(userId: number) {
   cookieStore.set(SESSION_COOKIE_NAME, sessionToken, {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure: secureCookiesEnabled(),
     path: "/",
     expires: cookieExpiresAt,
   });

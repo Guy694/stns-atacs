@@ -9,10 +9,12 @@ import { redirect } from "next/navigation";
 import type { RowDataPacket } from "mysql2/promise";
 
 import { parseAssetFields, type AssetFields } from "@/lib/asset-input";
+import { isMissingSchemaError } from "@/lib/schema-errors";
 import { getCurrentUser } from "@/lib/auth";
 import { recordAssetStatusHistory } from "@/lib/asset-status-history";
 import { createAsset, deleteAsset, findOrCreateSurvey, getAssetById, updateAsset, type AssetInput, type AssetWithFacility } from "@/lib/assets";
 import { writeAuditLog } from "@/lib/audit";
+import { assetImageDir, assetImageUrl } from "@/lib/upload-storage";
 import { selectRows } from "@/lib/mysql";
 import { canManageAssetRecord, canMutateAssets } from "@/lib/permissions";
 import { hasPermission } from "@/lib/role-permissions";
@@ -62,14 +64,15 @@ async function storeAssetImage(file: File, slot: 1 | 2) {
     throw new Error("รูปภาพต้องมีขนาดไม่เกิน 5MB ต่อภาพ");
   }
 
-  const uploadDir = path.join(process.cwd(), "public", "uploads", "assets");
+  // Stored outside public/ and served by app/uploads/assets/[file] (login + facility check).
+  const uploadDir = assetImageDir();
   await mkdir(uploadDir, { recursive: true });
 
   const filename = `asset-${Date.now()}-${slot}-${randomUUID()}.${extension}`;
   const bytes = Buffer.from(await file.arrayBuffer());
   await writeFile(path.join(uploadDir, filename), bytes);
 
-  return `/uploads/assets/${filename}`;
+  return assetImageUrl(filename);
 }
 
 async function buildAssetImageUrls(fd: FormData, currentAsset?: AssetWithFacility | null) {
@@ -159,6 +162,11 @@ async function validateAssetBusinessRules(input: AssetFormInput, assetId?: numbe
   }
 }
 
+function assetErrorMessage(err: unknown) {
+  if (isMissingSchemaError(err)) return "ฐานข้อมูลยังไม่รองรับข้อมูลบางช่อง (เช่น แหล่งเงิน วิธีได้มา ผู้ขาย ประกัน หน่วยนับ) กรุณาให้ผู้ดูแลระบบรัน database/add_registry_completeness.sql หรือเว้นช่องเหล่านี้ว่างไว้ก่อน";
+  return err instanceof Error ? err.message : "เกิดข้อผิดพลาด กรุณาลองใหม่";
+}
+
 async function buildInput(fd: FormData, updaterName: string, currentAsset?: AssetWithFacility): Promise<AssetFormInput> {
   const facilityId = Number(fd.get("facilityId"));
   if (!Number.isSafeInteger(facilityId) || facilityId <= 0) throw new Error("กรุณาเลือกหน่วยงาน");
@@ -201,7 +209,7 @@ export async function createAssetAction(_prev: string | null, fd: FormData): Pro
     revalidatePath("/assets");
     revalidatePath("/");
   } catch (err) {
-    return err instanceof Error ? err.message : "เกิดข้อผิดพลาด กรุณาลองใหม่";
+    return assetErrorMessage(err);
   }
   return null;
 }
@@ -240,7 +248,7 @@ export async function updateAssetAction(_prev: string | null, fd: FormData): Pro
     revalidatePath("/");
     revalidatePath(`/facilities/${input.facilityId}`);
   } catch (err) {
-    return err instanceof Error ? err.message : "เกิดข้อผิดพลาด กรุณาลองใหม่";
+    return assetErrorMessage(err);
   }
   return null;
 }

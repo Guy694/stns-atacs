@@ -7,8 +7,11 @@ import { getFacilityById } from "@/lib/assets";
 import { buildDashboardAccessScope } from "@/lib/dashboard-access";
 import { CategoryBars, compactBaht, DistrictColumns, DistrictComparison, hrefWith as hrefFor, numberFormat, Panel, percent, baht, StatTile, StatusDonut } from "@/app/_components/asset-overview-charts";
 import { buildDashboardSummary, readDashboardFilters } from "@/lib/dashboard-summary";
-import { formatThaiDateTime } from "@/lib/date-format";
+import { formatThaiDate, formatThaiDateTime } from "@/lib/date-format";
 import { DashboardFilters } from "@/app/_components/dashboard-filters";
+import { InspectionProgressPanel, WorkQueuePanel } from "@/app/_components/work-panels";
+import { fiscalYearOf } from "@/lib/asset-valuation";
+import { getInspectionProgress, getWorkQueue } from "@/lib/dashboard-work";
 
 type Props = { searchParams: Promise<Record<string, string | string[] | undefined>> };
 
@@ -38,6 +41,21 @@ export default async function DashboardPage({ searchParams }: Props) {
     if (status) query.set("status", status);
     return `/assets${query.size ? `?${query}` : ""}`;
   };
+  // Inspection progress and the work queue follow the same facility scope as the KPIs above.
+  const progressFacilities = summary.facilityOptions.filter((f) => !filters.facility || String(f.id) === filters.facility);
+  const facilityIds = user.role === "admin" && !filters.district && !filters.facility ? null : progressFacilities.map((f) => f.id);
+  const inspectionYear = filters.fy ? Number(filters.fy) : fiscalYearOf(new Date().toISOString().slice(0, 10));
+  const [progress, queue] = await Promise.all([
+    getInspectionProgress(inspectionYear, progressFacilities, facilityIds),
+    getWorkQueue(facilityIds),
+  ]);
+  const coverageHref = (facilityId?: number) => {
+    const query = new URLSearchParams({ fy: String(inspectionYear) });
+    if (facilityId || filters.facility) query.set("facility", String(facilityId ?? filters.facility));
+    else if (filters.district) query.set("district", filters.district);
+    return `/inspection/coverage?${query}`;
+  };
+
   const describe = [filters.fy && `ได้มาในปีงบประมาณ ${filters.fy}`, categoryLabel].filter(Boolean).join(" · ");
 
   return (
@@ -49,6 +67,9 @@ export default async function DashboardPage({ searchParams }: Props) {
           <p className="mt-1 text-sm text-[var(--muted)]">{scopeLabel}{describe ? ` · ${describe}` : ""} · ข้อมูล ณ {formatThaiDateTime(new Date())}</p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Link href={`/data-quality${filters.facility ? `?facility=${filters.facility}` : filters.district ? `?district=${encodeURIComponent(filters.district)}` : ""}`} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[var(--line)] bg-white px-4 text-sm font-medium text-[var(--foreground)] transition hover:bg-[var(--primary-soft)]">
+            <AppIcon name="check" className="h-4 w-4" /> ความครบถ้วนข้อมูล
+          </Link>
           <Link href="/dashboard/it" className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[var(--line)] bg-white px-4 text-sm font-medium text-[var(--foreground)] transition hover:bg-[var(--primary-soft)]">
             <AppIcon name="monitor" className="h-4 w-4" /> แดชบอร์ด IT
           </Link>
@@ -95,6 +116,17 @@ export default async function DashboardPage({ searchParams }: Props) {
           unit={cost.unit}
           detail={<>{baht(summary.totalCost)} บาท · มีราคา {numberFormat.format(summary.priced)} จาก {numberFormat.format(summary.total)} รายการ</>}
         />
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+        <Panel id="inspection-progress" title={`ความคืบหน้าการตรวจนับประจำปีงบประมาณ ${inspectionYear}`}
+          subtitle={`ครุภัณฑ์ที่ยังอยู่ในทะเบียน เทียบกับรอบตรวจนับที่เริ่มระหว่าง ${formatThaiDate(progress.range.start)} – ${formatThaiDate(progress.range.end)}`}
+          action={<Link href="/inspection" className="text-xs font-medium text-[var(--primary-text)] underline">ไปที่ตรวจนับ</Link>}>
+          <InspectionProgressPanel progress={progress} coverageHref={coverageHref} />
+        </Panel>
+        <Panel id="work-queue" title="งานรอดำเนินการ" subtitle="เรื่องที่ต้องติดตามในขอบเขตที่เลือก">
+          <WorkQueuePanel queue={queue} />
+        </Panel>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">

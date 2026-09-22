@@ -6,6 +6,7 @@ import { StatusBadge } from "@/app/_components/ui/status-badge";
 import { getCurrentUser } from "@/lib/auth";
 import { formatThaiDate } from "@/lib/date-format";
 import { listInspections } from "@/lib/inspection";
+import { inspectionDeadline } from "@/lib/inspection-progress";
 import { listFacilities } from "@/lib/assets";
 import { getFacilityScopeId } from "@/lib/facility-scope";
 import { canManageFacility } from "@/lib/permissions";
@@ -78,14 +79,19 @@ export default async function InspectionPage({
             เปิดรอบตรวจนับตามช่วงวันที่ และติดตามรายการที่ตรวจแล้วกับรายการคงเหลือของแต่ละหน่วยบริการ
           </p>
         </div>
-        {canMutate && view !== "new" && (
-          <Link
-            href="/inspection?view=new"
-            className="primary-action"
-          >
-            + เริ่มรอบตรวจนับใหม่
+        <div className="flex flex-wrap gap-2">
+          <Link href="/inspection/coverage" className="inline-flex min-h-11 items-center rounded-xl border border-[var(--line)] bg-white px-4 text-sm font-medium hover:bg-[var(--primary-soft)]">
+            ความครอบคลุมประจำปี
           </Link>
-        )}
+          {canMutate && view !== "new" && (
+            <Link
+              href="/inspection?view=new"
+              className="primary-action"
+            >
+              + เริ่มรอบตรวจนับใหม่
+            </Link>
+          )}
+        </div>
       </div>
 
       {!canMutate && (
@@ -199,6 +205,15 @@ export default async function InspectionPage({
                         ) : (
                           <StatusBadge tone="warning">คงเหลือ {ins.remainingItems.toLocaleString("th-TH")}</StatusBadge>
                         )}
+                        {(() => {
+                          const deadline = inspectionDeadline({ startDate: ins.startDate || ins.inspectedAt, roundStatus: ins.roundStatus });
+                          if (deadline.state === "closed" || !deadline.dueDate) return null;
+                          return (
+                            <p className={`mt-1 text-xs ${deadline.state === "overdue" ? "font-semibold text-rose-700" : deadline.state === "due-soon" ? "text-amber-700" : "text-[var(--muted)]"}`}>
+                              ส่งรายงานภายใน {formatThaiDate(deadline.dueDate)}{deadline.state === "overdue" ? " (เกินกำหนด)" : ""}
+                            </p>
+                          );
+                        })()}
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">

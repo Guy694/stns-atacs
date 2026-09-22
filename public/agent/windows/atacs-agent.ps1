@@ -11,7 +11,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$script:AgentVersion = "1.0.1"
+$script:AgentVersion = "1.1.0"
 
 function Enable-TlsForLegacyPowerShell {
     try {
@@ -260,6 +260,23 @@ try {
     $payload = Get-InventoryPayload
     $result = Send-Inventory -Config $config -Payload $payload
     Write-Host "Inventory report sent successfully. DeviceId=$($result.deviceId) AssetId=$($result.linkedAssetId)"
+
+    # The server announces its current address after a move (e.g. Vercel -> own server); follow it once.
+    if ($result -and $result.apiBaseUrl) {
+        $newBase = Normalize-ApiBaseUrl -BaseUrl ([string]$result.apiBaseUrl)
+        if ($newBase -match '^https?://' -and $newBase -ne (Normalize-ApiBaseUrl -BaseUrl ([string]$config.apiBaseUrl))) {
+            if ($config -is [hashtable]) {
+                $updated = $config.Clone()
+            }
+            else {
+                $updated = @{}
+                foreach ($property in $config.PSObject.Properties) { $updated[$property.Name] = $property.Value }
+            }
+            $updated["apiBaseUrl"] = $newBase
+            Save-Config -Path $ConfigPath -Config $updated
+            Write-Host "Server address changed; apiBaseUrl updated to $newBase"
+        }
+    }
 }
 catch {
     Write-Error $_

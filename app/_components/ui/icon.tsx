@@ -26,7 +26,9 @@ export type IconName =
   | "shield"
   | "tag"
   | "users"
-  | "wrench";
+  | "wrench"
+  | "repeat"
+  | "printer";
 
 type AppIconProps = SVGProps<SVGSVGElement> & {
   name: IconName;
@@ -34,6 +36,8 @@ type AppIconProps = SVGProps<SVGSVGElement> & {
 };
 
 const PATHS: Record<IconName, ReactNode> = {
+  repeat: <><path d="m17 2 4 4-4 4" /><path d="M3 11v-1a4 4 0 0 1 4-4h14" /><path d="m7 22-4-4 4-4" /><path d="M21 13v1a4 4 0 0 1-4 4H3" /></>,
+  printer: <><path d="M6 9V2h12v7" /><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" /><rect x="6" y="14" width="12" height="8" /></>,
   wrench: <path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.4-.6-.6-2.4z" />,
   activity: <polyline points="3 12 7 12 10 5 14 19 17 12 21 12" />,
   archive: <><rect x="3" y="4" width="18" height="4" rx="1" /><path d="M5 8v11h14V8" /><path d="M10 12h4" /></>,

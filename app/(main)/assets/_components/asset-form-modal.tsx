@@ -1,5 +1,6 @@
 "use client";
 
+import { ACQUISITION_METHODS, FUNDING_SOURCES } from "@/lib/acquisition-options";
 import { useActionState, useEffect, useId, useMemo, useRef, useState } from "react";
 
 import { formatAssetNumber } from "@/lib/asset-number";
@@ -615,6 +616,32 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
                     placeholder="เช่น 65-045/2567"
                     className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
                   />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium" htmlFor="fundingSource">แหล่งเงิน</label>
+                  <select id="fundingSource" name="fundingSource" defaultValue={asset?.fundingSource ?? ""} className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]">
+                    <option value="">— ไม่ระบุ —</option>
+                    {FUNDING_SOURCES.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium" htmlFor="acquisitionMethod">วิธีการได้มา</label>
+                  <select id="acquisitionMethod" name="acquisitionMethod" defaultValue={asset?.acquisitionMethod ?? ""} className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]">
+                    <option value="">— ไม่ระบุ —</option>
+                    {ACQUISITION_METHODS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium" htmlFor="unitName">หน่วยนับ</label>
+                  <input id="unitName" name="unitName" maxLength={30} defaultValue={asset?.unitName ?? ""} placeholder="เช่น เครื่อง ตัว ชุด" className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]" />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="block text-sm font-medium" htmlFor="vendorName">ผู้ขาย / ผู้รับจ้าง / ผู้บริจาค</label>
+                  <input id="vendorName" name="vendorName" maxLength={255} defaultValue={asset?.vendorName ?? ""} placeholder="เช่น บริษัท ตัวอย่าง จำกัด" className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium" htmlFor="warrantyEndDate">สิ้นสุดการรับประกัน</label>
+                  <input id="warrantyEndDate" type="date" name="warrantyEndDate" defaultValue={asset?.warrantyEndDate ?? ""} className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]" />
                 </div>
                 <div className="sm:col-span-3">
                   <label className="block text-sm font-medium">อายุการใช้งานสำหรับคิดค่าเสื่อม (ปี)</label>

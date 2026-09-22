@@ -3,6 +3,8 @@
 import type { ReactNode } from "react";
 import Swal from "sweetalert2";
 
+import { resetSplash } from "@/app/_components/splash-screen";
+
 type LogoutConfirmFormProps = {
   buttonClassName: string;
   buttonContent?: ReactNode;
@@ -37,6 +39,7 @@ export function LogoutConfirmForm({ buttonClassName, buttonContent, ariaLabel, t
     });
 
     if (result.isConfirmed) {
+      resetSplash();
       form.submit();
     }
   }

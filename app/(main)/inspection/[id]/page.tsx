@@ -6,6 +6,7 @@ import { StatusBadge } from "@/app/_components/ui/status-badge";
 import { updateInspectionItemAction } from "@/app/(main)/inspection/actions";
 import { DeleteInspectionButton } from "@/app/(main)/inspection/_components/delete-inspection-button";
 import { CommitteeForm } from "@/app/(main)/inspection/_components/committee-form";
+import { inspectionDeadline, INSPECTION_REPORT_WORKING_DAYS } from "@/lib/inspection-progress";
 import { RoundStatusControl } from "@/app/(main)/inspection/_components/round-status-control";
 import { ScanCheckIn } from "@/app/(main)/inspection/_components/scan-check-in";
 import { BulkDisposalForm } from "@/app/(main)/inspection/_components/bulk-disposal-form";
@@ -16,8 +17,9 @@ import { formatThaiDate, formatThaiDateTime } from "@/lib/date-format";
 import { canAccessFacility } from "@/lib/facility-scope";
 import { getInspectionById, getInspectionCommittee, getInspectionItems, type InspectionItem } from "@/lib/inspection";
 import { itemOutcome, OUTCOME_LABELS, OUTCOMES, summarizeInspection } from "@/lib/inspection-report";
-import { filterInspectionItems, inspectionFilterOptions, itemCategory, itemLocation, readInspectionItemFilters, RESULT_OPTIONS } from "@/lib/inspection-sheet";
+import { committeeOrderText, foundLocationText, isFoundElsewhere, registeredLocation, filterInspectionItems, inspectionFilterOptions, itemCategory, itemLocation, readInspectionItemFilters, RESULT_OPTIONS } from "@/lib/inspection-sheet";
 import { canManageFacility, canMutateAssets } from "@/lib/permissions";
+import { listFacilityWorkGroups } from "@/lib/facility-work-groups";
 import { hasPermission } from "@/lib/role-permissions";
 
 type InspectionDetailPageProps = {
@@ -46,7 +48,11 @@ function inspectionStatusTone(status: InspectionItem["inspectionStatus"]) {
   return "warning";
 }
 
-function InspectionItemForm({ item, canMutate }: { item: InspectionItem; canMutate: boolean }) {
+function InspectionItemForm({ item, canMutate, workGroups }: { item: InspectionItem; canMutate: boolean; workGroups: Array<{ id: number; workGroupName: string }> }) {
+  const registeredGroupId = item.registeredWorkGroupId ?? item.workGroupId;
+  const groups = item.workGroupId && !workGroups.some((group) => group.id === item.workGroupId)
+    ? [{ id: item.workGroupId, workGroupName: item.workGroupName || `กลุ่มงาน #${item.workGroupId}` }, ...workGroups]
+    : workGroups;
   const defaultInspectionStatus = item.inspectionStatus === "Pending" ? "Found" : item.inspectionStatus;
   const terminal = isTerminalAssetStatus(item.currentStatus);
   const defaultAssetStatus = terminal ? item.currentStatus : (item.assetStatus && !isTerminalAssetStatus(item.assetStatus) ? item.assetStatus : item.currentStatus || "Active");
@@ -69,7 +75,7 @@ function InspectionItemForm({ item, canMutate }: { item: InspectionItem; canMuta
 
   return (
     <td className="px-4 py-3">
-      <form action={updateInspectionItemAction} className="grid min-w-[420px] gap-2 sm:grid-cols-[110px_130px_minmax(160px,1fr)_auto]">
+      <form action={updateInspectionItemAction} className="grid min-w-[560px] gap-2 sm:grid-cols-[100px_120px_minmax(140px,1fr)_minmax(140px,1fr)_auto]">
         <input type="hidden" name="itemId" value={item.id} />
         <select
           name="inspectionStatus"
@@ -88,6 +94,19 @@ function InspectionItemForm({ item, canMutate }: { item: InspectionItem; canMuta
             <option key={option.value} value={option.value}>{option.label}</option>
           ))}
         </select>
+        <select
+          name="foundWorkGroupId"
+          defaultValue={String(item.foundWorkGroupId ?? registeredGroupId ?? "")}
+          aria-label="พบที่กลุ่มงาน"
+          title="พบที่กลุ่มงาน (ค่าเริ่มต้นตามทะเบียน)"
+          className="min-h-10 min-w-0 rounded-xl border border-black/10 bg-white/85 px-3 py-2 text-xs outline-none focus:border-[var(--accent)]"
+        >
+          <option value="">ไม่ระบุกลุ่มงาน</option>
+          {groups.map((group) => (
+            <option key={group.id} value={group.id}>{group.workGroupName}{group.id === item.workGroupId ? " (ทะเบียน)" : ""}</option>
+          ))}
+        </select>
+        <input type="hidden" name="foundLocation" value={item.foundLocation} />
         <input
           name="conditionNote"
           defaultValue={item.conditionNote}
@@ -129,6 +148,7 @@ export default async function InspectionDetailPage({ params, searchParams }: Ins
   ]);
 
   if (!inspection) notFound();
+  const facilityWorkGroups = (await listFacilityWorkGroups(inspection.facilityId)).map((group) => ({ id: group.id, workGroupName: group.workGroupName }));
   if (!canAccessFacility(user, inspection.facilityId)) {
     redirect("/inspection");
   }
@@ -162,6 +182,8 @@ export default async function InspectionDetailPage({ params, searchParams }: Ins
       const outcome = itemOutcome(item) as "broken" | "unused" | "missing";
       return { assetId: item.assetId, number: item.assetNumber || item.assetRegistrationNo, name: item.assetName, outcome, outcomeLabel: OUTCOME_LABELS[outcome], pendingRequestId: pendingByAsset.get(item.assetId) ?? null };
     });
+  const deadline = inspectionDeadline({ startDate: inspection.startDate || inspection.inspectedAt, roundStatus: inspection.roundStatus });
+  const orderLabel = committeeOrderText(inspection);
   const remaining = items.filter((item) => item.inspectionStatus === "Pending");
   const missing = items.filter((item) => item.inspectionStatus === "Missing");
 
@@ -186,6 +208,11 @@ export default async function InspectionDetailPage({ params, searchParams }: Ins
               <StatusBadge tone="neutral">
                 {inspection.startDate ? formatThaiDate(inspection.startDate) : "-"} - {inspection.endDate ? formatThaiDate(inspection.endDate) : "-"}
               </StatusBadge>
+              {deadline.dueDate && deadline.state !== "closed" && (
+                <StatusBadge tone={deadline.state === "overdue" ? "danger" : deadline.state === "due-soon" ? "warning" : "info"}>
+                  กำหนดส่งรายงาน {formatThaiDate(deadline.dueDate)} ({deadline.daysLeft < 0 ? `เกิน ${(-deadline.daysLeft).toLocaleString("th-TH")} วัน` : `อีก ${deadline.daysLeft.toLocaleString("th-TH")} วัน`})
+                </StatusBadge>
+              )}
             </div>
             <h1 className="section-title mt-2 break-words text-2xl font-semibold text-[var(--foreground)]">
               {inspection.roundName}
@@ -245,7 +272,13 @@ export default async function InspectionDetailPage({ params, searchParams }: Ins
       )}
 
       {canEditResults && inspection.totalItems > 0 && (
-        <ScanCheckIn items={items.map((item) => ({ assetId: item.assetId, number: item.assetNumber, name: item.assetName, status: item.inspectionStatus }))} />
+        <ScanCheckIn
+          inspectionId={inspection.id}
+          workGroups={facilityWorkGroups}
+          items={items
+            .filter((item) => !isTerminalAssetStatus(item.currentStatus))
+            .map((item) => ({ itemId: item.id, assetId: item.assetId, number: item.assetNumber, name: item.assetName, status: item.inspectionStatus, currentStatus: item.currentStatus }))}
+        />
       )}
 
       <section className="glass-panel overflow-hidden rounded-2xl" aria-labelledby="report-heading">
@@ -253,7 +286,7 @@ export default async function InspectionDetailPage({ params, searchParams }: Ins
           <div>
             <h2 id="report-heading" className="font-semibold text-[var(--foreground)]">รายงานผลการตรวจสอบพัสดุ</h2>
             <p className="mt-1 text-xs text-[var(--muted)]">
-              {closed ? "ข้อมูล ณ เวลาปิดรอบ" : "ฉบับร่าง — ปิดรอบก่อนพิมพ์รายงานฉบับจริง"} · สรุปตามประเภทและผลตรวจ พร้อมรายการที่เสนอจำหน่าย/สอบข้อเท็จจริง และช่องลงนามคณะกรรมการ
+              {closed ? "ข้อมูล ณ เวลาปิดรอบ" : "ฉบับร่าง — ปิดรอบก่อนพิมพ์รายงานฉบับจริง"} · สรุปตามประเภทและผลตรวจ พร้อมรายการที่เสนอจำหน่าย/สอบข้อเท็จจริง และช่องลงนามคณะกรรมการ{report.moved.length ? <span className="font-semibold text-amber-800"> · พบต่างจากกลุ่มงาน/ที่ตั้งในทะเบียน {report.moved.length.toLocaleString("th-TH")} รายการ</span> : null}
             </p>
           </div>
           <a href={`/api/export/inspection/${inspection.id}?type=report`} className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl border border-[var(--primary-soft-strong)] bg-[var(--primary-soft)] px-4 text-sm font-semibold text-[var(--primary-text)] hover:bg-[var(--primary-soft-strong)]">
@@ -298,9 +331,9 @@ export default async function InspectionDetailPage({ params, searchParams }: Ins
 
       <section className="glass-panel rounded-2xl p-5" aria-labelledby="committee-heading">
         <h2 id="committee-heading" className="mb-1 font-semibold text-[var(--foreground)]">คณะกรรมการตรวจนับ</h2>
-        <p className="mb-3 text-xs text-[var(--muted)]">พิมพ์เป็นช่องลงนามท้ายใบตรวจนับ Excel</p>
+        <p className="mb-3 text-xs text-[var(--muted)]">พิมพ์เป็นช่องลงนามท้ายใบตรวจนับและรายงานผล · คณะกรรมการรายงานผลต่อหัวหน้าหน่วยงานภายใน {INSPECTION_REPORT_WORKING_DAYS} วันทำการนับจากวันเริ่มตรวจ (ระบบนับเฉพาะวันจันทร์–ศุกร์ ไม่รวมวันหยุดราชการ)</p>
         {committee.schemaReady
-          ? <CommitteeForm inspectionId={inspection.id} members={committee.members} canEdit={canEditResults} />
+          ? <CommitteeForm inspectionId={inspection.id} members={committee.members} canEdit={canEditResults} orderNo={inspection.committeeOrderNo} orderDate={inspection.committeeOrderDate} orderLabel={orderLabel} />
           : <p className="text-sm text-amber-700">ยังไม่ได้เปิดใช้ (ต้องรัน database/add_asset_codes_and_inspection_committee.sql)</p>}
       </section>
 
@@ -417,9 +450,10 @@ export default async function InspectionDetailPage({ params, searchParams }: Ins
                   </td>
                   <td className="px-4 py-3 text-xs text-[var(--muted)]">
                     <p className="text-[var(--foreground)]">{itemCategory(item).label}</p>
-                    <p className="mt-0.5">{itemLocation(item)}</p>
+                    <p className="mt-0.5">{isFoundElsewhere(item) ? <>ทะเบียน: {registeredLocation(item)}</> : itemLocation(item)}</p>
+                    {isFoundElsewhere(item) && <p className="mt-0.5 font-semibold text-amber-800">พบที่: {foundLocationText(item)}</p>}
                   </td>
-                  <InspectionItemForm item={item} canMutate={canEditResults} />
+                  <InspectionItemForm item={item} canMutate={canEditResults} workGroups={facilityWorkGroups} />
                 </tr>
               ))}
             </tbody>

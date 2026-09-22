@@ -3,6 +3,7 @@ import crypto from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 
 import { getGoogleAuthConfig } from "@/lib/google-auth";
+import { secureCookiesEnabled } from "@/lib/cookie-security";
 
 const STATE_COOKIE_NAME = "atacs_google_state";
 const NEXT_COOKIE_NAME = "atacs_google_next";
@@ -34,14 +35,14 @@ export async function GET(req: NextRequest) {
   response.cookies.set(STATE_COOKIE_NAME, state, {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure: secureCookiesEnabled(),
     path: "/",
     maxAge: 10 * 60,
   });
   response.cookies.set(NEXT_COOKIE_NAME, nextPath, {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure: secureCookiesEnabled(),
     path: "/",
     maxAge: 10 * 60,
   });

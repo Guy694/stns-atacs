@@ -15,6 +15,15 @@ import { listTransfers } from "@/lib/asset-transfers";
 import { CAPITALIZATION_THRESHOLD, fiscalYearOf, fiscalYearRange, summarizeValuation, VALUATION_STATUS_LABELS } from "@/lib/asset-valuation";
 import { DISPOSAL_REQUEST_TYPE_LABELS, DISPOSAL_STATUS_LABELS, DISPOSAL_STATUS_TONES, disposalMethodLabel } from "@/lib/disposal-options";
 import { REPAIR_STATUS_LABELS, REPAIR_STATUS_TONES } from "@/lib/repair-options";
+import {
+  buildReplacementPlan,
+  DEFAULT_REPLACEMENT_RULES,
+  repairWindowStart,
+  REPLACEMENT_PRIORITY_LABELS,
+  REPLACEMENT_REASON_LABELS,
+  type ReplacementReason,
+} from "@/lib/replacement-plan";
+import { getPendingDisposalAssetIds, getRepairStats } from "@/lib/replacement-plan-db";
 
 type Props = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -31,6 +40,7 @@ const VIEWS = [
   { key: "type", label: "แยกตามประเภท" },
   { key: "expiring", label: "ใกล้หมดอายุ MA" },
   { key: "broken", label: "ชำรุด / ไม่ใช้งาน" },
+  { key: "replacement", label: "แผนทดแทน" },
   { key: "valuation", label: "มูลค่าและค่าเสื่อมราคา" },
   { key: "repairs", label: "งานซ่อม" },
   { key: "transfers", label: "โอนย้าย" },
@@ -86,6 +96,15 @@ export default async function ReportsPage({ searchParams }: Props) {
     view === "disposal" ? listDisposalRequests({ facilityIds: scopeIds, dateFrom: fyRange.start, dateTo: fyRange.end, limit: 1000 }) : Promise.resolve(null),
   ]);
   const districts = new Set(assets.map((a) => a.districtName)).size;
+  const replacementPlan = view === "replacement"
+    ? await (async () => {
+        const [repairStats, pending] = await Promise.all([
+          getRepairStats(repairWindowStart(todayIso, DEFAULT_REPLACEMENT_RULES.repairWindowYears), scopeIds),
+          getPendingDisposalAssetIds(scopeIds),
+        ]);
+        return buildReplacementPlan(assets.map((a) => ({ ...a, subtypeName: a.extensions[a.assetClass]?.subtypeName })), repairStats, pending, todayIso);
+      })()
+    : null;
 
   // ── by facility ──────────────────────────────────────────────────────
   const byFacility = Object.values(
@@ -409,6 +428,84 @@ export default async function ReportsPage({ searchParams }: Props) {
                   ))}
                 </tbody>
               </table>
+            </div>
+          )}
+        </div>
+      )}
+      {/* ── View: replacement plan ─────────────────────────────────────── */}
+      {view === "replacement" && replacementPlan && (
+        <div className="glass-panel overflow-hidden rounded-2xl">
+          <div className="flex flex-col gap-3 border-b border-black/6 px-5 py-4 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="font-semibold">
+                แผนการจัดหาครุภัณฑ์ทดแทน ปีงบประมาณ {currentFiscalYear + 1}
+                <span className="ml-2 text-sm font-normal text-[var(--muted)]">{replacementPlan.items.length.toLocaleString("th-TH")} รายการ</span>
+              </p>
+              <p className="mt-1 text-xs text-[var(--muted)]">
+                เกณฑ์: ชำรุด · ตัดค่าเสื่อมครบหรือใช้งานเกินอายุ · ซ่อม {DEFAULT_REPLACEMENT_RULES.repairCountMin} ครั้งขึ้นไปใน {DEFAULT_REPLACEMENT_RULES.repairWindowYears} ปี · ค่าซ่อมสะสม ≥ {Math.round(DEFAULT_REPLACEMENT_RULES.repairCostRatio * 100)}% ของราคาทุน · ไม่ใช้งาน
+                — คะแนนรวมกำหนดความเร่งด่วน งบประมาณประมาณการจากราคาทุนเดิม
+              </p>
+            </div>
+            <a href={`/api/export/replacement${scopedFacilityId ? `?facilityId=${scopedFacilityId}` : ""}`}
+              className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl border border-[var(--primary-soft-strong)] bg-[var(--primary-soft)] px-4 text-sm font-semibold text-[var(--primary-text)] hover:bg-[var(--primary-soft-strong)]">
+              <AppIcon name="download" className="h-4 w-4" /> แผนทดแทน Excel
+            </a>
+          </div>
+          <div className="grid gap-3 border-b border-black/6 p-5 sm:grid-cols-3">
+            {(["High", "Medium", "Low"] as const).map((priority) => (
+              <div key={priority} className="rounded-xl border border-black/6 bg-white/70 p-4">
+                <p className="text-xs text-[var(--muted)]">{REPLACEMENT_PRIORITY_LABELS[priority]}</p>
+                <p className={`mt-1 text-2xl font-bold ${priority === "High" ? "text-rose-600" : priority === "Medium" ? "text-amber-600" : "text-slate-600"}`}>{replacementPlan.counts[priority].toLocaleString("th-TH")}</p>
+                {priority !== "Low" && <p className="mt-0.5 text-xs text-[var(--muted)]">ประมาณ {baht(replacementPlan.estimatedBudget[priority])} บาท</p>}
+              </div>
+            ))}
+            <p className="text-xs text-[var(--muted)] sm:col-span-3">
+              {(Object.keys(REPLACEMENT_REASON_LABELS) as ReplacementReason[]).map((reason) => `${REPLACEMENT_REASON_LABELS[reason]} ${replacementPlan.reasonCounts[reason].toLocaleString("th-TH")}`).join(" · ")}
+            </p>
+          </div>
+          {replacementPlan.items.length === 0 ? (
+            <div className="flex items-center justify-center gap-2 p-10 text-center text-[var(--primary-text)]">
+              <AppIcon name="check" className="h-4 w-4" /> ยังไม่มีครุภัณฑ์ที่เข้าเกณฑ์จัดหาทดแทน
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-black/6 bg-slate-50/60 text-xs text-[var(--muted)]">
+                    <th className="px-4 py-2.5 text-left font-medium">ความเร่งด่วน</th>
+                    <th className="px-4 py-2.5 text-left font-medium">ทรัพย์สิน</th>
+                    <th className="px-4 py-2.5 text-left font-medium">หน่วยงาน</th>
+                    <th className="px-4 py-2.5 text-right font-medium">อายุ (ปี)</th>
+                    <th className="px-4 py-2.5 text-right font-medium">ราคาทุน</th>
+                    <th className="px-4 py-2.5 text-right font-medium">มูลค่าสุทธิ</th>
+                    <th className="px-4 py-2.5 text-right font-medium">ซ่อม (ครั้ง / บาท)</th>
+                    <th className="px-4 py-2.5 text-left font-medium">เหตุผล</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-black/4">
+                  {replacementPlan.items.slice(0, 500).map((item) => (
+                    <tr key={item.asset.id} className="align-top transition hover:bg-white/50">
+                      <td className="px-4 py-3">
+                        <StatusBadge tone={item.priority === "High" ? "danger" : item.priority === "Medium" ? "warning" : "neutral"}>{REPLACEMENT_PRIORITY_LABELS[item.priority]}</StatusBadge>
+                      </td>
+                      <td className="px-4 py-3">
+                        <Link href={`/assets/${item.asset.id}`} className="font-medium hover:text-[var(--accent-strong)] hover:underline">{item.asset.assetName}</Link>
+                        <p className="font-mono text-xs text-[var(--muted)]">{item.asset.assetNumber}</p>
+                      </td>
+                      <td className="px-4 py-3 text-[var(--muted)]">{item.asset.facilityName}</td>
+                      <td className="px-4 py-3 text-right tabular-nums">{item.ageYears ?? "-"}</td>
+                      <td className="px-4 py-3 text-right tabular-nums">{baht(item.asset.purchasePrice)}</td>
+                      <td className="px-4 py-3 text-right tabular-nums">{baht(item.valuation.bookValue)}</td>
+                      <td className="px-4 py-3 text-right tabular-nums">{item.repairs.totalCount ? `${item.repairs.totalCount} / ${baht(item.repairs.totalCost)}` : "-"}</td>
+                      <td className="px-4 py-3 text-xs">
+                        {item.reasons.map((reason) => REPLACEMENT_REASON_LABELS[reason]).join(", ")}
+                        {item.pendingDisposal && <span className="mt-1 block text-[var(--muted)]">มีคำขอจำหน่ายรออนุมัติ</span>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {replacementPlan.items.length > 500 && <p className="px-5 py-3 text-xs text-[var(--muted)]">แสดง 500 รายการแรก — ดาวน์โหลด Excel เพื่อดูทั้งหมด</p>}
             </div>
           )}
         </div>

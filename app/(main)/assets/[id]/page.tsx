@@ -1,4 +1,7 @@
 import { ASSET_DETAIL_FIELDS } from "@/lib/asset-details";
+import { listLoans } from "@/lib/asset-loans";
+import { findSerialTwins } from "@/lib/data-quality-db";
+import { acquisitionMethodLabel, fundingSourceLabel } from "@/lib/acquisition-options";
 import { isItAsset, supportsAgentAsset } from "@/lib/asset-policy";
 import Link from "next/link";
 import Image from "next/image";
@@ -64,6 +67,8 @@ function AssetImageGallery({ images, assetName }: { images: string[]; assetName:
             alt={`${assetName} ภาพที่ ${index + 1}`}
             fill
             sizes={images.length === 1 ? "(max-width: 1024px) 100vw, 720px" : "(max-width: 640px) 100vw, 360px"}
+            // Served by an authenticated route; the optimizer's internal fetch has no session cookie.
+            unoptimized
             className="object-cover"
           />
         </div>
@@ -186,6 +191,9 @@ export default async function AssetDetailPage({ params, searchParams }: Props) {
   const canInspect = !terminal && canManageFacility(user, asset.facilityId) && user.role !== "viewer" && (await hasPermission(user.role, "inspection.create"));
   const openRounds = canInspect ? await listOpenInspectionsForAsset(asset.id) : [];
   const checkedParam = Number((await searchParams)?.checked);
+  const serialTwins = asset.serialNumber ? await findSerialTwins(asset.id, asset.serialNumber) : [];
+  const [canViewLoans, canManageLoans] = await Promise.all([hasPermission(user.role, "loans.view"), hasPermission(user.role, "loans.manage")]);
+  const activeLoan = canViewLoans ? (await listLoans({ assetId: asset.id, status: "OnLoan", limit: 1 })).rows[0] : undefined;
   const pendingDisposal = disposals.rows.find((row) => row.status === "Pending");
   const openRepair = repairs.rows.find((row) => row.status === "Reported" || row.status === "InProgress" || row.status === "SentToVendor");
   const today = new Date().toISOString().slice(0, 10);
@@ -222,6 +230,23 @@ export default async function AssetDetailPage({ params, searchParams }: Props) {
         <span className="text-[var(--foreground)]">{asset.assetNumber}</span>
       </nav>
 
+      {activeLoan && (
+        <div role="note" className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+          ถูกยืมอยู่โดย <b>{activeLoan.borrowerName}</b>{activeLoan.borrowerUnit ? ` (${activeLoan.borrowerUnit})` : ""} ตั้งแต่ {formatThaiDate(activeLoan.loanedOn)} กำหนดคืน {formatThaiDate(activeLoan.dueOn)}
+          {activeLoan.dueOn < today ? <span className="ml-1 font-semibold text-rose-700">· เกินกำหนดคืน</span> : null}
+          {" "}<Link href="/loans" className="font-medium underline">ไปที่ยืม-คืน</Link>
+        </div>
+      )}
+
+      {serialTwins.length > 0 && (
+        <div role="note" className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          Serial Number <span className="font-mono">{asset.serialNumber}</span> ซ้ำกับครุภัณฑ์อื่นในทะเบียน อาจเป็นรายการเดียวกันที่ลงทะเบียนซ้ำ:{" "}
+          {serialTwins.map((twin, index) => (
+            <span key={twin.id}>{index ? ", " : ""}<Link href={`/assets/${twin.id}`} className="font-medium underline">{twin.assetName}</Link> ({twin.facilityName})</span>
+          ))}
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
@@ -239,6 +264,12 @@ export default async function AssetDetailPage({ params, searchParams }: Props) {
           </div>
           <h1 className="section-title mt-2 break-words text-2xl font-semibold leading-tight sm:text-3xl">{asset.assetName}</h1>
           <p className="mt-1 break-all font-mono text-sm text-[var(--muted)]">{asset.assetNumber}</p>
+          <Link href={`/print/assets/${asset.id}`} className="mt-2 inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-[var(--line)] bg-white px-3 text-xs font-medium text-[var(--foreground)] hover:bg-[var(--primary-soft)]">
+            <AppIcon name="printer" className="h-3.5 w-3.5" /> พิมพ์ทะเบียนคุมทรัพย์สิน
+          </Link>{" "}
+          <Link href={`/print/stickers?ids=${asset.id}&size=mini`} className="mt-2 inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-[var(--line)] bg-white px-3 text-xs font-medium text-[var(--foreground)] hover:bg-[var(--primary-soft)]">
+            <AppIcon name="printer" className="h-3.5 w-3.5" /> พิมพ์สติ๊กเกอร์ QR (A4)
+          </Link>
         </div>
         {canMutateThisAsset && (
           <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
@@ -259,7 +290,20 @@ export default async function AssetDetailPage({ params, searchParams }: Props) {
         )}
       </div>
 
-      {openRounds.length > 0 && <InspectionCheckIn assetId={asset.id} rounds={openRounds} justChecked={Number.isFinite(checkedParam) ? checkedParam : undefined} />}
+      {openRounds.length > 0 && (
+        <InspectionCheckIn
+          assetId={asset.id}
+          rounds={openRounds}
+          justChecked={Number.isFinite(checkedParam) ? checkedParam : undefined}
+          placement={{
+            facilityName: asset.facilityName,
+            workGroupId: asset.workGroupId,
+            workGroupName: asset.workGroupName ?? "",
+            locationDetail: asset.locationDetail,
+            workGroups: workGroups.filter((group) => group.facilityId === asset.facilityId).map((group) => ({ id: group.id, workGroupName: group.workGroupName })),
+          }}
+        />
+      )}
 
       {(pendingDisposal || openRepair) && (
         <div className="flex flex-col gap-2">
@@ -406,6 +450,11 @@ export default async function AssetDetailPage({ params, searchParams }: Props) {
               <Field label="เลขที่สัญญา / PO" value={asset.purchaseOrderNo || undefined} />
               <Field label="รหัสหน่วยงาน / เลขครุภัณฑ์" value={asset.assetNumber || undefined} />
               <Field label="รหัสสินทรัพย์" value={asset.assetAccountingCode || undefined} />
+              <Field label="แหล่งเงิน" value={fundingSourceLabel(asset.fundingSource) || undefined} />
+              <Field label="วิธีการได้มา" value={acquisitionMethodLabel(asset.acquisitionMethod) || undefined} />
+              <Field label="ผู้ขาย / ผู้รับจ้าง / ผู้บริจาค" value={asset.vendorName || undefined} />
+              <Field label="หน่วยนับ" value={asset.unitName || undefined} />
+              <Field label="สิ้นสุดการรับประกัน" value={asset.warrantyEndDate ? `${formatThaiDate(asset.warrantyEndDate)}${asset.warrantyEndDate < today ? " (หมดประกันแล้ว)" : ""}` : undefined} />
             </div>
           </div>
 
@@ -429,6 +478,14 @@ export default async function AssetDetailPage({ params, searchParams }: Props) {
                     className="inline-flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-700 transition hover:bg-amber-100"
                   >
                     <AppIcon name="package" className="h-4 w-4" /> โอนย้ายทรัพย์สิน
+                  </Link>
+                )}
+                {canManageLoans && !activeLoan && asset.currentStatus !== "Broken" && (
+                  <Link
+                    href={`/loans/new?assetId=${asset.id}`}
+                    className="inline-flex items-center gap-2 rounded-xl border border-[var(--line)] bg-white px-4 py-2 text-sm font-medium text-[var(--foreground)] transition hover:bg-[var(--primary-soft)]"
+                  >
+                    <AppIcon name="repeat" className="h-4 w-4" /> ให้ยืม
                   </Link>
                 )}
                 {canManageRepairs && (
@@ -466,9 +523,9 @@ export default async function AssetDetailPage({ params, searchParams }: Props) {
             <div className="mx-auto mt-3 flex w-56 max-w-full items-center justify-center overflow-hidden rounded-xl border border-[var(--primary-soft-strong)] bg-white shadow-sm">
               <Image
                 src={`/api/qr/asset/${asset.id}`}
-                alt={`QR Code: ${asset.assetNumber || asset.assetName}`}
-                width={220}
-                height={244}
+                alt={`QR Code: ${asset.facilityName} ${asset.assetNumber || asset.assetName}`}
+                width={240}
+                height={300}
                 unoptimized
                 className="h-auto w-full object-contain"
               />
