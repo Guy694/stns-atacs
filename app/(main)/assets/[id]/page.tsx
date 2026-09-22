@@ -18,12 +18,24 @@ import { DeleteAssetButton } from "@/app/(main)/assets/_components/delete-asset-
 import { QrDownloadButton } from "@/app/(main)/assets/_components/print-button";
 import { getAgentDeviceByLinkedAssetId, type AgentDevice } from "@/lib/agent";
 import { listAssetStatusHistory } from "@/lib/asset-status-history";
-import { canAccessAssetFacility, canManageAssetRecord, canSeeSensitiveAssetNetwork } from "@/lib/permissions";
+import { canAccessAssetFacility, canManageAssetRecord, canManageFacility, canSeeSensitiveAssetNetwork } from "@/lib/permissions";
 import { formatThaiDate, formatThaiDateTime } from "@/lib/date-format";
 import { hasPermission } from "@/lib/role-permissions";
 import { windowsLicenseStatusLabel } from "@/lib/windows-license";
+import { listDisposalRequests } from "@/lib/asset-disposals";
+import { listRepairs } from "@/lib/asset-repairs";
+import { isTerminalAssetStatus } from "@/lib/asset-status";
+import { listAssetTransfers } from "@/lib/asset-transfers";
+import { depreciationSchedule, fiscalYearOf, valueAsset } from "@/lib/asset-valuation";
+import { DISPOSAL_REQUEST_TYPE_LABELS } from "@/lib/disposal-options";
+import { DisposalHistorySection, RepairHistorySection, TransferHistorySection, ValuationSection } from "./_components/lifecycle-sections";
+import { InspectionCheckIn } from "./_components/inspection-check-in";
+import { listOpenInspectionsForAsset } from "@/lib/inspection";
 
-type Props = { params: Promise<{ id: string }> };
+type Props = {
+  params: Promise<{ id: string }>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+};
 
 function Field({ label, value }: { label: string; value?: string | null }) {
   return (
@@ -130,7 +142,7 @@ function ComputerSpecPanel({ device }: { device: AgentDevice | null }) {
   );
 }
 
-export default async function AssetDetailPage({ params }: Props) {
+export default async function AssetDetailPage({ params, searchParams }: Props) {
   const { id } = await params;
   const numId = Number(id);
   if (isNaN(numId)) notFound();
@@ -159,6 +171,27 @@ export default async function AssetDetailPage({ params }: Props) {
   const canMutateThisAsset = (await hasPermission(user.role, "assets.update")) && canManageAssetRecord(user, asset.facilityId);
   const canDeleteThisAsset = (await hasPermission(user.role, "assets.delete")) && canManageAssetRecord(user, asset.facilityId);
   const canViewNetwork = (await hasPermission(user.role, "assets.network.view")) && canSeeSensitiveAssetNetwork(user, asset.facilityId);
+  const [canViewRepairs, canManageRepairs, canTransfer, canDispose] = await Promise.all([
+    hasPermission(user.role, "repairs.view"),
+    hasPermission(user.role, "repairs.manage"),
+    hasPermission(user.role, "transfer.manage"),
+    hasPermission(user.role, "disposal.manage"),
+  ]);
+  const [transfers, repairs, disposals] = await Promise.all([
+    listAssetTransfers(asset.id),
+    canViewRepairs ? listRepairs({ assetId: asset.id, limit: 100 }) : Promise.resolve({ rows: [], schemaReady: true }),
+    listDisposalRequests({ assetId: asset.id, limit: 50 }),
+  ]);
+  const terminal = isTerminalAssetStatus(asset.currentStatus);
+  const canInspect = !terminal && canManageFacility(user, asset.facilityId) && user.role !== "viewer" && (await hasPermission(user.role, "inspection.create"));
+  const openRounds = canInspect ? await listOpenInspectionsForAsset(asset.id) : [];
+  const checkedParam = Number((await searchParams)?.checked);
+  const pendingDisposal = disposals.rows.find((row) => row.status === "Pending");
+  const openRepair = repairs.rows.find((row) => row.status === "Reported" || row.status === "InProgress" || row.status === "SentToVendor");
+  const today = new Date().toISOString().slice(0, 10);
+  const valuationInput = { ...asset, subtypeName: asset.extensions[asset.assetClass]?.subtypeName };
+  const valuation = valueAsset(valuationInput, today);
+  const schedule = depreciationSchedule(valuationInput);
 
   const maStart = asset.maintenanceEndDate
     ? (() => {
@@ -186,7 +219,7 @@ export default async function AssetDetailPage({ params }: Props) {
           <Link href="/assets" className="hover:text-[var(--foreground)]">ทรัพย์สินทั้งหมด</Link>
         )}
         <span>/</span>
-        <span className="text-[var(--foreground)]">{asset.assetRegistrationNo}</span>
+        <span className="text-[var(--foreground)]">{asset.assetNumber}</span>
       </nav>
 
       {/* Header */}
@@ -205,7 +238,7 @@ export default async function AssetDetailPage({ params }: Props) {
             )}
           </div>
           <h1 className="section-title mt-2 break-words text-2xl font-semibold leading-tight sm:text-3xl">{asset.assetName}</h1>
-          <p className="mt-1 break-all font-mono text-sm text-[var(--muted)]">{asset.assetRegistrationNo}</p>
+          <p className="mt-1 break-all font-mono text-sm text-[var(--muted)]">{asset.assetNumber}</p>
         </div>
         {canMutateThisAsset && (
           <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
@@ -225,6 +258,24 @@ export default async function AssetDetailPage({ params }: Props) {
           </div>
         )}
       </div>
+
+      {openRounds.length > 0 && <InspectionCheckIn assetId={asset.id} rounds={openRounds} justChecked={Number.isFinite(checkedParam) ? checkedParam : undefined} />}
+
+      {(pendingDisposal || openRepair) && (
+        <div className="flex flex-col gap-2">
+          {pendingDisposal && (
+            <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              มีคำขอ{DISPOSAL_REQUEST_TYPE_LABELS[pendingDisposal.requestType]}รออนุมัติ{" "}
+              <Link href={`/disposal?requestId=${pendingDisposal.id}`} className="font-semibold underline">#{pendingDisposal.id}</Link>
+            </p>
+          )}
+          {openRepair && (
+            <p className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">
+              อยู่ระหว่างงานซ่อม <Link href={`/repairs/${openRepair.id}`} className="font-semibold underline">#{openRepair.id}</Link>
+            </p>
+          )}
+        </div>
+      )}
 
       <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]">
 
@@ -353,26 +404,49 @@ export default async function AssetDetailPage({ params }: Props) {
               />
               <Field label="วันที่ซื้อ / ได้รับมอบ" value={formatThaiDate(asset.purchaseDate)} />
               <Field label="เลขที่สัญญา / PO" value={asset.purchaseOrderNo || undefined} />
+              <Field label="รหัสหน่วยงาน / เลขครุภัณฑ์" value={asset.assetNumber || undefined} />
+              <Field label="รหัสสินทรัพย์" value={asset.assetAccountingCode || undefined} />
             </div>
           </div>
+
+          <ValuationSection valuation={valuation} schedule={schedule} currentFiscalYear={fiscalYearOf(today)} />
+          <TransferHistorySection rows={transfers.rows} schemaReady={transfers.schemaReady} />
+          {canViewRepairs && <RepairHistorySection rows={repairs.rows} schemaReady={repairs.schemaReady} />}
+          <DisposalHistorySection rows={disposals.rows} />
 
           {/* การดำเนินการด่วน */}
           <div className="glass-panel rounded-2xl p-5">
             <h2 className="mb-4 text-sm font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">การดำเนินการ</h2>
-            {canMutateThisAsset ? (
+            {terminal ? (
+              <div className="rounded-xl border border-stone-300 bg-stone-100 px-4 py-3 text-sm text-stone-600">
+                ทรัพย์สินนี้{asset.currentStatus === "Lost" ? "บันทึกสูญหาย" : "จำหน่าย"}แล้วตามคำขอที่อนุมัติ จึงไม่มีการดำเนินการเพิ่มเติม
+              </div>
+            ) : canMutateThisAsset ? (
               <div className="flex flex-wrap gap-3">
-                <Link
-                  href={`/transfer?assetId=${asset.id}`}
-                  className="inline-flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-700 transition hover:bg-amber-100"
-                >
-                  <AppIcon name="package" className="h-4 w-4" /> โอนย้ายทรัพย์สิน
-                </Link>
-                <Link
-                  href={`/disposal?assetId=${asset.id}`}
-                  className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100"
-                >
-                  <AppIcon name="clipboard-check" className="h-4 w-4" /> จำหน่าย/ชำรุด
-                </Link>
+                {canTransfer && (
+                  <Link
+                    href={`/transfer?assetId=${asset.id}`}
+                    className="inline-flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-700 transition hover:bg-amber-100"
+                  >
+                    <AppIcon name="package" className="h-4 w-4" /> โอนย้ายทรัพย์สิน
+                  </Link>
+                )}
+                {canManageRepairs && (
+                  <Link
+                    href={openRepair ? `/repairs/${openRepair.id}` : `/repairs/new?assetId=${asset.id}`}
+                    className="inline-flex items-center gap-2 rounded-xl border border-sky-200 bg-sky-50 px-4 py-2 text-sm font-medium text-sky-700 transition hover:bg-sky-100"
+                  >
+                    <AppIcon name="wrench" className="h-4 w-4" /> {openRepair ? "ดูงานซ่อมที่เปิดอยู่" : "แจ้งซ่อม"}
+                  </Link>
+                )}
+                {canDispose && (
+                  <Link
+                    href={`/disposal?assetId=${asset.id}`}
+                    className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100"
+                  >
+                    <AppIcon name="clipboard-check" className="h-4 w-4" /> ชำรุด / เสนอจำหน่าย
+                  </Link>
+                )}
               </div>
             ) : (
               <div className="rounded-xl border border-stone-300 bg-stone-100 px-4 py-3 text-sm text-stone-600">
@@ -392,7 +466,7 @@ export default async function AssetDetailPage({ params }: Props) {
             <div className="mx-auto mt-3 flex w-56 max-w-full items-center justify-center overflow-hidden rounded-xl border border-[var(--primary-soft-strong)] bg-white shadow-sm">
               <Image
                 src={`/api/qr/asset/${asset.id}`}
-                alt={`QR Code: ${asset.assetRegistrationNo || asset.assetName}`}
+                alt={`QR Code: ${asset.assetNumber || asset.assetName}`}
                 width={220}
                 height={244}
                 unoptimized

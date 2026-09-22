@@ -43,7 +43,7 @@ export function TopNavigation({ current, user }: TopNavigationProps) {
             </>
           ) : (
             <Link href="/login" className={navItemClass(current === "login" || current === "register")}>
-              เข้าสู่ระบบ / ลงทะเบียน
+              
             </Link>
           )}
         </div>

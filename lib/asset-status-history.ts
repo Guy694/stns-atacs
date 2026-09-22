@@ -6,7 +6,8 @@ import { executeStatement, selectRows } from "@/lib/mysql";
 
 let historyTableReady = false;
 
-async function ensureAssetStatusHistoryTable() {
+/** DDL auto-commits in MySQL, so call this before opening a transaction that writes history. */
+export async function ensureAssetStatusHistoryTable() {
   if (historyTableReady) return;
 
   await executeStatement(`
@@ -54,6 +55,25 @@ export type AssetStatusHistory = {
 function toDateTime(value: Date | string | null | undefined) {
   if (!value) return "";
   return (value instanceof Date ? value.toISOString() : String(value)).slice(0, 19).replace("T", " ");
+}
+
+type StatusHistoryInput = {
+  assetId: number;
+  fromStatus?: string | null;
+  toStatus: string;
+  note?: string | null;
+  changedByUserId?: number | null;
+  changedBy?: string | null;
+};
+
+/** Insert only; safe inside withTransaction once ensureAssetStatusHistoryTable() has run. */
+export async function insertAssetStatusHistory(input: StatusHistoryInput) {
+  await executeStatement(
+    `INSERT INTO asset_status_history
+      (asset_id, from_status, to_status, note, changed_by_user_id, changed_by)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [input.assetId, input.fromStatus ?? null, input.toStatus, input.note ?? null, input.changedByUserId ?? null, input.changedBy ?? null]
+  );
 }
 
 export async function recordAssetStatusHistory(input: {

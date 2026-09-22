@@ -4,6 +4,7 @@ export type AssetRecord = {
   assetName: string;
   usageDescription: string;
   assetClass?: string;
+  subtypeName?: string;
   assetGroup: "Hardware" | "Software";
   deviceType: string;
   operatingSystem: string;
@@ -11,7 +12,8 @@ export type AssetRecord = {
   privateIp: string;
   publicIp?: string;
   locationDetail: string;
-  currentStatus: "Active" | "Inactive" | "Broken";
+  currentStatus: string;
+  createdAt?: string;
   ownerName: string;
   updatedBy: string;
   updatedAt: string;
@@ -21,6 +23,7 @@ export type AssetRecord = {
   purchasePrice?: number | null;
   purchaseDate?: string;
   purchaseOrderNo?: string;
+  installedAt?: string;
 };
 
 export type FacilitySurvey = {

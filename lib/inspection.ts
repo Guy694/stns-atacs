@@ -2,7 +2,19 @@ import "server-only";
 
 import type { RowDataPacket } from "mysql2/promise";
 
-import { executeStatement, selectRows } from "@/lib/mysql";
+import { formatAssetNumber } from "@/lib/asset-number";
+import { executeStatement, selectRows, withTransaction } from "@/lib/mysql";
+import { isMissingSchemaError } from "@/lib/schema-errors";
+
+/** Runs the query that needs the newest columns, falling back to the legacy shape before migration. */
+async function withSchemaFallback<T>(current: () => Promise<T>, legacy: () => Promise<T>) {
+  try {
+    return await current();
+  } catch (error) {
+    if (!isMissingSchemaError(error)) throw error;
+    return legacy();
+  }
+}
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -22,7 +34,15 @@ export type Inspection = {
   foundItems: number;
   missingItems: number;
   remainingItems: number;
+  workGroupId: number | null;
+  workGroupName: string;
+  roundStatus: "Open" | "Closed";
+  closedAt: string;
+  closedBy: string;
 };
+
+export type CommitteeMember = { seq: number; role: "chair" | "member"; fullName: string; position: string };
+export const COMMITTEE_SIZE = 4;
 
 export type InspectionItem = {
   id: number;
@@ -38,6 +58,18 @@ export type InspectionItem = {
   conditionNote: string;
   checkedBy: string;
   checkedAt: string;
+  assetClass: string;
+  assetGroup: "Hardware" | "Software";
+  subtypeName: string;
+  workGroupId: number | null;
+  workGroupName: string;
+  locationDetail: string;
+  purchaseDate: string;
+  installedAt: string;
+  purchasePrice: number | null;
+  assetCodePrefix: string;
+  assetNumber: string;
+  assetAccountingCode: string;
 };
 
 export type CreateInspectionInput = {
@@ -47,6 +79,8 @@ export type CreateInspectionInput = {
   startDate: string;
   endDate: string;
   note?: string;
+  workGroupId?: number | null;
+  committee?: CommitteeMember[];
   items: { assetId: number }[];
 };
 
@@ -83,6 +117,11 @@ type InspectionRow = RowDataPacket & {
   checked_items: number;
   found_items: number;
   missing_items: number;
+  work_group_id?: number | null;
+  work_group_name?: string | null;
+  round_status?: string | null;
+  closed_at?: Date | string | null;
+  closed_by?: string | null;
 };
 
 type InspectionItemRow = RowDataPacket & {
@@ -99,6 +138,17 @@ type InspectionItemRow = RowDataPacket & {
   condition_note: string | null;
   checked_by: string | null;
   checked_at: Date | string | null;
+  asset_class: string | null;
+  asset_category: "Hardware" | "Software" | null;
+  subtype_name: string | null;
+  work_group_id: number | null;
+  work_group_name: string | null;
+  location_detail: string | null;
+  purchase_date: Date | string | null;
+  installed_at: Date | string | null;
+  purchase_price: string | number | null;
+  asset_code_prefix?: string | null;
+  asset_accounting_code?: string | null;
 };
 
 type InspectionItemContextRow = RowDataPacket & {
@@ -145,6 +195,11 @@ function mapInspection(row: InspectionRow): Inspection {
     foundItems: Number(row.found_items ?? 0),
     missingItems: Number(row.missing_items ?? 0),
     remainingItems: Math.max(0, totalItems - checkedItems),
+    workGroupId: row.work_group_id ?? null,
+    workGroupName: row.work_group_name ?? "",
+    roundStatus: row.round_status === "Closed" ? "Closed" : "Open",
+    closedAt: toDateTimeStr(row.closed_at),
+    closedBy: row.closed_by ?? "",
   };
 }
 
@@ -154,6 +209,10 @@ const INSPECTION_SUMMARY_SELECT = `
   SUM(CASE WHEN COALESCE(aii.inspection_status, 'Pending') = 'Found' THEN 1 ELSE 0 END) AS found_items,
   SUM(CASE WHEN COALESCE(aii.inspection_status, 'Pending') = 'Missing' THEN 1 ELSE 0 END) AS missing_items
 `;
+
+// Columns added by later migrations (read with fallbacks so older databases keep working).
+const WORK_GROUP_COLUMNS = "ai.work_group_id, fwg.work_group_name,";
+const CLOSE_COLUMNS = "ai.round_status, ai.closed_at, ai.closed_by,";
 
 // ── Queries ───────────────────────────────────────────────────────────────
 
@@ -178,44 +237,59 @@ export async function listInspections(facilityId?: number): Promise<Inspection[]
     GROUP BY ai.id
     ORDER BY ai.inspected_at DESC
   `;
-  const rows = await selectRows<InspectionRow>(sql, facilityId ? [facilityId] : []);
+  const extend = (columns: string) => sql
+    .replace("COALESCE(ai.note, '')           AS note,", `COALESCE(ai.note, '')           AS note, ${columns}`)
+    .replace("LEFT JOIN asset_inspection_items aii", "LEFT JOIN facility_work_groups fwg ON fwg.id = ai.work_group_id\n    LEFT JOIN asset_inspection_items aii");
+  const values = facilityId ? [facilityId] : [];
+  const rows = await withSchemaFallback(
+    () => selectRows<InspectionRow>(extend(`${WORK_GROUP_COLUMNS} ${CLOSE_COLUMNS}`), values),
+    () => withSchemaFallback(() => selectRows<InspectionRow>(extend(WORK_GROUP_COLUMNS), values), () => selectRows<InspectionRow>(sql, values))
+  );
   return rows.map(mapInspection);
 }
 
 export async function getInspectionById(id: number): Promise<Inspection | null> {
-  const rows = await selectRows<InspectionRow>(
+  const query = (level: 0 | 1 | 2) => selectRows<InspectionRow>(
     `SELECT ai.id, ai.facility_id,
        COALESCE(hf.name,'') AS facility_name,
        COALESCE(hf.district_name,'') AS district_name,
        ai.round_name, ai.inspected_by, ai.inspected_at, ai.start_date, ai.end_date,
-       COALESCE(ai.note,'') AS note,
+       COALESCE(ai.note,'') AS note,${level >= 1 ? ` ${WORK_GROUP_COLUMNS}` : ""}${level === 2 ? ` ${CLOSE_COLUMNS}` : ""}
        ${INSPECTION_SUMMARY_SELECT}
      FROM asset_inspections ai
-     LEFT JOIN health_facilities hf ON hf.id = ai.facility_id
+     LEFT JOIN health_facilities hf ON hf.id = ai.facility_id${level >= 1 ? "\n     LEFT JOIN facility_work_groups fwg ON fwg.id = ai.work_group_id" : ""}
      LEFT JOIN asset_inspection_items aii ON aii.inspection_id = ai.id
      WHERE ai.id = ?
      GROUP BY ai.id`,
     [id]
   );
+  const rows = await withSchemaFallback(() => query(2), () => withSchemaFallback(() => query(1), () => query(0)));
   if (!rows[0]) return null;
   return mapInspection(rows[0]);
 }
 
 export async function getInspectionItems(inspectionId: number): Promise<InspectionItem[]> {
-  const rows = await selectRows<InspectionItemRow>(
-    `SELECT aii.id, aii.inspection_id, aii.asset_id,
+  const query = (withCodes: boolean) => selectRows<InspectionItemRow>(
+    `SELECT aii.id, aii.inspection_id, aii.asset_id,${withCodes ? " ia.asset_code_prefix, ia.asset_accounting_code," : ""}
        ia.asset_name, ia.asset_registration_no, ia.device_type, ia.current_status,
        aii.found, COALESCE(aii.inspection_status, 'Pending') AS inspection_status,
        COALESCE(aii.asset_status, '') AS asset_status,
        COALESCE(aii.condition_note,'') AS condition_note,
        COALESCE(aii.checked_by, '') AS checked_by,
-       aii.checked_at
+       aii.checked_at,
+       ia.asset_class, ia.asset_category, ia.work_group_id, fwg.work_group_name, ia.location_detail,
+       ia.purchase_date, ia.installed_at, ia.purchase_price,
+       (SELECT st.name FROM asset_extensions ex
+        JOIN asset_subtypes st ON st.id = ex.subtype_id AND st.asset_class = ex.asset_class
+        WHERE ex.asset_id = ia.id AND ex.asset_class = ia.asset_class LIMIT 1) AS subtype_name
      FROM asset_inspection_items aii
      JOIN information_assets ia ON ia.id = aii.asset_id
+     LEFT JOIN facility_work_groups fwg ON fwg.id = ia.work_group_id
      WHERE aii.inspection_id = ?
      ORDER BY COALESCE(aii.inspection_status, 'Pending') = 'Pending' DESC, ia.asset_registration_no`,
     [inspectionId]
   );
+  const rows = await withSchemaFallback(() => query(true), () => query(false));
   return rows.map((r) => ({
     id: r.id,
     inspectionId: r.inspection_id,
@@ -230,33 +304,95 @@ export async function getInspectionItems(inspectionId: number): Promise<Inspecti
     conditionNote: r.condition_note ?? "",
     checkedBy: r.checked_by ?? "",
     checkedAt: toDateTimeStr(r.checked_at),
+    assetClass: r.asset_class?.trim() || "IT",
+    assetGroup: r.asset_category ?? "Hardware",
+    subtypeName: r.subtype_name ?? "",
+    workGroupId: r.work_group_id ?? null,
+    workGroupName: r.work_group_name ?? "",
+    locationDetail: r.location_detail ?? "",
+    purchaseDate: toDateStr(r.purchase_date),
+    installedAt: toDateStr(r.installed_at),
+    purchasePrice: r.purchase_price === null || r.purchase_price === undefined ? null : Number(r.purchase_price),
+    assetCodePrefix: r.asset_code_prefix ?? "",
+    assetNumber: formatAssetNumber(r.asset_code_prefix, r.asset_registration_no),
+    assetAccountingCode: r.asset_accounting_code ?? "",
   }));
 }
 
 export async function createInspection(input: CreateInspectionInput): Promise<number> {
-  const result = await executeStatement(
-    `INSERT INTO asset_inspections (facility_id, round_name, inspected_by, start_date, end_date, note)
-     VALUES (?, ?, ?, ?, ?, ?)`,
-    [input.facilityId, input.roundName, input.inspectedBy, input.startDate, input.endDate, input.note ?? null]
+  return withTransaction(async () => {
+    const result = input.workGroupId
+      ? await executeStatement(
+          `INSERT INTO asset_inspections (facility_id, work_group_id, round_name, inspected_by, start_date, end_date, note)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [input.facilityId, input.workGroupId, input.roundName, input.inspectedBy, input.startDate, input.endDate, input.note ?? null]
+        )
+      : await executeStatement(
+          `INSERT INTO asset_inspections (facility_id, round_name, inspected_by, start_date, end_date, note)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+          [input.facilityId, input.roundName, input.inspectedBy, input.startDate, input.endDate, input.note ?? null]
+        );
+    const inspectionId = result.insertId;
+
+    if (input.items.length > 0) {
+      const placeholders = input.items.map(() => "(?,?,?,?,?)").join(",");
+      const values = input.items.flatMap((item) => [inspectionId, item.assetId, 0, "Pending", null]);
+      await executeStatement(
+        `INSERT INTO asset_inspection_items (inspection_id, asset_id, found, inspection_status, asset_status) VALUES ${placeholders}`,
+        values
+      );
+    }
+    if (input.committee?.length) await writeCommittee(inspectionId, input.committee);
+    return inspectionId;
+  });
+}
+
+export const COMMITTEE_ROLE_LABELS: Record<CommitteeMember["role"], string> = { chair: "ประธานกรรมการ", member: "กรรมการ" };
+
+/**
+ * Normalises form input: blank rows are dropped, at most COMMITTEE_SIZE members, exactly one chair.
+ * The chair is stored first (seq 1) so it prints first in the signature block.
+ */
+export function normalizeCommittee(rows: Array<{ fullName?: string; position?: string; role?: string }>): CommitteeMember[] {
+  const cleaned = rows.slice(0, COMMITTEE_SIZE).map((row) => ({
+    role: (row.role === "chair" ? "chair" : "member") as CommitteeMember["role"],
+    fullName: (row.fullName ?? "").trim().slice(0, 255),
+    position: (row.position ?? "").trim().slice(0, 255),
+  }));
+  if (cleaned.some((member) => !member.fullName && member.position)) throw new Error("กรุณาระบุชื่อกรรมการให้ครบทุกแถวที่กรอกตำแหน่ง");
+  const members = cleaned.filter((member) => member.fullName);
+  if (!members.length) return [];
+  const chairs = members.filter((member) => member.role === "chair").length;
+  if (chairs === 0) throw new Error("กรุณาเลือกประธานกรรมการ 1 คน");
+  if (chairs > 1) throw new Error("เลือกประธานกรรมการได้เพียง 1 คน");
+  return [...members.filter((m) => m.role === "chair"), ...members.filter((m) => m.role === "member")]
+    .map((member, index) => ({ ...member, seq: index + 1 }));
+}
+
+async function writeCommittee(inspectionId: number, members: CommitteeMember[]) {
+  await executeStatement("DELETE FROM asset_inspection_committee WHERE inspection_id = ?", [inspectionId]);
+  if (!members.length) return;
+  await executeStatement(
+    `INSERT INTO asset_inspection_committee (inspection_id, seq, role, full_name, position) VALUES ${members.map(() => "(?, ?, ?, ?, ?)").join(", ")}`,
+    members.flatMap((member) => [inspectionId, member.seq, member.role, member.fullName, member.position || null])
   );
-  const inspectionId = result.insertId;
+}
 
-  if (input.items.length > 0) {
-    const placeholders = input.items.map(() => "(?,?,?,?,?)").join(",");
-    const values = input.items.flatMap((item) => [
-      inspectionId,
-      item.assetId,
-      0,
-      "Pending",
-      null,
-    ]);
-    await executeStatement(
-      `INSERT INTO asset_inspection_items (inspection_id, asset_id, found, inspection_status, asset_status) VALUES ${placeholders}`,
-      values
+export async function saveInspectionCommittee(inspectionId: number, members: CommitteeMember[]) {
+  return withTransaction(() => writeCommittee(inspectionId, members));
+}
+
+export async function getInspectionCommittee(inspectionId: number): Promise<{ members: CommitteeMember[]; schemaReady: boolean }> {
+  try {
+    const rows = await selectRows<RowDataPacket & { seq: number; role: CommitteeMember["role"]; full_name: string; position: string | null }>(
+      "SELECT seq, role, full_name, position FROM asset_inspection_committee WHERE inspection_id = ? ORDER BY seq",
+      [inspectionId]
     );
+    return { members: rows.map((row) => ({ seq: row.seq, role: row.role, fullName: row.full_name, position: row.position ?? "" })), schemaReady: true };
+  } catch (error) {
+    if (isMissingSchemaError(error)) return { members: [], schemaReady: false };
+    throw error;
   }
-
-  return inspectionId;
 }
 
 export async function getInspectionItemContext(itemId: number): Promise<InspectionItemContext | null> {
@@ -298,4 +434,71 @@ export async function updateInspectionItem(input: UpdateInspectionItemInput) {
       input.itemId,
     ]
   );
+}
+
+/**
+ * Permanently deletes an inspection round and all of its item results. Asset records, their current
+ * statuses and status history are not touched. Items are deleted explicitly (not only via FK cascade)
+ * so the delete is complete even on databases created without the foreign key.
+ */
+export async function deleteInspection(inspectionId: number) {
+  return withTransaction(async () => {
+    const items = await executeStatement("DELETE FROM asset_inspection_items WHERE inspection_id = ?", [inspectionId]);
+    const round = await executeStatement("DELETE FROM asset_inspections WHERE id = ?", [inspectionId]);
+    if (round.affectedRows !== 1) throw new Error("ไม่พบรอบตรวจนับ หรือถูกลบไปแล้ว");
+    return { deletedItems: items.affectedRows };
+  });
+}
+
+/** Closing locks results; reopening is allowed for people who manage the round. */
+export async function setInspectionRoundStatus(inspectionId: number, status: "Open" | "Closed", userName: string) {
+  const result = await executeStatement(
+    status === "Closed"
+      ? "UPDATE asset_inspections SET round_status = 'Closed', closed_at = NOW(), closed_by = ? WHERE id = ? AND round_status <> 'Closed'"
+      : "UPDATE asset_inspections SET round_status = 'Open', closed_at = NULL, closed_by = NULL WHERE id = ? AND round_status = 'Closed'",
+    status === "Closed" ? [userName, inspectionId] : [inspectionId]
+  );
+  return result.affectedRows === 1;
+}
+
+export type OpenInspectionForAsset = {
+  itemId: number;
+  inspectionId: number;
+  facilityId: number;
+  roundName: string;
+  inspectionStatus: InspectionItem["inspectionStatus"];
+  assetStatus: string;
+  checkedBy: string;
+  checkedAt: string;
+};
+
+/** Open rounds that include this asset, newest first — used for one-tap check-in after scanning its QR. */
+export async function listOpenInspectionsForAsset(assetId: number): Promise<OpenInspectionForAsset[]> {
+  type Row = RowDataPacket & { id: number; inspection_id: number; facility_id: number; round_name: string; inspection_status: string | null; asset_status: string | null; checked_by: string | null; checked_at: Date | string | null };
+  const query = (withStatus: boolean) => selectRows<Row>(
+    `SELECT aii.id, aii.inspection_id, ai.facility_id, ai.round_name, aii.inspection_status, aii.asset_status, aii.checked_by, aii.checked_at
+     FROM asset_inspection_items aii
+     JOIN asset_inspections ai ON ai.id = aii.inspection_id
+     WHERE aii.asset_id = ?${withStatus ? " AND ai.round_status = 'Open'" : ""}
+       AND (ai.end_date IS NULL OR ai.end_date >= CURDATE() - INTERVAL 30 DAY)
+     ORDER BY ai.inspected_at DESC
+     LIMIT 5`,
+    [assetId]
+  );
+  try {
+    const rows = await withSchemaFallback(() => query(true), () => query(false));
+    return rows.map((row) => ({
+      itemId: row.id,
+      inspectionId: row.inspection_id,
+      facilityId: row.facility_id,
+      roundName: row.round_name,
+      inspectionStatus: normalizeInspectionStatus(row.inspection_status),
+      assetStatus: row.asset_status ?? "",
+      checkedBy: row.checked_by ?? "",
+      checkedAt: toDateTimeStr(row.checked_at),
+    }));
+  } catch (error) {
+    if (isMissingSchemaError(error)) return [];
+    throw error;
+  }
 }

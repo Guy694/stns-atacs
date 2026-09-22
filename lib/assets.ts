@@ -6,6 +6,7 @@ import type { RowDataPacket } from "mysql2/promise";
 
 import { facilitySurveys as fallbackSurveys, type AssetRecord } from "@/app/atacs-data";
 import { normalizeAssetClass } from "@/lib/asset-classes";
+import { formatAssetNumber } from "@/lib/asset-number";
 import { isItAsset, parseAssetClass, supportsAgentAsset } from "@/lib/asset-policy";
 import { executeStatement, selectRows, withTransaction } from "@/lib/mysql";
 import type { WindowsLicenseStatus } from "@/lib/windows-license";
@@ -22,6 +23,8 @@ type AssetRow = RowDataPacket & {
   district_name: string | null;
   row_no: number | null;
   asset_registration_no: string | null;
+  asset_code_prefix?: string | null;
+  asset_accounting_code?: string | null;
   asset_name: string;
   usage_description: string | null;
   owner_name: string | null;
@@ -48,6 +51,7 @@ type AssetRow = RowDataPacket & {
   purchase_order_no: string | null;
   maintenance_start_date: Date | string | null;
   maintenance_end_date: Date | string | null;
+  useful_life_years?: number | null;
   asset_image_1_url: string | null;
   asset_image_2_url: string | null;
 };
@@ -73,6 +77,9 @@ function normalizeStatus(v: string | null): AssetRecord["currentStatus"] {
   const s = (v ?? "").trim().toLowerCase();
   if (["broken", "ชำรุด", "เสีย"].includes(s)) return "Broken";
   if (["inactive", "in-active", "ไม่ใช้งาน"].includes(s)) return "Inactive";
+  // Terminal statuses are written only by approved disposal/loss; never read them back as Active.
+  if (["disposed", "จำหน่ายแล้ว", "จำหน่ายออก"].includes(s)) return "Disposed";
+  if (["lost", "สูญหาย"].includes(s)) return "Lost";
   return "Active";
 }
 
@@ -94,6 +101,9 @@ function rowToAsset(row: AssetRow) {
     districtName: row.district_name ?? "",
     rowNo: row.row_no ?? null,
     assetRegistrationNo: row.asset_registration_no ?? "",
+    assetCodePrefix: row.asset_code_prefix ?? "",
+    assetNumber: formatAssetNumber(row.asset_code_prefix, row.asset_registration_no),
+    assetAccountingCode: row.asset_accounting_code ?? "",
     assetName: row.asset_name,
     assetClass: normalizeAssetClass(row.asset_class),
     usageDescription: row.usage_description ?? "",
@@ -121,6 +131,7 @@ function rowToAsset(row: AssetRow) {
     purchasePrice: row.purchase_price ?? null,
     purchaseDate: toDateOnly(row.purchase_date),
     purchaseOrderNo: row.purchase_order_no ?? "",
+    usefulLifeYears: row.useful_life_years ?? null,
     assetImage1Url: row.asset_image_1_url ?? "",
     assetImage2Url: row.asset_image_2_url ?? "",
     assetImages: [row.asset_image_1_url, row.asset_image_2_url].filter((url): url is string => Boolean(url)),
@@ -137,6 +148,8 @@ export type AssetInput = {
   surveyId: number;
   workGroupId?: number | null;
   assetRegistrationNo: string | null;
+  assetCodePrefix?: string | null;
+  assetAccountingCode?: string | null;
   assetName: string;
   assetClass?: string | null;
   usageDescription?: string;
@@ -162,6 +175,7 @@ export type AssetInput = {
   maintenanceStartDate?: string | null;
   maintenanceEndDate?: string | null;
   installedAt?: string | null;
+  usefulLifeYears?: number | null;
   lastUpdatedAt?: string | null;
   assetImage1Url?: string | null;
   assetImage2Url?: string | null;
@@ -169,6 +183,7 @@ export type AssetInput = {
 };
 
 export type AssetListFilter = {
+  subtypeId?: number;
   facilityId?: number;
   workGroupId?: number;
   status?: string;
@@ -225,17 +240,26 @@ function buildAssetFilter(filter?: AssetListFilter) {
     values.push(filter.status);
   }
   if (filter?.search) {
-    conditions.push("(a.asset_name LIKE ? OR a.asset_registration_no LIKE ? OR a.device_type LIKE ? OR a.serial_number LIKE ? OR EXISTS (SELECT 1 FROM asset_extensions ex LEFT JOIN asset_subtypes st ON st.id = ex.subtype_id WHERE ex.asset_id = a.id AND ex.asset_class = a.asset_class AND (CAST(ex.details AS CHAR) LIKE ? OR st.name LIKE ?)))");
+    conditions.push("(a.asset_name LIKE ? OR a.asset_registration_no LIKE ? OR CONCAT(COALESCE(a.asset_code_prefix, ''), COALESCE(a.asset_registration_no, '')) LIKE ? OR a.asset_accounting_code LIKE ? OR a.device_type LIKE ? OR a.serial_number LIKE ? OR EXISTS (SELECT 1 FROM asset_extensions ex LEFT JOIN asset_subtypes st ON st.id = ex.subtype_id WHERE ex.asset_id = a.id AND ex.asset_class = a.asset_class AND (CAST(ex.details AS CHAR) LIKE ? OR st.name LIKE ?)))");
     const like = `%${filter.search}%`;
-    values.push(like, like, like, like, like, like);
+    values.push(like, like, like, like, like, like, like, like);
   }
   if (filter?.district) {
     conditions.push("hf.district_name = ?");
     values.push(filter.district);
   }
   if (filter?.assetClass) {
-    conditions.push("COALESCE(NULLIF(TRIM(a.asset_class), ''), 'IT') = ?");
+    if (filter.assetClass === "Intangible") {
+      conditions.push("(a.asset_class = ? OR (COALESCE(NULLIF(TRIM(a.asset_class), ''), 'IT') = 'IT' AND a.asset_category = 'Software'))");
+    } else {
+      conditions.push("COALESCE(NULLIF(TRIM(a.asset_class), ''), 'IT') = ?");
+      if (filter.assetClass === "IT") conditions.push("COALESCE(a.asset_category, 'Hardware') <> 'Software'");
+    }
     values.push(filter.assetClass);
+  }
+  if (filter?.subtypeId) {
+    conditions.push("EXISTS (SELECT 1 FROM asset_extensions sx WHERE sx.asset_id = a.id AND sx.asset_class = a.asset_class AND sx.subtype_id = ?)");
+    values.push(filter.subtypeId);
   }
   if (filter?.assetGroup) {
     conditions.push("COALESCE(NULLIF(TRIM(a.asset_class), ''), 'IT') = 'IT' AND a.asset_category = ?");
@@ -296,6 +320,10 @@ function filterFallbackAssets(filter?: AssetListFilter) {
       purchasePrice: a.purchasePrice ?? null,
       purchaseDate: a.purchaseDate ?? "",
       purchaseOrderNo: a.purchaseOrderNo ?? "",
+      usefulLifeYears: null,
+      assetCodePrefix: "",
+      assetNumber: a.assetRegistrationNo,
+      assetAccountingCode: "",
       maintenanceStartDate: "",
       windowsLicenseStatus: null,
       assetImage1Url: "",
@@ -308,7 +336,12 @@ function filterFallbackAssets(filter?: AssetListFilter) {
   if (filter?.workGroupId) assets = [];
   if (filter?.status) assets = assets.filter((asset) => asset.currentStatus === filter.status);
   if (filter?.district) assets = assets.filter((asset) => asset.districtName === filter.district);
-  if (filter?.assetClass) assets = assets.filter((asset) => asset.assetClass === normalizeAssetClass(filter.assetClass));
+  if (filter?.assetClass) assets = assets.filter((asset) => {
+    if (filter.assetClass === "Intangible") return asset.assetClass === "Intangible" || (isItAsset(asset) && asset.assetGroup === "Software");
+    if (filter.assetClass === "IT") return isItAsset(asset) && asset.assetGroup !== "Software";
+    return asset.assetClass === normalizeAssetClass(filter.assetClass);
+  });
+  if (filter?.subtypeId) assets = assets.filter(asset => asset.extensions[asset.assetClass]?.subtypeId === filter.subtypeId);
   if (filter?.assetGroup) assets = assets.filter((asset) => isItAsset(asset) && asset.assetGroup === filter.assetGroup);
   if (filter?.deviceType) assets = assets.filter((asset) => asset.deviceType === filter.deviceType);
   if (filter?.search) {
@@ -468,6 +501,18 @@ export async function createAsset(input: AssetInput) {
         input.assetImage2Url ?? null,
       ]
     );
+    const codeColumns: Array<[string, string | null | undefined]> = [["asset_code_prefix", input.assetCodePrefix], ["asset_accounting_code", input.assetAccountingCode]];
+    const providedCodes = codeColumns.filter(([, value]) => value);
+    if (providedCodes.length) {
+      await executeStatement(
+        `UPDATE information_assets SET ${providedCodes.map(([column]) => `${column} = ?`).join(", ")} WHERE id = ?`,
+        [...providedCodes.map(([, value]) => value), result.insertId]
+      );
+    }
+    if (input.usefulLifeYears != null) {
+      // Written separately so installs without the lifecycle migration keep creating assets normally.
+      await executeStatement("UPDATE information_assets SET useful_life_years = ? WHERE id = ?", [input.usefulLifeYears, result.insertId]);
+    }
     await saveAssetExtension(result.insertId, parseAssetClass(input.assetClass), input.subtypeId, input.details);
     return result;
   });
@@ -476,7 +521,7 @@ export async function createAsset(input: AssetInput) {
 /** แก้ไขทรัพย์สิน */
 export async function updateAsset(id: number, input: Partial<AssetInput>) {
   return withTransaction(async () => {
-    const locked = await selectRows<RowDataPacket>("SELECT asset_class FROM information_assets WHERE id = ? FOR UPDATE", [id]);
+    const locked = await selectRows<RowDataPacket>("SELECT * FROM information_assets WHERE id = ? FOR UPDATE", [id]);
     if (input.assetClass !== undefined) parseAssetClass(input.assetClass);
     // Any classification change on a linked record must leave it eligible for Agent updates.
     if (input.assetClass !== undefined || input.assetCategory !== undefined || input.deviceType !== undefined || input.surveyId !== undefined) {
@@ -527,6 +572,11 @@ export async function updateAsset(id: number, input: Partial<AssetInput>) {
       last_updated_at: input.lastUpdatedAt,
       asset_image_1_url: input.assetImage1Url,
       asset_image_2_url: input.assetImage2Url,
+      // Clearing an override is a no-op on databases that predate the lifecycle migration.
+      useful_life_years: input.usefulLifeYears === null && locked[0] && !("useful_life_years" in locked[0]) ? undefined : input.usefulLifeYears,
+      // Clearing is a no-op on databases without the asset-code migration; setting a value requires it.
+      asset_code_prefix: !input.assetCodePrefix && locked[0] && !("asset_code_prefix" in locked[0]) ? undefined : input.assetCodePrefix,
+      asset_accounting_code: !input.assetAccountingCode && locked[0] && !("asset_accounting_code" in locked[0]) ? undefined : input.assetAccountingCode,
     };
 
     for (const [col, val] of Object.entries(fieldMap)) {
@@ -596,20 +646,27 @@ export type FacilitySelectRow = RowDataPacket & {
   facility_name: string;
   district_name: string | null;
   typecode: string;
+  asset_code_prefix?: string | null;
 };
 
 export async function listAllFacilitiesForSelect(filter?: { facilityId?: number }): Promise<FacilitySelectRow[]> {
   const where = filter?.facilityId ? "WHERE is_active = 1 AND id = ?" : "WHERE is_active = 1";
   const values = filter?.facilityId ? [filter.facilityId] : [];
-  try {
-    return await selectRows<FacilitySelectRow>(`
-      SELECT id, name AS facility_name, district_name, typecode
+  const query = (columns: string) => selectRows<FacilitySelectRow>(`
+      SELECT ${columns}
       FROM health_facilities
       ${where}
       ORDER BY district_name, typecode DESC, name
     `, values);
+  try {
+    return await query("id, name AS facility_name, district_name, typecode, asset_code_prefix");
   } catch {
-    return [];
+    // Databases without the asset-code migration still list facilities (no default prefix).
+    try {
+      return await query("id, name AS facility_name, district_name, typecode");
+    } catch {
+      return [];
+    }
   }
 }
 
@@ -724,14 +781,14 @@ export type FacilityAdminRow = RowDataPacket & {
   lon: number | null;
   is_active: number;
   asset_count: number;
+  asset_code_prefix?: string | null;
 };
 
 export async function listFacilitiesAdmin(filter?: { facilityId?: number }): Promise<FacilityAdminRow[]> {
   const where = filter?.facilityId ? "WHERE hf.id = ?" : "";
   const values = filter?.facilityId ? [filter.facilityId] : [];
-  try {
-    return await selectRows<FacilityAdminRow>(`
-      SELECT hf.id, hf.name, hf.typecode, hf.district_name, hf.tambon, hf.lat, hf.lon, hf.is_active,
+  const query = (extra: string) => selectRows<FacilityAdminRow>(`
+      SELECT hf.id, hf.name, hf.typecode, hf.district_name, hf.tambon, hf.lat, hf.lon, hf.is_active,${extra}
              COUNT(DISTINCT a.id) AS asset_count
       FROM health_facilities hf
       LEFT JOIN information_asset_surveys s ON s.facility_id = hf.id
@@ -740,8 +797,14 @@ export async function listFacilitiesAdmin(filter?: { facilityId?: number }): Pro
       GROUP BY hf.id
       ORDER BY hf.district_name, hf.typecode DESC, hf.name
     `, values);
+  try {
+    return await query(" hf.asset_code_prefix,");
   } catch {
-    return [];
+    try {
+      return await query("");
+    } catch {
+      return [];
+    }
   }
 }
 
@@ -752,12 +815,17 @@ export async function createFacility(input: {
   tambon?: string;
   lat?: number;
   lon?: number;
+  assetCodePrefix?: string;
 }) {
-  return executeStatement(
+  const result = await executeStatement(
     `INSERT INTO health_facilities (name, typecode, district_name, tambon, lat, lon, is_active)
      VALUES (?, ?, ?, ?, ?, ?, 1)`,
     [input.name, input.typecode, input.districtName, input.tambon ?? "", input.lat ?? 0, input.lon ?? 0]
   );
+  if (input.assetCodePrefix) {
+    await executeStatement("UPDATE health_facilities SET asset_code_prefix = ? WHERE id = ?", [input.assetCodePrefix, result.insertId]);
+  }
+  return result;
 }
 
 export async function updateFacility(id: number, input: {
@@ -767,10 +835,13 @@ export async function updateFacility(id: number, input: {
   tambon?: string;
   lat?: number;
   lon?: number;
+  /** "" clears the default prefix; undefined leaves it unchanged. */
+  assetCodePrefix?: string;
 }) {
   const sets: string[] = [];
   const values: unknown[] = [];
   const map: Record<string, unknown> = {
+    asset_code_prefix: input.assetCodePrefix === undefined ? undefined : input.assetCodePrefix || null,
     name: input.name,
     typecode: input.typecode,
     district_name: input.districtName,

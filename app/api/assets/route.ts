@@ -46,6 +46,8 @@ export async function GET(req: NextRequest) {
       assetGroup: a.assetGroup,
       displayType: assetTypeLabel(a),
       currentStatus: a.currentStatus,
+      workGroupId: a.workGroupId,
+      assetNumber: a.assetNumber,
     }))
   );
 }

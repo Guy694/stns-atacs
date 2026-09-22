@@ -9,6 +9,12 @@ import { getCurrentUser } from "@/lib/auth";
 import { formatThaiDate } from "@/lib/date-format";
 import { getFacilityById, listAssets } from "@/lib/assets";
 import { hasPermission } from "@/lib/role-permissions";
+import { listDisposalRequests } from "@/lib/asset-disposals";
+import { listRepairs, summarizeRepairs } from "@/lib/asset-repairs";
+import { listTransfers } from "@/lib/asset-transfers";
+import { CAPITALIZATION_THRESHOLD, fiscalYearOf, fiscalYearRange, summarizeValuation, VALUATION_STATUS_LABELS } from "@/lib/asset-valuation";
+import { DISPOSAL_REQUEST_TYPE_LABELS, DISPOSAL_STATUS_LABELS, DISPOSAL_STATUS_TONES, disposalMethodLabel } from "@/lib/disposal-options";
+import { REPAIR_STATUS_LABELS, REPAIR_STATUS_TONES } from "@/lib/repair-options";
 
 type Props = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -25,7 +31,14 @@ const VIEWS = [
   { key: "type", label: "แยกตามประเภท" },
   { key: "expiring", label: "ใกล้หมดอายุ MA" },
   { key: "broken", label: "ชำรุด / ไม่ใช้งาน" },
+  { key: "valuation", label: "มูลค่าและค่าเสื่อมราคา" },
+  { key: "repairs", label: "งานซ่อม" },
+  { key: "transfers", label: "โอนย้าย" },
+  { key: "disposal", label: "จำหน่าย / สูญหาย" },
 ] as const;
+
+const baht = (value: number | null | undefined) => (value === null || value === undefined ? "-" : value.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+const MIGRATION_NOTE = "ยังไม่ได้เปิดใช้ข้อมูลส่วนนี้ (ต้องรัน database/add_asset_lifecycle.sql)";
 
 type View = (typeof VIEWS)[number]["key"];
 
@@ -41,6 +54,11 @@ export default async function ReportsPage({ searchParams }: Props) {
 
   const params = await searchParams;
   const view = (readParam(params, "view") || "summary") as View;
+  const todayIso = TODAY.toISOString().slice(0, 10);
+  const currentFiscalYear = fiscalYearOf(todayIso);
+  const fiscalYear = Number(readParam(params, "fy")) || currentFiscalYear;
+  const fyRange = fiscalYearRange(fiscalYear);
+  const fyOptions = Array.from({ length: 8 }, (_, i) => currentFiscalYear - i);
 
   const scopedFacilityId = user.role === "admin" ? undefined : Number(user.facilityId);
   const [assets, scopedFacility] = await Promise.all([
@@ -55,7 +73,18 @@ export default async function ReportsPage({ searchParams }: Props) {
   const inactive = assets.filter((a) => a.currentStatus === "Inactive").length;
   const hw = assets.filter((a) => isItAsset(a) && a.assetGroup === "Hardware").length;
   const sw = assets.filter((a) => isItAsset(a) && a.assetGroup === "Software").length;
+  const terminalCount = assets.filter((a) => a.currentStatus === "Disposed" || a.currentStatus === "Lost").length;
   const facilities = new Set(assets.map((a) => a.facilityId)).size;
+  const scopeIds = scopedFacilityId ? [scopedFacilityId] : undefined;
+  const valuationReport = view === "valuation"
+    ? summarizeValuation(assets.map((a) => ({ ...a, subtypeName: a.extensions[a.assetClass]?.subtypeName })), fiscalYear, todayIso)
+    : null;
+  const [repairList, repairSummary, transferList, disposalList] = await Promise.all([
+    view === "repairs" ? listRepairs({ facilityIds: scopeIds, dateFrom: fyRange.start, dateTo: fyRange.end, limit: 1000 }) : Promise.resolve(null),
+    view === "repairs" ? summarizeRepairs({ facilityIds: scopeIds, dateFrom: fyRange.start, dateTo: fyRange.end }) : Promise.resolve(null),
+    view === "transfers" ? listTransfers({ facilityIds: scopeIds, dateFrom: fyRange.start, dateTo: fyRange.end, limit: 1000 }) : Promise.resolve(null),
+    view === "disposal" ? listDisposalRequests({ facilityIds: scopeIds, dateFrom: fyRange.start, dateTo: fyRange.end, limit: 1000 }) : Promise.resolve(null),
+  ]);
   const districts = new Set(assets.map((a) => a.districtName)).size;
 
   // ── by facility ──────────────────────────────────────────────────────
@@ -134,12 +163,13 @@ export default async function ReportsPage({ searchParams }: Props) {
       </div>
 
       {/* KPI strip */}
-      <div className="grid gap-3 sm:grid-cols-4 lg:grid-cols-8">
+      <div className="grid gap-3 sm:grid-cols-5 lg:grid-cols-10">
         {[
           { label: "ทรัพย์สินรวม", value: total, color: "text-[var(--accent-strong)]" },
           { label: "ใช้งานอยู่", value: active, color: "text-emerald-600" },
           { label: "ชำรุด", value: broken, color: "text-rose-600" },
           { label: "ไม่ใช้งาน", value: inactive, color: "text-amber-600" },
+          { label: "จำหน่าย/สูญหาย", value: terminalCount, color: "text-slate-500" },
           { label: "IT Hardware", value: hw, color: "text-sky-700" },
           { label: "IT Software", value: sw, color: "text-indigo-600" },
           { label: "ทรัพย์สินกลุ่มอื่น", value: total - hw - sw, color: "text-slate-700" },
@@ -156,7 +186,7 @@ export default async function ReportsPage({ searchParams }: Props) {
       {/* Tab nav */}
       <div className="flex flex-wrap gap-2">
         {VIEWS.map((v) => (
-          <Link key={v.key} href={`/reports?view=${v.key}`} className={navClass(v.key)}>
+          <Link key={v.key} href={`/reports?view=${v.key}${fiscalYear !== currentFiscalYear ? `&fy=${fiscalYear}` : ""}`} className={navClass(v.key)}>
             {v.label}
           </Link>
         ))}
@@ -304,7 +334,7 @@ export default async function ReportsPage({ searchParams }: Props) {
                     <tr key={a.id} className="transition hover:bg-white/50">
                       <td className="px-4 py-3">
                         <Link href={`/assets/${a.id}`} className="font-medium hover:text-[var(--accent-strong)] hover:underline">{a.assetName}</Link>
-                        <p className="font-mono text-xs text-[var(--muted)]">{a.assetRegistrationNo}</p>
+                        <p className="font-mono text-xs text-[var(--muted)]">{a.assetNumber}</p>
                       </td>
                       <td className="px-4 py-3 text-[var(--muted)]">{a.facilityName}</td>
                       <td className="px-4 py-3 text-xs">{formatThaiDate(a.maintenanceEndDate)}</td>
@@ -352,7 +382,7 @@ export default async function ReportsPage({ searchParams }: Props) {
                     <tr key={a.id} className="transition hover:bg-white/50">
                       <td className="px-4 py-3">
                         <Link href={`/assets/${a.id}`} className="font-medium hover:text-[var(--accent-strong)] hover:underline">{a.assetName}</Link>
-                        <p className="font-mono text-xs text-[var(--muted)]">{a.assetRegistrationNo}</p>
+                        <p className="font-mono text-xs text-[var(--muted)]">{a.assetNumber}</p>
                       </td>
                       <td className="px-4 py-3 text-[var(--muted)]">{a.facilityName}</td>
                       <td className="px-4 py-3">
@@ -382,6 +412,227 @@ export default async function ReportsPage({ searchParams }: Props) {
             </div>
           )}
         </div>
+      )}
+      {["valuation", "repairs", "transfers", "disposal"].includes(view) && (
+        <form method="GET" className="flex flex-wrap items-center gap-2 text-sm">
+          <input type="hidden" name="view" value={view} />
+          <label htmlFor="report-fy" className="text-[var(--muted)]">ปีงบประมาณ</label>
+          <select id="report-fy" name="fy" defaultValue={fiscalYear} className="rounded-lg border border-[var(--line)] bg-white/80 px-2 py-1">
+            {fyOptions.map((year) => <option key={year} value={year}>{year}</option>)}
+          </select>
+          <button className="rounded-lg border border-[var(--line)] bg-white px-3 py-1">แสดง</button>
+          <span className="text-xs text-[var(--muted)]">{formatThaiDate(fyRange.start)} – {formatThaiDate(fyRange.end)}</span>
+        </form>
+      )}
+
+      {/* ── View: valuation ───────────────────────────────────────────── */}
+      {view === "valuation" && valuationReport && (
+        <div className="space-y-4">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {[
+              { label: "ราคาทุนรวม (บาท)", value: baht(valuationReport.totals.cost) },
+              { label: `ค่าเสื่อมราคาปีงบ ${fiscalYear} (บาท)`, value: baht(valuationReport.totals.depreciationThisYear) },
+              { label: "ค่าเสื่อมสะสม (บาท)", value: baht(valuationReport.totals.accumulated) },
+              { label: "มูลค่าสุทธิ (บาท)", value: baht(valuationReport.totals.bookValue) },
+            ].map((kpi) => (
+              <div key={kpi.label} className="glass-panel rounded-2xl p-4">
+                <p className="text-xs text-[var(--muted)]">{kpi.label}</p>
+                <p className="mt-1 text-xl font-bold tabular-nums">{kpi.value}</p>
+              </div>
+            ))}
+          </div>
+          <div className="glass-panel overflow-hidden rounded-2xl">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-black/6 px-5 py-3">
+              <div>
+                <p className="font-semibold">สรุปมูลค่าตามประเภททรัพย์สิน</p>
+                <p className="text-xs text-[var(--muted)]">ณ วันที่ {formatThaiDate(valuationReport.asOf)} · เส้นตรง ราคาซาก 1 บาท · ไม่รวมรายการจำหน่าย/สูญหาย {valuationReport.terminalCount} รายการ</p>
+              </div>
+              <a href={`/api/export/valuation?fy=${fiscalYear}${scopedFacilityId ? `&facilityId=${scopedFacilityId}` : ""}`} className="inline-flex items-center gap-2 rounded-xl border border-[var(--primary-soft-strong)] bg-[var(--primary-soft)] px-4 py-2 text-sm font-medium text-[var(--primary-text)] hover:bg-[var(--primary-soft-strong)]">
+                <AppIcon name="download" className="h-4 w-4" /> ทะเบียนค่าเสื่อม CSV
+              </a>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[860px] text-sm">
+                <thead className="bg-slate-50/60 text-xs text-[var(--muted)]">
+                  <tr>
+                    <th className="px-4 py-2.5 text-left font-medium">ประเภท (ตารางอายุการใช้งาน)</th>
+                    <th className="px-4 py-2.5 text-right font-medium">จำนวน</th>
+                    <th className="px-4 py-2.5 text-right font-medium">ราคาทุน</th>
+                    <th className="px-4 py-2.5 text-right font-medium">ค่าเสื่อมปีงบ</th>
+                    <th className="px-4 py-2.5 text-right font-medium">ค่าเสื่อมสะสม</th>
+                    <th className="px-4 py-2.5 text-right font-medium">มูลค่าสุทธิ</th>
+                    <th className="px-4 py-2.5 text-right font-medium">ครบอายุ</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-black/4">
+                  {valuationReport.rows.length === 0 ? (
+                    <tr><td colSpan={7} className="px-4 py-8 text-center text-[var(--muted)]">ยังไม่มีรายการที่มีราคาและวันที่ได้มาครบสำหรับคิดค่าเสื่อม</td></tr>
+                  ) : valuationReport.rows.map((row) => (
+                    <tr key={row.categoryId ?? "none"}>
+                      <td className="px-4 py-2.5">{row.categoryId ? `${row.categoryId}. ` : ""}{row.categoryLabel}</td>
+                      <td className="px-4 py-2.5 text-right tabular-nums">{row.count}</td>
+                      <td className="px-4 py-2.5 text-right tabular-nums">{baht(row.cost)}</td>
+                      <td className="px-4 py-2.5 text-right tabular-nums">{baht(row.depreciationThisYear)}</td>
+                      <td className="px-4 py-2.5 text-right tabular-nums">{baht(row.accumulated)}</td>
+                      <td className="px-4 py-2.5 text-right tabular-nums">{baht(row.bookValue)}</td>
+                      <td className="px-4 py-2.5 text-right tabular-nums">{row.fullyDepreciated}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                {valuationReport.rows.length > 0 && (
+                  <tfoot className="border-t border-black/10 font-semibold">
+                    <tr>
+                      <td className="px-4 py-2.5">รวม</td>
+                      <td className="px-4 py-2.5 text-right tabular-nums">{valuationReport.totals.count}</td>
+                      <td className="px-4 py-2.5 text-right tabular-nums">{baht(valuationReport.totals.cost)}</td>
+                      <td className="px-4 py-2.5 text-right tabular-nums">{baht(valuationReport.totals.depreciationThisYear)}</td>
+                      <td className="px-4 py-2.5 text-right tabular-nums">{baht(valuationReport.totals.accumulated)}</td>
+                      <td className="px-4 py-2.5 text-right tabular-nums">{baht(valuationReport.totals.bookValue)}</td>
+                      <td className="px-4 py-2.5 text-right tabular-nums">{valuationReport.totals.fullyDepreciated}</td>
+                    </tr>
+                  </tfoot>
+                )}
+              </table>
+            </div>
+          </div>
+          <div className="glass-panel rounded-2xl p-5 text-sm">
+            <p className="font-semibold">รายการที่ไม่ได้คิดค่าเสื่อม</p>
+            <ul className="mt-2 grid gap-1 sm:grid-cols-2">
+              {(Object.keys(valuationReport.excluded) as Array<keyof typeof valuationReport.excluded>).map((key) => (
+                <li key={key} className="flex justify-between gap-3 border-b border-black/5 py-1">
+                  <span className="text-[var(--muted)]">{VALUATION_STATUS_LABELS[key]}</span>
+                  <span className="tabular-nums">{valuationReport.excluded[key]} รายการ</span>
+                </li>
+              ))}
+            </ul>
+            <p className="mt-2 text-xs text-[var(--muted)]">ครุภัณฑ์ราคาต่ำกว่า {CAPITALIZATION_THRESHOLD.toLocaleString("th-TH")} บาท มูลค่ารวม {baht(valuationReport.belowThresholdCost)} บาท แสดงในทะเบียนแต่ไม่คิดค่าเสื่อม · ตัวเลขเป็นการประมาณการเพื่อบริหารทรัพย์สิน ไม่ใช่การบันทึกบัญชีแยกประเภท</p>
+          </div>
+          {(() => {
+            const replace = valuationReport.items.filter((item) => item.valuation.isFullyDepreciated && item.asset.currentStatus === "Active").slice(0, 100);
+            if (replace.length === 0) return null;
+            return (
+              <div className="glass-panel overflow-hidden rounded-2xl">
+                <div className="border-b border-black/6 px-5 py-3 font-semibold">ครบอายุการใช้งานแล้วแต่ยังใช้งาน (พิจารณาทดแทน) <span className="ml-1 text-sm font-normal text-[var(--muted)]">{replace.length} รายการ</span></div>
+                <ul className="divide-y divide-black/5 text-sm">
+                  {replace.map(({ asset, valuation }) => (
+                    <li key={asset.id} className="flex flex-wrap items-center justify-between gap-2 px-5 py-2">
+                      <Link href={`/assets/${asset.id}`} className="hover:underline">{asset.assetName} <span className="font-mono text-xs text-[var(--muted)]">{asset.assetNumber}</span></Link>
+                      <span className="text-xs text-[var(--muted)]">{asset.facilityName} · ครบอายุ {formatThaiDate(valuation.fullyDepreciatedOn)}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            );
+          })()}
+        </div>
+      )}
+
+      {/* ── View: repairs ─────────────────────────────────────────────── */}
+      {view === "repairs" && repairList && repairSummary && (
+        !repairList.schemaReady ? <p className="glass-panel rounded-2xl p-5 text-sm text-amber-700">{MIGRATION_NOTE}</p> : (
+          <div className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              {[
+                { label: "แจ้งซ่อมในปีงบ", value: String(repairList.rows.length) },
+                { label: "งานค้าง", value: String(repairSummary.open) },
+                { label: "เวลาเฉลี่ยจนซ่อมเสร็จ", value: repairSummary.averageDaysToComplete === null ? "-" : `${repairSummary.averageDaysToComplete} วัน` },
+                { label: "ค่าใช้จ่ายรวม (บาท)", value: baht(repairSummary.totalCost) },
+              ].map((kpi) => (
+                <div key={kpi.label} className="glass-panel rounded-2xl p-4"><p className="text-xs text-[var(--muted)]">{kpi.label}</p><p className="mt-1 text-xl font-bold tabular-nums">{kpi.value}</p></div>
+              ))}
+            </div>
+            <div className="glass-panel overflow-x-auto rounded-2xl">
+              <table className="w-full min-w-[820px] text-sm">
+                <thead className="bg-slate-50/60 text-xs text-[var(--muted)]"><tr>
+                  <th className="px-4 py-2.5 text-left font-medium">งาน</th><th className="px-4 py-2.5 text-left font-medium">ทรัพย์สิน</th><th className="px-4 py-2.5 text-left font-medium">หน่วยงาน</th>
+                  <th className="px-4 py-2.5 text-center font-medium">สถานะ</th><th className="px-4 py-2.5 text-left font-medium">ผู้ซ่อม</th><th className="px-4 py-2.5 text-right font-medium">ค่าใช้จ่าย</th>
+                </tr></thead>
+                <tbody className="divide-y divide-black/4">
+                  {repairList.rows.length === 0 ? <tr><td colSpan={6} className="px-4 py-8 text-center text-[var(--muted)]">ไม่มีงานซ่อมในปีงบประมาณนี้</td></tr> : repairList.rows.map((row) => (
+                    <tr key={row.id}>
+                      <td className="px-4 py-2.5"><Link href={`/repairs/${row.id}`} className="font-mono text-xs font-semibold text-[var(--primary)] hover:underline">#{row.id}</Link><p className="text-xs text-[var(--muted)]">{formatThaiDate(row.reportedAt)}</p></td>
+                      <td className="px-4 py-2.5"><Link href={`/assets/${row.assetId}`} className="hover:underline">{row.assetName}</Link><p className="font-mono text-xs text-[var(--muted)]">{row.assetRegistrationNo}</p></td>
+                      <td className="px-4 py-2.5 text-xs text-[var(--muted)]">{row.facilityName}</td>
+                      <td className="px-4 py-2.5 text-center"><StatusBadge tone={REPAIR_STATUS_TONES[row.status]}>{REPAIR_STATUS_LABELS[row.status]}</StatusBadge></td>
+                      <td className="px-4 py-2.5 text-xs">{row.vendorName || row.assignedTo || "-"}</td>
+                      <td className="px-4 py-2.5 text-right text-xs tabular-nums">{baht(row.cost)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )
+      )}
+
+      {/* ── View: transfers ───────────────────────────────────────────── */}
+      {view === "transfers" && transferList && (
+        !transferList.schemaReady ? <p className="glass-panel rounded-2xl p-5 text-sm text-amber-700">{MIGRATION_NOTE}</p> : (
+          <div className="glass-panel overflow-x-auto rounded-2xl">
+            <div className="border-b border-black/6 px-5 py-3 font-semibold">การโอนย้ายในปีงบ {fiscalYear} <span className="ml-1 text-sm font-normal text-[var(--muted)]">{transferList.rows.length} รายการ</span></div>
+            <table className="w-full min-w-[860px] text-sm">
+              <thead className="bg-slate-50/60 text-xs text-[var(--muted)]"><tr>
+                <th className="px-4 py-2.5 text-left font-medium">วันที่</th><th className="px-4 py-2.5 text-left font-medium">ทรัพย์สิน</th><th className="px-4 py-2.5 text-left font-medium">จาก</th>
+                <th className="px-4 py-2.5 text-left font-medium">ไป</th><th className="px-4 py-2.5 text-left font-medium">เอกสาร / เหตุผล</th><th className="px-4 py-2.5 text-left font-medium">ผู้บันทึก</th>
+              </tr></thead>
+              <tbody className="divide-y divide-black/4">
+                {transferList.rows.length === 0 ? <tr><td colSpan={6} className="px-4 py-8 text-center text-[var(--muted)]">ไม่มีการโอนย้ายในปีงบประมาณนี้</td></tr> : transferList.rows.map((row) => (
+                  <tr key={row.id} className="align-top">
+                    <td className="whitespace-nowrap px-4 py-2.5 text-xs">{formatThaiDate(row.transferDate)}</td>
+                    <td className="px-4 py-2.5"><Link href={`/assets/${row.assetId}`} className="hover:underline">{row.assetName}</Link><p className="font-mono text-xs text-[var(--muted)]">{row.assetRegistrationNo}</p></td>
+                    <td className="px-4 py-2.5 text-xs">{row.fromFacilityName}<p className="text-[var(--muted)]">{[row.fromOwnerName, row.fromLocationDetail].filter(Boolean).join(" · ")}</p></td>
+                    <td className="px-4 py-2.5 text-xs">{row.toFacilityName}<p className="text-[var(--muted)]">{[row.toOwnerName, row.toLocationDetail].filter(Boolean).join(" · ")}</p></td>
+                    <td className="px-4 py-2.5 text-xs text-[var(--muted)]">{row.documentNo || "-"}{row.reason && <p>{row.reason}</p>}</td>
+                    <td className="px-4 py-2.5 text-xs text-[var(--muted)]">{row.transferredBy}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )
+      )}
+
+      {/* ── View: disposal ────────────────────────────────────────────── */}
+      {view === "disposal" && disposalList && (
+        !disposalList.schemaReady ? <p className="glass-panel rounded-2xl p-5 text-sm text-amber-700">{MIGRATION_NOTE}</p> : (() => {
+          const approved = disposalList.rows.filter((row) => row.status === "Approved");
+          const sum = (rows: typeof approved, pick: (row: (typeof approved)[number]) => number | null) => rows.reduce((total, row) => total + (pick(row) ?? 0), 0);
+          return (
+            <div className="space-y-4">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                {[
+                  { label: "รออนุมัติ", value: String(disposalList.rows.filter((row) => row.status === "Pending").length) },
+                  { label: "อนุมัติจำหน่าย / สูญหาย", value: `${approved.filter((row) => row.requestType === "Disposed").length} / ${approved.filter((row) => row.requestType === "Lost").length}` },
+                  { label: "มูลค่าสุทธิที่ตัดจำหน่าย (บาท)", value: baht(sum(approved, (row) => row.bookValue)) },
+                  { label: "เงินที่ได้รับจากการจำหน่าย (บาท)", value: baht(sum(approved, (row) => row.proceedsAmount)) },
+                ].map((kpi) => (
+                  <div key={kpi.label} className="glass-panel rounded-2xl p-4"><p className="text-xs text-[var(--muted)]">{kpi.label}</p><p className="mt-1 text-xl font-bold tabular-nums">{kpi.value}</p></div>
+                ))}
+              </div>
+              <div className="glass-panel overflow-x-auto rounded-2xl">
+                <table className="w-full min-w-[900px] text-sm">
+                  <thead className="bg-slate-50/60 text-xs text-[var(--muted)]"><tr>
+                    <th className="px-4 py-2.5 text-left font-medium">คำขอ</th><th className="px-4 py-2.5 text-left font-medium">ทรัพย์สิน</th><th className="px-4 py-2.5 text-left font-medium">ประเภท / วิธี</th>
+                    <th className="px-4 py-2.5 text-right font-medium">ราคาทุน</th><th className="px-4 py-2.5 text-right font-medium">มูลค่าสุทธิ</th><th className="px-4 py-2.5 text-center font-medium">สถานะ</th><th className="px-4 py-2.5 text-left font-medium">หนังสืออนุมัติ</th>
+                  </tr></thead>
+                  <tbody className="divide-y divide-black/4">
+                    {disposalList.rows.length === 0 ? <tr><td colSpan={7} className="px-4 py-8 text-center text-[var(--muted)]">ไม่มีคำขอในปีงบประมาณนี้</td></tr> : disposalList.rows.map((row) => (
+                      <tr key={row.id}>
+                        <td className="px-4 py-2.5"><Link href={`/disposal?requestId=${row.id}`} className="font-mono text-xs font-semibold text-[var(--primary)] hover:underline">#{row.id}</Link><p className="text-xs text-[var(--muted)]">{formatThaiDate(row.requestedAt)}</p></td>
+                        <td className="px-4 py-2.5"><Link href={`/assets/${row.assetId}`} className="hover:underline">{row.assetName}</Link><p className="font-mono text-xs text-[var(--muted)]">{row.assetRegistrationNo} · {row.facilityName}</p></td>
+                        <td className="px-4 py-2.5 text-xs">{DISPOSAL_REQUEST_TYPE_LABELS[row.requestType]}{row.disposalMethod && <p className="text-[var(--muted)]">{disposalMethodLabel(row.disposalMethod)}</p>}</td>
+                        <td className="px-4 py-2.5 text-right text-xs tabular-nums">{baht(row.purchasePrice)}</td>
+                        <td className="px-4 py-2.5 text-right text-xs tabular-nums">{baht(row.bookValue)}</td>
+                        <td className="px-4 py-2.5 text-center"><StatusBadge tone={DISPOSAL_STATUS_TONES[row.status]}>{DISPOSAL_STATUS_LABELS[row.status]}</StatusBadge></td>
+                        <td className="px-4 py-2.5 text-xs text-[var(--muted)]">{row.approvalDocumentNo || "-"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          );
+        })()
       )}
     </div>
   );

@@ -5,6 +5,7 @@ import crypto from "node:crypto";
 import type { RowDataPacket } from "mysql2/promise";
 
 import { supportsAgentAsset } from "@/lib/asset-policy";
+import { isTerminalAssetStatus } from "@/lib/asset-status";
 import { createAsset, findOrCreateSurvey, updateAsset } from "@/lib/assets";
 import { findActiveFacilityWorkGroup, getActiveFacilityWorkGroupForFacility, getFacilityAgentContext, normalizeWorkGroupName } from "@/lib/facility-work-groups";
 import { executeStatement, selectRows } from "@/lib/mysql";
@@ -701,7 +702,13 @@ export async function reportAgentInventory(input: {
   };
 
   if (linkedAssetId) {
-    await updateAsset(linkedAssetId, commonAssetFields);
+    // Disposed/Lost come from an approved request; an Agent report must not revert them.
+    const [statusRow] = await selectRows<RowDataPacket & { current_status: string | null }>(
+      "SELECT current_status FROM information_assets WHERE id = ? LIMIT 1",
+      [linkedAssetId]
+    );
+    const { currentStatus, ...fieldsWithoutStatus } = commonAssetFields;
+    await updateAsset(linkedAssetId, isTerminalAssetStatus(statusRow?.current_status) ? fieldsWithoutStatus : { ...fieldsWithoutStatus, currentStatus });
   } else {
     const result = await createAsset({
       ...commonAssetFields,

@@ -53,6 +53,7 @@ export async function createFacilityAction(_prev: string | null, fd: FormData): 
       tambon: optStr(fd, "tambon"),
       lat: optFloat(fd, "lat"),
       lon: optFloat(fd, "lon"),
+      assetCodePrefix: optStr(fd, "assetCodePrefix")?.slice(0, 30),
     });
     REVALIDATE();
   } catch (err) {
@@ -76,6 +77,7 @@ export async function updateFacilityAction(_prev: string | null, fd: FormData): 
       tambon: optStr(fd, "tambon"),
       lat: optFloat(fd, "lat"),
       lon: optFloat(fd, "lon"),
+      assetCodePrefix: fd.has("assetCodePrefix") ? str(fd, "assetCodePrefix").slice(0, 30) : undefined,
     });
     REVALIDATE();
   } catch (err) {

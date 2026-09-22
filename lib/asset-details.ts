@@ -8,6 +8,14 @@ export const ASSET_DETAIL_FIELDS: Record<string, DetailField[]> = {
   Utility: [{ key: "utility_system", label: "ระบบสาธารณูปโภค" }, { key: "capacity", label: "กำลัง / ความจุ (ระบุหน่วย)" }, { key: "meter_number", label: "หมายเลขมิเตอร์" }, { key: "next_service_date", label: "วันบำรุงรักษาครั้งถัดไป", type: "date" }],
   Other: [{ key: "specific_description", label: "รายละเอียดเฉพาะเพิ่มเติม" }],
 };
+// Keep legacy detail keys when editing older records; new classes share applicable fields.
+ASSET_DETAIL_FIELDS.PermanentBuilding = ASSET_DETAIL_FIELDS.Building;
+ASSET_DETAIL_FIELDS.Structure = ASSET_DETAIL_FIELDS.Building;
+ASSET_DETAIL_FIELDS.Electrical = ASSET_DETAIL_FIELDS.Utility.map(field => field.key === "utility_system" ? { ...field, label: "ระบบ / ชนิดอุปกรณ์ไฟฟ้า" } : field);
+for (const group of ["Advertising", "Agricultural", "Factory", "Construction", "Survey", "Education", "Kitchen", "Sports", "Music", "Weapons", "Field", "Intangible"]) {
+  ASSET_DETAIL_FIELDS[group] = ASSET_DETAIL_FIELDS.Other;
+}
+
 export const DETAIL_COLUMNS = [...new Set(Object.values(ASSET_DETAIL_FIELDS).flat().map(f => f.key))];
 export type AssetDetails = Record<string, string>;
 export type AssetExtension = { subtypeId: number | null; subtypeName: string; details: AssetDetails; schemaVersion: number };

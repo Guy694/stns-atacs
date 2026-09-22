@@ -3,12 +3,17 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-import { recordAssetStatusHistory } from "@/lib/asset-status-history";
 import { getCurrentUser } from "@/lib/auth";
-import { getAssetById, getSurveyById, updateAsset } from "@/lib/assets";
+import { getAssetById, getSurveyById } from "@/lib/assets";
+import { transferAsset } from "@/lib/asset-transfers";
 import { writeAuditLog } from "@/lib/audit";
 import { canManageAsset, canMutateAssets } from "@/lib/permissions";
 import { hasPermission } from "@/lib/role-permissions";
+import { friendlyLifecycleError } from "@/lib/schema-errors";
+
+function text(fd: FormData, key: string) {
+  return (fd.get(key) as string | null)?.trim() ?? "";
+}
 
 export async function transferAssetAction(_prev: string | null, fd: FormData): Promise<string | null> {
   const user = await getCurrentUser();
@@ -18,12 +23,15 @@ export async function transferAssetAction(_prev: string | null, fd: FormData): P
 
   const assetId = Number(fd.get("assetId"));
   const newSurveyId = Number(fd.get("newSurveyId"));
-  const newOwnerName = (fd.get("newOwnerName") as string | null)?.trim() || undefined;
-  const newLocationDetail = (fd.get("newLocationDetail") as string | null)?.trim() || undefined;
-  const reason = (fd.get("reason") as string | null)?.trim() || "";
+  if (!Number.isSafeInteger(assetId) || assetId <= 0) return "ไม่พบ ID ทรัพย์สิน";
+  if (!Number.isSafeInteger(newSurveyId) || newSurveyId <= 0) return "กรุณาเลือกหน่วยงานปลายทาง";
 
-  if (!assetId || isNaN(assetId)) return "ไม่พบ ID ทรัพย์สิน";
-  if (!newSurveyId || isNaN(newSurveyId)) return "กรุณาเลือกหน่วยงานปลายทาง";
+  let workGroupId: number | null | undefined;
+  if (fd.has("newWorkGroupId")) {
+    const raw = text(fd, "newWorkGroupId");
+    workGroupId = raw ? Number(raw) : null;
+    if (workGroupId !== null && (!Number.isSafeInteger(workGroupId) || workGroupId <= 0)) return "กลุ่มงานไม่ถูกต้อง";
+  }
 
   try {
     const [asset, destinationSurvey] = await Promise.all([getAssetById(assetId), getSurveyById(newSurveyId)]);
@@ -32,33 +40,28 @@ export async function transferAssetAction(_prev: string | null, fd: FormData): P
     if (!canManageAsset(user, asset.facilityId)) return "คุณไม่มีสิทธิ์โอนย้ายทรัพย์สินของหน่วยงานนี้";
     if (!canManageAsset(user, destinationSurvey.facilityId)) return "คุณไม่มีสิทธิ์โอนย้ายไปหน่วยงานปลายทางนี้";
 
-    const transferNote = reason
-      ? `[โอนย้าย] จาก ${asset.facilityName} (${asset.districtName}) → เหตุผล: ${reason} — บันทึกโดย ${user.fullName}`
-      : `[โอนย้าย] จาก ${asset.facilityName} (${asset.districtName}) — บันทึกโดย ${user.fullName}`;
-
-    await updateAsset(assetId, {
-      surveyId: newSurveyId,
-      ownerName: newOwnerName,
-      locationDetail: newLocationDetail,
-      usageDescription: transferNote,
-      updatedBy: user.fullName,
-      lastUpdatedAt: new Date().toISOString().slice(0, 10),
-    });
-    await recordAssetStatusHistory({
+    const result = await transferAsset({
       assetId,
-      fromStatus: asset.currentStatus,
-      toStatus: asset.currentStatus,
-      note: transferNote,
-      changedByUserId: user.id,
-      changedBy: user.fullName,
+      toSurveyId: newSurveyId,
+      toWorkGroupId: workGroupId,
+      toOwnerName: fd.has("newOwnerName") ? text(fd, "newOwnerName") : undefined,
+      toLocationDetail: fd.has("newLocationDetail") ? text(fd, "newLocationDetail") : undefined,
+      reason: text(fd, "reason"),
+      documentNo: text(fd, "documentNo"),
+      transferDate: text(fd, "transferDate") || new Date().toISOString().slice(0, 10),
+      userId: user.id,
+      userName: user.fullName,
     });
 
+    await writeAuditLog({ userId: user.id, userName: user.fullName, action: "transfer", entity: "information_assets", entityId: assetId, summary: `${result.note} (โอนย้าย #${result.transferId})` });
     revalidatePath("/assets");
     revalidatePath(`/assets/${assetId}`);
+    revalidatePath("/transfer");
+    revalidatePath(`/facilities/${result.fromFacilityId}`);
+    revalidatePath(`/facilities/${result.toFacilityId}`);
     revalidatePath("/");
-    await writeAuditLog({ userId: user.id, userName: user.fullName, action: "transfer", entity: "information_assets", entityId: assetId, summary: transferNote });
   } catch (err) {
-    return err instanceof Error ? err.message : "เกิดข้อผิดพลาด กรุณาลองใหม่";
+    return friendlyLifecycleError(err);
   }
 
   redirect(`/assets/${assetId}`);

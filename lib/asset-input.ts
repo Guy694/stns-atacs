@@ -1,6 +1,8 @@
 import { validateAssetDetails, type AssetExtensions } from "@/lib/asset-details";
 import type { AssetInput } from "@/lib/assets";
 import { isItAsset, parseAssetClass, requiresWindowsLicense } from "@/lib/asset-policy";
+import { ASSET_ACCOUNTING_CODE_MAX, ASSET_CODE_PREFIX_MAX } from "@/lib/asset-number";
+import { isTerminalAssetStatus, OPERATIONAL_ASSET_STATUSES } from "@/lib/asset-status";
 import { WINDOWS_LICENSE_STATUS_VALUES, type WindowsLicenseStatus } from "@/lib/windows-license";
 
 export type AssetFields = Record<string, string | undefined>;
@@ -34,6 +36,16 @@ export function parseAssetFields(fields: AssetFields, existing?: ExistingAssetFi
       ? existing?.assetRegistrationNo ?? null : fields.assetRegistrationNo || null,
   };
   for (const key of COMMON_TEXT_FIELDS) if (fields[key] !== undefined) result[key] = fields[key];
+  if (fields.assetCodePrefix !== undefined) {
+    const prefix = fields.assetCodePrefix.trim();
+    if (prefix.length > ASSET_CODE_PREFIX_MAX) throw new Error(`รหัสหน่วยงานของเลขครุภัณฑ์ต้องไม่เกิน ${ASSET_CODE_PREFIX_MAX} ตัวอักษร`);
+    result.assetCodePrefix = prefix;
+  }
+  if (fields.assetAccountingCode !== undefined) {
+    const code = fields.assetAccountingCode.trim();
+    if (code.length > ASSET_ACCOUNTING_CODE_MAX) throw new Error(`รหัสสินทรัพย์ต้องไม่เกิน ${ASSET_ACCOUNTING_CODE_MAX} ตัวอักษร`);
+    result.assetAccountingCode = code;
+  }
   // Hidden IT fields are never cleared or overwritten while editing a non-IT record.
   if (isIt) for (const key of IT_FIELDS) if (fields[key] !== undefined) result[key] = fields[key];
 
@@ -72,9 +84,24 @@ export function parseAssetFields(fields: AssetFields, existing?: ExistingAssetFi
   const end = result.maintenanceEndDate ?? existing?.maintenanceEndDate;
   if (start && end && end < start) throw new Error("วันสิ้นสุดสัญญาต้องไม่ก่อนวันเริ่มสัญญา");
   if (fields.currentStatus !== undefined) {
-    if (!["Active", "Inactive", "Broken"].includes(fields.currentStatus)) throw new Error("สถานะทรัพย์สินไม่ถูกต้อง");
-    result.currentStatus = fields.currentStatus;
+    const priorStatus = existing?.currentStatus;
+    if (isTerminalAssetStatus(priorStatus)) {
+      // Disposed/Lost are set only by an approved request and cannot be reverted by a form or import.
+      if (fields.currentStatus && fields.currentStatus !== priorStatus) throw new Error("ทรัพย์สินที่จำหน่ายหรือสูญหายแล้วเปลี่ยนสถานะผ่านการแก้ไขข้อมูลไม่ได้");
+    } else {
+      if (!(OPERATIONAL_ASSET_STATUSES as readonly string[]).includes(fields.currentStatus)) {
+        throw new Error(isTerminalAssetStatus(fields.currentStatus) ? "สถานะจำหน่าย/สูญหายต้องบันทึกผ่านคำขอจำหน่ายที่ได้รับอนุมัติ" : "สถานะทรัพย์สินไม่ถูกต้อง");
+      }
+      result.currentStatus = fields.currentStatus;
+    }
   } else if (!existing) result.currentStatus = "Active";
+  if (fields.usefulLifeYears !== undefined) {
+    const raw = fields.usefulLifeYears.trim();
+    result.usefulLifeYears = raw === "" ? null : Number(raw);
+    if (result.usefulLifeYears !== null && (!Number.isInteger(result.usefulLifeYears) || result.usefulLifeYears < 1 || result.usefulLifeYears > 100)) {
+      throw new Error("อายุการใช้งานต้องเป็นจำนวนเต็ม 1–100 ปี");
+    }
+  }
   if (fields.subtypeId !== undefined) {
     result.subtypeId = fields.subtypeId === "" ? null : Number(fields.subtypeId);
     if (isIt || (result.subtypeId !== null && (!Number.isSafeInteger(result.subtypeId) || result.subtypeId <= 0))) throw new Error("ประเภทย่อยไม่ถูกต้อง");

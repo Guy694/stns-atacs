@@ -110,7 +110,7 @@ export async function getPublicDashboardData(): Promise<PublicDashboardData> {
           COUNT(DISTINCT s.facility_id) AS total_facilities,
           COUNT(a.id) AS total_assets,
           COUNT(DISTINCT hf.district_name) AS total_districts,
-          SUM(CASE WHEN LOWER(COALESCE(a.current_status, '')) NOT IN ('inactive', 'in-active', 'not active', 'ไม่ใช้งาน', 'broken', 'ชำรุด', 'เสีย') THEN 1 ELSE 0 END) AS active_assets,
+          SUM(CASE WHEN a.id IS NOT NULL AND LOWER(COALESCE(a.current_status, '')) NOT IN ('inactive', 'in-active', 'not active', 'ไม่ใช้งาน', 'broken', 'ชำรุด', 'เสีย', 'disposed', 'จำหน่ายแล้ว', 'จำหน่ายออก', 'lost', 'สูญหาย') THEN 1 ELSE 0 END) AS active_assets,
           SUM(CASE WHEN LOWER(COALESCE(a.current_status, '')) IN ('inactive', 'in-active', 'not active', 'ไม่ใช้งาน', 'broken', 'ชำรุด', 'เสีย') THEN 1 ELSE 0 END) AS degraded_assets,
           SUM(CASE WHEN COALESCE(NULLIF(TRIM(a.asset_class), ''), 'IT') = 'IT' AND a.asset_category = 'Hardware' THEN 1 ELSE 0 END) AS hardware_assets,
           SUM(CASE WHEN COALESCE(NULLIF(TRIM(a.asset_class), ''), 'IT') = 'IT' AND a.asset_category = 'Software' THEN 1 ELSE 0 END) AS software_assets

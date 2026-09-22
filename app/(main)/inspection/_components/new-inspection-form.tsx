@@ -8,6 +8,7 @@ import { assetClassLabel } from "@/lib/asset-classes";
 import { assetStatusLabel, assetStatusTone } from "@/lib/asset-status";
 import type { FacilityRow } from "@/lib/assets";
 import { createInspectionAction } from "../actions";
+import { CommitteeRow } from "./committee-form";
 
 type Asset = {
   id: number;
@@ -17,14 +18,23 @@ type Asset = {
   assetClass?: string;
   assetGroup: string;
   currentStatus: string;
+  workGroupId?: number | null;
+  assetNumber?: string;
 };
+
+type WorkGroup = { id: number; facilityId: number; workGroupName: string };
+
 
 const today = new Date().toISOString().slice(0, 10);
 
-export default function NewInspectionForm({ facilities }: { facilities: FacilityRow[] }) {
+export default function NewInspectionForm({ facilities, workGroups = [] }: { facilities: FacilityRow[]; workGroups?: WorkGroup[] }) {
   const [error, formAction, pending] = useActionState(createInspectionAction, null);
   const [selectedFacilityId, setSelectedFacilityId] = useState<number | null>(null);
-  const [assets, setAssets] = useState<Asset[]>([]);
+  const [allAssets, setAssets] = useState<Asset[]>([]);
+  const [workGroupId, setWorkGroupId] = useState("");
+  const facilityGroups = workGroups.filter((group) => group.facilityId === selectedFacilityId);
+  // Mirrors the server: disposed/lost items are excluded, and a work group narrows the round.
+  const assets = allAssets.filter((asset) => asset.currentStatus !== "Disposed" && asset.currentStatus !== "Lost" && (!workGroupId || String(asset.workGroupId ?? "") === workGroupId));
 
   useEffect(() => {
     if (!selectedFacilityId) return;
@@ -64,6 +74,7 @@ export default function NewInspectionForm({ facilities }: { facilities: Facility
             onChange={(e) => {
               const nextId = e.target.value ? Number(e.target.value) : null;
               setSelectedFacilityId(nextId);
+              setWorkGroupId("");
               if (!nextId) {
                 setAssets([]);
               }
@@ -82,6 +93,25 @@ export default function NewInspectionForm({ facilities }: { facilities: Facility
           </select>
         </div>
 
+        {/* Work group */}
+        <div className="space-y-1">
+          <label className="text-sm font-semibold" style={{ color: "var(--foreground)" }} htmlFor="inspection-work-group">
+            กลุ่มงานที่ตรวจนับ
+          </label>
+          <select
+            id="inspection-work-group"
+            name="workGroupId"
+            value={workGroupId}
+            onChange={(e) => setWorkGroupId(e.target.value)}
+            disabled={!selectedFacilityId || facilityGroups.length === 0}
+            className="w-full rounded-lg border px-3 py-2 text-sm disabled:bg-slate-50"
+            style={{ borderColor: "var(--line)", color: "var(--foreground)" }}
+          >
+            <option value="">{selectedFacilityId && facilityGroups.length === 0 ? "หน่วยงานนี้ยังไม่มีกลุ่มงาน (ตรวจทั้งหน่วยงาน)" : "ทุกกลุ่มงาน (ตรวจทั้งหน่วยงาน)"}</option>
+            {facilityGroups.map((group) => <option key={group.id} value={group.id}>{group.workGroupName}</option>)}
+          </select>
+        </div>
+
         {/* Round name */}
         <div className="space-y-1">
           <label className="text-sm font-semibold" style={{ color: "var(--foreground)" }}>
@@ -90,7 +120,7 @@ export default function NewInspectionForm({ facilities }: { facilities: Facility
           <input
             name="roundName"
             required
-            placeholder="เช่น ตรวจนับ Q1/2569"
+            placeholder="เช่น การตรวจสอบพัสดุประจำปี 2569"
             className="w-full rounded-lg border px-3 py-2 text-sm"
             style={{ borderColor: "var(--line)", color: "var(--foreground)" }}
           />
@@ -137,6 +167,14 @@ export default function NewInspectionForm({ facilities }: { facilities: Facility
         />
       </div>
 
+      {/* Committee */}
+      <fieldset className="space-y-2 rounded-xl border p-4" style={{ borderColor: "var(--line)" }}>
+        <legend className="px-1 text-sm font-semibold" style={{ color: "var(--foreground)" }}>คณะกรรมการตรวจนับ</legend>
+        <p className="text-xs" style={{ color: "var(--muted)" }}>ชื่อและตำแหน่งจะพิมพ์เป็นช่องลงนามท้ายใบตรวจนับ แก้ไขภายหลังได้ในหน้ารอบตรวจ</p>
+        <p className="text-xs" style={{ color: "var(--muted)" }}>เลือกประธานกรรมการ 1 คน ที่เหลือเป็นกรรมการ</p>
+        {[0, 1, 2, 3].map((index) => <CommitteeRow key={index} index={index} defaultRole={index === 0 ? "chair" : "member"} />)}
+      </fieldset>
+
       {/* Assets checklist */}
       {selectedFacilityId && (
         <div className="space-y-2">
@@ -169,7 +207,7 @@ export default function NewInspectionForm({ facilities }: { facilities: Facility
                   {assets.map((a) => (
                     <tr key={a.id} style={{ borderBottom: "1px solid var(--line)" }}>
                       <td className="px-3 py-2 font-mono text-xs" style={{ color: "var(--muted)" }}>
-                        {a.assetRegistrationNo}
+                        {a.assetNumber || a.assetRegistrationNo}
                       </td>
                       <td className="px-3 py-2" style={{ color: "var(--foreground)" }}>
                         {a.assetName}

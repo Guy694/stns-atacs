@@ -1,10 +1,12 @@
+import { AssetFilters } from "@/app/(main)/assets/_components/asset-filters";
+import { listAssetSubtypes } from "@/lib/asset-extensions";
 import { isItAsset } from "@/lib/asset-policy";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { AppIcon } from "@/app/_components/ui/icon";
 import { StatusBadge } from "@/app/_components/ui/status-badge";
-import { ASSET_CLASS_OPTIONS, assetClassLabel } from "@/lib/asset-classes";
+import { assetClassLabel } from "@/lib/asset-classes";
 import { getCurrentUser } from "@/lib/auth";
 import { getFacilityById, listAssets, listAllFacilitiesForSelect } from "@/lib/assets";
 import { formatThaiDate } from "@/lib/date-format";
@@ -26,11 +28,15 @@ const STATUS_LABELS: Record<string, string> = {
   Active: "พร้อมใช้งาน",
   Inactive: "ไม่ใช้งาน",
   Broken: "ชำรุด",
+  Disposed: "จำหน่ายแล้ว",
+  Lost: "สูญหาย",
 };
 const STATUS_TONE = {
   Active: "success",
   Inactive: "warning",
   Broken: "danger",
+  Disposed: "neutral",
+  Lost: "danger",
 } as const;
 
 function readParam(p: Record<string, string | string[] | undefined>, key: string) {
@@ -65,6 +71,7 @@ export default async function FacilityDetailPage({ params, searchParams }: Props
   const search = readParam(query, "search");
   const statusFilter = readParam(query, "status");
   const assetClassFilter = readParam(query, "assetClass");
+  const subtypeFilter = Number(readParam(query, "subtype")) || undefined;
   const groupFilter = readParam(query, "group");
   const workGroupFilter = Number(readParam(query, "workGroup")) || undefined;
   const deviceTypeFilter = readParam(query, "deviceType");
@@ -73,7 +80,7 @@ export default async function FacilityDetailPage({ params, searchParams }: Props
   const sort = readParam(query, "sort") as "updated_desc" | "updated_asc" | "name_asc" | "name_desc" | "ma_soon";
   const normalizedSort = ["updated_desc", "updated_asc", "name_asc", "name_desc", "ma_soon"].includes(sort) ? sort : undefined;
 
-  const [allAssets, assets, facilitiesForSelect, workGroups, deviceTypes] = await Promise.all([
+  const [allAssets, assets, facilitiesForSelect, workGroups, deviceTypes, subtypes] = await Promise.all([
     listAssets({ facilityId }),
     listAssets({
       facilityId,
@@ -81,6 +88,7 @@ export default async function FacilityDetailPage({ params, searchParams }: Props
       search: search || undefined,
       status: statusFilter || undefined,
       assetClass: assetClassFilter || undefined,
+      subtypeId: subtypeFilter,
       assetGroup: groupFilter === "Hardware" || groupFilter === "Software" ? groupFilter : undefined,
       deviceType: deviceTypeFilter || undefined,
       maExpiringDays,
@@ -89,6 +97,7 @@ export default async function FacilityDetailPage({ params, searchParams }: Props
     listAllFacilitiesForSelect(user.role === "admin" ? undefined : { facilityId }),
     listFacilityWorkGroups(facilityId),
     listActiveDeviceTypes(),
+    listAssetSubtypes(),
   ]);
 
   const currentFacility = await getFacilityById(facilityId);
@@ -108,10 +117,7 @@ export default async function FacilityDetailPage({ params, searchParams }: Props
   const hardwareCount = allAssets.filter((a) => isItAsset(a) && a.assetGroup === "Hardware").length;
   const softwareCount = allAssets.filter((a) => isItAsset(a) && a.assetGroup === "Software").length;
   const referenceDate = new Date();
-  const deviceTypeOptions = [...new Set(allAssets.filter(isItAsset).map((asset) => asset.deviceType).filter(Boolean))].sort((a, b) =>
-    a.localeCompare(b, "th")
-  );
-  const hasActiveFilters = Boolean(search || statusFilter || assetClassFilter || groupFilter || workGroupFilter || deviceTypeFilter || maExpiringDays || normalizedSort);
+
 
   const expiringSoon = allAssets
     .filter((a) => a.maintenanceEndDate)
@@ -216,121 +222,9 @@ export default async function FacilityDetailPage({ params, searchParams }: Props
           </div>
         </div>
 
-        <form method="GET" className="grid gap-3 border-b border-black/6 bg-[var(--neutral-bg)]/60 px-5 py-4 sm:grid-cols-2 lg:grid-cols-6">
-          <label className="min-w-0 lg:col-span-2">
-            <span className="sr-only">ค้นหาทรัพย์สิน</span>
-            <input
-              name="search"
-              defaultValue={search}
-              placeholder="ค้นหาชื่อ / เลขทะเบียน / รายละเอียดเฉพาะ"
-              className="min-h-11 w-full rounded-xl border border-black/10 bg-white/85 px-4 py-2 text-sm outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/20"
-            />
-          </label>
-          <label>
-            <span className="sr-only">สถานะ</span>
-            <select
-              name="status"
-              defaultValue={statusFilter}
-              className="min-h-11 w-full rounded-xl border border-black/10 bg-white/85 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
-            >
-              <option value="">ทุกสถานะ</option>
-              <option value="Active">พร้อมใช้งาน</option>
-              <option value="Inactive">ไม่ใช้งาน</option>
-              <option value="Broken">ชำรุด</option>
-            </select>
-          </label>
-          <label>
-            <span className="sr-only">กลุ่มครุภัณฑ์</span>
-            <select
-              name="assetClass"
-              defaultValue={assetClassFilter}
-              className="min-h-11 w-full rounded-xl border border-black/10 bg-white/85 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
-            >
-              <option value="">ทุกกลุ่มครุภัณฑ์</option>
-              {ASSET_CLASS_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>{option.label}</option>
-              ))}
-            </select>
-          </label>
-          <label>
-            <span className="sr-only">หมวด</span>
-            <select
-              name="group"
-              defaultValue={groupFilter}
-              className="min-h-11 w-full rounded-xl border border-black/10 bg-white/85 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
-            >
-              <option value="">ทุกลักษณะ</option>
-              <option value="Hardware">ฮาร์ดแวร์</option>
-              <option value="Software">ซอฟต์แวร์</option>
-            </select>
-          </label>
-          <label>
-            <span className="sr-only">ประเภททรัพย์สิน / อุปกรณ์</span>
-            <select
-              name="deviceType"
-              defaultValue={deviceTypeFilter}
-              className="min-h-11 w-full rounded-xl border border-black/10 bg-white/85 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
-            >
-              <option value="">ทุกประเภททรัพย์สิน</option>
-              {deviceTypeOptions.map((deviceType) => (
-                <option key={deviceType} value={deviceType}>{deviceType}</option>
-              ))}
-            </select>
-          </label>
-          {workGroups.length > 0 && (
-            <label>
-              <span className="sr-only">กลุ่มงาน</span>
-              <select
-                name="workGroup"
-                defaultValue={workGroupFilter ?? ""}
-                className="min-h-11 w-full rounded-xl border border-black/10 bg-white/85 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
-              >
-                <option value="">ทุกกลุ่มงาน</option>
-                {workGroups.map((workGroup) => (
-                  <option key={workGroup.id} value={workGroup.id}>
-                    {workGroup.workGroupName}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
-          <label>
-            <span className="sr-only">MA ใกล้หมดอายุ</span>
-            <select
-              name="maDays"
-              defaultValue={maDaysFilter}
-              className="min-h-11 w-full rounded-xl border border-black/10 bg-white/85 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
-            >
-              <option value="">MA ทุกช่วง</option>
-              <option value="30">ภายใน 30 วัน</option>
-              <option value="60">ภายใน 60 วัน</option>
-              <option value="90">ภายใน 90 วัน</option>
-            </select>
-          </label>
-          <label>
-            <span className="sr-only">เรียงลำดับ</span>
-            <select
-              name="sort"
-              defaultValue={normalizedSort ?? ""}
-              className="min-h-11 w-full rounded-xl border border-black/10 bg-white/85 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
-            >
-              <option value="">เรียงลำดับเริ่มต้น</option>
-              <option value="updated_desc">อัปเดตล่าสุด</option>
-              <option value="name_asc">ชื่อ A-Z</option>
-              <option value="ma_soon">MA ใกล้หมดก่อน</option>
-            </select>
-          </label>
-          <div className="flex flex-col gap-2 sm:flex-row lg:col-span-2">
-            <button type="submit" className="min-h-11 rounded-xl bg-[var(--accent-strong)] px-5 py-2 text-sm font-semibold text-white transition hover:opacity-90">
-              ค้นหา
-            </button>
-            {hasActiveFilters && (
-              <Link href={buildFacilityHref(facilityId, {})} className="inline-flex min-h-11 items-center justify-center rounded-xl border border-black/10 bg-white/80 px-4 py-2 text-sm text-[var(--muted)] hover:bg-white">
-                ล้างตัวกรอง
-              </Link>
-            )}
-          </div>
-        </form>
+        <div className="p-4 sm:p-5">
+          <AssetFilters key={JSON.stringify(query)} resetHref={buildFacilityHref(facilityId, {})} values={{ search, status: statusFilter, assetClass: assetClassFilter, subtype: subtypeFilter, group: groupFilter, deviceType: deviceTypeFilter, workGroup: workGroupFilter, maDays: maDaysFilter, sort: normalizedSort }} subtypes={subtypes} deviceTypes={deviceTypes} workGroups={workGroups} />
+        </div>
 
         {assets.length === 0 ? (
           <div className="p-10 text-center text-sm text-[var(--muted)]">ไม่พบรายการทรัพย์สินที่ตรงกับเงื่อนไข</div>
@@ -357,7 +251,7 @@ export default async function FacilityDetailPage({ params, searchParams }: Props
                         href={`/assets/${asset.id}`}
                         className="font-mono text-xs font-semibold text-[var(--accent-strong)] underline-offset-4 hover:underline"
                       >
-                        {asset.assetRegistrationNo || `#${asset.id}`}
+                        {asset.assetNumber || `#${asset.id}`}
                       </Link>
                     </td>
                     <td className="px-4 py-3">

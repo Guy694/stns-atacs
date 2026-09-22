@@ -1,9 +1,11 @@
+import { AssetFilters } from "./_components/asset-filters";
+import { listAssetSubtypes } from "@/lib/asset-extensions";
 import { isItAsset } from "@/lib/asset-policy";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { StatusBadge } from "@/app/_components/ui/status-badge";
-import { ASSET_CLASS_OPTIONS, assetClassLabel } from "@/lib/asset-classes";
+import { assetClassLabel } from "@/lib/asset-classes";
 import { getCurrentUser } from "@/lib/auth";
 import { countAssets, listAssets, listAllFacilitiesForSelect, listFacilities, type AssetListFilter } from "@/lib/assets";
 import { formatThaiDate } from "@/lib/date-format";
@@ -68,12 +70,16 @@ const STATUS_LABELS: Record<string, string> = {
   Active: "พร้อมใช้งาน",
   Inactive: "ไม่ใช้งาน",
   Broken: "ชำรุด",
+  Disposed: "จำหน่ายแล้ว",
+  Lost: "สูญหาย",
 };
 
 const STATUS_TONE = {
   Active: "success",
   Inactive: "warning",
   Broken: "danger",
+  Disposed: "neutral",
+  Lost: "danger",
 } as const;
 export default async function AssetsPage({ searchParams }: AssetsPageProps) {
   const user = await getCurrentUser();
@@ -95,6 +101,7 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
   const statusFilter = readParam(params, "status");
   const districtFilter = readParam(params, "district");
   const assetClassFilter = readParam(params, "assetClass");
+  const subtypeFilter = Number(readParam(params, "subtype")) || undefined;
   const groupFilter = readParam(params, "group");
   const workGroupFilter = Number(readParam(params, "workGroup")) || undefined;
   const deviceTypeFilter = readParam(params, "deviceType");
@@ -111,18 +118,20 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
     workGroupId: workGroupFilter,
     district: districtFilter || undefined,
     assetClass: assetClassFilter || undefined,
+    subtypeId: subtypeFilter,
     assetGroup: groupFilter === "Hardware" || groupFilter === "Software" ? groupFilter : undefined,
     deviceType: deviceTypeFilter || undefined,
     maExpiringDays,
     sort: ["updated_desc", "updated_asc", "name_asc", "name_desc", "ma_soon"].includes(sort) ? sort : undefined,
   };
 
-  const [totalAssets, facilitiesForSelect, facilities, deviceTypes, workGroups] = await Promise.all([
+  const [totalAssets, facilitiesForSelect, facilities, deviceTypes, workGroups, subtypes] = await Promise.all([
     countAssets(assetFilter),
     listAllFacilitiesForSelect(),
     listFacilities(),
     listActiveDeviceTypes(),
     listFacilityWorkGroups(),
+    listAssetSubtypes(),
   ]);
   const totalPages = Math.max(1, Math.ceil(totalAssets / perPage));
   const currentPage = Math.min(requestedPage, totalPages);
@@ -131,6 +140,7 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
   const pageStart = totalAssets === 0 ? 0 : offset + 1;
   const pageEnd = Math.min(offset + assets.length, totalAssets);
   const pageQuery = {
+    subtype: subtypeFilter,
     search: search || undefined,
     status: statusFilter || undefined,
     assetClass: assetClassFilter || undefined,
@@ -148,9 +158,7 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
   const districtOptions = [
     ...new Set(facilitiesForSelect.map((facility) => facility.district_name).filter((district): district is string => Boolean(district))),
   ].sort();
-  const facilityWorkGroups = requestedFacilityFilter
-    ? workGroups.filter((workGroup) => workGroup.facilityId === requestedFacilityFilter)
-    : workGroups;
+
 
   const facilitiesForForm = facilitiesForSelect;
   const canManageSubtypes = await hasPermission(user.role, "device-types.manage");
@@ -199,161 +207,7 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
         )}
       </div>
 
-      {/* Filters */}
-      <form method="GET" className="glass-panel flex flex-wrap gap-3 rounded-2xl p-4">
-        <label htmlFor="asset-search" className="sr-only">ค้นหาทรัพย์สิน</label>
-        <input
-          id="asset-search"
-          name="search"
-          defaultValue={search}
-          placeholder="ค้นหาชื่อ / เลขทะเบียน / รายละเอียดเฉพาะ…"
-          className="min-w-0 flex-1 rounded-xl border border-black/10 bg-white/80 px-4 py-2 text-sm outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/20"
-        />
-        <label htmlFor="asset-status-filter" className="sr-only">กรองสถานะทรัพย์สิน</label>
-        <select
-          id="asset-status-filter"
-          name="status"
-          defaultValue={statusFilter}
-          className="rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
-        >
-          <option value="">ทุกสถานะ</option>
-          <option value="Active">พร้อมใช้งาน</option>
-          <option value="Inactive">ไม่ใช้งาน</option>
-          <option value="Broken">ชำรุด</option>
-        </select>
-        <label htmlFor="asset-class-filter" className="sr-only">กรองกลุ่มครุภัณฑ์</label>
-        <select
-          id="asset-class-filter"
-          name="assetClass"
-          defaultValue={assetClassFilter}
-          className="rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
-        >
-          <option value="">ทุกกลุ่มครุภัณฑ์</option>
-          {ASSET_CLASS_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value}>{option.label}</option>
-          ))}
-        </select>
-        <label htmlFor="asset-group-filter" className="sr-only">กรองลักษณะทรัพย์สิน</label>
-        <select
-          id="asset-group-filter"
-          name="group"
-          defaultValue={groupFilter}
-          className="rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
-        >
-          <option value="">ทุกลักษณะ</option>
-          <option value="Hardware">IT Hardware</option>
-          <option value="Software">IT Software</option>
-        </select>
-        <label htmlFor="asset-device-type-filter" className="sr-only">กรองประเภททรัพย์สิน / อุปกรณ์</label>
-        <select
-          id="asset-device-type-filter"
-          name="deviceType"
-          defaultValue={deviceTypeFilter}
-          className="rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
-        >
-          <option value="">ทุกประเภททรัพย์สิน</option>
-          {deviceTypes.map((deviceType) => (
-            <option key={deviceType.id + deviceType.name} value={deviceType.name}>
-              {deviceType.name}
-            </option>
-          ))}
-        </select>
-        {facilityWorkGroups.length > 0 && (
-          <>
-            <label htmlFor="asset-work-group-filter" className="sr-only">กรองกลุ่มงาน</label>
-            <select
-              id="asset-work-group-filter"
-              name="workGroup"
-              defaultValue={workGroupFilter ?? ""}
-              className="rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
-            >
-              <option value="">ทุกกลุ่มงาน</option>
-              {facilityWorkGroups.map((workGroup) => (
-                <option key={workGroup.id} value={workGroup.id}>
-                  {workGroup.workGroupName} · {workGroup.facilityName}
-                </option>
-              ))}
-            </select>
-          </>
-        )}
-        <label htmlFor="asset-district-filter" className="sr-only">กรองอำเภอ</label>
-        <select
-          id="asset-district-filter"
-          name="district"
-          defaultValue={districtFilter}
-          className="rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
-        >
-          <option value="">ทุกอำเภอ</option>
-          {districtOptions.map((district) => (
-            <option key={district} value={district}>
-              {district}
-            </option>
-          ))}
-        </select>
-        <label htmlFor="asset-ma-days-filter" className="sr-only">กรองช่วง MA ใกล้หมดอายุ</label>
-        <select
-          id="asset-ma-days-filter"
-          name="maDays"
-          defaultValue={maExpiringDays?.toString() ?? ""}
-          className="rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
-        >
-          <option value="">MA ทุกช่วงเวลา</option>
-          <option value="30">MA ภายใน 30 วัน</option>
-          <option value="60">MA ภายใน 60 วัน</option>
-          <option value="90">MA ภายใน 90 วัน</option>
-        </select>
-        <label htmlFor="asset-facility-filter" className="sr-only">กรองหน่วยงาน</label>
-        <select
-          id="asset-facility-filter"
-          name="facility"
-          defaultValue={facilityFilter ?? ""}
-          className="rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
-        >
-          <option value="">ทุกหน่วยงาน</option>
-          {facilitiesForSelect.map((f) => (
-            <option key={f.id} value={f.id}>
-              {f.facility_name} {f.district_name ? `· อ.${f.district_name}` : ""}
-            </option>
-          ))}
-        </select>
-        <label htmlFor="asset-sort" className="sr-only">เรียงลำดับทรัพย์สิน</label>
-        <select
-          id="asset-sort"
-          name="sort"
-          defaultValue={sort || ""}
-          className="rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
-        >
-          <option value="">เรียงลำดับเริ่มต้น</option>
-          <option value="updated_desc">อัปเดตล่าสุดก่อน</option>
-          <option value="updated_asc">อัปเดตเก่าสุดก่อน</option>
-          <option value="name_asc">ชื่อ A-Z</option>
-          <option value="name_desc">ชื่อ Z-A</option>
-          <option value="ma_soon">MA ใกล้หมดก่อน</option>
-        </select>
-        <label htmlFor="asset-per-page" className="sr-only">จำนวนรายการต่อหน้า</label>
-        <select
-          id="asset-per-page"
-          name="perPage"
-          defaultValue={perPage.toString()}
-          className="rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
-        >
-          <option value="10">10 รายการ/หน้า</option>
-          <option value="25">25 รายการ/หน้า</option>
-          <option value="50">50 รายการ/หน้า</option>
-          <option value="100">100 รายการ/หน้า</option>
-        </select>
-        <button
-          type="submit"
-          className="rounded-xl bg-[var(--accent-strong)] px-5 py-2 text-sm font-semibold text-white transition hover:opacity-90"
-        >
-          ค้นหา
-        </button>
-        {(search || statusFilter || requestedFacilityFilter || districtFilter || assetClassFilter || groupFilter || workGroupFilter || deviceTypeFilter || maExpiringDays || sort || perPage !== 25) && (
-          <Link href="/assets" className="rounded-xl border border-black/10 bg-white/80 px-4 py-2 text-sm text-[var(--muted)] hover:bg-white">
-            ล้างตัวกรอง
-          </Link>
-        )}
-      </form>
+      <AssetFilters key={JSON.stringify(pageQuery)} values={pageQuery} resetHref="/assets" subtypes={subtypes} deviceTypes={deviceTypes} facilities={facilitiesForSelect} districts={districtOptions} workGroups={workGroups} paginate />
 
       {/* Table by district */}
       {Object.entries(byDistrict).map(([district, items]) => (
@@ -384,7 +238,7 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
                   <tr key={asset.id} className="hover:bg-white/50 transition">
                     <td className="px-4 py-3">
                       <Link href={`/assets/${asset.id}`} className="font-mono text-xs text-[var(--accent)] hover:underline">
-                        {asset.assetRegistrationNo || `#${asset.id}`}
+                        {asset.assetNumber || `#${asset.id}`}
                       </Link>
                     </td>
                     <td className="px-4 py-3 font-medium">{asset.assetName}</td>

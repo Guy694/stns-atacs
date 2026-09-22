@@ -1,627 +1,128 @@
-import { isItAsset, assetTypeLabel } from "@/lib/asset-policy";
 import Link from "next/link";
 
-import { StatusBadge } from "@/app/_components/ui/status-badge";
+import {
+  CategoryBars,
+  compactBaht,
+  DistrictColumns,
+  DistrictComparison,
+  numberFormat,
+  Panel,
+  percent,
+  baht,
+  StatTile,
+  StatusDonut,
+  hrefWith,
+} from "@/app/_components/asset-overview-charts";
+import { DashboardFilters } from "@/app/_components/dashboard-filters";
 import { TopNavigation } from "@/app/_components/top-navigation";
-import { districtCoverage } from "@/app/atacs-data";
-import { assetStatusLabel } from "@/lib/asset-status";
-import { listAllFacilitiesForSelect, listAssets } from "@/lib/assets";
+import { AppIcon } from "@/app/_components/ui/icon";
+import { getDashboardData } from "@/lib/atacs";
+import { buildDashboardSummary, readDashboardFilters } from "@/lib/dashboard-summary";
+import { formatThaiDateTime } from "@/lib/date-format";
 
-type Props = {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-};
+type Props = { searchParams: Promise<Record<string, string | string[] | undefined>> };
 
-const TEST_SYSTEM_EMBED_URL = "https://satunhealth-srykdxrz.manus.space/";
+const BASE_PATH = "/";
 
-function sp(params: Record<string, string | string[] | undefined>, key: string) {
-  const v = params[key];
-  return (Array.isArray(v) ? v[0] : v ?? "").trim();
-}
-
-function PctBar({ value, max, color }: { value: number; max: number; color: string }) {
-  const w = max > 0 ? Math.round((value / max) * 100) : 0;
-  return (
-    <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
-      <div className={`h-full rounded-full ${color}`} style={{ width: `${w}%` }} />
-    </div>
-  );
-}
-
-function uniqueSorted(values: string[]) {
-  return [...new Set(values.filter(Boolean))].sort((a, b) => a.localeCompare(b, "th"));
-}
-
+/**
+ * Public landing page before login. Shows aggregates only: no asset names, registration numbers,
+ * serials, owners, locations or network data leave the server.
+ */
 export default async function PublicDashboardPage({ searchParams }: Props) {
   const params = await searchParams;
-  const q = sp(params, "q");
-  const districtFilter = sp(params, "district");
-  const groupFilter = sp(params, "group"); // "Hardware" | "Software" | ""
-  const requestedView = sp(params, "view");
-  const view = requestedView === "facilities" ? "facilities" : "overview";
-
-  // ── Load all assets (server-only, no IP/serial exposed to client) ────────
-  const [allAssets, allFacilities] = await Promise.all([listAssets(), listAllFacilitiesForSelect()]);
-
-  // ── District list for filter ─────────────────────────────────────────────
-  const seededDistricts = districtCoverage.map((district) => district.district);
-  const seededDistrictSet = new Set(seededDistricts);
-  const extraDistricts = uniqueSorted([
-    ...allFacilities.map((facility) => facility.district_name ?? ""),
-    ...allAssets.map((asset) => asset.districtName),
-    districtFilter,
-  ]).filter((district) => !seededDistrictSet.has(district));
-  const allDistricts = [...seededDistricts, ...extraDistricts];
-  const facilityCountByDistrict = allFacilities.reduce<Record<string, number>>((acc, facility) => {
-    const district = facility.district_name ?? "";
-    if (!district) return acc;
-    acc[district] = (acc[district] ?? 0) + 1;
-    return acc;
-  }, {});
-  const seededFacilityCountByDistrict = Object.fromEntries(
-    districtCoverage.map((district) => [district.district, district.facilities])
-  ) as Record<string, number>;
-
-  // ── Apply filters ────────────────────────────────────────────────────────
-  let filtered = allAssets;
-  if (districtFilter) filtered = filtered.filter((a) => a.districtName === districtFilter);
-  if (groupFilter) filtered = filtered.filter((a) => isItAsset(a) && a.assetGroup === groupFilter);
-
-  const total = filtered.length;
-  const active = filtered.filter((a) => a.currentStatus === "Active").length;
-  const broken = filtered.filter((a) => a.currentStatus === "Broken").length;
-  const inactive = filtered.filter((a) => a.currentStatus === "Inactive").length;
-  const hw = filtered.filter((a) => isItAsset(a) && a.assetGroup === "Hardware").length;
-  const sw = filtered.filter((a) => isItAsset(a) && a.assetGroup === "Software").length;
-  const facilityCount = new Set(filtered.map((a) => a.facilityId)).size;
-  const districtCount = districtFilter ? (allDistricts.includes(districtFilter) ? 1 : 0) : allDistricts.length;
-  const safeTotal = Math.max(total, 1);
-  const activeRate = Math.round((active / safeTotal) * 100);
-
-  // ── By district aggregation ──────────────────────────────────────────────
-  const districtStats = filtered.reduce<Record<string, { name: string; total: number; active: number; broken: number; inactive: number; facilities: Set<number> }>>(
-      (acc, a) => {
-        if (!acc[a.districtName]) acc[a.districtName] = { name: a.districtName, total: 0, active: 0, broken: 0, inactive: 0, facilities: new Set() };
-        acc[a.districtName].total++;
-        acc[a.districtName].facilities.add(a.facilityId);
-        if (a.currentStatus === "Active") acc[a.districtName].active++;
-        if (a.currentStatus === "Broken") acc[a.districtName].broken++;
-        if (a.currentStatus === "Inactive") acc[a.districtName].inactive++;
-        return acc;
-      }, {}
-    );
-  const byDistrict = allDistricts.map((district) => {
-    const stats = districtStats[district] ?? { name: district, total: 0, active: 0, broken: 0, inactive: 0, facilities: new Set<number>() };
-    return {
-      ...stats,
-      facilityCount: facilityCountByDistrict[district] ?? seededFacilityCountByDistrict[district] ?? stats.facilities.size,
-    };
-  });
-
-  // ── By facility aggregation ──────────────────────────────────────────────
-  const byFacility = Object.values(
-    filtered.reduce<Record<number, { id: number; name: string; district: string; total: number; active: number; broken: number; inactive: number }>>(
-      (acc, a) => {
-        if (!acc[a.facilityId]) acc[a.facilityId] = { id: a.facilityId, name: a.facilityName, district: a.districtName, total: 0, active: 0, broken: 0, inactive: 0 };
-        acc[a.facilityId].total++;
-        if (a.currentStatus === "Active") acc[a.facilityId].active++;
-        if (a.currentStatus === "Broken") acc[a.facilityId].broken++;
-        if (a.currentStatus === "Inactive") acc[a.facilityId].inactive++;
-        return acc;
-      }, {}
-    )
-  ).sort((a, b) => b.total - a.total);
-  const facilityStatsById = new Map(byFacility.map((facility) => [facility.id, facility]));
-  const facilitiesByDistrict = Object.fromEntries(
-    allDistricts.map((district) => {
-      const registeredFacilities = allFacilities
-        .filter((facility) => facility.district_name === district)
-        .map((facility) => {
-          const stats = facilityStatsById.get(facility.id);
-          return {
-            id: facility.id,
-            name: facility.facility_name,
-            district,
-            total: stats?.total ?? 0,
-            active: stats?.active ?? 0,
-            broken: stats?.broken ?? 0,
-            inactive: stats?.inactive ?? 0,
-          };
-        });
-      const registeredIds = new Set(registeredFacilities.map((facility) => facility.id));
-      const facilitiesFromAssets = byFacility.filter(
-        (facility) => facility.district === district && !registeredIds.has(facility.id)
-      );
-
-      return [
-        district,
-        [...registeredFacilities, ...facilitiesFromAssets].sort(
-          (left, right) => right.total - left.total || left.name.localeCompare(right.name, "th")
-        ),
-      ];
-    })
-  ) as Record<string, typeof byFacility>;
-
-  // ── By device type ───────────────────────────────────────────────────────
-  const byType = Object.entries(
-    filtered.reduce<Record<string, { total: number; active: number; broken: number; inactive: number }>>((acc, a) => {
-      const k = assetTypeLabel(a);
-      if (!acc[k]) acc[k] = { total: 0, active: 0, broken: 0, inactive: 0 };
-      acc[k].total++;
-      if (a.currentStatus === "Active") acc[k].active++;
-      if (a.currentStatus === "Broken") acc[k].broken++;
-      if (a.currentStatus === "Inactive") acc[k].inactive++;
-      return acc;
-    }, {})
-  ).map(([type, c]) => ({ type, ...c })).sort((a, b) => b.total - a.total);
-
-  const maxType = byType[0]?.total ?? 1;
-  const maxDistrict = Math.max(...byDistrict.map((district) => district.total), 1);
-
-  // CSS conic-gradient for status donut
-  const activePct = (active / safeTotal) * 100;
-  const brokenPct = (broken / safeTotal) * 100;
-  const donutGradient = `conic-gradient(#10b981 0% ${activePct.toFixed(1)}%, #ef4444 ${activePct.toFixed(1)}% ${(activePct + brokenPct).toFixed(1)}%, #f59e0b ${(activePct + brokenPct).toFixed(1)}% 100%)`;
-
-  function filterHref(changes: Record<string, string>) {
-    const next = { district: districtFilter, group: groupFilter, view, q, ...changes };
-    const parts = Object.entries(next).filter(([, v]) => v).map(([k, v]) => `${k}=${encodeURIComponent(v)}`);
-    return `/${parts.length ? "?" + parts.join("&") : ""}`;
-  }
-
-  function tabClass(v: string) {
-    return `rounded-xl px-4 py-2 text-sm font-medium transition ${view === v ? "bg-[var(--primary)] text-white shadow-sm" : "bg-white/70 text-[var(--muted)] hover:bg-white hover:text-[var(--foreground)]"}`;
-  }
+  const { facilitySurveys, dataSource } = await getDashboardData();
+  const summary = buildDashboardSummary(facilitySurveys, readDashboardFilters(params));
+  const { filters } = summary;
+  const facilityName = summary.facilityOptions.find((facility) => String(facility.id) === filters.facility)?.name;
+  const scopeLabel = facilityName ?? (filters.district ? `อำเภอ${filters.district}` : "ทุกหน่วยงานใน จ.สตูล");
+  const categoryLabel = summary.categoryOptions.find((category) => category.key === filters.category)?.label.replace(/^\d+\.\s*/, "");
+  const describe = [filters.fy && `ได้มาในปีงบประมาณ ${filters.fy}`, categoryLabel].filter(Boolean).join(" · ");
+  const cost = compactBaht(summary.totalCost);
+  const broken = summary.statuses.find((status) => status.value === "Broken")?.count ?? 0;
 
   return (
-    <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 px-5 py-6 sm:px-8 lg:px-10 lg:py-8">
+    <main className="mx-auto flex w-full max-w-[1400px] flex-1 flex-col gap-5 px-4 py-6 sm:px-8 lg:px-10 lg:py-8">
       <TopNavigation current="public" user={null} />
 
-      {/* ── Hero ──────────────────────────────────────────────────────────── */}
-      <section className="relative overflow-hidden rounded-2xl bg-[linear-gradient(135deg,#123d2f_0%,#14532d_58%,#166534_100%)] px-6 py-10 text-white sm:px-10 sm:py-12 lg:px-14 lg:py-14">
-        <div className="absolute inset-0 opacity-10 [background-image:linear-gradient(rgba(255,255,255,0.2)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.2)_1px,transparent_1px)] [background-size:40px_40px]" />
-
-        <div className="relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+      <section aria-labelledby="public-heading" className="rounded-2xl bg-[linear-gradient(135deg,#0f3d5e_0%,#15548f_60%,#1687d9_100%)] px-6 py-8 text-white sm:px-10">
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-2xl">
-            <div className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-medium tracking-[0.2em] text-white/80 backdrop-blur-sm">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-              ATACS · PUBLIC DASHBOARD · จ.สตูล
-            </div>
-            <h1 className="section-title mt-4 text-4xl font-semibold leading-tight sm:text-5xl">
-              ทะเบียนทรัพย์สินและครุภัณฑ์<br className="hidden sm:block" />จ.สตูล
-            </h1>
-            <p className="mt-3 max-w-lg text-sm leading-7 text-white">
-              ข้อมูลสรุประดับจังหวัดและอำเภอ
+            <p className="text-xs font-semibold tracking-[0.16em] text-sky-100">ATACS · สำนักงานสาธารณสุขจังหวัดสตูล</p>
+            <h1 id="public-heading" className="section-title mt-3 text-3xl font-semibold leading-tight sm:text-4xl">ทะเบียนทรัพย์สินและครุภัณฑ์ จ.สตูล</h1>
+            <p className="mt-3 text-sm leading-7 text-sky-50">
+              ภาพรวมจำนวน สถานะการใช้งาน และมูลค่าครุภัณฑ์ของหน่วยบริการสาธารณสุขในจังหวัด แยกตามปีงบประมาณ อำเภอ หน่วยงาน และประเภท
             </p>
           </div>
-          {/* Status ring */}
-          <div className="flex shrink-0 flex-col items-center gap-2">
-            <div className="relative flex h-32 w-32 items-center justify-center">
-              <svg viewBox="0 0 120 120" className="absolute inset-0 -rotate-90">
-                <circle cx="60" cy="60" r="52" fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="10" />
-                <circle cx="60" cy="60" r="52" fill="none" stroke="rgba(255,255,255,0.9)" strokeWidth="10" strokeLinecap="round"
-                  strokeDasharray={`${2 * Math.PI * 52}`}
-                  strokeDashoffset={`${2 * Math.PI * 52 * (1 - activeRate / 100)}`} />
-              </svg>
-              <div className="z-10 text-center">
-                <p className="text-3xl font-semibold">{activeRate}%</p>
-                <p className="text-[11px] text-white">พร้อมใช้งาน</p>
-              </div>
-            </div>
-            <p className="text-xs text-white">{active} / {total} รายการ</p>
+          <div className="flex flex-wrap gap-3">
+            <Link href="/login" className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-white px-5 text-sm font-semibold text-[#15548f] transition hover:bg-sky-50">
+              <AppIcon name="key" className="h-4 w-4" /> เข้าสู่ระบบสำหรับเจ้าหน้าที่
+            </Link>
+            <Link href="/register" className="inline-flex min-h-11 items-center rounded-xl border border-white/50 px-5 text-sm font-semibold text-white transition hover:bg-white/10">
+              ลงทะเบียนผู้ใช้งาน
+            </Link>
           </div>
         </div>
-
-        {/* KPI row */}
-        <div className="relative mt-7 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8">
-          {[
-            { label: "ทรัพย์สินรวม", value: total },
-            { label: "พร้อมใช้งาน", value: active, accent: true },
-            { label: "ชำรุด", value: broken, warn: broken > 0 },
-            { label: "ไม่ใช้งาน", value: inactive },
-            { label: "IT Hardware", value: hw },
-            { label: "IT Software", value: sw },
-            { label: "หน่วยงาน", value: facilityCount },
-            { label: "อำเภอ", value: districtCount },
-          ].map((k) => (
-            <div key={k.label} className={`rounded-xl border px-3 py-3 backdrop-blur-sm ${
-              k.accent ? "border-white/30 bg-white/20" :
-              k.warn ? "border-rose-300/30 bg-rose-500/15" :
-              "border-white/15 bg-white/10"
-            }`}>
-              <p className="text-[10px] text-white">{k.label}</p>
-              <p className="mt-1.5 text-2xl font-semibold">{k.value}</p>
-            </div>
-          ))}
-        </div>
-        {districtFilter && (
-          <div className="relative mt-3 flex items-center gap-2 text-xs text-white/60">
-            <span>กรองข้อมูล: อำเภอ {districtFilter}</span>
-            <Link href="/" className="rounded-full bg-white/10 px-2 py-0.5 hover:bg-white/20">✕ ล้างตัวกรอง</Link>
-          </div>
-        )}
       </section>
 
-      {/* ── Search ─────────────────────────────────────────────────────────── */}
-      {/* <section className="glass-panel rounded-2xl p-5 sm:p-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-xs font-medium uppercase tracking-[0.22em] text-[var(--muted)]">ค้นหาสาธารณะ</p>
-            <p className="mt-0.5 text-sm font-semibold">ค้นหาจากเลขครุภัณฑ์ / ชื่ออุปกรณ์</p>
-          </div>
-        </div>
-        <form method="GET" action="/" className="mt-3 flex gap-3">
-          <input type="hidden" name="district" value={districtFilter} />
-          <input type="hidden" name="group" value={groupFilter} />
-          <input type="hidden" name="view" value={view} />
-          <label htmlFor="public-search" className="sr-only">ค้นหาทรัพย์สินสาธารณะ</label>
-          <input type="search" name="q" defaultValue={q}
-            id="public-search"
-            placeholder="เลขครุภัณฑ์, ชื่ออุปกรณ์, ประเภท…"
-            className="min-w-0 flex-1 rounded-xl border border-[var(--line)] bg-white/80 px-4 py-2.5 text-sm outline-none focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/15" />
-          <button type="submit" className="shrink-0 rounded-xl bg-[var(--primary)] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[var(--primary-hover)]">ค้นหา</button>
-        </form>
+      <p className="text-sm text-[var(--muted)]">
+        แสดง: <span className="font-medium text-[var(--foreground)]">{scopeLabel}</span>{describe ? ` · ${describe}` : ""} · ข้อมูล ณ {formatThaiDateTime(new Date())}
+      </p>
+      {dataSource === "fallback" && (
+        <p role="status" className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">ขณะนี้ไม่สามารถดึงข้อมูลล่าสุดได้ กรุณาลองใหม่ภายหลัง</p>
+      )}
 
-        {q.length >= 2 && (
-          <div className="mt-4">
-            {searchResults.length === 0 ? (
-              <p className="text-sm text-[var(--muted)]">ไม่พบทรัพย์สินที่ตรงกับ &ldquo;{q}&rdquo;</p>
-            ) : (
-              <>
-                <p className="mb-3 text-xs text-[var(--muted)]">พบ {searchResults.length} รายการ{searchResults.length === 20 ? " (สูงสุด 20)" : ""}</p>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-black/6 text-xs text-[var(--muted)]">
-                        <th className="pb-2 pr-4 text-left font-medium">เลขครุภัณฑ์</th>
-                        <th className="pb-2 pr-4 text-left font-medium">ชื่ออุปกรณ์</th>
-                        <th className="pb-2 pr-4 text-left font-medium">ประเภท</th>
-                        <th className="pb-2 pr-4 text-left font-medium">หน่วยงาน</th>
-                        <th className="pb-2 text-center font-medium">สถานะ</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-black/4">
-	                      {searchResults.map((a) => (
-	                        <tr key={`${a.assetRegistrationNo}-${a.assetName}-${a.facilityName}`} className="hover:bg-white/50">
-	                          <td className="py-2.5 pr-4 font-mono text-xs">{a.assetRegistrationNo}</td>
-	                          <td className="py-2.5 pr-4 font-medium">{a.assetName}</td>
-	                          <td className="py-2.5 pr-4"><StatusBadge tone="primary">{assetTypeLabel(a)}</StatusBadge></td>
-	                          <td className="py-2.5 pr-4 text-[var(--muted)]">{a.facilityName}</td>
-	                          <td className="py-2.5 text-center">
-	                            <StatusBadge tone={assetStatusTone(a.currentStatus)}>
-	                              {assetStatusLabel(a.currentStatus)}
-	                            </StatusBadge>
-	                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </>
-            )}
-          </div>
-        )}
-        {q.length > 0 && q.length < 2 && <p className="mt-3 text-xs text-[var(--muted)]">กรุณาป้อนอย่างน้อย 2 ตัวอักษร</p>}
-      </section> */}
+      <DashboardFilters
+        values={filters}
+        fiscalYears={summary.fiscalYearOptions}
+        districts={summary.districtOptions}
+        facilities={summary.facilityOptions}
+        categories={summary.categoryOptions}
+      />
 
-      {/* ── Filter + Tabs ───────────────────────────────────────────────────── */}
-      <div className="flex flex-wrap items-center gap-3">
-        {/* District filter */}
-        <form method="GET" action="/" className="flex items-center gap-2">
-          <input type="hidden" name="view" value={view} />
-          <input type="hidden" name="group" value={groupFilter} />
-          <input type="hidden" name="q" value={q} />
-          <label htmlFor="public-district-filter" className="sr-only">กรองอำเภอ</label>
-          <select name="district" defaultValue={districtFilter}
-            id="public-district-filter"
-            onChange={undefined}
-            className="rounded-xl border border-[var(--line)] bg-white/80 px-3 py-2 text-sm text-[var(--foreground)] outline-none focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/15">
-            <option value="">ทุกอำเภอ</option>
-            {allDistricts.map((d) => <option key={d} value={d}>{d}</option>)}
-          </select>
-          <button type="submit" className="rounded-xl bg-white/80 border border-[var(--line)] px-3 py-2 text-sm hover:bg-white">กรอง</button>
-        </form>
-
-        {/* Asset group filter */}
-        <div className="flex gap-1.5">
-          {[["", "ทั้งหมด"], ["Hardware", "Hardware"], ["Software", "Software"]].map(([val, label]) => (
-            <Link key={val} href={filterHref({ group: val })}
-              className={`rounded-xl px-3 py-2 text-xs font-medium transition ${groupFilter === val ? "bg-[var(--primary)] text-white shadow-sm" : "bg-white/70 text-[var(--muted)] hover:bg-white"}`}>
-              {label}
-            </Link>
-          ))}
-        </div>
-
-        {/* View tabs */}
-        <div className="ml-auto flex gap-1.5">
-          <Link href={filterHref({ view: "overview" })} className={tabClass("overview")}>ภาพรวม</Link>
-          <Link href={filterHref({ view: "facilities" })} className={tabClass("facilities")}>รายหน่วยงาน</Link>
-        </div>
+      <div className="grid gap-4 md:grid-cols-3">
+        <StatTile
+          label="ครุภัณฑ์ทั้งหมด"
+          value={numberFormat.format(summary.total)}
+          unit="รายการ"
+          detail={<>{numberFormat.format(summary.facilityCount)} หน่วยงาน · {numberFormat.format(summary.districtCount)} อำเภอ{summary.undated ? <><br />ไม่รวม {numberFormat.format(summary.undated)} รายการที่ไม่มีวันที่ได้มา</> : null}</>}
+        />
+        <StatTile
+          label="พร้อมใช้งาน"
+          value={numberFormat.format(summary.active)}
+          unit="รายการ"
+          detail={<><span className="font-semibold text-[#006300]">{percent(summary.activeRate)}</span> ของครุภัณฑ์ตามตัวกรอง · ชำรุด {numberFormat.format(broken)} รายการ</>}
+        />
+        <StatTile
+          label="มูลค่ารวม (ราคาทุน)"
+          value={cost.value}
+          unit={cost.unit}
+          detail={<>{baht(summary.totalCost)} บาท · มีราคา {numberFormat.format(summary.priced)} จาก {numberFormat.format(summary.total)} รายการ</>}
+        />
       </div>
 
-      {/* ════════════════════════════════════════════════════════════════════ */}
-      {/* VIEW: OVERVIEW */}
-      {/* ════════════════════════════════════════════════════════════════════ */}
-      {view === "overview" && (
-        <>
-          {/* Status donut + breakdown */}
-          <div className="grid gap-6 md:grid-cols-2">
-            {/* Donut chart */}
-            <div className="glass-panel rounded-2xl p-6">
-              <p className="text-xs font-medium uppercase tracking-[0.22em] text-[var(--muted)]">สถานะทรัพย์สิน</p>
-              <h2 className="section-title mt-1 text-xl font-semibold">สัดส่วนสถานะทรัพย์สินและครุภัณฑ์</h2>
-              <div className="mt-5 flex items-center gap-6">
-                {/* donut */}
-                <div className="relative shrink-0" style={{ width: 160, height: 160 }}>
-                  <div className="h-full w-full rounded-full" style={{ background: donutGradient }} />
-                  <div className="absolute inset-0 m-auto flex h-[100px] w-[100px] flex-col items-center justify-center rounded-full bg-white shadow-sm">
-                    <p className="text-2xl font-bold text-[var(--primary-text)]">{activeRate}%</p>
-                    <p className="text-[10px] text-[var(--muted)]">พร้อมใช้งาน</p>
-                  </div>
-                </div>
-                {/* Legend */}
-                <div className="flex flex-col gap-4 text-sm">
-                  {[
-                    { label: assetStatusLabel("Active"), count: active, color: "bg-emerald-500", pct: Math.round((active / safeTotal) * 100) },
-                    { label: assetStatusLabel("Broken"), count: broken, color: "bg-rose-500", pct: Math.round((broken / safeTotal) * 100) },
-                    { label: assetStatusLabel("Inactive"), count: inactive, color: "bg-amber-400", pct: Math.round((inactive / safeTotal) * 100) },
-                  ].map((s) => (
-                    <div key={s.label} className="flex items-center gap-2.5">
-                      <span className={`h-3 w-3 shrink-0 rounded-full ${s.color}`} />
-                      <div>
-                        <p className="font-medium">{s.label}</p>
-                        <p className="text-xs text-[var(--muted)]">{s.count} รายการ · {s.pct}%</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+        <Panel id="category-share" title="สัดส่วนประเภทครุภัณฑ์" subtitle="จำนวนรายการตามประเภทในตารางอายุการใช้งาน · เลือกแถวเพื่อกรอง"
+          action={filters.category ? <Link href={hrefWith(BASE_PATH, filters, { category: "" })} className="text-xs font-medium text-[var(--primary-text)] underline">ทุกประเภท</Link> : undefined}>
+          <CategoryBars summary={summary} basePath={BASE_PATH} />
+        </Panel>
+        <Panel id="status-mix" title="สถานะการใช้งานครุภัณฑ์" subtitle="สัดส่วนตามสถานะปัจจุบัน">
+          <StatusDonut summary={summary} />
+        </Panel>
+      </div>
 
-            {/* HW/SW + status bars */}
-            <div className="glass-panel rounded-2xl p-6">
-              <p className="text-xs font-medium uppercase tracking-[0.22em] text-[var(--muted)]">สัดส่วนทรัพย์สิน IT และกลุ่มอื่น</p>
-              <h2 className="section-title mt-1 text-xl font-semibold">สัดส่วน ฮาร์ดแวร์ / ซอฟต์แวร์</h2>
-              {/* stacked bar */}
-              <div className="mt-5 flex h-8 overflow-hidden rounded-xl text-xs font-semibold text-white">
-                <div className="flex items-center justify-center bg-[var(--primary)]" style={{ width: `${Math.round((hw / safeTotal) * 100)}%` }}>
-                  {hw > 0 && `${Math.round((hw / safeTotal) * 100)}%`}
-                </div>
-                <div className="flex items-center justify-center bg-emerald-400 text-emerald-900" style={{ width: `${(sw / safeTotal) * 100}%` }}>
-                  {sw > 0 && `${Math.round((sw / safeTotal) * 100)}%`}
-                </div>
-                <div className="flex items-center justify-center bg-slate-600" style={{ width: `${((total - hw - sw) / safeTotal) * 100}%` }}>
-                  {total - hw - sw > 0 && `${Math.round(((total - hw - sw) / safeTotal) * 100)}%`}
-                </div>
-              </div>
-              <div className="mt-3 grid grid-cols-2 gap-3">
-                <div className="rounded-xl bg-[var(--primary-soft)] p-4">
-                  <div className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-[var(--primary)]" /><span className="text-xs text-[var(--muted)]">IT Hardware</span></div>
-                  <p className="mt-2 text-2xl font-bold text-[var(--primary-text)]">{hw}</p>
-                  <p className="text-xs text-[var(--muted)]">{Math.round((hw / safeTotal) * 100)}% ของทั้งหมด</p>
-                </div>
-                <div className="rounded-xl bg-emerald-50 p-4">
-                  <div className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-emerald-500" /><span className="text-xs text-[var(--muted)]">IT Software</span></div>
-                  <p className="mt-2 text-2xl font-bold text-emerald-700">{sw}</p>
-                  <p className="text-xs text-[var(--muted)]">{Math.round((sw / safeTotal) * 100)}% ของทั้งหมด</p>
-                </div>
-              </div>
-              <p className="mt-3 text-sm text-[var(--foreground)]">IT รวม {hw + sw} รายการ · ทรัพย์สินกลุ่มอื่น {total - hw - sw} รายการ</p>
-              {/* status quick bars */}
-              <div className="mt-4 space-y-3 border-t border-black/6 pt-4">
-                {[
-	                  { label: assetStatusLabel("Active"), value: active, color: "bg-emerald-500", tone: "success" as const },
-	                  { label: assetStatusLabel("Broken"), value: broken, color: "bg-rose-500", tone: "danger" as const },
-	                  { label: assetStatusLabel("Inactive"), value: inactive, color: "bg-amber-400", tone: "warning" as const },
-                ].map((s) => (
-                  <div key={s.label}>
-                    <div className="flex items-center justify-between text-xs">
-                      <span>{s.label}</span>
-                      <StatusBadge tone={s.tone}>{s.value} ({Math.round((s.value / safeTotal) * 100)}%)</StatusBadge>
-                    </div>
-                    <PctBar value={s.value} max={total} color={s.color} />
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
+      <Panel id="district-count" title="จำนวนครุภัณฑ์ตามอำเภอ"
+        subtitle={filters.district ? `ทุกอำเภอตามปีงบประมาณและประเภทที่เลือก · ไฮไลต์ อ.${filters.district}` : "เลือกแท่งเพื่อดูเฉพาะอำเภอนั้น"}
+        action={filters.district ? <Link href={hrefWith(BASE_PATH, filters, { district: "", facility: "" })} className="text-xs font-medium text-[var(--primary-text)] underline">ทุกอำเภอ</Link> : undefined}>
+        <DistrictColumns summary={summary} basePath={BASE_PATH} />
+      </Panel>
 
-          {/* District comparison */}
-          <div className="glass-panel overflow-hidden rounded-2xl">
-            <div className="flex items-center justify-between border-b border-black/6 px-5 py-3">
-              <div>
-                <h2 className="font-semibold">เปรียบเทียบรายอำเภอ</h2>
-                <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-                  เปอร์เซ็นต์พร้อมใช้งาน = ทรัพย์สินสถานะพร้อมใช้งาน ÷ ทรัพย์สินทั้งหมดของอำเภอ × 100
-                </p>
-                <p className="text-xs leading-5 text-[var(--muted)]">
-                  เลือกอำเภอเพื่อดูหน่วยงานและจำนวนข้อมูล
-                </p>
-              </div>
-              <span className="shrink-0 text-xs text-[var(--muted)]">{byDistrict.length} อำเภอ</span>
-            </div>
-            <div className="divide-y divide-black/4">
-              {byDistrict.map((d) => {
-                const rate = Math.round((d.active / Math.max(d.total, 1)) * 100);
-                const barColor = rate >= 85 ? "bg-emerald-500" : rate >= 70 ? "bg-amber-400" : "bg-rose-500";
-                const districtFacilities = facilitiesByDistrict[d.name] ?? [];
-                return (
-                  <details key={d.name} className="group">
-                    <summary className="grid cursor-pointer list-none gap-3 px-5 py-4 text-sm transition hover:bg-white/50 focus-visible:bg-white/70 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center lg:grid-cols-[minmax(0,1fr)_auto_auto_auto_auto_auto] lg:gap-4 lg:py-3 [&::-webkit-details-marker]:hidden">
-                      <div className="flex min-w-0 items-center gap-3">
-                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[var(--primary-soft)] text-[var(--primary-text)]">
-                          <svg
-                            viewBox="0 0 20 20"
-                            fill="none"
-                            aria-hidden="true"
-                            className="h-4 w-4 transition-transform duration-200 group-open:rotate-180"
-                          >
-                            <path d="m6 8 4 4 4-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                          </svg>
-                        </span>
-                        <div className="min-w-0 flex-1">
-                          <span className="font-semibold">อ.{d.name}</span>
-                          <div className="mt-1.5">
-                            <PctBar value={d.total} max={maxDistrict} color="bg-[var(--primary-soft-strong)]" />
-                          </div>
-                        </div>
-                      </div>
-                      <span className="text-xs text-[var(--muted)] sm:text-center">{d.facilityCount} หน่วยงาน</span>
-                      <span className="font-semibold sm:text-center">{d.total} รายการ</span>
-                      <div className="flex items-center gap-1.5 sm:col-span-2 lg:col-span-1">
-                        <div className="h-1.5 w-16 overflow-hidden rounded-full bg-slate-100">
-                          <div className={`h-full rounded-full ${barColor}`} style={{ width: `${rate}%` }} />
-                        </div>
-                        <span className="whitespace-nowrap text-xs font-medium">พร้อมใช้งาน {rate}%</span>
-                      </div>
-                      <div className="flex flex-wrap gap-2 text-xs sm:col-span-3 lg:col-span-1">
-                        <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-emerald-700">พร้อมใช้ {d.active}</span>
-                        {d.broken > 0 && <span className="rounded-full bg-rose-100 px-2 py-0.5 text-rose-700">ชำรุด {d.broken}</span>}
-                        {d.inactive > 0 && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-amber-700">ไม่ใช้งาน {d.inactive}</span>}
-                      </div>
-                    </summary>
+      <Panel id="district-compare" title="เปรียบเทียบรายอำเภอ" subtitle="จำนวน สถานะการใช้งาน อัตราพร้อมใช้งาน และมูลค่ารวม (ทุกอำเภอตามปีงบประมาณและประเภทที่เลือก)">
+        <DistrictComparison summary={summary} basePath={BASE_PATH} />
+      </Panel>
 
-                    <div className="border-t border-black/6 bg-[var(--neutral-bg)]/65 px-5 py-4">
-                      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                        <p className="text-sm font-semibold">หน่วยงานในอำเภอ{d.name}</p>
-                        <Link
-                          href={filterHref({ district: d.name })}
-                          className="text-xs font-medium text-[var(--primary-text)] hover:underline"
-                        >
-                          ดูเฉพาะอำเภอนี้
-                        </Link>
-                      </div>
-
-                      {districtFacilities.length > 0 ? (
-                        <div className="overflow-x-auto rounded-xl border border-black/8 bg-white">
-                          <table className="w-full min-w-[620px] text-sm">
-                            <thead>
-                              <tr className="border-b border-black/6 bg-slate-50/80 text-xs text-[var(--muted)]">
-                                <th className="px-4 py-2.5 text-left font-medium">หน่วยงาน</th>
-                                <th className="px-4 py-2.5 text-center font-medium">ข้อมูลทั้งหมด</th>
-                                <th className="px-4 py-2.5 text-center font-medium">พร้อมใช้งาน</th>
-                                <th className="px-4 py-2.5 text-center font-medium">ชำรุด</th>
-                                <th className="px-4 py-2.5 text-center font-medium">ไม่ใช้งาน</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-black/4">
-                              {districtFacilities.map((facility) => (
-                                <tr key={facility.id} className="hover:bg-slate-50/70">
-                                  <td className="px-4 py-3 font-medium">{facility.name}</td>
-                                  <td className="px-4 py-3 text-center">
-                                    {facility.total > 0 ? (
-                                      <span className="font-semibold">{facility.total} รายการ</span>
-                                    ) : (
-                                      <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-[var(--muted)]">
-                                        ยังไม่มีข้อมูล
-                                      </span>
-                                    )}
-                                  </td>
-                                  <td className="px-4 py-3 text-center font-medium text-emerald-700">{facility.active || "–"}</td>
-                                  <td className="px-4 py-3 text-center text-rose-700">{facility.broken || "–"}</td>
-                                  <td className="px-4 py-3 text-center text-amber-700">{facility.inactive || "–"}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      ) : (
-                        <p className="rounded-xl bg-white px-4 py-5 text-center text-sm text-[var(--muted)]">
-                          ยังไม่มีรายชื่อหน่วยงานในอำเภอนี้
-                        </p>
-                      )}
-                    </div>
-                  </details>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Device type horizontal bar chart */}
-          <div className="glass-panel rounded-2xl p-6">
-            <h2 className="mb-5 font-semibold">ประเภทอุปกรณ์ — Top 7</h2>
-            <div className="space-y-3">
-              {byType.slice(0, 7).map((t, i) => (
-                <div key={t.type} className="flex items-center gap-3 text-sm">
-                  <span className="w-4 shrink-0 text-right text-xs text-[var(--muted)]">{i + 1}</span>
-                  <span className="w-36 shrink-0 truncate text-xs font-medium">{t.type}</span>
-                  {/* stacked bar */}
-                  <div className="flex h-5 flex-1 overflow-hidden rounded-md bg-slate-100">
-                    <div className="bg-emerald-400" style={{ width: `${(t.active / Math.max(t.total, 1)) * (t.total / maxType) * 100}%` }} />
-                    <div className="bg-rose-400" style={{ width: `${(t.broken / Math.max(t.total, 1)) * (t.total / maxType) * 100}%` }} />
-                    <div className="bg-amber-300" style={{ width: `${(t.inactive / Math.max(t.total, 1)) * (t.total / maxType) * 100}%` }} />
-                  </div>
-                  <span className="w-10 shrink-0 text-right text-xs font-semibold">{t.total}</span>
-                </div>
-              ))}
-            </div>
-            {/* legend */}
-            <div className="mt-4 flex gap-4 text-[11px] text-[var(--muted)]">
-              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-emerald-400" />ใช้งานอยู่</span>
-              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-rose-400" />ชำรุด</span>
-              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-amber-300" />ไม่ใช้งาน</span>
-            </div>
-          </div>
-
-
-        </>
-      )}
-
-      {/* ════════════════════════════════════════════════════════════════════ */}
-      {/* VIEW: FACILITIES */}
-      {/* ════════════════════════════════════════════════════════════════════ */}
-      {view === "facilities" && (
-        <div className="glass-panel overflow-hidden rounded-2xl">
-          <div className="flex flex-col gap-2 border-b border-black/6 px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
-            <h2 className="font-semibold">รายละเอียดรายหน่วยงาน{districtFilter ? ` — อ.${districtFilter}` : ""}</h2>
-            <span className="text-xs text-[var(--muted)]">{byFacility.length} หน่วยงาน · {total} ทรัพย์สิน</span>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-black/6 bg-slate-50/60 text-xs text-[var(--muted)]">
-                  <th className="px-4 py-2.5 text-left font-medium">หน่วยงาน</th>
-                  <th className="px-4 py-2.5 text-left font-medium">อำเภอ</th>
-                  <th className="px-4 py-2.5 text-center font-medium">รวม</th>
-                  <th className="px-4 py-2.5 text-center font-medium">พร้อมใช้งาน</th>
-                  <th className="px-4 py-2.5 text-center font-medium">ชำรุด</th>
-                  <th className="px-4 py-2.5 text-center font-medium">ไม่ใช้งาน</th>
-                  <th className="px-4 py-2.5 text-left font-medium">อัตรา พร้อมใช้งาน</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-black/4">
-                {byFacility.map((f) => {
-                  const rate = Math.round((f.active / Math.max(f.total, 1)) * 100);
-                  const barColor = rate >= 85 ? "bg-emerald-500" : rate >= 70 ? "bg-amber-400" : "bg-rose-500";
-                  return (
-                    <tr key={f.id} className="hover:bg-white/50">
-                      <td className="px-4 py-3 font-medium">{f.name}</td>
-                      <td className="px-4 py-3 text-[var(--muted)]">
-                        <Link href={filterHref({ view: "facilities", district: f.district })} className="hover:text-[var(--primary)] hover:underline">
-                          อ.{f.district}
-                        </Link>
-                      </td>
-                      <td className="px-4 py-3 text-center font-semibold">{f.total}</td>
-                      <td className="px-4 py-3 text-center text-emerald-600 font-semibold">{f.active}</td>
-                      <td className="px-4 py-3 text-center text-rose-600">{f.broken || "–"}</td>
-                      <td className="px-4 py-3 text-center text-amber-600">{f.inactive || "–"}</td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <div className="h-1.5 w-20 overflow-hidden rounded-full bg-slate-100">
-                            <div className={`h-full rounded-full ${barColor}`} style={{ width: `${rate}%` }} />
-                          </div>
-                          <span className="text-xs font-medium">{rate}%</span>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-
+      <footer className="border-t border-[var(--line)] pt-4 text-center text-xs text-[var(--muted)]">
+        กลุ่มงานสุขภาพดิจิทัล สำนักงานสาธารณสุขจังหวัดสตูล · แสดงเฉพาะข้อมูลสรุป ไม่แสดงรายละเอียดรายเครื่อง
+      </footer>
     </main>
   );
 }

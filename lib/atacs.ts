@@ -38,6 +38,7 @@ type AssetRow = RowDataPacket & {
   usage_description: string | null;
   owner_name: string | null;
   asset_class: string | null;
+  subtype_name: string | null;
   asset_category: "Hardware" | "Software" | null;
   asset_group: string | null;
   device_type: string | null;
@@ -49,9 +50,13 @@ type AssetRow = RowDataPacket & {
   current_status: string | null;
   updated_by: string | null;
   audit_updated_at: Date | string;
+  created_at: Date | string;
   maintenance_end_date: Date | string | null;
   manufacturer_brand: string | null;
   serial_number: string | null;
+  purchase_price?: string | number | null;
+  purchase_date?: Date | string | null;
+  installed_at?: Date | string | null;
 };
 
 export type DashboardData = {
@@ -111,7 +116,10 @@ function normalizeCurrentStatus(value: string | null): AssetRecord["currentStatu
     return "Inactive";
   }
 
-  return "Active";
+  if (["active", "ใช้งานได้", "ใช้งานอยู่", "พร้อมใช้งาน"].includes(normalized)) return "Active";
+  if (["disposed", "จำหน่ายแล้ว", "จำหน่ายออก"].includes(normalized)) return "Disposed";
+  if (["lost", "สูญหาย"].includes(normalized)) return "Lost";
+  return "Unknown";
 }
 
 function calculateCompletionRate(survey: Omit<FacilitySurvey, "completionRate">) {
@@ -224,6 +232,10 @@ export async function getDashboardData(): Promise<DashboardData> {
           usage_description,
           owner_name,
           asset_class,
+          (SELECT s.name FROM asset_extensions e
+           JOIN asset_subtypes s ON s.id = e.subtype_id AND s.asset_class = e.asset_class
+           WHERE e.asset_id = information_assets.id AND e.asset_class = information_assets.asset_class
+           LIMIT 1) AS subtype_name,
           asset_category,
           asset_group,
           device_type,
@@ -235,9 +247,13 @@ export async function getDashboardData(): Promise<DashboardData> {
           current_status,
           updated_by,
           updated_at AS audit_updated_at,
+          created_at,
           maintenance_end_date,
           manufacturer_brand,
-          serial_number
+          serial_number,
+          purchase_price,
+          purchase_date,
+          installed_at
         FROM information_assets
         WHERE survey_id IN (?)
         ORDER BY survey_id ASC, row_no ASC, id ASC
@@ -253,6 +269,7 @@ export async function getDashboardData(): Promise<DashboardData> {
         assetName: asset.asset_name,
         usageDescription: asset.usage_description ?? "-",
         assetClass: normalizeAssetClass(asset.asset_class),
+        subtypeName: asset.subtype_name ?? "",
         assetGroup: asset.asset_category ?? normalizeAssetGroup(asset.asset_group),
         deviceType: asset.device_type ?? "ไม่ระบุ",
         operatingSystem: asset.operating_system ?? "ไม่ระบุ",
@@ -264,9 +281,13 @@ export async function getDashboardData(): Promise<DashboardData> {
         ownerName: asset.owner_name ?? "ไม่ระบุ",
         updatedBy: asset.updated_by ?? "system",
         updatedAt: toDateTime(asset.audit_updated_at),
+        createdAt: toDateTime(asset.created_at),
         maintenanceEndDate: toDateOnly(asset.maintenance_end_date),
         manufacturerBrand: asset.manufacturer_brand ?? "ไม่ระบุ",
         serialNumber: asset.serial_number ?? "ไม่ระบุ",
+        purchasePrice: asset.purchase_price === null || asset.purchase_price === undefined ? null : Number(asset.purchase_price),
+        purchaseDate: toDateOnly(asset.purchase_date),
+        installedAt: toDateOnly(asset.installed_at),
       });
       summary[asset.survey_id] = current;
       return summary;

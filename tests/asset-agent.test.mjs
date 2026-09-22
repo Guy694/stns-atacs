@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { loadTs } from "./helpers/load-ts.mjs";
 
-function setup({ linkedAssetId = null, candidateClass = "IT", candidateType = "Desktop", candidateCategory = "Hardware", candidateFacility = 10, candidates = true } = {}) {
+function setup({ linkedAssetId = null, candidateClass = "IT", candidateType = "Desktop", candidateCategory = "Hardware", candidateFacility = 10, candidates = true, candidateStatus = "Active" } = {}) {
   const writes = [], assetWrites = [], reads = [];
   const agent = loadTs("lib/agent.ts", {
     "@/lib/facility-work-groups": {},
@@ -17,7 +17,7 @@ function setup({ linkedAssetId = null, candidateClass = "IT", candidateType = "D
         reads.push({ sql, values });
         if (sql.includes("WHERE ad.agent_uuid")) return [{ id: 1, facility_id: 10, agent_uuid: "agent-1", linked_asset_id: linkedAssetId, status: "online" }];
         if (sql.includes("SELECT facility_id FROM agent_devices")) return [{ facility_id: 10 }];
-        if (sql.includes("FROM information_assets")) return candidates ? [{ id: 7, survey_id: 99, asset_class: candidateClass, asset_category: candidateCategory, device_type: candidateType, facility_id: candidateFacility }] : [];
+        if (sql.includes("FROM information_assets")) return candidates ? [{ id: 7, survey_id: 99, asset_class: candidateClass, asset_category: candidateCategory, device_type: candidateType, facility_id: candidateFacility, current_status: candidateStatus }] : [];
         return [];
       },
     },
@@ -73,4 +73,15 @@ test("heartbeat response remains compatible and never changes asset records", as
   assert.equal(result.deviceId, 1);
   assert.equal(ctx.assetWrites.length, 0);
   assert.match(ctx.writes[0].sql, /UPDATE agent_devices SET status/);
+});
+
+test("Agent reports keep Active/Inactive sync but never revert an approved Disposed/Lost status", async () => {
+  const active = setup({ linkedAssetId: 7 });
+  await active.report();
+  assert.equal(active.assetWrites[0][2].currentStatus, "Active");
+  for (const candidateStatus of ["Disposed", "Lost"]) {
+    const ctx = setup({ linkedAssetId: 7, candidateStatus });
+    await ctx.report();
+    assert.equal(Object.hasOwn(ctx.assetWrites[0][2], "currentStatus"), false);
+  }
 });

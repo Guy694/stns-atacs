@@ -35,9 +35,9 @@ export function inferDashboardFacilityGroup(
   const nameText = (facilityName ?? "").replace(/\s+/g, "");
   const text = `${typeText}${nameText}`;
 
-  if (text.includes("สสจ")) return "province";
-  if (text.includes("สสอ")) return "primary-office";
-  if (typeText.includes("รพ.สต") || /^รพ\.สต(?:\.|$)/.test(nameText) || text.includes("ศสช") || text.includes("สอน.")) {
+  if (text.includes("สสจ") || nameText.includes("สำนักงานสาธารณสุขจังหวัด")) return "province";
+  if (text.includes("สสอ") || nameText.includes("สำนักงานสาธารณสุขอำเภอ")) return "primary-office";
+  if (nameText.includes("โรงพยาบาลส่งเสริมสุขภาพตำบล") || typeText.includes("รพ.สต") || /^รพ\.สต(?:\.|$)/.test(nameText) || text.includes("ศสช") || text.includes("สอน.")) {
     return "primary-unit";
   }
   if (typeText.includes("รพ.ทั่วไป") || typeText.includes("รพ.ชุมชน") || nameText.startsWith("รพ.") || nameText.includes("โรงพยาบาล")) {
@@ -83,18 +83,25 @@ export function buildDashboardAccessScope(
     };
   }
 
-  if (user.role === "officer" && (user.managedAssetFacilityIds?.length ?? 0) > 1) {
-    const managedFacilityIds = new Set(user.managedAssetFacilityIds);
+  const ownSurvey = allFacilitySurveys.find((survey) => survey.facilityId === Number(user.facilityId));
+  const isDistrictOffice = inferDashboardFacilityGroup(
+    ownFacility?.typecode ?? ownSurvey?.facilityTypeCode,
+    ownFacility?.name ?? ownSurvey?.facilityName
+  ) === "primary-office";
+  if (user.role === "officer" && isDistrictOffice) {
+    const managedFacilityIds = new Set(user.managedAssetFacilityIds ?? []);
     return {
-      surveys: allFacilitySurveys.filter((survey) => managedFacilityIds.has(survey.facilityId)),
-      scopeFacilityName: "หน่วยงานในความดูแลของ สสอ.",
+      surveys: allFacilitySurveys.filter((survey) => survey.facilityId === Number(user.facilityId) || (
+        managedFacilityIds.has(survey.facilityId) &&
+        inferDashboardFacilityGroup(survey.facilityTypeCode, survey.facilityName) === "primary-unit"
+      )),
+      scopeFacilityName: ownFacility?.name ?? ownSurvey?.facilityName ?? "สสอ. และ รพ.สต. ในความดูแล",
       missingFacilityAssignment: false,
       officerScopeKind: "district-primary",
       lockedFacilityId: null,
     };
   }
 
-  const ownSurvey = allFacilitySurveys.find((survey) => survey.facilityId === Number(user.facilityId));
   const facilityName = ownFacility?.name ?? ownSurvey?.facilityName ?? "รายการทรัพย์สิน";
   return {
     surveys: allFacilitySurveys.filter((survey) => survey.facilityId === Number(user.facilityId)),

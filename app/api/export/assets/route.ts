@@ -40,6 +40,10 @@ const IMPORT_HEADERS = [
   "usage_description",
   "subtype_id",
   ...DETAIL_COLUMNS,
+  // Appended last so column positions used by older import files stay unchanged.
+  "useful_life_years",
+  "asset_code_prefix",
+  "asset_accounting_code",
 ];
 
 const IMPORT_SAMPLE_ROWS = [
@@ -73,6 +77,9 @@ const IMPORT_SAMPLE_ROWS = [
     "สำหรับงานธุรการ",
     "",
     ...DETAIL_COLUMNS.map(() => ""),
+    "",
+    "สสจ.",
+    "110000490204",
   ],
 ];
 
@@ -170,6 +177,9 @@ export async function GET(req: NextRequest) {
     asset.usageDescription,
     asset.extensions?.[asset.assetClass]?.subtypeId ?? "",
     ...DETAIL_COLUMNS.map(key => asset.extensions?.[asset.assetClass]?.details[key] ?? ""),
+    asset.usefulLifeYears ?? "",
+    asset.assetCodePrefix,
+    asset.assetAccountingCode,
   ]);
 
   const today = new Date().toISOString().slice(0, 10);

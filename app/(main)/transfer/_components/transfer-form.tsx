@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import Link from "next/link";
 
 import { transferAssetAction } from "@/app/(main)/transfer/actions";
@@ -13,13 +13,22 @@ type SurveyOption = {
   district_name: string | null;
 };
 
+type WorkGroupOption = { id: number; facilityId: number; workGroupName: string };
+
 type Props = {
   asset: AssetWithFacility;
   surveys: SurveyOption[];
+  workGroups: WorkGroupOption[];
 };
 
-export function TransferForm({ asset, surveys }: Props) {
+const inputClass = "w-full rounded-xl border border-[var(--line)] bg-white/80 px-3 py-2.5 text-sm outline-none focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/15";
+
+export function TransferForm({ asset, surveys, workGroups }: Props) {
   const [error, formAction, pending] = useActionState(transferAssetAction, null);
+  const [surveyId, setSurveyId] = useState("");
+  const destinationFacilityId = surveys.find((s) => String(s.id) === surveyId)?.facility_id;
+  const destinationGroups = workGroups.filter((group) => group.facilityId === destinationFacilityId);
+  const today = new Date().toISOString().slice(0, 10);
 
   // Group surveys by district for the dropdown
   const grouped = surveys.reduce<Record<string, SurveyOption[]>>((acc, s) => {
@@ -46,7 +55,7 @@ export function TransferForm({ asset, surveys }: Props) {
           </div>
           <div>
             <span className="text-[var(--muted)]">เลขทะเบียน: </span>
-            <span className="font-mono font-semibold">{asset.assetRegistrationNo}</span>
+            <span className="font-mono font-semibold">{asset.assetNumber}</span>
           </div>
           <div>
             <span className="text-[var(--muted)]">หน่วยงานปัจจุบัน: </span>
@@ -71,7 +80,8 @@ export function TransferForm({ asset, surveys }: Props) {
         <select
           name="newSurveyId"
           required
-          defaultValue=""
+          value={surveyId}
+          onChange={(event) => setSurveyId(event.target.value)}
           className="w-full rounded-xl border border-[var(--line)] bg-white/80 px-3 py-2.5 text-sm outline-none focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/15"
         >
           <option value="" disabled>-- เลือกหน่วยงานปลายทาง --</option>
@@ -85,6 +95,45 @@ export function TransferForm({ asset, surveys }: Props) {
             </optgroup>
           ))}
         </select>
+      </div>
+
+      {/* Work group of the destination facility */}
+      {destinationFacilityId !== undefined && (
+        <div>
+          <label className="block text-sm font-medium mb-1">
+            กลุ่มงานปลายทาง {destinationGroups.length > 0 && <span className="text-rose-500">*</span>}
+          </label>
+          {destinationGroups.length > 0 ? (
+            <select
+              key={destinationFacilityId}
+              name="newWorkGroupId"
+              required
+              defaultValue={destinationFacilityId === asset.facilityId && asset.workGroupId ? String(asset.workGroupId) : ""}
+              className={inputClass}
+            >
+              <option value="" disabled>-- เลือกกลุ่มงาน --</option>
+              {destinationGroups.map((group) => (
+                <option key={group.id} value={group.id}>{group.workGroupName}</option>
+              ))}
+            </select>
+          ) : (
+            <>
+              <input type="hidden" name="newWorkGroupId" value="" />
+              <p className="rounded-xl border border-[var(--line)] bg-white/60 px-3 py-2.5 text-sm text-[var(--muted)]">หน่วยงานนี้ยังไม่มีกลุ่มงาน</p>
+            </>
+          )}
+        </div>
+      )}
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <label className="block text-sm font-medium mb-1">วันที่โอนย้าย <span className="text-rose-500">*</span></label>
+          <input type="date" name="transferDate" required defaultValue={today} max={today} className={inputClass} />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">เลขที่หนังสือ / ใบโอน</label>
+          <input name="documentNo" type="text" placeholder="เช่น สต 0033.001/123" className={inputClass} />
+        </div>
       </div>
 
       {/* New owner */}

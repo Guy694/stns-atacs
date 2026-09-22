@@ -69,6 +69,13 @@ function FacilityModal({
           </div>
 
           <div>
+            <label className="block text-sm font-medium" htmlFor="facility-asset-code-prefix">รหัสหน่วยงานสำหรับเลขครุภัณฑ์</label>
+            <input id="facility-asset-code-prefix" name="assetCodePrefix" maxLength={30} defaultValue={facility?.asset_code_prefix ?? ""} placeholder="เช่น สสจ."
+              className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]" />
+            <p className="mt-1 text-xs text-[var(--muted)]">ใช้เป็นค่าเริ่มต้นเมื่อเพิ่มครุภัณฑ์ใหม่ของหน่วยงานนี้ เช่น สสจ. + 123 = สสจ.123</p>
+          </div>
+
+          <div>
             <label className="block text-sm font-medium">ตำบล</label>
             <input name="tambon" defaultValue={facility?.tambon ?? ""}
               className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]" />

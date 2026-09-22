@@ -10,6 +10,7 @@ import { listFacilities } from "@/lib/assets";
 import { getFacilityScopeId } from "@/lib/facility-scope";
 import { canManageFacility } from "@/lib/permissions";
 import { hasPermission } from "@/lib/role-permissions";
+import { listFacilityWorkGroups } from "@/lib/facility-work-groups";
 import NewInspectionForm from "./_components/new-inspection-form";
 
 function readParam(params: Record<string, string | string[] | undefined>, key: string) {
@@ -35,9 +36,10 @@ export default async function InspectionPage({
   const facilityScopeId = getFacilityScopeId(user);
   if (facilityScopeId === null) redirect("/profile");
 
-  const [inspections, facilities] = await Promise.all([
+  const [inspections, facilities, workGroups] = await Promise.all([
     listInspections(facilityScopeId),
     listFacilities(facilityScopeId ? { facilityId: facilityScopeId } : undefined),
+    listFacilityWorkGroups(facilityScopeId || undefined),
   ]);
   const facilitiesForForm = facilityScopeId
     ? facilities.filter((facility) => canManageFacility(user, facility.id))
@@ -98,7 +100,7 @@ export default async function InspectionPage({
           <h2 className="text-lg font-bold mb-4" style={{ color: "var(--foreground)" }}>
             เริ่มรอบตรวจนับใหม่
           </h2>
-          <NewInspectionForm facilities={facilitiesForForm} />
+          <NewInspectionForm facilities={facilitiesForForm} workGroups={workGroups} />
         </div>
       )}
 
@@ -174,6 +176,7 @@ export default async function InspectionPage({
                     >
                       <td className="px-4 py-3 font-medium" style={{ color: "var(--foreground)" }}>
                         {ins.roundName}
+                        {ins.workGroupName && <p className="mt-1 text-xs font-medium text-[var(--primary-text)]">{ins.workGroupName}</p>}
                         <p className="mt-1 text-xs font-normal" style={{ color: "var(--muted)" }}>
                           เปิดเมื่อ {formatThaiDate(ins.inspectedAt)}
                         </p>
@@ -189,7 +192,9 @@ export default async function InspectionPage({
                         {ins.inspectedBy}
                       </td>
                       <td className="px-4 py-3">
-                        {ins.remainingItems === 0 ? (
+                        {ins.roundStatus === "Closed" ? (
+                          <StatusBadge tone="neutral">ปิดรอบแล้ว</StatusBadge>
+                        ) : ins.remainingItems === 0 ? (
                           <StatusBadge tone="success">ตรวจครบแล้ว</StatusBadge>
                         ) : (
                           <StatusBadge tone="warning">คงเหลือ {ins.remainingItems.toLocaleString("th-TH")}</StatusBadge>
@@ -215,13 +220,20 @@ export default async function InspectionPage({
                         </p>
                       </td>
                       <td className="px-4 py-3">
-                        <Link
-                          href={"/inspection/" + ins.id}
-                          className="text-xs font-semibold"
-                          style={{ color: "var(--accent)" }}
-                        >
-                          ดูรายละเอียด →
-                        </Link>
+                        <div className="flex flex-col items-start gap-2">
+                          <Link
+                            href={"/inspection/" + ins.id}
+                            className="text-xs font-semibold"
+                            style={{ color: "var(--accent)" }}
+                          >
+                            ดูรายละเอียด →
+                          </Link>
+                          {canMutate && ins.roundStatus !== "Closed" && (
+                            <Link href={`/inspection/${ins.id}?delete=1#delete-round`} className="text-xs font-medium text-rose-700 hover:underline">
+                              ยกเลิก / ลบรอบ
+                            </Link>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );

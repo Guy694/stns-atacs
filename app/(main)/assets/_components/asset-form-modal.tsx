@@ -1,16 +1,19 @@
 "use client";
 
 import { useActionState, useEffect, useId, useMemo, useRef, useState } from "react";
+
+import { formatAssetNumber } from "@/lib/asset-number";
 import { AssetSpecificFields } from "./asset-specific-fields";
 import { createPortal } from "react-dom";
 
 import { createAssetAction, updateAssetAction } from "@/app/(main)/assets/actions";
 import { ASSET_CLASS_OPTIONS } from "@/lib/asset-classes";
+import { DEPRECIATION_CATEGORIES } from "@/lib/asset-depreciation";
 import { isItAsset, requiresWindowsLicense } from "@/lib/asset-policy";
 import type { AssetWithFacility } from "@/lib/assets";
 import { isComputerDeviceType, type WindowsLicenseStatus } from "@/lib/windows-license";
 
-type FacilityOption = { id: number; facility_name: string | null; district_name: string | null };
+type FacilityOption = { id: number; facility_name: string | null; district_name: string | null; asset_code_prefix?: string | null };
 type DeviceTypeOption = { name: string; category: string };
 type WorkGroupOption = { id: number; facilityId: number; facilityName: string; workGroupName: string };
 
@@ -183,10 +186,16 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
   const [subtypePending, setSubtypePending] = useState(false);
   const [selectedFacilityId, setSelectedFacilityId] = useState<number | null>(fixedFacilityId ?? asset?.facilityId ?? null);
   const [selectedWorkGroupId, setSelectedWorkGroupId] = useState(asset?.workGroupId?.toString() ?? "");
+  const [codePrefix, setCodePrefix] = useState(
+    asset ? asset.assetCodePrefix : facilities.find((facility) => facility.id === (fixedFacilityId ?? null))?.asset_code_prefix ?? ""
+  );
+  const [codeNumber, setCodeNumber] = useState(asset?.assetRegistrationNo ?? "");
+  const [prefixTouched, setPrefixTouched] = useState(Boolean(asset));
   const [assetClass, setAssetClass] = useState(asset?.assetClass ?? "IT");
   const isIt = isItAsset({ assetClass });
   const classChanged = mode === "edit" && assetClass !== asset?.assetClass;
   const [assetCategory, setAssetCategory] = useState<"Hardware" | "Software">(asset?.assetGroup ?? "Hardware");
+  const referenceCategory = DEPRECIATION_CATEGORIES.find(category => category.id === (isIt && assetCategory === "Software" ? 20 : ASSET_CLASS_OPTIONS.find(option => option.value === assetClass)?.categoryId));
   const [deviceType, setDeviceType] = useState(asset?.deviceType?.trim() ?? "");
   const [windowsLicenseStatus, setWindowsLicenseStatus] = useState<WindowsLicenseStatus | "">(
     asset?.windowsLicenseStatus ?? ""
@@ -294,6 +303,8 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
                     onSelectedFacilityIdChange={(facilityId) => {
                       setSelectedFacilityId(facilityId);
                       setSelectedWorkGroupId("");
+                      // New records take the facility's default unit code until the user edits it.
+                      if (!prefixTouched) setCodePrefix(facilities.find((facility) => facility.id === facilityId)?.asset_code_prefix ?? "");
                     }}
                   />
                 )}
@@ -324,17 +335,49 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
                 </div>
               )}
 
-              <div className="grid gap-4 sm:grid-cols-2">
-                {/* เลขทะเบียน */}
+              {/* เลขครุภัณฑ์ = รหัสหน่วยงาน + เลขครุภัณฑ์ */}
+              <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_minmax(0,1.5fr)]">
                 <div>
-                  <label className="block text-sm font-medium">เลขทะเบียนทรัพย์สิน</label>
+                  <label className="block text-sm font-medium" htmlFor="assetCodePrefix">รหัสหน่วยงาน</label>
                   <input
-                    name="assetRegistrationNo"
-                    defaultValue={asset?.assetRegistrationNo ?? ""}
-                    placeholder="เช่น SAT-HW-0001 หรือเว้นว่าง"
+                    id="assetCodePrefix"
+                    name="assetCodePrefix"
+                    value={codePrefix}
+                    maxLength={30}
+                    onChange={(event) => { setCodePrefix(event.target.value); setPrefixTouched(true); }}
+                    placeholder="เช่น สสจ."
                     className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
                   />
                 </div>
+                <div>
+                  <label className="block text-sm font-medium" htmlFor="assetRegistrationNo">เลขครุภัณฑ์</label>
+                  <input
+                    id="assetRegistrationNo"
+                    name="assetRegistrationNo"
+                    value={codeNumber}
+                    onChange={(event) => setCodeNumber(event.target.value)}
+                    placeholder="เช่น 7440-001-0006/120 หรือเว้นว่าง"
+                    className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium" htmlFor="assetAccountingCode">รหัสสินทรัพย์</label>
+                  <input
+                    id="assetAccountingCode"
+                    name="assetAccountingCode"
+                    defaultValue={asset?.assetAccountingCode ?? ""}
+                    maxLength={50}
+                    placeholder="เช่น 110000490204"
+                    className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+                  />
+                </div>
+                <p className="-mt-2 text-xs text-[var(--muted)] sm:col-span-3">
+                  เลขครุภัณฑ์เต็ม: <span className="font-mono text-[var(--foreground)]">{formatAssetNumber(codePrefix, codeNumber) || "-"}</span>
+                  {" "}· รหัสสินทรัพย์เว้นว่างได้ ถ้าราคาต่ำกว่าเกณฑ์ใบตรวจนับจะแสดง “ต่ำกว่าเกณฑ์”
+                </p>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
                 {/* ชื่อ */}
                 <div>
                   <label className="block text-sm font-medium">ชื่อทรัพย์สิน <span className="text-rose-500">*</span></label>
@@ -349,18 +392,19 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
+                <div className="sm:col-span-2 text-sm leading-6 text-[var(--muted)]">เลือกประเภทตามตารางอายุการใช้งาน 20 ประเภท แล้วกรอกรายละเอียดของครุภัณฑ์ <a href="/references/asset-useful-life.pdf" target="_blank" rel="noreferrer" className="text-[var(--primary-text)] underline">ดูเอกสารอ้างอิง</a></div>
                 {/* หมวด */}
                 <div>
-                  <label htmlFor={`${titleId}-class`} className="block text-sm font-medium">กลุ่มทรัพย์สิน <span className="text-rose-500">*</span></label>
+                  <label htmlFor={`${titleId}-class`} className="block text-sm font-medium">ประเภททรัพย์สินตามเอกสาร <span className="text-rose-500">*</span></label>
                   <select
                     id={`${titleId}-class`}
                     name="assetClass"
                     value={assetClass}
-                    onChange={(event) => setAssetClass(event.target.value)}
+                    onChange={(event) => { setAssetClass(event.target.value); if (mode === "create") setAssetCategory("Hardware"); }}
                     className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
                   >
-                    {ASSET_CLASS_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>{option.label}</option>
+                    {ASSET_CLASS_OPTIONS.filter(option => option.categoryId > 0 || option.value === asset?.assetClass).map((option) => (
+                      <option key={option.value} value={option.value}>{option.categoryId ? `${option.categoryId}. ` : ""}{option.label}</option>
                     ))}
                   </select>
                 </div>
@@ -376,10 +420,11 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
                     }}
                     className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
                   >
-                    <option value="Hardware">Hardware</option>
-                    <option value="Software">Software</option>
+                    <option value="Hardware">ฮาร์ดแวร์ / อุปกรณ์คอมพิวเตอร์</option>
+                    {mode === "edit" && asset?.assetGroup === "Software" && <option value="Software">ซอฟต์แวร์ (ข้อมูลเดิม)</option>}
                   </select>
                 </fieldset>
+                {isIt && mode === "create" && <p className="text-xs leading-5 text-[var(--muted)] sm:col-span-2">หากเพิ่มโปรแกรมหรือซอฟต์แวร์ ให้เลือกประเภท 20. สินทรัพย์ไม่มีตัวตน</p>}
                 {/* ประเภททรัพย์สิน */}
                 <fieldset hidden={!isIt} disabled={!isIt} className="sm:col-span-2">
                   <label className="block text-sm font-medium">ประเภทอุปกรณ์ IT</label>
@@ -395,12 +440,12 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
                   >
                     <option value="">เลือกประเภททรัพย์สิน</option>
                     {hasSelectedDeviceType && <option value={selectedDeviceType}>{selectedDeviceType} (ค่าปัจจุบัน)</option>}
-                    {hardwareDeviceTypes.length > 0 && (
+                    {assetCategory === "Hardware" && hardwareDeviceTypes.length > 0 && (
                       <optgroup label="ฮาร์ดแวร์">
                         {hardwareDeviceTypes.map((t) => <option key={t.name} value={t.name}>{t.name}</option>)}
                       </optgroup>
                     )}
-                    {softwareDeviceTypes.length > 0 && (
+                    {assetCategory === "Software" && softwareDeviceTypes.length > 0 && (
                       <optgroup label="ซอฟต์แวร์">
                         {softwareDeviceTypes.map((t) => <option key={t.name} value={t.name}>{t.name}</option>)}
                       </optgroup>
@@ -430,6 +475,12 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
                   </div>
                 )}
               </div>
+
+              {referenceCategory && <details className="rounded-lg bg-[var(--neutral-bg)] px-4 py-3 text-sm">
+                <summary className="cursor-pointer font-medium text-[var(--primary-text)]">อายุการใช้งานและอัตราค่าเสื่อมอ้างอิง · {referenceCategory.label}</summary>
+                <ul className="mt-3 space-y-2 text-[var(--neutral-text)]">{referenceCategory.rates.map(rate => <li key={rate.label}>{rate.label}: {rate.years === null ? "คณะกรรมการพิจารณาเป็นรายกรณี" : `${rate.years} ปี · ${rate.rate}% ต่อปี`}</li>)}</ul>
+                <p className="mt-2 text-xs text-[var(--muted)]">เป็นเกณฑ์ตามเอกสาร ไม่ใช่ค่าเสื่อมที่คำนวณรายรายการ</p>
+              </details>}
 
               {classChanged && (
                 <label className="flex items-start gap-2 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
@@ -565,11 +616,35 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
                     className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
                   />
                 </div>
+                <div className="sm:col-span-3">
+                  <label className="block text-sm font-medium">อายุการใช้งานสำหรับคิดค่าเสื่อม (ปี)</label>
+                  <input
+                    type="number"
+                    name="usefulLifeYears"
+                    min="1"
+                    max="100"
+                    step="1"
+                    defaultValue={asset?.usefulLifeYears ?? ""}
+                    placeholder="เว้นว่างเพื่อใช้ตามตารางอายุการใช้งานของประเภททรัพย์สิน"
+                    className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)] sm:max-w-md"
+                  />
+                  <p className="mt-1 text-xs text-[var(--muted)]">ระบุเฉพาะกรณีคณะกรรมการกำหนดอายุต่างจากตาราง เช่น งานต่อเติม</p>
+                </div>
               </div>
 
               {/* Status */}
               <div>
                 <label className="block text-sm font-medium">สถานะ</label>
+                {asset && (asset.currentStatus === "Disposed" || asset.currentStatus === "Lost") ? (
+                  <>
+                    {/* A disabled control is not submitted, so the approved terminal status is preserved. */}
+                    <select disabled value={asset.currentStatus} className="mt-1 w-full rounded-xl border border-black/10 bg-stone-100 px-3 py-2 text-sm text-stone-600">
+                      <option value="Disposed">จำหน่ายแล้ว</option>
+                      <option value="Lost">สูญหาย</option>
+                    </select>
+                    <p className="mt-1 text-xs text-[var(--muted)]">สถานะนี้มาจากคำขอจำหน่ายที่อนุมัติแล้ว แก้ไขผ่านฟอร์มนี้ไม่ได้</p>
+                  </>
+                ) : (
                 <select
                   name="currentStatus"
                   defaultValue={asset?.currentStatus ?? "Active"}
@@ -579,6 +654,7 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
                   <option value="Inactive">ไม่ใช้งาน</option>
                   <option value="Broken">ชำรุด</option>
                 </select>
+                )}
               </div>
 
               {/* Description */}

@@ -1,4 +1,6 @@
-import { isItAsset, assetTypeLabel } from "@/lib/asset-policy";
+import { AssetCategorySummary } from "@/app/_components/asset-category-summary";
+import { summarizeDepreciationCategories } from "@/lib/asset-depreciation";
+import { isItAsset } from "@/lib/asset-policy";
 import Link from "next/link";
 
 import { ExpiringMaintenanceTable, type ExpiringMaintenanceRow } from "@/app/(main)/_components/expiring-maintenance-table";
@@ -127,13 +129,6 @@ export default async function Home({ searchParams }: HomeProps) {
   const softwareCount = allAssets.filter((a) => isItAsset(a) && a.assetGroup === "Software").length;
   const totalDistricts = selectedDistrict ? 1 : new Set(facilitySurveys.map((s) => s.districtName)).size;
   const activeRate = Math.round((activeAssets / safeTotalAssets) * 100);
-
-  const deviceTypes = Object.entries(
-    allAssets.reduce<Record<string, number>>((acc, asset) => {
-      acc[assetTypeLabel(asset)] = (acc[assetTypeLabel(asset)] ?? 0) + 1;
-      return acc;
-    }, {})
-  ).sort((a, b) => b[1] - a[1]);
 
   const districtMetrics = facilitySurveys.reduce<Record<string, { assets: number; facilities: number; activeAssets: number; completionTotal: number }>>(
     (acc, survey) => {
@@ -413,6 +408,8 @@ export default async function Home({ searchParams }: HomeProps) {
           </div>
         </div>
 
+        <AssetCategorySummary {...summarizeDepreciationCategories(allAssets)} />
+
         {isScopedUser && !missingFacilityAssignment && !hasScopedData && (
           <div className="glass-panel rounded-2xl p-8 text-center">
             <p className="text-lg font-semibold text-[var(--foreground)]">ยังไม่พบข้อมูลสำรวจของหน่วยงานนี้</p>
@@ -492,7 +489,7 @@ export default async function Home({ searchParams }: HomeProps) {
         </div>
 
         {/* ── Operational + Distribution ───────────────────────────────────── */}
-        <div className="grid gap-6 lg:grid-cols-2">
+        <div className="grid gap-6">
           {/* Operational Readiness */}
           <div className="glass-panel rounded-2xl p-6">
             <p className="text-xs font-medium uppercase tracking-[0.2em] text-[var(--muted)]">Operational Readiness</p>
@@ -523,44 +520,6 @@ export default async function Home({ searchParams }: HomeProps) {
 
             {/* Public IP panel */}
   
-          </div>
-
-          {/* Asset Distribution */}
-          <div className="glass-panel rounded-2xl p-6">
-            <p className="text-xs font-medium uppercase tracking-[0.2em] text-[var(--muted)]">Asset Distribution</p>
-            <h2 className="section-title mt-1 text-xl font-semibold">ประเภทอุปกรณ์</h2>
-
-            <div className="mt-4 grid grid-cols-2 gap-3">
-              <div className="rounded-xl bg-[var(--accent-strong)] p-4 text-white">
-                <p className="text-xs text-white/60">IT Hardware</p>
-                <p className="mt-1.5 text-3xl font-semibold">{hardwareCount}</p>
-                <p className="mt-0.5 text-xs text-white/60">{Math.round((hardwareCount / safeTotalAssets) * 100)}%</p>
-              </div>
-              <div className="rounded-xl border border-black/8 bg-white/80 p-4">
-                <p className="text-xs text-[var(--muted)]">IT Software</p>
-                <p className="mt-1.5 text-3xl font-semibold">{softwareCount}</p>
-                <p className="mt-0.5 text-xs text-[var(--muted)]">{Math.round((softwareCount / safeTotalAssets) * 100)}%</p>
-              </div>
-            </div>
-
-            <div className="mt-5 space-y-3">
-              {deviceTypes.map(([type, count]) => (
-                <div key={type}>
-                  <div className="flex items-center justify-between text-sm">
-                    <span>{type}</span>
-                    <span className="font-mono text-xs text-[var(--muted)]">
-                      {count} / {totalAssets}
-                    </span>
-                  </div>
-                  <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-stone-100">
-                    <div
-                      className="h-full rounded-full bg-[var(--accent)]"
-                      style={{ width: `${(count / safeTotalAssets) * 100}%` }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
           </div>
         </div>
 

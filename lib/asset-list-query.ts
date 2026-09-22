@@ -21,6 +21,7 @@ export function parseAssetListQuery(params: URLSearchParams): AssetListFilter {
     status: text("status"),
     assetClass: assetClass ? parseAssetClass(assetClass) : undefined,
     assetGroup: group,
+    subtypeId: positive("subtype"),
     district: text("district"),
     deviceType: text("deviceType"),
     workGroupId: positive("workGroupId", "workGroup"),

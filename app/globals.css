@@ -76,8 +76,11 @@ textarea {
   font: inherit;
 }
 
-a {
-  color: inherit;
+/* In the base layer so Tailwind text-* utilities on links (buttons, CTAs) take effect. */
+@layer base {
+  a {
+    color: inherit;
+  }
 }
 
 ::selection {

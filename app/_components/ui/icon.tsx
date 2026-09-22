@@ -25,7 +25,8 @@ export type IconName =
   | "settings"
   | "shield"
   | "tag"
-  | "users";
+  | "users"
+  | "wrench";
 
 type AppIconProps = SVGProps<SVGSVGElement> & {
   name: IconName;
@@ -33,6 +34,7 @@ type AppIconProps = SVGProps<SVGSVGElement> & {
 };
 
 const PATHS: Record<IconName, ReactNode> = {
+  wrench: <path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.4-.6-.6-2.4z" />,
   activity: <polyline points="3 12 7 12 10 5 14 19 17 12 21 12" />,
   archive: <><rect x="3" y="4" width="18" height="4" rx="1" /><path d="M5 8v11h14V8" /><path d="M10 12h4" /></>,
   "arrow-down": <><path d="M12 4v16" /><path d="m6 14 6 6 6-6" /></>,
