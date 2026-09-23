@@ -5,6 +5,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { StatusBadge } from "@/app/_components/ui/status-badge";
+import { ActionIconButton } from "@/app/_components/ui/action-icon-button";
 import { assetClassLabel } from "@/lib/asset-classes";
 import { getCurrentUser } from "@/lib/auth";
 import { countAssets, listAssets, listAllFacilitiesForSelect, listFacilities, type AssetListFilter } from "@/lib/assets";
@@ -277,9 +278,7 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
                             mode="edit"
                             asset={asset}
                           >
-                            <button className="inline-flex min-h-11 items-center rounded-lg border border-black/10 bg-white/80 px-3 py-2 text-xs font-medium text-[var(--accent-strong)] transition hover:bg-white">
-                              แก้ไข
-                            </button>
+                            <ActionIconButton icon="pencil" label={`แก้ไข ${asset.assetName}`} />
                           </AssetFormModal>
                           <DeleteAssetButton assetId={asset.id} assetName={asset.assetName} />
                         </div>

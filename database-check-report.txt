@@ -1,5 +1,5 @@
-ATACS database check · 2026-09-22T13:38:04.925Z
-Server: 10.4.22-MariaDB (MariaDB) · database: stn_atacs
+ATACS database check · 2026-09-23T02:28:10.318Z
+Server: 8.0.44 (MySQL) · database: stn_atacs
 Charset: utf8mb4 / utf8mb4_general_ci
 
 1) Migration
@@ -13,6 +13,7 @@ Charset: utf8mb4 / utf8mb4_general_ci
   [OK]   add_asset_lifecycle.sql
   [OK]   add_asset_codes_and_inspection_committee.sql
   [OK]   add_inspection_close.sql
+  [OK]   add_inspection_found_location.sql
   [OK]   add_registry_completeness.sql
 
 2) จำนวนข้อมูล
@@ -26,7 +27,7 @@ Charset: utf8mb4 / utf8mb4_general_ci
   asset_repairs                0
   asset_loans                  0
   asset_status_history         508
-  audit_logs                   613
+  audit_logs                   619
   users                        38
 
 3) ความถูกต้องของข้อมูล (อ่านอย่างเดียว)

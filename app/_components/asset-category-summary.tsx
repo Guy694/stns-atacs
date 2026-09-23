@@ -40,13 +40,13 @@ export function AssetCategorySummary({ rows, unclassified, total }: Props) {
       <div className="flex flex-col gap-3 px-5 py-4 sm:px-6 lg:flex-row lg:items-center lg:justify-between">
         <p className="text-sm text-[var(--muted)]"><strong className="font-semibold text-[var(--foreground)]">{number.format(total)} รายการ</strong> ตามตัวกรองปัจจุบัน · พบข้อมูล {populated} จาก 20 ประเภท</p>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <label className="flex min-h-11 items-center gap-2 text-sm">
+          <label className="flex min-h-9 items-center gap-2 text-xs">
             <input type="checkbox" checked={onlyPopulated} onChange={event => setOnlyPopulated(event.target.checked)} className="h-4 w-4 accent-[var(--accent-strong)]" />
             เฉพาะประเภทที่มีข้อมูล
           </label>
           <label className="min-w-0 sm:w-60">
             <span className="sr-only">ค้นหาประเภททรัพย์สิน</span>
-            <input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="ค้นหาประเภททรัพย์สิน" className="min-h-11 w-full rounded-lg border border-[var(--line)] px-3 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]" />
+            <input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="ค้นหาประเภททรัพย์สิน" className="filter-control w-full" />
           </label>
         </div>
       </div>

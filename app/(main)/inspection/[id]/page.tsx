@@ -392,28 +392,28 @@ export default async function InspectionDetailPage({ params, searchParams }: Ins
             <AppIcon name="download" className="h-4 w-4" /> ใบตรวจนับ Excel{activeFilterCount ? " (ตามตัวกรอง)" : ""}
           </a>
         </div>
-        <form method="GET" action="#items" className="grid gap-3 border-b border-black/6 bg-white/60 px-5 py-4 sm:grid-cols-2 lg:grid-cols-[repeat(3,minmax(0,1fr))_auto] lg:items-end" aria-label="กรองรายการในรอบตรวจ">
-          <label className="min-w-0 text-sm font-medium">ประเภทครุภัณฑ์
+        <form method="GET" action="#items" className="grid gap-3 border-b border-black/6 bg-white/60 px-4 py-4 sm:grid-cols-2 lg:grid-cols-[repeat(3,minmax(0,1fr))_auto] lg:items-end" aria-label="กรองรายการในรอบตรวจ">
+          <label className="min-w-0 text-xs font-medium">ประเภทครุภัณฑ์
             <select name="category" defaultValue={itemFilters.category} className={filterControl}>
               <option value="">ทุกประเภท</option>
               {filterOptions.categories.map((option) => <option key={option.key} value={option.key}>{option.label} ({option.count})</option>)}
             </select>
           </label>
-          <label className="min-w-0 text-sm font-medium">ใช้ประจำที่ (กลุ่มงาน)
+          <label className="min-w-0 text-xs font-medium">ใช้ประจำที่ (กลุ่มงาน)
             <select name="location" defaultValue={itemFilters.location} className={filterControl}>
               <option value="">ทุกกลุ่มงาน</option>
               {filterOptions.locations.map((option) => <option key={option.value} value={option.value}>{option.label} ({option.count})</option>)}
             </select>
           </label>
-          <label className="min-w-0 text-sm font-medium">ผลตรวจ
+          <label className="min-w-0 text-xs font-medium">ผลตรวจ
             <select name="result" defaultValue={itemFilters.result} className={filterControl}>
               <option value="">ทุกผลตรวจ</option>
               {RESULT_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             </select>
           </label>
-          <div className="flex min-h-11 items-center gap-3">
-            <button type="submit" className="min-h-11 rounded-lg bg-[var(--accent-strong)] px-4 text-sm font-semibold text-white hover:opacity-90">กรอง</button>
-            {activeFilterCount > 0 && <Link href={`/inspection/${inspection.id}#items`} className="text-sm text-[var(--primary-text)] underline underline-offset-4">ล้าง</Link>}
+          <div className="flex min-h-9 items-center gap-3">
+            <button type="submit" className="min-h-9 rounded-lg bg-[var(--accent-strong)] px-4 text-xs font-semibold text-white hover:opacity-90">กรอง</button>
+            {activeFilterCount > 0 && <Link href={`/inspection/${inspection.id}#items`} className="text-xs text-[var(--primary-text)] underline underline-offset-4">ล้าง</Link>}
           </div>
         </form>
         <div className="overflow-x-auto">

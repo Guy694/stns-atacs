@@ -66,8 +66,8 @@ export default async function NewLoanPage({ searchParams }: Props) {
       </div>
       <form method="GET" className="glass-panel flex gap-3 rounded-2xl p-4">
         <label htmlFor="loan-search" className="sr-only">ค้นหาครุภัณฑ์</label>
-        <input id="loan-search" name="q" defaultValue={q} autoFocus placeholder="ค้นหาชื่อ / เลขครุภัณฑ์ / Serial…" className="min-w-0 flex-1 rounded-xl border border-[var(--line)] bg-white/80 px-4 py-2.5 text-sm outline-none focus:border-[var(--primary)]" />
-        <button className="rounded-xl bg-[var(--primary)] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[var(--primary-hover)]">ค้นหา</button>
+        <input id="loan-search" name="q" defaultValue={q} autoFocus placeholder="ค้นหาชื่อ / เลขครุภัณฑ์ / Serial…" className="filter-control min-w-0 flex-1" />
+        <button className="rounded-xl bg-[var(--primary)] px-4 py-2.5 text-xs font-semibold text-white hover:bg-[var(--primary-hover)]">ค้นหา</button>
       </form>
       {q && (
         <section className="glass-panel divide-y divide-black/5 overflow-hidden rounded-2xl">

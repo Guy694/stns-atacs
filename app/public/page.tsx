@@ -14,6 +14,8 @@ import {
   hrefWith,
 } from "@/app/_components/asset-overview-charts";
 import { DashboardFilters } from "@/app/_components/dashboard-filters";
+import { SplashScreen } from "@/app/_components/splash-screen";
+import { SPLASH_SEEN_SCRIPT } from "@/lib/splash";
 import { TopNavigation } from "@/app/_components/top-navigation";
 import { AppIcon } from "@/app/_components/ui/icon";
 import { getDashboardData } from "@/lib/atacs";
@@ -42,6 +44,9 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
 
   return (
     <main className="mx-auto flex w-full max-w-[1400px] flex-1 flex-col gap-5 px-4 py-6 sm:px-8 lg:px-10 lg:py-8">
+      <SplashScreen />
+      {/* Must follow the splash: hides it before first paint when this session has already seen it. */}
+      <script dangerouslySetInnerHTML={{ __html: SPLASH_SEEN_SCRIPT }} />
       <TopNavigation current="public" user={null} />
 
       <section aria-labelledby="public-heading" className="rounded-2xl bg-[linear-gradient(135deg,#0f3d5e_0%,#15548f_60%,#1687d9_100%)] px-6 py-8 text-white sm:px-10">

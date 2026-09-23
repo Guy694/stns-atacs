@@ -3,6 +3,7 @@
 import { useActionState, useEffect, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import { toggleUserActiveAction, resetUserPasswordAction, updateUserProfileAction } from "@/app/(main)/admin/users/actions";
+import { ActionIconButton } from "@/app/_components/ui/action-icon-button";
 
 type FacilityOption = {
   id: number;
@@ -99,14 +100,12 @@ export function UserRowActions({
 
   return (
     <div className="inline-flex items-center">
-      <button
-        type="button"
+      <ActionIconButton
+        icon="settings"
+        label={`จัดการผู้ใช้ ${fullName}`}
         onClick={() => setShowActions(true)}
-        className="min-h-11 rounded-xl border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-stone-700 transition hover:bg-stone-50"
-        aria-label={`จัดการผู้ใช้ ${fullName}`}
-      >
-        จัดการ
-      </button>
+        className="rounded-xl"
+      />
 
       {mounted && showActions && createPortal(
         <div className="fixed inset-0 z-50 flex items-end justify-center p-3 sm:items-center" role="presentation">

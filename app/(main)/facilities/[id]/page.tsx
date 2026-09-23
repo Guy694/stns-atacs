@@ -6,6 +6,7 @@ import { notFound, redirect } from "next/navigation";
 
 import { AppIcon } from "@/app/_components/ui/icon";
 import { StatusBadge } from "@/app/_components/ui/status-badge";
+import { ActionIconButton } from "@/app/_components/ui/action-icon-button";
 import { assetClassLabel } from "@/lib/asset-classes";
 import { getCurrentUser } from "@/lib/auth";
 import { getFacilityById, listAssets, listAllFacilitiesForSelect } from "@/lib/assets";
@@ -197,6 +198,12 @@ export default async function FacilityDetailPage({ params, searchParams }: Props
                 fixedFacilityId={facilityId}
               />
             )}
+            <a
+              href={`/print/assets/register?facility=${facilityId}`}
+              className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-black/10 bg-white/85 px-4 py-2 text-xs font-semibold text-[var(--foreground)] transition hover:bg-white"
+            >
+              <AppIcon name="printer" className="h-4 w-4" /> พิมพ์ทะเบียนคุมทรัพย์สิน (A4 แนวนอน)
+            </a>
             <FacilityAssetQrActions
               facilityId={facilityId}
               facilityName={facilityName}
@@ -293,9 +300,7 @@ export default async function FacilityDetailPage({ params, searchParams }: Props
                             mode="edit"
                             asset={asset}
                           >
-                            <button className="inline-flex min-h-11 items-center rounded-lg border border-black/10 bg-white/80 px-3 py-2 text-xs font-medium text-[var(--accent-strong)] hover:bg-white">
-                              แก้ไข
-                            </button>
+                            <ActionIconButton icon="pencil" label={`แก้ไข ${asset.assetName}`} />
                           </AssetFormModal>
                           <DeleteAssetButton assetId={asset.id} assetName={asset.assetName} />
                         </div>

@@ -297,10 +297,10 @@ export default async function Home({ searchParams }: HomeProps) {
         )}
 
         <form method="GET" className="glass-panel rounded-2xl p-4" aria-label="ตัวกรองข้อมูลภาพรวม">
-          <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-3">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex flex-wrap items-center gap-2">
-                <p className="text-sm font-semibold text-[var(--foreground)]">ฟิลเตอร์ข้อมูลภาพรวม</p>
+                <p className="text-xs font-semibold text-[var(--foreground)]">ฟิลเตอร์ข้อมูลภาพรวม</p>
                 {activeFilterCount > 0 && (
                   <StatusBadge tone="primary">{activeFilterCount} เงื่อนไข</StatusBadge>
                 )}
@@ -322,7 +322,7 @@ export default async function Home({ searchParams }: HomeProps) {
                 <select
                   name="group"
                   defaultValue={selectedGroup}
-                  className="mt-1 w-full rounded-xl border border-black/10 bg-white/85 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+                  className="filter-control w-full"
                 >
                   <option value="">{dashboardScope.officerScopeKind === "district-primary" ? "ทั้งหมดในสังกัด" : "ทุกกลุ่ม"}</option>
                   {groupOptions.map((option) => (
@@ -338,7 +338,7 @@ export default async function Home({ searchParams }: HomeProps) {
                 <select
                   name="district"
                   defaultValue={selectedDistrict}
-                  className="mt-1 w-full rounded-xl border border-black/10 bg-white/85 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+                  className="filter-control w-full"
                 >
                   <option value="">ทุกอำเภอ</option>
                   {districtOptions.map((district) => (
@@ -354,7 +354,7 @@ export default async function Home({ searchParams }: HomeProps) {
                 <select
                   name="facility"
                   defaultValue={selectedFacilityId?.toString() ?? ""}
-                  className="mt-1 w-full rounded-xl border border-black/10 bg-white/85 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+                  className="filter-control w-full"
                 >
                   <option value="">ทุกหน่วยงาน</option>
                   {facilityOptions.map((facility) => (
@@ -367,7 +367,7 @@ export default async function Home({ searchParams }: HomeProps) {
 
               <button
                 type="submit"
-                className="rounded-xl bg-[var(--accent-strong)] px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90 md:mb-0"
+                className="rounded-xl bg-[var(--accent-strong)] px-4 py-2 text-xs font-semibold text-white transition hover:opacity-90 md:mb-0"
               >
                 กรองข้อมูล
               </button>

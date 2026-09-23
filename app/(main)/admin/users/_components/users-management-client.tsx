@@ -250,14 +250,14 @@ export function UsersManagementClient({ users, facilities, currentUserId }: Prop
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="ค้นหาชื่อ อีเมล Username หรือ ThaiD"
-              className="min-h-11 w-full rounded-xl border border-stone-200 bg-white px-4 py-2 text-sm outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-emerald-100 sm:w-80"
+              className="filter-control is-narrow"
             />
             <label className="sr-only" htmlFor="user-status">กรองสถานะผู้ใช้งาน</label>
             <select
               id="user-status"
               value={status}
               onChange={(event) => setStatus(event.target.value as typeof status)}
-              className="min-h-11 rounded-xl border border-stone-200 bg-white px-4 py-2 text-sm outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-emerald-100"
+              className="filter-control is-auto"
             >
               <option value="all">ทุกสถานะ</option>
               <option value="active">ใช้งานอยู่</option>

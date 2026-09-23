@@ -511,10 +511,10 @@ export default async function ReportsPage({ searchParams }: Props) {
         </div>
       )}
       {["valuation", "repairs", "transfers", "disposal"].includes(view) && (
-        <form method="GET" className="flex flex-wrap items-center gap-2 text-sm">
+        <form method="GET" className="flex flex-wrap items-center gap-2 text-xs">
           <input type="hidden" name="view" value={view} />
           <label htmlFor="report-fy" className="text-[var(--muted)]">ปีงบประมาณ</label>
-          <select id="report-fy" name="fy" defaultValue={fiscalYear} className="rounded-lg border border-[var(--line)] bg-white/80 px-2 py-1">
+          <select id="report-fy" name="fy" defaultValue={fiscalYear} className="filter-control">
             {fyOptions.map((year) => <option key={year} value={year}>{year}</option>)}
           </select>
           <button className="rounded-lg border border-[var(--line)] bg-white px-3 py-1">แสดง</button>

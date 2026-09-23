@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { AppIcon } from "@/app/_components/ui/icon";
+import { ActionIconLink } from "@/app/_components/ui/action-icon-button";
 import { StatusBadge } from "@/app/_components/ui/status-badge";
 import { getCurrentUser } from "@/lib/auth";
 import { formatThaiDate } from "@/lib/date-format";
@@ -113,21 +114,21 @@ export default async function InspectionPage({
       {/* List */}
       {view !== "new" && (
         <div className="glass-panel rounded-2xl overflow-hidden">
-          <form method="GET" className="grid gap-3 border-b border-black/6 bg-[var(--neutral-bg)]/60 px-5 py-4 sm:grid-cols-[minmax(240px,1fr)_180px_auto_auto]">
+          <form method="GET" className="grid gap-3 border-b border-black/6 bg-[var(--neutral-bg)]/60 px-4 py-4 sm:grid-cols-[minmax(240px,1fr)_180px_auto_auto]">
             <label htmlFor="inspection-search" className="sr-only">ค้นหารอบตรวจนับ</label>
             <input
               id="inspection-search"
               name="search"
               defaultValue={search}
               placeholder="ค้นหาชื่อรอบ / หน่วยบริการ / อำเภอ / ผู้เปิดรอบ"
-              className="min-h-11 min-w-0 rounded-xl border border-black/10 bg-white/85 px-4 py-2 text-sm outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/20"
+              className="filter-control min-w-0"
             />
             <label htmlFor="inspection-status" className="sr-only">กรองสถานะรอบตรวจ</label>
             <select
               id="inspection-status"
               name="status"
               defaultValue={statusFilter}
-              className="min-h-11 rounded-xl border border-black/10 bg-white/85 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+              className="filter-control"
             >
               <option value="">ทุกสถานะ</option>
               <option value="open">ยังตรวจไม่ครบ</option>
@@ -135,14 +136,14 @@ export default async function InspectionPage({
             </select>
             <button
               type="submit"
-              className="min-h-11 rounded-xl bg-[var(--accent-strong)] px-5 py-2 text-sm font-semibold text-white transition hover:opacity-90"
+              className="min-h-9 rounded-xl bg-[var(--accent-strong)] px-4 py-2 text-xs font-semibold text-white transition hover:opacity-90"
             >
               ค้นหา
             </button>
             {hasActiveFilters && (
               <Link
                 href="/inspection"
-                className="inline-flex min-h-11 items-center justify-center rounded-xl border border-black/10 bg-white/80 px-4 py-2 text-sm text-[var(--muted)] hover:bg-white"
+                className="inline-flex min-h-9 items-center justify-center rounded-xl border border-black/10 bg-white/80 px-4 py-2 text-xs text-[var(--muted)] hover:bg-white"
               >
                 ล้างตัวกรอง
               </Link>
@@ -244,9 +245,12 @@ export default async function InspectionPage({
                             ดูรายละเอียด →
                           </Link>
                           {canMutate && ins.roundStatus !== "Closed" && (
-                            <Link href={`/inspection/${ins.id}?delete=1#delete-round`} className="text-xs font-medium text-rose-700 hover:underline">
-                              ยกเลิก / ลบรอบ
-                            </Link>
+                            <ActionIconLink
+                              href={`/inspection/${ins.id}?delete=1#delete-round`}
+                              icon="trash"
+                              tone="danger"
+                              label={`ยกเลิก / ลบรอบ ${ins.roundName}`}
+                            />
                           )}
                         </div>
                       </td>

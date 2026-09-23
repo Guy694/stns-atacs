@@ -3,6 +3,7 @@
 import { useActionState, useId, useRef, useState, useTransition } from "react";
 
 import { StatusBadge, activeTone } from "@/app/_components/ui/status-badge";
+import { ActionIconButton } from "@/app/_components/ui/action-icon-button";
 import { createDeviceTypeAction, toggleDeviceTypeActiveAction, updateDeviceTypeAction } from "../actions";
 import type { DeviceTypeRow } from "@/lib/device-types";
 
@@ -108,10 +109,7 @@ function DeviceTypeItem({ item }: { item: DeviceTypeRow }) {
         </td>
         <td className="px-4 py-3 text-right">
           <div className="inline-flex gap-2">
-            <button onClick={() => setEditOpen(true)}
-              className="rounded-lg border border-[var(--primary-soft-strong)] bg-[var(--primary-soft)] px-3 py-1 text-xs font-medium text-[var(--primary-text)] hover:bg-[var(--primary-soft-strong)]">
-              แก้ไข
-            </button>
+            <ActionIconButton icon="pencil" tone="primary" label={`แก้ไข ${item.name}`} onClick={() => setEditOpen(true)} />
             <button
               onClick={() => startToggle(() => toggleDeviceTypeActiveAction(item.id, !item.is_active))}
               disabled={togglePending}

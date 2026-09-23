@@ -68,10 +68,10 @@ export default async function RepairsPage({ searchParams }: Props) {
       ) : (
         <>
           <section aria-label={`สรุปปีงบประมาณ ${fiscalYear}`} className="space-y-2">
-            <form method="GET" className="flex flex-wrap items-center gap-2 text-sm">
+            <form method="GET" className="flex flex-wrap items-center gap-2 text-xs">
               <input type="hidden" name="status" value={statusParam} />
               <label htmlFor="fy" className="text-[var(--muted)]">สรุปปีงบประมาณ</label>
-              <select id="fy" name="fy" defaultValue={fiscalYear} className="rounded-lg border border-[var(--line)] bg-white/80 px-2 py-1">
+              <select id="fy" name="fy" defaultValue={fiscalYear} className="filter-control">
                 {Array.from({ length: 6 }, (_, i) => currentFiscalYear - i).map((year) => <option key={year} value={year}>{year}</option>)}
               </select>
               <button className="rounded-lg border border-[var(--line)] bg-white px-3 py-1">แสดง</button>

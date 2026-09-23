@@ -264,8 +264,11 @@ export default async function AssetDetailPage({ params, searchParams }: Props) {
           </div>
           <h1 className="section-title mt-2 break-words text-2xl font-semibold leading-tight sm:text-3xl">{asset.assetName}</h1>
           <p className="mt-1 break-all font-mono text-sm text-[var(--muted)]">{asset.assetNumber}</p>
+          <Link href={`/print/assets/register?ids=${asset.id}`} className="mt-2 inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-[var(--line)] bg-white px-3 text-xs font-medium text-[var(--foreground)] hover:bg-[var(--primary-soft)]">
+            <AppIcon name="printer" className="h-3.5 w-3.5" /> ทะเบียนคุมทรัพย์สิน (A4 แนวนอน)
+          </Link>{" "}
           <Link href={`/print/assets/${asset.id}`} className="mt-2 inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-[var(--line)] bg-white px-3 text-xs font-medium text-[var(--foreground)] hover:bg-[var(--primary-soft)]">
-            <AppIcon name="printer" className="h-3.5 w-3.5" /> พิมพ์ทะเบียนคุมทรัพย์สิน
+            <AppIcon name="printer" className="h-3.5 w-3.5" /> พิมพ์ประวัติครุภัณฑ์
           </Link>{" "}
           <Link href={`/print/stickers?ids=${asset.id}&size=mini`} className="mt-2 inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-[var(--line)] bg-white px-3 text-xs font-medium text-[var(--foreground)] hover:bg-[var(--primary-soft)]">
             <AppIcon name="printer" className="h-3.5 w-3.5" /> พิมพ์สติ๊กเกอร์ QR (A4)

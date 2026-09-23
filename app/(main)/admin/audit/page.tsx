@@ -107,43 +107,43 @@ export default async function AuditLogPage({ searchParams }: AuditPageProps) {
           name="search"
           defaultValue={search}
           placeholder="ค้นหาจากรายละเอียด / entity / ผู้ใช้"
-          className="min-w-0 flex-1 rounded-xl border border-black/10 bg-white/80 px-4 py-2 text-sm outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/20"
+          className="filter-control min-w-0 flex-1"
         />
         <input
           name="actor"
           defaultValue={actorFilter}
           placeholder="ชื่อผู้ใช้"
-          className="rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+          className="filter-control"
         />
         <input
           name="entity"
           defaultValue={entityFilter}
           placeholder="entity เช่น users"
-          className="rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+          className="filter-control"
         />
         <input
           name="dateFrom"
           type="date"
           defaultValue={dateFrom}
-          className="rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+          className="filter-control"
         />
         <input
           name="dateTo"
           type="date"
           defaultValue={dateTo}
-          className="rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+          className="filter-control"
         />
         <select
           name="action"
           defaultValue={actionFilter}
-          className="rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+          className="filter-control"
         >
           <option value="">ทุกการดำเนินการ</option>
           {Object.entries(ACTION_LABEL).map(([key, label]) => (
             <option key={key} value={key}>{label}</option>
           ))}
         </select>
-        <button type="submit" className="rounded-xl bg-[var(--accent-strong)] px-5 py-2 text-sm font-semibold text-white transition hover:opacity-90">
+        <button type="submit" className="rounded-xl bg-[var(--accent-strong)] px-4 py-2 text-xs font-semibold text-white transition hover:opacity-90">
           ค้นหา
         </button>
         <a
@@ -153,7 +153,7 @@ export default async function AuditLogPage({ searchParams }: AuditPageProps) {
           Export CSV
         </a>
         {(search || actorFilter || entityFilter || actionFilter || dateFrom || dateTo) && (
-          <Link href="/admin/audit" className="rounded-xl border border-black/10 bg-white/80 px-4 py-2 text-sm text-[var(--muted)] hover:bg-white">
+          <Link href="/admin/audit" className="rounded-xl border border-black/10 bg-white/80 px-4 py-2 text-xs text-[var(--muted)] hover:bg-white">
             ล้างตัวกรอง
           </Link>
         )}

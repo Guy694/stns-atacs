@@ -2,6 +2,7 @@
 
 import { useTransition } from "react";
 
+import { ActionIconButton } from "@/app/_components/ui/action-icon-button";
 import { deleteAssetAction } from "@/app/(main)/assets/actions";
 
 type Props = {
@@ -20,12 +21,12 @@ export function DeleteAssetButton({ assetId, assetName }: Props) {
   }
 
   return (
-    <button
+    <ActionIconButton
+      icon="trash"
+      tone="danger"
+      label={pending ? `กำลังลบ ${assetName}…` : `ลบ ${assetName}`}
       onClick={handleClick}
       disabled={pending}
-      className="inline-flex min-h-11 items-center rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-medium text-rose-600 transition hover:bg-rose-100 disabled:opacity-50"
-    >
-      {pending ? "กำลังลบ…" : "ลบ"}
-    </button>
+    />
   );
 }

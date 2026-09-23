@@ -67,21 +67,21 @@ export default async function DataQualityPage({ searchParams }: Props) {
 
       <form method="GET" className="grid gap-3 rounded-2xl border border-[var(--line)] bg-white p-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
         {check && <input type="hidden" name="check" value={check.key} />}
-        <label className="text-sm">
+        <label className="text-xs">
           <span className="mb-1 block text-xs text-[var(--muted)]">อำเภอ</span>
-          <select name="district" defaultValue={district} className="min-h-11 w-full rounded-xl border border-[var(--line)] bg-white px-3 text-sm">
+          <select name="district" defaultValue={district} className="filter-control w-full">
             <option value="">ทุกอำเภอ</option>
             {districts.map((name) => <option key={name} value={name ?? ""}>{name}</option>)}
           </select>
         </label>
-        <label className="text-sm">
+        <label className="text-xs">
           <span className="mb-1 block text-xs text-[var(--muted)]">หน่วยงาน</span>
-          <select name="facility" defaultValue={facilityId ? String(facilityId) : ""} className="min-h-11 w-full rounded-xl border border-[var(--line)] bg-white px-3 text-sm">
+          <select name="facility" defaultValue={facilityId ? String(facilityId) : ""} className="filter-control w-full">
             <option value="">ทุกหน่วยงาน</option>
             {facilities.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
           </select>
         </label>
-        <button type="submit" className="min-h-11 self-end rounded-xl bg-[var(--primary)] px-5 text-sm font-semibold text-white">แสดง</button>
+        <button type="submit" className="min-h-9 self-end rounded-xl bg-[var(--primary)] px-4 text-xs font-semibold text-white">แสดง</button>
       </form>
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">

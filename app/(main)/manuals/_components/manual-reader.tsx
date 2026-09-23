@@ -94,14 +94,14 @@ export function ManualReader() {
 
       <div className="grid items-start gap-6 xl:grid-cols-[17rem_minmax(0,1fr)] xl:gap-8">
         <aside className="rounded-xl border border-[var(--line)] bg-[var(--surface-strong)] p-4 xl:sticky xl:top-6" aria-label="ค้นหาและเลือกหัวข้อคู่มือ">
-          <label htmlFor="manual-search" className="text-sm font-semibold">ค้นหาในคู่มือ</label>
+          <label htmlFor="manual-search" className="text-xs font-semibold">ค้นหาในคู่มือ</label>
           <input
             id="manual-search"
             type="search"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="เช่น CSV, ตรวจนับ, Windows"
-            className="mt-2 min-h-11 w-full rounded-lg border border-[var(--line)] bg-white px-3 text-sm placeholder:text-[var(--muted)]"
+            className="filter-control mt-2 w-full"
             aria-controls="manual-contents"
           />
           <p role="status" className="mb-4 mt-2 text-xs text-[var(--muted)]">

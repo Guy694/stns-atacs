@@ -125,9 +125,9 @@ export default async function TransferPage({ searchParams }: Props) {
           defaultValue={q}
           autoFocus
           placeholder="ค้นหาชื่อ / เลขทะเบียน / ประเภท…"
-          className="min-w-0 flex-1 rounded-xl border border-[var(--line)] bg-white/80 px-4 py-2.5 text-sm outline-none focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/15"
+          className="filter-control min-w-0 flex-1"
         />
-        <button type="submit" className="rounded-xl bg-[var(--primary)] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[var(--primary-hover)]">
+        <button type="submit" className="rounded-xl bg-[var(--primary)] px-4 py-2.5 text-xs font-semibold text-white transition hover:bg-[var(--primary-hover)]">
           ค้นหา
         </button>
       </form>
