@@ -47,3 +47,8 @@ next-env.d.ts
 # runtime data (asset photos, nightly backups)
 /storage/
 /backups/
+
+# SEC-05: ไม่เก็บไฟล์ที่มีบัญชีตัวอย่าง/รหัสผ่าน/ข้อมูลจริง หรือข้อมูลโครงสร้างภายในไว้ใน repo
+/database/seed_*.sql
+/database/stn_atacs.sql
+/.vscode/

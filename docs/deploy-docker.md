@@ -73,6 +73,40 @@ docker compose --env-file .env.docker exec app node scripts/check-database.mjs
 docker compose --env-file .env.docker exec -T db sh -c 'mariadb -u"$MARIADB_USER" -p"$MARIADB_PASSWORD" "$MARIADB_DATABASE"' < database/add_inspection_found_location.sql
 ```
 
+## 4.1) งานความปลอดภัยที่ต้องทำครั้งเดียว (ก.ย. 2569)
+
+หลังอัปเดตรอบแก้ SEC-01 – SEC-07 มี 4 อย่างที่ต้องทำด้วยมือ
+
+1. **รัน migration ของการผูก ThaiD** (SEC-04) — ปลอดภัยต่อการรันซ้ำ สำรองฐานข้อมูลก่อน
+   ```bash
+   docker compose --env-file .env.docker exec backup bash /backup.sh now
+   docker compose --env-file .env.docker exec -T db sh -c 'mariadb -u"$MARIADB_USER" -p"$MARIADB_PASSWORD" "$MARIADB_DATABASE"' < database/add_thaid_link_approval.sql
+   ```
+   หลังรันแล้ว บัญชีเดิมจะผูก ThaiD ครั้งแรกไม่ได้จนกว่าแอดมินจะกด “อนุญาตให้เชื่อมต่อ ThaiD ครั้งแรก”
+   ในหน้า จัดการผู้ใช้งาน (บัญชีบทบาทแอดมินผูกอัตโนมัติไม่ได้ในทุกกรณี)
+
+2. **ตรวจบัญชีจากไฟล์ seed** (SEC-05) — รัน `database/check_seed_accounts.sql` ใน phpMyAdmin
+   ถ้าพบบัญชีที่ไม่ได้ใช้งานจริง ให้ปิดใช้งานหรือล้างรหัสผ่าน (อย่าปิดแอดมินบัญชีสุดท้าย)
+   ไฟล์ `database/seed_*.sql`, `database/stn_atacs.sql`, `.vscode/` ถูกถอดออกจาก git แล้ว
+   แต่ยังอยู่ใน git history — ต้องลบด้วย `git filter-repo` และเปลี่ยนรหัสผ่าน/ข้อมูลที่รั่วเอง
+
+3. **ตั้งคีย์ติดตั้ง Agent แบบผูกหน่วยงาน** (SEC-03) ใน `.env.docker`
+   ```env
+   ATACS_AGENT_INSTALL_KEY=12:คีย์ของหน่วยงาน12,34:คีย์ของหน่วยงาน34
+   ```
+   คีย์ที่ไม่มี `<facilityId>:` นำหน้าจะใช้ได้ทุกหน่วยงาน (แบบเดิม) — ควรเลิกใช้
+   การลงทะเบียน Agent ถูกจำกัดไว้ที่ 10 ครั้ง/10 นาที/IP
+
+4. **จำกัดปลายทางที่ประกาศให้ Agent ย้ายไป** (SEC-06) ใน `.env.docker`
+   ```env
+   AGENT_API_BASE_URL=https://atacs.<โดเมนของคุณ>
+   AGENT_API_BASE_ALLOWED_HOSTS=atacs.<โดเมนของคุณ>
+   ```
+   เว้นว่าง `AGENT_API_BASE_ALLOWED_HOSTS` = ไม่ประกาศที่อยู่ใหม่เลย (ค่าเริ่มต้นที่ปลอดภัยที่สุด)
+   ฝั่งสคริปต์ agent ยอมย้ายเฉพาะ `https://` และโฮสต์ที่ลงท้ายด้วย `.moph.go.th` หรือโฮสต์เดิมที่ใช้อยู่
+   ถ้าใช้โดเมนอื่น ต้องแก้ `ALLOWED_API_HOST_SUFFIXES` ใน `public/agent/linux/atacs-agent.py`
+   และ `$allowedSuffixes` ใน `public/agent/windows/atacs-agent.ps1` แล้วให้เครื่องลูกข่ายอัปเดตสคริปต์
+
 ## 5) ย้ายรูปภาพเดิม (ถ้ามี)
 
 รูปครุภัณฑ์เก็บนอก `public/` แล้ว (เปิดได้เฉพาะผู้ที่ล็อกอิน) คัดลอกรูปเดิมเข้า volume:

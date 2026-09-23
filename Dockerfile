@@ -40,6 +40,7 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 # Maintenance scripts (check-database, migrate) and SQL files, runnable with `docker compose exec app ...`
 COPY --from=builder --chown=nextjs:nodejs /app/scripts ./scripts
+# SEC-05: ไฟล์ seed/ดัมป์ถูกกันไว้ใน .dockerignore แล้ว image จึงมีเฉพาะสคริปต์ migration
 COPY --from=builder --chown=nextjs:nodejs /app/database ./database
 
 # Uploaded asset photos (UPLOAD_DIR) live outside public/ and are served only to signed-in users.

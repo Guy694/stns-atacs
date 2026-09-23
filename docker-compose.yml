@@ -72,6 +72,7 @@ services:
       CRON_SECRET: ${CRON_SECRET:-}
       # Only set on a deployment that should send agents elsewhere (e.g. on the OLD Vercel project).
       AGENT_API_BASE_URL: ${AGENT_API_BASE_URL:-}
+      AGENT_API_BASE_ALLOWED_HOSTS: ${AGENT_API_BASE_ALLOWED_HOSTS:-}
       # Asset photos: outside public/, served only to signed-in users by the app.
       UPLOAD_DIR: /app/storage/uploads
     depends_on:

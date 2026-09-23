@@ -35,6 +35,27 @@ function Normalize-ApiBaseUrl {
     return $BaseUrl.Trim().TrimEnd('/')
 }
 
+function Test-ApiBaseAllowed {
+    # SEC-06: follow a server-announced address only over https and only for allow-listed hosts
+    # (or the host the agent already reports to). Prevents a stolen old deployment from
+    # redirecting every agent to an attacker-controlled server.
+    param([string]$NewBase, [string]$CurrentBase)
+
+    $allowedSuffixes = @('.moph.go.th')
+    try { $newUri = [Uri]$NewBase } catch { return $false }
+    if ($newUri.Scheme -ne 'https') { return $false }
+    $targetHost = $newUri.Host.ToLowerInvariant()
+
+    $currentHost = ''
+    if ($CurrentBase) { try { $currentHost = ([Uri]$CurrentBase).Host.ToLowerInvariant() } catch { $currentHost = '' } }
+    if ($currentHost -and $targetHost -eq $currentHost) { return $true }
+
+    foreach ($suffix in $allowedSuffixes) {
+        if ($targetHost -eq $suffix.TrimStart('.') -or $targetHost.EndsWith($suffix)) { return $true }
+    }
+    return $false
+}
+
 function Ensure-Directory {
     param([string]$Path)
     $dir = Split-Path -Parent $Path
@@ -264,7 +285,11 @@ try {
     # The server announces its current address after a move (e.g. Vercel -> own server); follow it once.
     if ($result -and $result.apiBaseUrl) {
         $newBase = Normalize-ApiBaseUrl -BaseUrl ([string]$result.apiBaseUrl)
-        if ($newBase -match '^https?://' -and $newBase -ne (Normalize-ApiBaseUrl -BaseUrl ([string]$config.apiBaseUrl))) {
+        $currentBase = Normalize-ApiBaseUrl -BaseUrl ([string]$config.apiBaseUrl)
+        if ($newBase -ne $currentBase -and -not (Test-ApiBaseAllowed -NewBase $newBase -CurrentBase $currentBase)) {
+            Write-Warning "Refused server address change to $newBase (host not allowed). Still reporting to $currentBase."
+        }
+        elseif ($newBase -ne $currentBase) {
             if ($config -is [hashtable]) {
                 $updated = $config.Clone()
             }

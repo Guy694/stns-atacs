@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { decryptThaiCidFromStorage } from "@/lib/auth";
 import { listAllFacilitiesForSelect } from "@/lib/assets";
 import { selectRows } from "@/lib/mysql";
+import { isMissingSchemaError } from "@/lib/schema-errors";
 import type { RowDataPacket } from "mysql2/promise";
 import { CreateUserModal } from "./_components/create-user-modal";
 import { UsersManagementClient } from "./_components/users-management-client";
@@ -19,6 +20,8 @@ type UserRow = RowDataPacket & {
   facility_id: number | null;
   is_active: number;
   last_login_at: Date | string | null;
+  /** SEC-04: 1 = ผู้ดูแลระบบอนุญาตให้ผูก ThaiD ครั้งแรกด้วยชื่อ-นามสกุล */
+  thaid_link_enabled?: number | null;
 };
 
 type UserRowWithoutFacility = RowDataPacket & {
@@ -42,11 +45,22 @@ export default async function AdminUsersPage() {
   let users: UserRow[] = [];
   let dbError = false;
 
+  const BASE_COLUMNS = `id, thaid_cid, TRIM(CONCAT(first_name, ' ', last_name)) AS full_name, officer_position, email, username, role, facility_id, is_active, last_login_at`;
+  /** SEC-04: `thaid_link_enabled` มีเฉพาะหลังรัน database/add_thaid_link_approval.sql */
+  let thaidLinkColumnAvailable = true;
+
   try {
     const rows = await selectRows<UserRow>(
-      `SELECT id, thaid_cid, TRIM(CONCAT(first_name, ' ', last_name)) AS full_name, officer_position, email, username, role, facility_id, is_active, last_login_at
+      `SELECT ${BASE_COLUMNS}, thaid_link_enabled
        FROM users ORDER BY role DESC, first_name ASC, last_name ASC`
-    );
+    ).catch(async (error) => {
+      thaidLinkColumnAvailable = false;
+      if (!isMissingSchemaError(error)) throw error;
+      return selectRows<UserRow>(
+        `SELECT ${BASE_COLUMNS}
+         FROM users ORDER BY role DESC, first_name ASC, last_name ASC`
+      );
+    });
     users = rows.map((row) => ({ ...row, thaid_cid: decryptThaiCidFromStorage(row.thaid_cid) }));
   } catch {
     try {
@@ -96,6 +110,7 @@ export default async function AdminUsersPage() {
             district_name: facility.district_name,
           }))}
           currentUserId={Number(user.id)}
+          thaidLinkColumnAvailable={thaidLinkColumnAvailable}
         />
       )}
     </div>

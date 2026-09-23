@@ -1,14 +1,17 @@
 import { redirect } from "next/navigation";
 
-import { getPrimaryAgentInstallKey } from "@/lib/agent-install-key";
 import { getCurrentUser } from "@/lib/auth";
 import { getFacilityAgentContext, listFacilityWorkGroups } from "@/lib/facility-work-groups";
+import { hasPermission } from "@/lib/role-permissions";
 import { AgentDownloadPanel } from "./_components/agent-download-panel";
 
 export default async function AgentDownloadPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
-  const staticInstallKey = getPrimaryAgentInstallKey();
+  // SEC-03: หน้านี้เคยตรวจแค่ "ล็อกอินแล้ว" ทั้งที่เมนูซ่อนด้วย agent.manage
+  if (user.role === "viewer" || !(user.role === "admin" || (await hasPermission(user.role, "agent.manage")))) {
+    redirect("/dashboard");
+  }
 
   let facilityName = "–";
   let requiresWorkGroup = false;
@@ -48,7 +51,6 @@ export default async function AgentDownloadPage() {
           facilityName={facilityName}
           requiresWorkGroup={requiresWorkGroup}
           workGroups={workGroups}
-          staticInstallKey={staticInstallKey}
         />
       )}
     </div>

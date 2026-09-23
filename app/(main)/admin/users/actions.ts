@@ -14,6 +14,7 @@ import {
 } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { executeStatement, selectRows } from "@/lib/mysql";
+import { isMissingSchemaError } from "@/lib/schema-errors";
 import type { RowDataPacket } from "mysql2/promise";
 
 async function requireAdmin() {
@@ -300,6 +301,33 @@ export async function toggleUserActiveAction(userId: number, currentActive: bool
   });
   revalidatePath("/admin/users");
   revalidatePath("/", "layout");
+}
+
+/**
+ * SEC-04: เปิด/ปิดสิทธิ์ให้บัญชีนี้ผูก ThaiD ครั้งแรกด้วยชื่อ-นามสกุล
+ * ต้องรัน database/add_thaid_link_approval.sql ก่อนจึงจะใช้งานได้
+ */
+export async function setThaidLinkEnabledAction(userId: number, enabled: boolean): Promise<string | null> {
+  const actor = await requireAdmin();
+  const target = await getUserAuditRow(userId);
+  try {
+    await executeStatement("UPDATE users SET thaid_link_enabled = ? WHERE id = ?", [enabled ? 1 : 0, userId]);
+  } catch (error) {
+    if (isMissingSchemaError(error)) {
+      return "ฐานข้อมูลยังไม่มีคอลัมน์สำหรับฟังก์ชันนี้ กรุณาให้ผู้ดูแลระบบรัน database/add_thaid_link_approval.sql";
+    }
+    return error instanceof Error ? error.message : "เกิดข้อผิดพลาด กรุณาลองใหม่";
+  }
+  await writeAuditLog({
+    userId: actor.id,
+    userName: actor.fullName,
+    action: "update",
+    entity: "users",
+    entityId: userId,
+    summary: `${enabled ? "เปิด" : "ปิด"}สิทธิ์เชื่อมต่อ ThaiD ให้ผู้ใช้ ${target?.full_name ?? `#${userId}`}`,
+  });
+  revalidatePath("/admin/users");
+  return null;
 }
 
 export async function approveUserAction(userId: number): Promise<void> {

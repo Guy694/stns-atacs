@@ -14,15 +14,22 @@ const identity = { thaiCid: "1234567890123", firstName: "สมชาย", lastN
 const hash = (cid) => crypto.createHmac("sha256", Buffer.from(key, "hex")).update(cid).digest("hex");
 const account = (overrides = {}) => ({
   id: 1, first_name: "สมชาย", last_name: "ใจดี", thaid_cid: null,
-  thaid_cid_hash: null, is_active: 1, role: "officer", ...overrides,
+  thaid_cid_hash: null, is_active: 1, role: "officer",
+  // SEC-04: ผู้ดูแลระบบต้องเปิดสิทธิ์ผูก ThaiD ให้ก่อน
+  thaid_link_enabled: 1, thaid_link_expected_hash: null, ...overrides,
 });
 
-function setup(initialRows, beforeUpdate) {
+function setup(initialRows, beforeUpdate, options = {}) {
   const rows = structuredClone(initialRows);
   const writes = [];
   let nameQueries = 0;
   const db = {
     async selectRows(sql, args) {
+      if (options.legacySchema && sql.includes("thaid_link_enabled")) {
+        const error = new Error("Unknown column 'thaid_link_enabled' in 'field list'");
+        error.code = "ER_BAD_FIELD_ERROR";
+        throw error;
+      }
       if (sql.includes("WHERE thaid_cid_hash")) {
         return rows.filter((row) => row.thaid_cid_hash === args[0] || row.thaid_cid === args[1])
           .slice(0, 1).map((row) => ({ ...row }));
@@ -57,6 +64,9 @@ function setup(initialRows, beforeUpdate) {
       if (id === "next/headers") return {};
       if (id === "@/lib/mysql") return db;
       if (id === "@/lib/cookie-security") return { secureCookiesEnabled: () => false };
+      if (id === "@/lib/schema-errors") {
+        return { isMissingSchemaError: (error) => error?.code === "ER_NO_SUCH_TABLE" || error?.code === "ER_BAD_FIELD_ERROR" };
+      }
       throw new Error(`Unexpected dependency: ${id}`);
     },
   });
@@ -128,4 +138,36 @@ test("concurrent identity, name or approval changes prevent linking", async () =
     await assert.rejects(ctx.auth.findOrLinkUserByVerifiedThaiD(identity), /ข้อมูลบัญชีเปลี่ยน/);
     assert.equal(ctx.writes.length, 0);
   }
+});
+
+test("SEC-04: does not link an account the admin has not enabled", async () => {
+  const ctx = setup([account({ thaid_link_enabled: 0 })]);
+  await assert.rejects(ctx.auth.findOrLinkUserByVerifiedThaiD(identity), /ยังไม่ได้เปิดให้เชื่อมต่อ ThaiD/);
+  assert.equal(ctx.writes.length, 0);
+});
+
+test("SEC-04: links when the admin pre-registered the CID hash, even without the flag", async () => {
+  const ctx = setup([account({ thaid_link_enabled: 0, thaid_link_expected_hash: hash(identity.thaiCid) })]);
+  assert.equal((await ctx.auth.findOrLinkUserByVerifiedThaiD(identity)).id, 1);
+  assert.equal(ctx.writes.length, 1);
+});
+
+test("SEC-04: a pre-registered hash for a different CID does not link", async () => {
+  const ctx = setup([account({ thaid_link_enabled: 0, thaid_link_expected_hash: hash("9876543210123") })]);
+  await assert.rejects(ctx.auth.findOrLinkUserByVerifiedThaiD(identity), /ยังไม่ได้เปิดให้เชื่อมต่อ ThaiD/);
+  assert.equal(ctx.writes.length, 0);
+});
+
+test("SEC-04: an admin account never links by name, with or without the migration", async () => {
+  for (const options of [{}, { legacySchema: true }]) {
+    const ctx = setup([account({ role: "admin" })], undefined, options);
+    await assert.rejects(ctx.auth.findOrLinkUserByVerifiedThaiD(identity), /บัญชีผู้ดูแลระบบ/);
+    assert.equal(ctx.writes.length, 0);
+  }
+});
+
+test("SEC-04: before the migration, non-admin linking keeps working", async () => {
+  const ctx = setup([account({ thaid_link_enabled: undefined })], undefined, { legacySchema: true });
+  assert.equal((await ctx.auth.findOrLinkUserByVerifiedThaiD(identity)).id, 1);
+  assert.equal(ctx.writes.length, 1);
 });

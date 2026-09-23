@@ -18,6 +18,7 @@ import socket
 import subprocess
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 from typing import Any
@@ -51,6 +52,31 @@ def normalize(value: Any) -> str | None:
         return None
     text = str(value).strip()
     return text or None
+
+
+# SEC-06: the server can announce a new address, but the agent only follows it when the host is
+# on this allowlist (or is the host it already reports to). Plain http is never accepted, so a
+# stolen old deployment cannot redirect every agent to an attacker-controlled server.
+ALLOWED_API_HOST_SUFFIXES = (
+    ".moph.go.th",
+)
+
+
+def api_base_allowed(new_base: str, current_base: str) -> bool:
+    try:
+        parsed = urllib.parse.urlparse(new_base)
+    except ValueError:
+        return False
+    if parsed.scheme != "https" or not parsed.hostname:
+        return False
+    host = parsed.hostname.lower()
+    try:
+        current_host = (urllib.parse.urlparse(current_base).hostname or "").lower()
+    except ValueError:
+        current_host = ""
+    if current_host and host == current_host:
+        return True
+    return any(host == suffix.lstrip(".") or host.endswith(suffix) for suffix in ALLOWED_API_HOST_SUFFIXES)
 
 
 def ensure_dir_for_file(path: str) -> None:
@@ -365,10 +391,19 @@ def main() -> int:
     )
     # The server announces its current address after a move (e.g. Vercel -> own server); follow it once.
     new_base = normalize(result.get("apiBaseUrl"))
-    if new_base and new_base.rstrip("/") != str(config.get("apiBaseUrl", "")).rstrip("/") and new_base.startswith(("https://", "http://")):
-        config["apiBaseUrl"] = new_base.rstrip("/")
-        save_config(args.config_path, config)
-        print(f"Server address changed; apiBaseUrl updated to {config['apiBaseUrl']}")
+    current_base = str(config.get("apiBaseUrl", "")).rstrip("/")
+    if new_base and new_base.rstrip("/") != current_base:
+        if api_base_allowed(new_base, current_base):
+            config["apiBaseUrl"] = new_base.rstrip("/")
+            save_config(args.config_path, config)
+            print(f"Server address changed; apiBaseUrl updated to {config['apiBaseUrl']}")
+        else:
+            # SEC-06: refuse to follow an address outside the allowlist, and keep reporting to the old one.
+            print(
+                f"Refused server address change to {new_base}: host is not allowed. "
+                f"Still reporting to {current_base}.",
+                file=sys.stderr,
+            )
     return 0
 
 

@@ -69,11 +69,20 @@ export async function updateFacilityAction(_prev: string | null, fd: FormData): 
   if (!canAccessFacility(user, id)) return "คุณไม่มีสิทธิ์แก้ไขหน่วยงานนี้";
   const name = str(fd, "name");
   if (!name) return "กรุณากรอกชื่อหน่วยงาน";
+  /**
+   * SEC-01: ประเภทหน่วยงาน (สสอ. ⇒ ดูแลทั้งอำเภอ) และอำเภอ เป็นตัวกำหนดขอบเขตสิทธิ์
+   * บทบาทที่ได้สิทธิ์ facilities.manage แต่ไม่ใช่แอดมิน จึงแก้สองช่องนี้ไม่ได้
+   */
+  const scopeTypecode = optStr(fd, "typecode");
+  const scopeDistrict = optStr(fd, "districtName");
+  if (user.role !== "admin" && (scopeTypecode || scopeDistrict)) {
+    return "ประเภทหน่วยงานและอำเภอมีผลต่อสิทธิ์การเข้าถึงข้อมูล ต้องให้ผู้ดูแลระบบเป็นผู้แก้ไข";
+  }
   try {
     await updateFacility(id, {
       name,
-      typecode: optStr(fd, "typecode"),
-      districtName: optStr(fd, "districtName"),
+      typecode: user.role === "admin" ? scopeTypecode : undefined,
+      districtName: user.role === "admin" ? scopeDistrict : undefined,
       tambon: optStr(fd, "tambon"),
       lat: optFloat(fd, "lat"),
       lon: optFloat(fd, "lon"),

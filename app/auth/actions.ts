@@ -16,10 +16,8 @@ import {
   getPendingRegistrationClaim,
   normalizeDisplayName,
   normalizeThaiCid,
-  setPendingThaiDRegistrationClaim,
   validatePasswordLoginInput,
   validateOfficerRegistrationInput,
-  validateThaiDLoginInput,
   verifyPassword,
 } from "@/lib/auth";
 import { notifyTelegramSafe } from "@/lib/telegram";
@@ -68,45 +66,11 @@ function maskThaiCid(cid: string) {
   return cid.length === 13 ? `${cid.slice(0, 3)}******${cid.slice(-4)}` : "invalid";
 }
 
-export async function loginWithThaiDAction(formData: FormData) {
-  const thaiCid = normalizeThaiCid(String(formData.get("thaidCid") ?? ""));
-  const displayName = normalizeDisplayName(String(formData.get("displayName") ?? ""));
-
-  const inputError = validateThaiDLoginInput(thaiCid, displayName);
-  if (inputError) {
-    const context = await recordLoginSecurityEvent("login_invalid_input", maskThaiCid(thaiCid), inputError);
-    await notifyTelegramSafe({
-      category: "security",
-      title: "พยายามเข้าสู่ระบบด้วย ThaiD แต่ข้อมูลไม่ถูกต้อง",
-      details: { ThaiD: maskThaiCid(thaiCid), ...context },
-    });
-    redirect(`/login?error=${toQuery(inputError)}`);
-  }
-
-  const user = await findUserByThaiCid(thaiCid);
-  if (user) {
-    if (!user.is_active) {
-      const context = await recordLoginSecurityEvent("login_pending_account", maskThaiCid(thaiCid), "ThaiD");
-      await notifyTelegramSafe({
-        category: "security",
-        title: "บัญชีที่ยังไม่ได้รับอนุมัติพยายามเข้าสู่ระบบ",
-        details: { ผู้ใช้: getUserDisplayName(user), วิธี: "ThaiD", ...context },
-      });
-      redirect("/pending-approval");
-    }
-    await clearPendingRegistrationClaim();
-    await createSession(user.id);
-    await notifyTelegramSafe({
-      category: "security",
-      title: "เข้าสู่ระบบสำเร็จ",
-      details: { ผู้ใช้: getUserDisplayName(user), วิธี: "ThaiD", ...(await requestDetails()) },
-    });
-    redirect("/");
-  }
-
-  await setPendingThaiDRegistrationClaim(thaiCid, displayName);
-  redirect(`/register?notice=${toQuery("ไม่พบข้อมูลผู้ใช้ในระบบ กรุณาสมัครสมาชิกครั้งแรก")}`);
-}
+/**
+ * SEC-07: ลบ loginWithThaiDAction ออกแล้ว (ก.ย. 2569)
+ * เดิมรับเลขบัตรประชาชนจากฟอร์มแล้วสร้างเซสชันทันทีโดยไม่ยืนยันตัวตนกับ ThaiD
+ * การสร้างเซสชันด้วย ThaiD ต้องเกิดที่ OAuth callback (app/api/auth/thaiid/callback) เท่านั้น
+ */
 
 export async function registerFirstTimeAction(formData: FormData) {
   const claim = await getPendingRegistrationClaim();

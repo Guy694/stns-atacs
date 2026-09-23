@@ -7,9 +7,11 @@ import { updateFacilitySelfAction } from "../actions";
 
 type Props = {
   facility: FacilityRow;
+  /** SEC-01: ประเภทหน่วยงาน/อำเภอกำหนดขอบเขตสิทธิ์ แก้ได้เฉพาะผู้ดูแลระบบ */
+  canManageScope?: boolean;
 };
 
-export function FacilityEditForm({ facility }: Props) {
+export function FacilityEditForm({ facility, canManageScope = false }: Props) {
   const [error, formAction, pending] = useActionState(
     async (_prev: string | null, fd: FormData) => updateFacilitySelfAction(_prev, fd),
     null
@@ -37,12 +39,26 @@ export function FacilityEditForm({ facility }: Props) {
 
         <div>
           <label className="block text-sm font-medium">ประเภทหน่วยงาน</label>
-          <input name="typecode" defaultValue={facility.typecode} className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]" />
+          {canManageScope ? (
+            <input name="typecode" defaultValue={facility.typecode} className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]" />
+          ) : (
+            <>
+              <p className="mt-1 w-full rounded-xl border border-black/10 bg-black/5 px-3 py-2 text-sm text-[var(--muted)]">{facility.typecode}</p>
+              <p className="mt-1 text-xs text-[var(--muted)]">แก้ไขได้โดยผู้ดูแลระบบเท่านั้น (มีผลต่อสิทธิ์การเข้าถึงข้อมูล)</p>
+            </>
+          )}
         </div>
 
         <div>
           <label className="block text-sm font-medium">อำเภอ</label>
-          <input name="districtName" defaultValue={facility.district_name ?? ""} className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]" />
+          {canManageScope ? (
+            <input name="districtName" defaultValue={facility.district_name ?? ""} className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]" />
+          ) : (
+            <>
+              <p className="mt-1 w-full rounded-xl border border-black/10 bg-black/5 px-3 py-2 text-sm text-[var(--muted)]">{facility.district_name ?? "-"}</p>
+              <p className="mt-1 text-xs text-[var(--muted)]">แก้ไขได้โดยผู้ดูแลระบบเท่านั้น (มีผลต่อสิทธิ์การเข้าถึงข้อมูล)</p>
+            </>
+          )}
         </div>
 
         <div>

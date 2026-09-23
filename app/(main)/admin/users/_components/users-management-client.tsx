@@ -18,6 +18,8 @@ export type ManagedUser = {
   facility_id: number | null;
   is_active: number;
   last_login_at: Date | string | null;
+  /** SEC-04: 1 = ผู้ดูแลระบบอนุญาตให้ผูก ThaiD ครั้งแรกด้วยชื่อ-นามสกุล */
+  thaid_link_enabled?: number | null;
 };
 
 type FacilityOption = {
@@ -30,6 +32,8 @@ type Props = {
   users: ManagedUser[];
   facilities: FacilityOption[];
   currentUserId: number;
+  /** SEC-04: false เมื่อยังไม่ได้รัน database/add_thaid_link_approval.sql */
+  thaidLinkColumnAvailable?: boolean;
 };
 
 function formatDate(value: Date | string | null) {
@@ -43,7 +47,7 @@ function roleLabel(role: ManagedUser["role"]) {
   return "เจ้าหน้าที่";
 }
 
-function UserActions({ user, facilities, currentUserId }: { user: ManagedUser; facilities: FacilityOption[]; currentUserId: number }) {
+function UserActions({ user, facilities, currentUserId, thaidLinkColumnAvailable }: { user: ManagedUser; facilities: FacilityOption[]; currentUserId: number; thaidLinkColumnAvailable: boolean }) {
   return (
     <UserRowActions
       userId={user.id}
@@ -58,11 +62,13 @@ function UserActions({ user, facilities, currentUserId }: { user: ManagedUser; f
       currentRole={user.role}
       hasUsername={!!user.username}
       isSelf={user.id === currentUserId}
+      thaidLinkEnabled={Number(user.thaid_link_enabled ?? 0) === 1}
+      thaidLinkColumnAvailable={thaidLinkColumnAvailable}
     />
   );
 }
 
-export function UsersManagementClient({ users, facilities, currentUserId }: Props) {
+export function UsersManagementClient({ users, facilities, currentUserId, thaidLinkColumnAvailable = false }: Props) {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<"all" | "active" | "inactive">("all");
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
@@ -301,7 +307,7 @@ export function UsersManagementClient({ users, facilities, currentUserId }: Prop
 	                      </StatusBadge>
                     </td>
                     <td className="px-4 py-4 text-xs text-[var(--muted)]">{formatDate(user.last_login_at)}</td>
-                    <td className="px-4 py-4 text-right"><UserActions user={user} facilities={facilities} currentUserId={currentUserId} /></td>
+                    <td className="px-4 py-4 text-right"><UserActions user={user} facilities={facilities} currentUserId={currentUserId} thaidLinkColumnAvailable={thaidLinkColumnAvailable} /></td>
                   </tr>
                 ))}
               </tbody>
@@ -316,7 +322,7 @@ export function UsersManagementClient({ users, facilities, currentUserId }: Prop
                     <h3 className="font-semibold">{user.full_name}</h3>
                     <p className="text-sm text-[var(--muted)]">{user.officer_position ?? roleLabel(user.role)}</p>
                   </div>
-                  <UserActions user={user} facilities={facilities} currentUserId={currentUserId} />
+                  <UserActions user={user} facilities={facilities} currentUserId={currentUserId} thaidLinkColumnAvailable={thaidLinkColumnAvailable} />
                 </div>
                 <div className="flex flex-wrap gap-2">
 	                  <StatusBadge tone="info">{roleLabel(user.role)}</StatusBadge>

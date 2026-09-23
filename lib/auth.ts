@@ -6,6 +6,7 @@ import type { RowDataPacket } from "mysql2/promise";
 import { cookies } from "next/headers";
 
 import { executeStatement, selectRows } from "@/lib/mysql";
+import { isMissingSchemaError } from "@/lib/schema-errors";
 import { secureCookiesEnabled } from "@/lib/cookie-security";
 
 const SESSION_COOKIE_NAME = "atacs_session";
@@ -18,6 +19,10 @@ type UserRecord = RowDataPacket & {
   id: number;
   thaid_cid: string | null;
   thaid_cid_hash?: string | null;
+  /** SEC-04: ผู้ดูแลระบบอนุญาตให้ผูก ThaiD ครั้งแรกด้วยชื่อ-นามสกุล (database/add_thaid_link_approval.sql) */
+  thaid_link_enabled?: number | null;
+  /** SEC-04: HMAC ของเลขบัตรที่ผู้ดูแลระบบบันทึกไว้ล่วงหน้าให้บัญชีนี้ */
+  thaid_link_expected_hash?: string | null;
   google_sub: string | null;
   first_name: string;
   last_name: string;
@@ -378,15 +383,28 @@ export async function findOrLinkUserByVerifiedThaiD(input: {
 
   // Binary comparisons preserve Thai marks; do not fuzzy-match, strip titles,
   // or exclude linked/inactive namesakes when checking for ambiguity.
-  const matches = await selectRows<UserRecord>(
-    `SELECT id, thaid_cid, thaid_cid_hash, NULL AS google_sub, first_name, last_name,
-            email, username, password_hash, role, is_active
-     FROM users
+  const nameFilter = `FROM users
      WHERE CAST(TRIM(first_name) AS BINARY) = CAST(? AS BINARY)
        AND CAST(TRIM(last_name) AS BINARY) = CAST(? AS BINARY)
-     LIMIT 2`,
+     LIMIT 2`;
+  // `thaidLinkColumnsPresent` = false เมื่อยังไม่ได้รัน database/add_thaid_link_approval.sql
+  let thaidLinkColumnsPresent = true;
+  const matches = await selectRows<UserRecord>(
+    `SELECT id, thaid_cid, thaid_cid_hash, NULL AS google_sub, first_name, last_name,
+            email, username, password_hash, role, is_active,
+            thaid_link_enabled, thaid_link_expected_hash
+     ${nameFilter}`,
     [firstName, lastName]
-  );
+  ).catch(async (error) => {
+    if (!isMissingSchemaError(error)) throw error;
+    thaidLinkColumnsPresent = false;
+    return selectRows<UserRecord>(
+      `SELECT id, thaid_cid, thaid_cid_hash, NULL AS google_sub, first_name, last_name,
+              email, username, password_hash, role, is_active
+       ${nameFilter}`,
+      [firstName, lastName]
+    );
+  });
   if (matches.length === 0) return null;
   if (matches.length > 1) {
     throw new Error("พบชื่อ–นามสกุลซ้ำในระบบ กรุณาติดต่อผู้ดูแลระบบเพื่อเชื่อมต่อ ThaiD");
@@ -396,8 +414,25 @@ export async function findOrLinkUserByVerifiedThaiD(input: {
   if (candidate.thaid_cid || candidate.thaid_cid_hash) {
     throw new Error("บัญชีชื่อนี้เชื่อมต่อ ThaiD ไว้แล้ว กรุณาติดต่อผู้ดูแลระบบ");
   }
+
   // Preserve the existing pending-approval flow without linking inactive users.
   if (!candidate.is_active) return hydrateUserRecord(candidate);
+
+  /**
+   * SEC-04: ห้ามผูกบัญชีด้วยชื่อ-นามสกุลอย่างเดียว
+   * - บัญชีบทบาท admin ห้ามผูกอัตโนมัติเสมอ (แม้ยังไม่ได้รัน migration)
+   * - บัญชีอื่นต้องให้ผู้ดูแลระบบเปิด thaid_link_enabled หรือบันทึก thaid_link_expected_hash ไว้ก่อน
+   */
+  if (candidate.role === "admin") {
+    throw new Error("บัญชีผู้ดูแลระบบต้องให้ผู้ดูแลระบบเป็นผู้เชื่อมต่อ ThaiD ให้ ไม่สามารถเชื่อมต่ออัตโนมัติได้");
+  }
+  if (thaidLinkColumnsPresent) {
+    const expectedHash = (candidate.thaid_link_expected_hash ?? "").trim().toLowerCase();
+    const matchesExpectedCid = expectedHash.length > 0 && expectedHash === hashThaiCidForLookup(input.thaiCid).toLowerCase();
+    if (!matchesExpectedCid && Number(candidate.thaid_link_enabled ?? 0) !== 1) {
+      throw new Error("บัญชีนี้ยังไม่ได้เปิดให้เชื่อมต่อ ThaiD กรุณาติดต่อผู้ดูแลระบบเพื่อเปิดสิทธิ์ก่อน");
+    }
+  }
 
   const encryptedCid = encryptThaiCidForStorage(input.thaiCid);
   const cidHash = hashThaiCidForLookup(input.thaiCid);

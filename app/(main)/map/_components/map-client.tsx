@@ -66,20 +66,40 @@ export function MapClient({ facilities }: { facilities: Facility[] }) {
             box-shadow:0 2px 6px rgba(0,0,0,0.3);
             display:flex;align-items:center;justify-content:center;
             font-size:10px;font-weight:700;color:white;
-          ">${f.asset_count > 0 ? f.asset_count : "·"}</div>`,
+          ">${Number(f.asset_count) > 0 ? Number(f.asset_count) : "·"}</div>`,
           iconSize: [28, 28],
           iconAnchor: [14, 14],
         });
 
-        const popup = `
-          <div style="min-width:180px;font-family:sans-serif">
-            <p style="font-weight:700;margin:0 0 4px">${f.name}</p>
-            <p style="margin:0;font-size:12px;color:#64748b">${f.district_name ?? ""} · ${f.typecode}</p>
-            <hr style="margin:6px 0;border-color:#e2e8f0"/>
-            <p style="margin:0;font-size:12px">ทรัพย์สิน: <strong>${f.asset_count}</strong> รายการ</p>
-            ${!f.has_survey ? '<p style="margin:4px 0 0;font-size:11px;color:#f59e0b">⚠ ยังไม่มีข้อมูล</p>' : ""}
-          </div>
-        `;
+        /** SEC-02: สร้าง popup ด้วย DOM + textContent ไม่ต่อสตริง HTML จากข้อมูลผู้ใช้ */
+        const popup = document.createElement("div");
+        popup.style.minWidth = "180px";
+        popup.style.fontFamily = "sans-serif";
+
+        const title = document.createElement("p");
+        title.style.cssText = "font-weight:700;margin:0 0 4px";
+        title.textContent = f.name ?? "";
+        popup.appendChild(title);
+
+        const subtitle = document.createElement("p");
+        subtitle.style.cssText = "margin:0;font-size:12px;color:#64748b";
+        subtitle.textContent = [f.district_name ?? "", f.typecode ?? ""].filter(Boolean).join(" · ");
+        popup.appendChild(subtitle);
+
+        popup.appendChild(document.createElement("hr")).style.cssText = "margin:6px 0;border-color:#e2e8f0";
+
+        const count = document.createElement("p");
+        count.style.cssText = "margin:0;font-size:12px";
+        count.textContent = `ทรัพย์สิน: ${Number(f.asset_count) || 0} รายการ`;
+        popup.appendChild(count);
+
+        if (!f.has_survey) {
+          const warn = document.createElement("p");
+          warn.style.cssText = "margin:4px 0 0;font-size:11px;color:#f59e0b";
+          warn.textContent = "⚠ ยังไม่มีข้อมูล";
+          popup.appendChild(warn);
+        }
+
         L.marker([f.lat, f.lon], { icon }).addTo(map).bindPopup(popup);
       });
     };

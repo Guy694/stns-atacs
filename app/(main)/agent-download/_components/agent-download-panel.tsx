@@ -16,7 +16,8 @@ type AgentDownloadPanelProps = {
   facilityName: string;
   requiresWorkGroup: boolean;
   workGroups: { id: number; workGroupName: string }[];
-  staticInstallKey: string | null;
+  /** SEC-03: ไม่ส่งคีย์ติดตั้งมาที่เบราว์เซอร์อีกต่อไป ใช้ enrollment token ต่อหน่วยงานแทน */
+  staticInstallKey?: string | null;
 };
 
 const INITIAL = { token: null as string | null, error: null as string | null, enrollmentName: null as string | null };
@@ -39,7 +40,7 @@ function CopyButton({ text, label = "คัดลอก" }: { text: string; labe
   );
 }
 
-export function AgentDownloadPanel({ facilityId, facilityName, requiresWorkGroup, workGroups, staticInstallKey }: AgentDownloadPanelProps) {
+export function AgentDownloadPanel({ facilityId, facilityName, requiresWorkGroup, workGroups, staticInstallKey = null }: AgentDownloadPanelProps) {
   const [state, formAction, pending] = useActionState(
     createOfficerDownloadTokenAction,
     INITIAL
@@ -141,7 +142,7 @@ export function AgentDownloadPanel({ facilityId, facilityName, requiresWorkGroup
         <p className="mt-3 text-xs text-sky-800">
           {staticInstallKey
             ? "คำสั่งนี้ใส่ INSTALL_KEY จาก server ให้แล้ว ใช้คัดลอกไปติดตั้งได้ทันที"
-            : "ยังไม่ได้ตั้งค่า ATACS_AGENT_INSTALL_KEY บน server คำสั่งจะแสดง <INSTALL_KEY> ไว้ให้แทนค่าภายหลัง"}
+            : "คำสั่งนี้แสดง <INSTALL_KEY> ไว้ — ขอคีย์ติดตั้งของหน่วยงานจากผู้ดูแลระบบ หรือใช้ปุ่มสร้าง enrollment token ด้านล่างซึ่งผูกกับหน่วยงานนี้อยู่แล้ว"}
         </p>
       </div>
 

@@ -22,3 +22,7 @@ storage
 backups
 docker/initdb/*.sql
 .github
+
+# SEC-05: ไฟล์ seed/ดัมป์ฐานข้อมูลมีบัญชีตัวอย่างและข้อมูลจริง ห้ามติดไปกับ image
+database/seed_*.sql
+database/stn_atacs.sql

@@ -6,12 +6,16 @@ import { redirect } from "next/navigation";
 import { createAgentEnrollment } from "@/lib/agent";
 import { getCurrentUser } from "@/lib/auth";
 import { getActiveFacilityWorkGroupForFacility, getFacilityAgentContext } from "@/lib/facility-work-groups";
+import { hasPermission } from "@/lib/role-permissions";
 import { executeStatement, selectRows } from "@/lib/mysql";
 import type { RowDataPacket } from "mysql2/promise";
 
 async function requireOfficerWithFacility() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
+  // SEC-03: เดิมสร้าง enrollment token อายุ 7 วันได้โดยไม่ตรวจสิทธิ์
+  if (user.role === "viewer") throw new Error("FORBIDDEN");
+  if (!(user.role === "admin" || (await hasPermission(user.role, "agent.manage")))) throw new Error("FORBIDDEN");
   if (!user.facilityId) throw new Error("NO_FACILITY");
   return user;
 }
@@ -30,7 +34,11 @@ export async function createOfficerDownloadTokenAction(
   let user;
   try {
     user = await requireOfficerWithFacility();
-  } catch {
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (message === "FORBIDDEN") {
+      return { token: null, error: "คุณไม่มีสิทธิ์สร้าง token ติดตั้ง Agent", enrollmentName: null };
+    }
     return { token: null, error: "บัญชีของคุณยังไม่ได้ผูกกับหน่วยงาน กรุณาติดต่อผู้ดูแลระบบ", enrollmentName: null };
   }
 

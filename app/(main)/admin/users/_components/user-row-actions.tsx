@@ -2,7 +2,7 @@
 
 import { useActionState, useEffect, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
-import { toggleUserActiveAction, resetUserPasswordAction, updateUserProfileAction } from "@/app/(main)/admin/users/actions";
+import { setThaidLinkEnabledAction, toggleUserActiveAction, resetUserPasswordAction, updateUserProfileAction } from "@/app/(main)/admin/users/actions";
 import { ActionIconButton } from "@/app/_components/ui/action-icon-button";
 
 type FacilityOption = {
@@ -24,6 +24,10 @@ type Props = {
   currentRole: "admin" | "officer" | "viewer";
   hasUsername: boolean;
   isSelf: boolean;
+  /** SEC-04: บัญชีนี้ได้รับอนุญาตให้ผูก ThaiD ครั้งแรกด้วยชื่อ-นามสกุลหรือยัง */
+  thaidLinkEnabled?: boolean;
+  /** SEC-04: false เมื่อยังไม่ได้รัน database/add_thaid_link_approval.sql */
+  thaidLinkColumnAvailable?: boolean;
 };
 
 export function UserRowActions({
@@ -39,12 +43,16 @@ export function UserRowActions({
   currentRole,
   hasUsername,
   isSelf,
+  thaidLinkEnabled = false,
+  thaidLinkColumnAvailable = false,
 }: Props) {
   const mounted = typeof document !== "undefined";
   const [showActions, setShowActions] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [showReset, setShowReset] = useState(false);
   const [togglePending, startToggle] = useTransition();
+  const [linkPending, startLink] = useTransition();
+  const [linkError, setLinkError] = useState<string | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const editFormRef = useRef<HTMLFormElement>(null);
   const editFacilityRef = useRef<HTMLSelectElement>(null);
@@ -142,6 +150,31 @@ export function UserRowActions({
                   รีเซ็ตรหัสผ่าน
                 </button>
               )}
+              {!isSelf && currentRole !== "admin" && !thaidCid && thaidLinkColumnAvailable && (
+                <button
+                  type="button"
+                  disabled={linkPending}
+                  onClick={() => {
+                    const next = !thaidLinkEnabled;
+                    const label = next ? "อนุญาต" : "ยกเลิกการอนุญาต";
+                    if (!window.confirm(`ยืนยัน${label}ให้บัญชี ${fullName} ผูกบัญชี ThaiD ด้วยชื่อ-นามสกุล?`)) return;
+                    setLinkError(null);
+                    startLink(async () => {
+                      const error = await setThaidLinkEnabledAction(userId, next);
+                      if (error) { setLinkError(error); return; }
+                      setShowActions(false);
+                    });
+                  }}
+                  className="min-h-11 rounded-xl border border-stone-200 px-4 py-2 text-left text-sm font-semibold hover:bg-stone-50 disabled:opacity-50"
+                >
+                  {linkPending
+                    ? "กำลังบันทึก..."
+                    : thaidLinkEnabled
+                      ? "ปิดสิทธิ์เชื่อมต่อ ThaiD ครั้งแรก"
+                      : "อนุญาตให้เชื่อมต่อ ThaiD ครั้งแรก"}
+                </button>
+              )}
+              {linkError && <p className="rounded-xl bg-rose-50 px-3 py-2 text-xs text-rose-700">{linkError}</p>}
               {!isSelf && (
                 <button
                   type="button"

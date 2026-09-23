@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { enrollAgentDevice, enrollAgentDeviceWithInstallKey } from "@/lib/agent";
 import { isAgentInstallKeyConfigured, verifyAgentInstallKey } from "@/lib/agent-install-key";
 import { notifyTelegramSafe } from "@/lib/telegram";
+import { consumeRateLimit } from "@/lib/rate-limit";
 import { readRequestIp, recordSecurityEvent } from "@/lib/security";
 
 type EnrollBody = {
@@ -16,7 +17,27 @@ type EnrollBody = {
   agentVersion?: string | null;
 };
 
+/** SEC-03: จำกัดจำนวนครั้งที่ลงทะเบียน Agent ได้ต่อ IP กัน enroll เครื่องปลอมจำนวนมาก */
+const ENROLL_LIMIT_PER_IP = 10;
+const ENROLL_WINDOW_MS = 10 * 60 * 1000;
+
 export async function POST(req: NextRequest) {
+  const clientIp = readRequestIp(req.headers) ?? "unknown";
+  const rate = consumeRateLimit(`agent-enroll:${clientIp}`, ENROLL_LIMIT_PER_IP, ENROLL_WINDOW_MS);
+  if (!rate.allowed) {
+    await recordSecurityEvent({
+      eventType: "agent_enroll_rate_limited",
+      ipAddress: clientIp,
+      identity: null,
+      path: req.nextUrl.pathname,
+      detail: `เกิน ${ENROLL_LIMIT_PER_IP} ครั้งใน ${ENROLL_WINDOW_MS / 60000} นาที`,
+    });
+    return NextResponse.json(
+      { error: "Too many enrollment attempts" },
+      { status: 429, headers: { "Retry-After": String(rate.retryAfterSeconds) } }
+    );
+  }
+
   let body: EnrollBody;
   try {
     body = (await req.json()) as EnrollBody;
@@ -45,7 +66,8 @@ export async function POST(req: NextRequest) {
     if (!isAgentInstallKeyConfigured()) {
       return NextResponse.json({ error: "Static agent install key is not configured" }, { status: 503 });
     }
-    if (!verifyAgentInstallKey(installKey)) {
+    // SEC-03: คีย์ที่ผูกกับหน่วยงานหนึ่ง จะใช้ลงทะเบียนให้หน่วยงานอื่นไม่ได้
+    if (!verifyAgentInstallKey(installKey, facilityId)) {
       await recordSecurityEvent({
         eventType: "agent_invalid_install_key",
         ipAddress: readRequestIp(req.headers),
