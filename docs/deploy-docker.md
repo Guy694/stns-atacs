@@ -107,6 +107,28 @@ docker compose --env-file .env.docker exec -T db sh -c 'mariadb -u"$MARIADB_USER
    ถ้าใช้โดเมนอื่น ต้องแก้ `ALLOWED_API_HOST_SUFFIXES` ใน `public/agent/linux/atacs-agent.py`
    และ `$allowedSuffixes` ใน `public/agent/windows/atacs-agent.ps1` แล้วให้เครื่องลูกข่ายอัปเดตสคริปต์
 
+## 4.2) การสำรองข้อมูลและการเฝ้าระวัง (ก.ย. 2569)
+
+- ทุกรอบสำรองจะ **ตรวจไฟล์ก่อนเก็บ** (gzip ไม่เสีย, มี CREATE TABLE, จบด้วย "Dump completed")
+  ไฟล์ที่ตรวจไม่ผ่านจะถูกเปลี่ยนชื่อเป็น `.bad` และไม่ถูกนับว่าเป็นไฟล์สำรองที่ใช้ได้
+- สถานะรอบล่าสุดเขียนไว้ที่ `./backups/last-status.json` และ `/api/cron/backup-check`
+  (คอนเทนเนอร์ cron เรียกวันละครั้ง) จะแจ้ง Telegram เมื่อไม่มีไฟล์สำรอง ไฟล์เก่าเกิน `BACKUP_MAX_AGE_HOURS`
+  ไฟล์เล็กผิดปกติ หรือรอบล่าสุดล้มเหลว — ตรวจเองได้ด้วย
+  ```bash
+  curl -s -H "Authorization: Bearer $CRON_SECRET" "http://localhost:3000/api/cron/backup-check?dry=1"
+  ```
+- **ซ้อมกู้คืนอย่างน้อยไตรมาสละครั้ง** (กู้ลงฐานข้อมูลชั่วคราว ไม่แตะฐานข้อมูลจริง):
+  ```bash
+  docker compose --env-file .env.docker exec backup bash /restore-check.sh
+  ```
+  ต้องตั้ง `RESTORE_MYSQL_USER` / `RESTORE_MYSQL_PASSWORD` เป็นบัญชีที่มีสิทธิ์ `CREATE DATABASE`
+  สคริปต์จะนับแถวในตารางหลักเทียบกับระบบจริงแล้วสรุปว่า PASSED หรือ FAILED
+- ข้อผิดพลาดของระบบถูกบันทึกเป็น log แบบ JSON (`{"tag":"atacs-error",…}`) ดูด้วย
+  `docker compose logs app | grep atacs-error` และแจ้ง Telegram หมวด "ข้อผิดพลาดของระบบ"
+  โดยข้อผิดพลาดเดียวกันจะแจ้งไม่เกิน 1 ครั้งต่อ `ERROR_ALERT_WINDOW_MINUTES` นาที
+- ถ้ายังไม่ได้รัน migration ครบ ผู้ดูแลระบบจะเห็น **แถบเตือนสีเหลืองด้านบนทุกหน้า** บอกชื่อไฟล์ที่ยังขาด
+  (เดิมหน้าเหล่านั้นจะแสดงข้อมูลว่างเงียบ ๆ)
+
 ## 5) ย้ายรูปภาพเดิม (ถ้ามี)
 
 รูปครุภัณฑ์เก็บนอก `public/` แล้ว (เปิดได้เฉพาะผู้ที่ล็อกอิน) คัดลอกรูปเดิมเข้า volume:

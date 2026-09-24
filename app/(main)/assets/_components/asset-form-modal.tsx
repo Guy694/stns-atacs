@@ -17,11 +17,14 @@ import { isComputerDeviceType, type WindowsLicenseStatus } from "@/lib/windows-l
 type FacilityOption = { id: number; facility_name: string | null; district_name: string | null; asset_code_prefix?: string | null };
 type DeviceTypeOption = { name: string; category: string };
 type WorkGroupOption = { id: number; facilityId: number; facilityName: string; workGroupName: string };
+type LocationOption = { facilityId: number; location: string; usageCount?: number };
 
 type Props = {
   facilities: FacilityOption[];
   deviceTypes?: DeviceTypeOption[];
   workGroups?: WorkGroupOption[];
+  /** ที่ตั้งที่เคยบันทึกไว้ในทะเบียน ใช้เป็นตัวเลือกค้นหาได้ (ยังพิมพ์ที่ตั้งใหม่เองได้) */
+  locations?: LocationOption[];
   fixedFacilityId?: number;
   updaterName: string;
   mode: "create" | "edit";
@@ -182,7 +185,145 @@ function FacilityCombobox({
   );
 }
 
-export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], fixedFacilityId, mode, asset, children }: Props) {
+/**
+ * ช่อง "ที่ตั้ง" แบบพิมพ์ได้และเลือกได้
+ * - ตัวเลือกมาจากที่ตั้งที่เคยบันทึกไว้ในหน่วยงานนั้น และจากชื่อกลุ่มงานของหน่วยงานนั้น
+ * - พิมพ์ที่ตั้งใหม่ได้ทันที (ไม่บังคับให้เลือกจากรายการ) ที่ตั้งใหม่จะกลายเป็นตัวเลือกให้ครั้งถัดไปเอง
+ */
+function LocationCombobox({
+  name,
+  defaultValue,
+  suggestions,
+  workGroupName,
+}: {
+  name: string;
+  defaultValue: string;
+  suggestions: string[];
+  workGroupName?: string;
+}) {
+  const inputId = useId();
+  const listboxId = useId();
+  const [value, setValue] = useState(defaultValue);
+  const [open, setOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(0);
+
+  const options = useMemo(() => {
+    const seen = new Set<string>();
+    const list: Array<{ label: string; hint?: string }> = [];
+    const push = (label: string, hint?: string) => {
+      const trimmed = label.trim();
+      const key = trimmed.toLowerCase();
+      if (!trimmed || seen.has(key)) return;
+      seen.add(key);
+      list.push({ label: trimmed, hint });
+    };
+    if (workGroupName) push(workGroupName, "กลุ่มงานที่เลือก");
+    for (const suggestion of suggestions) push(suggestion, "เคยใช้ในหน่วยงานนี้");
+    return list;
+  }, [suggestions, workGroupName]);
+
+  const filtered = useMemo(() => {
+    const query = value.trim().toLowerCase();
+    if (!query) return options;
+    return options.filter((option) => option.label.toLowerCase().includes(query));
+  }, [options, value]);
+
+  const activeOptionIndex = Math.min(activeIndex, Math.max(filtered.length - 1, 0));
+  const isNewValue = value.trim().length > 0 && !options.some((option) => option.label.toLowerCase() === value.trim().toLowerCase());
+
+  function choose(label: string) {
+    setValue(label);
+    setActiveIndex(0);
+    setOpen(false);
+  }
+
+  return (
+    <div className="mt-1">
+      <input
+        id={inputId}
+        name={name}
+        type="text"
+        role="combobox"
+        aria-autocomplete="list"
+        aria-controls={listboxId}
+        aria-expanded={open}
+        autoComplete="off"
+        value={value}
+        placeholder="พิมพ์เพื่อค้นหา หรือพิมพ์ที่ตั้งใหม่ได้เลย"
+        onFocus={() => setOpen(true)}
+        onBlur={() => window.setTimeout(() => setOpen(false), 120)}
+        onChange={(event) => {
+          setValue(event.target.value);
+          setActiveIndex(0);
+          setOpen(true);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "ArrowDown") {
+            event.preventDefault();
+            setOpen(true);
+            setActiveIndex((index) => Math.min(index + 1, Math.max(filtered.length - 1, 0)));
+          }
+          if (event.key === "ArrowUp") {
+            event.preventDefault();
+            setOpen(true);
+            setActiveIndex((index) => Math.max(index - 1, 0));
+          }
+          if (event.key === "Enter" && open && filtered[activeOptionIndex]) {
+            event.preventDefault();
+            choose(filtered[activeOptionIndex].label);
+          }
+          if (event.key === "Escape") setOpen(false);
+        }}
+        className="w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+      />
+
+      {open && (options.length > 0 || isNewValue) && (
+        <div id={listboxId} role="listbox" className="mt-2 max-h-56 overflow-y-auto rounded-xl border border-black/10 bg-white shadow-sm">
+          {isNewValue && (
+            <button
+              type="button"
+              role="option"
+              aria-selected={false}
+              onMouseDown={(event) => {
+                event.preventDefault();
+                choose(value.trim());
+              }}
+              className="flex w-full items-center justify-between gap-3 border-b border-black/6 px-4 py-2.5 text-left text-sm hover:bg-[var(--accent)]/5"
+            >
+              <span className="min-w-0 truncate font-medium">ใช้ที่ตั้งใหม่ “{value.trim()}”</span>
+              <span className="shrink-0 text-xs text-[var(--muted)]">เพิ่มใหม่</span>
+            </button>
+          )}
+          {filtered.length === 0 && !isNewValue ? (
+            <p className="px-4 py-4 text-center text-sm text-[var(--muted)]">ยังไม่มีที่ตั้งที่บันทึกไว้ พิมพ์เพื่อเพิ่มใหม่ได้</p>
+          ) : (
+            filtered.map((option, index) => (
+              <button
+                key={option.label}
+                type="button"
+                role="option"
+                aria-selected={option.label === value}
+                onMouseEnter={() => setActiveIndex(index)}
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  choose(option.label);
+                }}
+                className={`flex w-full items-center justify-between gap-3 border-b border-black/6 px-4 py-2.5 text-left text-sm transition last:border-0 ${
+                  index === activeOptionIndex ? "bg-[var(--accent)]/8" : "hover:bg-[var(--accent)]/5"
+                }`}
+              >
+                <span className="min-w-0 truncate">{option.label}</span>
+                {option.hint && <span className="shrink-0 text-xs text-[var(--muted)]">{option.hint}</span>}
+              </button>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], locations = [], fixedFacilityId, mode, asset, children }: Props) {
   const [open, setOpen] = useState(false);
   const [subtypePending, setSubtypePending] = useState(false);
   const [selectedFacilityId, setSelectedFacilityId] = useState<number | null>(fixedFacilityId ?? asset?.facilityId ?? null);
@@ -225,6 +366,14 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
   const selectedWorkGroupValue = selectedWorkGroups.some((group) => String(group.id) === selectedWorkGroupId)
     ? selectedWorkGroupId
     : "";
+  /** ที่ตั้งที่เคยบันทึกไว้ในหน่วยงานที่เลือก + ชื่อกลุ่มงานทุกกลุ่มของหน่วยงานนั้น */
+  const locationSuggestions = useMemo(() => {
+    const used = selectedFacilityId
+      ? locations.filter((item) => item.facilityId === selectedFacilityId).map((item) => item.location)
+      : locations.map((item) => item.location);
+    return [...used, ...selectedWorkGroups.map((group) => group.workGroupName)];
+  }, [locations, selectedFacilityId, selectedWorkGroups]);
+  const currentWorkGroupName = selectedWorkGroups.find((group) => String(group.id) === selectedWorkGroupValue)?.workGroupName;
 
   function openModal() {
     setSelectedFacilityId(fixedFacilityId ?? asset?.facilityId ?? null);
@@ -527,11 +676,16 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
                 {/* Location */}
                 <div>
                   <label className="block text-sm font-medium">ที่ตั้ง / Location</label>
-                  <input
+                  <LocationCombobox
+                    key={`${selectedFacilityId ?? "none"}-${selectedWorkGroupValue || "none"}`}
                     name="locationDetail"
                     defaultValue={asset?.locationDetail ?? ""}
-                    className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+                    suggestions={locationSuggestions}
+                    workGroupName={currentWorkGroupName}
                   />
+                  <p className="mt-1 text-xs text-[var(--muted)]">
+                    เลือกจากที่ตั้งเดิมหรือกลุ่มงานของหน่วยงานนี้ หรือพิมพ์ที่ตั้งใหม่ได้เลย — ที่ตั้งใหม่จะขึ้นเป็นตัวเลือกให้ครั้งถัดไป
+                  </p>
                 </div>
               </div>
 

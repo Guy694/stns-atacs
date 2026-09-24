@@ -22,28 +22,10 @@ const config = {
 };
 
 // What each migration adds; the app works without later ones but hides the related features.
-const MIGRATIONS = [
-  { file: "information_assets.sql / inspection_audit.sql (ฐานเดิม)", tables: ["health_facilities", "information_asset_surveys", "information_assets", "asset_inspections", "asset_inspection_items", "audit_logs"], columns: {} },
-  { file: "migrate_purchase_fields.sql", tables: [], columns: { information_assets: ["purchase_price", "purchase_date", "purchase_order_no"] } },
-  { file: "add_asset_work_group.sql / add_facility_work_groups.sql", tables: ["facility_work_groups"], columns: { information_assets: ["work_group_id"] } },
-  { file: "add_asset_status_history.sql", tables: ["asset_status_history"], columns: {} },
-  { file: "add_inspection_workflow.sql", tables: [], columns: { asset_inspection_items: ["inspection_status", "asset_status", "checked_by", "checked_at"] } },
-  { file: "add_role_permissions_and_indexes.sql", tables: ["role_permissions"], columns: {} },
-  { file: "add_asset_extensions.sql", tables: ["asset_subtypes", "asset_extensions"], columns: {} },
-  { file: "add_asset_lifecycle.sql", tables: ["asset_transfers", "asset_disposal_requests", "asset_repairs", "asset_repair_logs"], columns: { information_assets: ["useful_life_years"] } },
-  { file: "add_asset_codes_and_inspection_committee.sql", tables: ["asset_inspection_committee"], columns: { information_assets: ["asset_code_prefix", "asset_accounting_code"], health_facilities: ["asset_code_prefix"], asset_inspections: ["work_group_id"] } },
-  { file: "add_inspection_close.sql", tables: [], columns: { asset_inspections: ["round_status", "closed_at", "closed_by"] } },
-  { file: "add_inspection_found_location.sql", tables: [], columns: { asset_inspection_items: ["found_work_group_id", "found_location", "registered_work_group_id"] } },
-  {
-    file: "add_registry_completeness.sql",
-    tables: ["asset_loans"],
-    columns: {
-      information_assets: ["funding_source", "acquisition_method", "vendor_name", "warranty_end_date", "unit_name"],
-      asset_inspections: ["committee_order_no", "committee_order_date"],
-      asset_disposal_requests: ["fact_finding_note", "executed_on", "execution_document_no", "execution_note", "executed_by_user_id", "executed_by", "executed_recorded_at"],
-    },
-  },
-];
+// สิ่งที่แต่ละ migration เพิ่ม — เก็บไว้ที่ database/schema-requirements.json เพื่อให้แอปใช้รายการเดียวกัน
+const MIGRATIONS = JSON.parse(
+  fs.readFileSync(new URL("../database/schema-requirements.json", import.meta.url), "utf8")
+);
 
 let connection;
 try {

@@ -5,12 +5,20 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { ASSET_CLASS_OPTIONS } from "@/lib/asset-classes";
+import { IMPORT_COLUMNS, REQUIREMENT_LABELS, type ImportColumnRequirement } from "@/lib/asset-import-columns";
 import { ASSET_STATUS_LABELS } from "@/lib/asset-status";
 import { getCurrentUser } from "@/lib/auth";
 import { listActiveDeviceTypes } from "@/lib/device-types";
 import { listFacilityWorkGroups } from "@/lib/facility-work-groups";
 import { canAccessAssetFacility } from "@/lib/permissions";
 import { hasPermission } from "@/lib/role-permissions";
+
+const REQUIREMENT_TONE: Record<ImportColumnRequirement, string> = {
+  key: "bg-slate-100 text-slate-700",
+  required: "bg-rose-100 text-rose-800",
+  conditional: "bg-amber-100 text-amber-900",
+  optional: "bg-slate-100 text-slate-600",
+};
 
 function Code({ children }: { children: React.ReactNode }) {
   return <code className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[0.9em] font-semibold text-slate-800">{children}</code>;
@@ -48,10 +56,56 @@ export default async function AssetImportGuidePage() {
         <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">คู่มือนำเข้าครุภัณฑ์ด้วย CSV</h1>
         <p className="mt-3 max-w-3xl text-sm leading-6 text-sky-50 sm:text-base">ใช้หน้านี้เพื่อเตรียมไฟล์ CSV สำหรับเพิ่มหรือแก้ไขครุภัณฑ์ ตรวจสอบการใช้ <Code>id</Code> และค้นหา <Code>work_group_id</Code> ของแต่ละหน่วยบริการก่อนนำเข้า</p>
         <div className="mt-5 flex flex-wrap gap-3">
-          <Link href="/api/export/assets?template=csv" className="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-[#15548f] transition hover:bg-sky-50">ดาวน์โหลดไฟล์ CSV ตัวอย่าง</Link>
+          <Link href="/api/export/assets?template=xlsx" className="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-[#15548f] transition hover:bg-sky-50">ดาวน์โหลดไฟล์ Excel ต้นแบบ (มีคำอธิบายคอลัมน์)</Link>
+          <Link href="/api/export/assets?template=csv" className="rounded-xl border border-white/40 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/10">ไฟล์ CSV ตัวอย่าง</Link>
           <Link href="/assets" className="rounded-xl border border-white/40 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/10">กลับไปรายการทรัพย์สิน</Link>
         </div>
       </header>
+
+      {/* ตารางคำอธิบายคอลัมน์ — สร้างจาก lib/asset-import-columns.ts จึงตรงกับระบบเสมอ */}
+      <section className="space-y-4 rounded-xl border border-black/10 bg-white p-5">
+        <div>
+          <h2 className="text-lg font-semibold">คำอธิบายคอลัมน์ทั้งหมด ({IMPORT_COLUMNS.length} คอลัมน์)</h2>
+          <p className="mt-1 text-sm text-[var(--muted)]">
+            ห้ามแก้ชื่อหัวคอลัมน์ · ลำดับคอลัมน์ไม่มีผล ระบบอ่านจากชื่อหัวคอลัมน์ · คอลัมน์ที่ไม่ต้องการกรอกให้เว้นว่างไว้
+            (ตอนแก้ไขข้อมูลเดิม ช่องที่เว้นว่างจะคงค่าเดิมไว้ ใส่ <Code>__CLEAR__</Code> เมื่อต้องการล้างค่า) ·
+            วันที่ทุกช่องใช้ ค.ศ. รูปแบบ <Code>YYYY-MM-DD</Code>
+          </p>
+        </div>
+        <div className="overflow-x-auto rounded-xl border border-black/10">
+          <table className="w-full min-w-[960px] text-left text-sm">
+            <thead className="bg-slate-50 text-xs text-slate-700">
+              <tr>
+                <th className="px-3 py-2 font-semibold">คอลัมน์</th>
+                <th className="px-3 py-2 font-semibold">ความหมาย</th>
+                <th className="px-3 py-2 font-semibold">ความจำเป็น</th>
+                <th className="px-3 py-2 font-semibold">รูปแบบ / ค่าที่อนุญาต</th>
+                <th className="px-3 py-2 font-semibold">ตัวอย่าง</th>
+                <th className="px-3 py-2 font-semibold">หมายเหตุ</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-black/5">
+              {IMPORT_COLUMNS.map((column) => (
+                <tr key={column.column} className="align-top">
+                  <td className="px-3 py-2"><Code>{column.column}</Code></td>
+                  <td className="px-3 py-2">{column.label}</td>
+                  <td className="px-3 py-2">
+                    <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${REQUIREMENT_TONE[column.requirement]}`}>
+                      {REQUIREMENT_LABELS[column.requirement]}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2 text-xs">
+                    <span className="block">{column.format}</span>
+                    {column.allowed && <span className="mt-0.5 block text-[var(--muted)]">{column.allowed}</span>}
+                  </td>
+                  <td className="px-3 py-2 text-xs">{column.example || "—"}</td>
+                  <td className="px-3 py-2 text-xs text-[var(--muted)]">{column.note ?? "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
 
       <section className="space-y-4 rounded-xl border border-black/10 bg-white p-5">
         <h2 className="text-lg font-semibold">ข้อมูลเฉพาะครุภัณฑ์นอกกลุ่ม IT</h2>

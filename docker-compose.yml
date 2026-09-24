@@ -75,11 +75,16 @@ services:
       AGENT_API_BASE_ALLOWED_HOSTS: ${AGENT_API_BASE_ALLOWED_HOSTS:-}
       # Asset photos: outside public/, served only to signed-in users by the app.
       UPLOAD_DIR: /app/storage/uploads
+      # ตรวจสุขภาพไฟล์สำรอง (/api/cron/backup-check)
+      BACKUP_CHECK_DIR: /backups
+      BACKUP_MAX_AGE_HOURS: ${BACKUP_MAX_AGE_HOURS:-36}
     depends_on:
       db:
         condition: service_healthy
     volumes:
       - uploads:/app/storage/uploads
+      # อ่านอย่างเดียว: ใช้ตรวจสุขภาพไฟล์สำรองผ่าน /api/cron/backup-check
+      - ${BACKUP_HOST_DIR:-./backups}:/backups:ro
     expose:
       - "3000"
 
@@ -125,7 +130,7 @@ services:
           if [ $$((now - last_health)) -ge "$$CRON_INTERVAL_SECONDS" ]; then call /api/cron/agent-health; last_health=$$now; fi
           today=$$(date +%Y-%m-%d)
           if [ "$$(date +%H:%M)" \> "$$DAILY_SUMMARY_TIME" ] || [ "$$(date +%H:%M)" = "$$DAILY_SUMMARY_TIME" ]; then
-            if [ "$$today" != "$$last_summary_day" ]; then call /api/cron/daily-summary; last_summary_day=$$today; fi
+            if [ "$$today" != "$$last_summary_day" ]; then call /api/cron/daily-summary; call /api/cron/backup-check; last_summary_day=$$today; fi
           fi
           sleep 60
         done
@@ -146,9 +151,13 @@ services:
       BACKUP_TIME: ${BACKUP_TIME:-02:30}
       BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
       BACKUP_ON_START: ${BACKUP_ON_START:-0}
+      # บัญชีที่สร้างฐานข้อมูลชั่วคราวได้ สำหรับซ้อมกู้คืน (bash /restore-check.sh)
+      RESTORE_MYSQL_USER: ${RESTORE_MYSQL_USER:-}
+      RESTORE_MYSQL_PASSWORD: ${RESTORE_MYSQL_PASSWORD:-}
       TZ: Asia/Bangkok
     volumes:
       - ./docker/backup.sh:/backup.sh:ro
+      - ./docker/restore-check.sh:/restore-check.sh:ro
       - uploads:/uploads:ro
       - ${BACKUP_HOST_DIR:-./backups}:/backups
     depends_on:

@@ -13,6 +13,7 @@ import { listDisposalRequests } from "@/lib/asset-disposals";
 import { listRepairs, summarizeRepairs } from "@/lib/asset-repairs";
 import { listTransfers } from "@/lib/asset-transfers";
 import { CAPITALIZATION_THRESHOLD, fiscalYearOf, fiscalYearRange, summarizeValuation, VALUATION_STATUS_LABELS } from "@/lib/asset-valuation";
+import { buildDepreciationRollup } from "@/lib/depreciation-rollup";
 import { DISPOSAL_REQUEST_TYPE_LABELS, DISPOSAL_STATUS_LABELS, DISPOSAL_STATUS_TONES, disposalMethodLabel } from "@/lib/disposal-options";
 import { REPAIR_STATUS_LABELS, REPAIR_STATUS_TONES } from "@/lib/repair-options";
 import {
@@ -42,6 +43,7 @@ const VIEWS = [
   { key: "broken", label: "ชำรุด / ไม่ใช้งาน" },
   { key: "replacement", label: "แผนทดแทน" },
   { key: "valuation", label: "มูลค่าและค่าเสื่อมราคา" },
+  { key: "depreciation", label: "สรุปค่าเสื่อมรายปีงบ" },
   { key: "repairs", label: "งานซ่อม" },
   { key: "transfers", label: "โอนย้าย" },
   { key: "disposal", label: "จำหน่าย / สูญหาย" },
@@ -86,6 +88,9 @@ export default async function ReportsPage({ searchParams }: Props) {
   const terminalCount = assets.filter((a) => a.currentStatus === "Disposed" || a.currentStatus === "Lost").length;
   const facilities = new Set(assets.map((a) => a.facilityId)).size;
   const scopeIds = scopedFacilityId ? [scopedFacilityId] : undefined;
+  const depreciationRollup = view === "depreciation"
+    ? buildDepreciationRollup(assets.map((a) => ({ ...a, subtypeName: a.extensions[a.assetClass]?.subtypeName })), fiscalYear)
+    : null;
   const valuationReport = view === "valuation"
     ? summarizeValuation(assets.map((a) => ({ ...a, subtypeName: a.extensions[a.assetClass]?.subtypeName })), fiscalYear, todayIso)
     : null;
@@ -510,7 +515,7 @@ export default async function ReportsPage({ searchParams }: Props) {
           )}
         </div>
       )}
-      {["valuation", "repairs", "transfers", "disposal"].includes(view) && (
+      {["valuation", "depreciation", "repairs", "transfers", "disposal"].includes(view) && (
         <form method="GET" className="flex flex-wrap items-center gap-2 text-xs">
           <input type="hidden" name="view" value={view} />
           <label htmlFor="report-fy" className="text-[var(--muted)]">ปีงบประมาณ</label>
@@ -520,6 +525,97 @@ export default async function ReportsPage({ searchParams }: Props) {
           <button className="rounded-lg border border-[var(--line)] bg-white px-3 py-1">แสดง</button>
           <span className="text-xs text-[var(--muted)]">{formatThaiDate(fyRange.start)} – {formatThaiDate(fyRange.end)}</span>
         </form>
+      )}
+
+
+      {/* ── View: depreciation rollup (สำหรับงานการเงิน) ─────────────── */}
+      {view === "depreciation" && depreciationRollup && (
+        <div className="space-y-4">
+          <div className="glass-panel rounded-2xl p-4">
+            <h2 className="text-base font-semibold">งบแสดงการเปลี่ยนแปลงค่าเสื่อมราคา ปีงบประมาณ {fiscalYear}</h2>
+            <p className="mt-1 text-xs text-[var(--muted)]">
+              {reportScopeLabel} · รอบบัญชี {formatThaiDate(depreciationRollup.periodStart)} – {formatThaiDate(depreciationRollup.periodEnd)} ·
+              ปิดยอดทุก 30 กันยายน · ไม่นับครุภัณฑ์ที่จำหน่าย/สูญหายแล้ว {depreciationRollup.excludedTerminal.toLocaleString("th-TH")} รายการ
+            </p>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {[
+              { label: "ราคาทุนรวม (บาท)", value: baht(depreciationRollup.totals.cost) },
+              { label: "ค่าเสื่อมสะสมยกมา (บาท)", value: baht(depreciationRollup.totals.openingAccumulated) },
+              { label: `ค่าเสื่อมราคาปีงบ ${fiscalYear} (บาท)`, value: baht(depreciationRollup.totals.depreciationThisYear) },
+              { label: "มูลค่าสุทธิยกไป (บาท)", value: baht(depreciationRollup.totals.closingBookValue) },
+            ].map((kpi) => (
+              <div key={kpi.label} className="glass-panel rounded-2xl p-4">
+                <p className="text-xs text-[var(--muted)]">{kpi.label}</p>
+                <p className="mt-1 text-xl font-semibold tabular-nums">{kpi.value}</p>
+              </div>
+            ))}
+          </div>
+
+          {!depreciationRollup.balanced && (
+            <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">
+              ยอดยกมา + ค่าเสื่อมปีนี้ ไม่เท่ากับยอดยกไป กรุณาตรวจสอบข้อมูลวันที่ได้มา/ราคาของครุภัณฑ์
+            </p>
+          )}
+
+          <div className="flex flex-wrap items-center gap-2">
+            <a
+              href={`/api/export/depreciation?fy=${fiscalYear}${scopedFacilityId ? `&facilityId=${scopedFacilityId}` : ""}`}
+              className="filter-button border border-[var(--line)] text-[var(--primary-text)]"
+            >
+              ดาวน์โหลด CSV
+            </a>
+            {depreciationRollup.totals.incomplete > 0 && (
+              <span className="text-xs text-[var(--muted)]">
+                ข้อมูลไม่ครบจึงยังคิดค่าเสื่อมไม่ได้ {depreciationRollup.totals.incomplete.toLocaleString("th-TH")} รายการ
+              </span>
+            )}
+          </div>
+
+          <div className="glass-panel overflow-x-auto rounded-2xl">
+            <table className="w-full min-w-[840px] text-sm">
+              <thead className="bg-[var(--neutral-bg)] text-xs">
+                <tr>
+                  <th className="px-4 py-3 text-left font-semibold">หน่วยงาน</th>
+                  <th className="px-4 py-3 text-right font-semibold">จำนวน</th>
+                  <th className="px-4 py-3 text-right font-semibold">ราคาทุน</th>
+                  <th className="px-4 py-3 text-right font-semibold">ค่าเสื่อมสะสมยกมา</th>
+                  <th className="px-4 py-3 text-right font-semibold">ค่าเสื่อมปีนี้</th>
+                  <th className="px-4 py-3 text-right font-semibold">ค่าเสื่อมสะสมยกไป</th>
+                  <th className="px-4 py-3 text-right font-semibold">มูลค่าสุทธิยกไป</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--line)]">
+                {depreciationRollup.rows.map((row) => (
+                  <tr key={row.facilityId ?? row.facilityName}>
+                    <td className="px-4 py-3">{row.facilityName}</td>
+                    <td className="px-4 py-3 text-right tabular-nums">{row.count.toLocaleString("th-TH")}</td>
+                    <td className="px-4 py-3 text-right tabular-nums">{baht(row.cost)}</td>
+                    <td className="px-4 py-3 text-right tabular-nums">{baht(row.openingAccumulated)}</td>
+                    <td className="px-4 py-3 text-right tabular-nums">{baht(row.depreciationThisYear)}</td>
+                    <td className="px-4 py-3 text-right tabular-nums">{baht(row.closingAccumulated)}</td>
+                    <td className="px-4 py-3 text-right tabular-nums">{baht(row.closingBookValue)}</td>
+                  </tr>
+                ))}
+                {depreciationRollup.rows.length === 0 && (
+                  <tr><td colSpan={7} className="px-4 py-8 text-center text-[var(--muted)]">ไม่มีข้อมูลในปีงบประมาณนี้</td></tr>
+                )}
+              </tbody>
+              <tfoot className="border-t-2 border-[var(--line)] bg-[var(--neutral-bg)] font-semibold">
+                <tr>
+                  <td className="px-4 py-3">รวมทั้งสิ้น</td>
+                  <td className="px-4 py-3 text-right tabular-nums">{depreciationRollup.totals.count.toLocaleString("th-TH")}</td>
+                  <td className="px-4 py-3 text-right tabular-nums">{baht(depreciationRollup.totals.cost)}</td>
+                  <td className="px-4 py-3 text-right tabular-nums">{baht(depreciationRollup.totals.openingAccumulated)}</td>
+                  <td className="px-4 py-3 text-right tabular-nums">{baht(depreciationRollup.totals.depreciationThisYear)}</td>
+                  <td className="px-4 py-3 text-right tabular-nums">{baht(depreciationRollup.totals.closingAccumulated)}</td>
+                  <td className="px-4 py-3 text-right tabular-nums">{baht(depreciationRollup.totals.closingBookValue)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
       )}
 
       {/* ── View: valuation ───────────────────────────────────────────── */}

@@ -20,7 +20,7 @@ function load(file, dependencies) {
 const permissions = load("../lib/permissions.ts", { "server-only": {} });
 const officer = { id: 1, fullName: "Officer", role: "officer", facilityId: 10, managedAssetFacilityIds: [20] };
 
-function setup({ user = officer, create = true, update = true, existingFacility = 10, existingAsset = {} } = {}) {
+function setup({ user = officer, create = true, update = true, existingFacility = 10, existingAsset = {}, workGroups = [] } = {}) {
   const writes = [];
   const alerts = [];
   const audits = [];
@@ -28,6 +28,7 @@ function setup({ user = officer, create = true, update = true, existingFacility 
   const route = load("../app/api/import/assets/route.ts", {
     xlsx: XLSX,
     "@/lib/asset-details": loadTs("lib/asset-details.ts"),
+    "@/lib/asset-import-columns": loadTs("lib/asset-import-columns.ts"),
     "next/server": { NextResponse: Response },
     "next/cache": { revalidatePath: () => {} },
     "@/lib/asset-input": loadTs("lib/asset-input.ts"),
@@ -40,8 +41,13 @@ function setup({ user = officer, create = true, update = true, existingFacility 
     "@/lib/telegram": { notifyTelegramSafe: async (input) => alerts.push(input) },
     "@/lib/asset-status-history": { recordAssetStatusHistory: noop },
     "@/lib/windows-license": { isComputerDeviceType: () => false, WINDOWS_LICENSE_STATUS_VALUES: ["Genuine", "Pirated"] },
-    "@/lib/mysql": { selectRows: async (sql) => sql.includes("WHERE a.id = ?")
-      ? [{ id: 7, facility_id: existingFacility, current_status: "Active", asset_class: "IT", asset_category: "Hardware", asset_name: "Existing printer", ...existingAsset }] : [] },
+    "@/lib/mysql": { selectRows: async (sql) => {
+      if (sql.includes("WHERE a.id = ?")) {
+        return [{ id: 7, facility_id: existingFacility, current_status: "Active", asset_class: "IT", asset_category: "Hardware", asset_name: "Existing printer", ...existingAsset }];
+      }
+      if (sql.includes("facility_work_groups")) return workGroups;
+      return [];
+    } },
     "@/lib/assets": {
       findOrCreateSurvey: async (id) => { writes.push(["survey", id]); return 1; },
       createAsset: async (input) => { writes.push(["create", input]); return { insertId: 8 }; },
@@ -171,4 +177,47 @@ test("CSV specific fields preserve omissions, support explicit clear and reject 
   assert.equal(patches[0].subtypeId, undefined);
   assert.equal(patches[1].details.license_plate, "");
   assert.equal(patches[1].subtypeId, null);
+});
+
+const WORK_GROUPS = [
+  { id: 7, work_group_name: "งานธุรการ" },
+  { id: 9, work_group_name: "งานเทคโนโลยีสารสนเทศ" },
+];
+
+test("กรอก work_group_name แทน work_group_id ได้ (ไม่สนช่องว่าง/ตัวพิมพ์)", async () => {
+  const ctx = setup({ workGroups: WORK_GROUPS });
+  const { body } = await ctx.request({ csv: "asset_name,work_group_name\nเครื่องพิมพ์, งานธุรการ " });
+  assert.equal(body.created, 1, JSON.stringify(body.errors));
+  assert.equal(ctx.writes.find(([action]) => action === "create")[1].workGroupId, 7);
+});
+
+test("work_group_id ชนะเมื่อกรอกมาทั้งสองช่อง", async () => {
+  const ctx = setup({ workGroups: WORK_GROUPS });
+  const { body } = await ctx.request({ csv: "asset_name,work_group_id,work_group_name\nเครื่องพิมพ์,9,งานธุรการ" });
+  assert.equal(body.created, 1, JSON.stringify(body.errors));
+  assert.equal(ctx.writes.find(([action]) => action === "create")[1].workGroupId, 9);
+});
+
+test("ชื่อกลุ่มงานที่ไม่มีจริงถูกปฏิเสธ พร้อมบอกรายชื่อที่ใช้ได้", async () => {
+  const ctx = setup({ workGroups: WORK_GROUPS });
+  const { body } = await ctx.request({ csv: "asset_name,work_group_name\nเครื่องพิมพ์,กลุ่มงานที่ไม่มีจริง" });
+  assert.equal(body.created, 0);
+  assert.match(body.errors[0].message, /ไม่พบกลุ่มงานชื่อ/);
+  assert.match(body.errors[0].message, /งานธุรการ/);
+});
+
+test("หน่วยงานที่มีกลุ่มงานแต่ไม่กรอก ถูกปฏิเสธพร้อมบอกวิธีแก้", async () => {
+  const ctx = setup({ workGroups: WORK_GROUPS });
+  const { body } = await ctx.request({ csv: "asset_name\nเครื่องพิมพ์" });
+  assert.equal(body.created, 0);
+  assert.match(body.errors[0].message, /work_group_id หรือ work_group_name/);
+});
+
+test("รายงานคอลัมน์ที่ระบบไม่รู้จัก เพื่อไม่ให้ข้อมูลหายเงียบ ๆ", async () => {
+  const ctx = setup();
+  const { body } = await ctx.request({ csv: "asset_name,asset_nane,ราคา\nเครื่องพิมพ์,สะกดผิด,1000" });
+  assert.equal(body.created, 1);
+  assert.ok(body.unknownColumns.includes("asset_nane"));
+  assert.ok(body.unknownColumns.includes("ราคา"));
+  assert.ok(!body.unknownColumns.includes("asset_name"));
 });

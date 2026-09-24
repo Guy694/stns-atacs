@@ -1,17 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { assetClassLabel } from "@/lib/asset-classes";
+import { toCsv } from "@/lib/csv";
 import { fiscalYearOf, summarizeValuation, VALUATION_STATUS_LABELS } from "@/lib/asset-valuation";
 import { getCurrentUser } from "@/lib/auth";
 import { listAssets } from "@/lib/assets";
 import { resolveFacilityFilter } from "@/lib/facility-scope";
 import { hasPermission } from "@/lib/role-permissions";
 import { readRequestIp, recordSecurityEvent } from "@/lib/security";
-
-function escapeCsv(value: unknown) {
-  const text = String(value ?? "");
-  return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
-}
 
 /** Depreciation register (ทะเบียนค่าเสื่อมราคา) for one fiscal year, scoped like the reports page. */
 export async function GET(req: NextRequest) {
@@ -46,7 +42,8 @@ export async function GET(req: NextRequest) {
     valuation.status === "ok" ? valuation.accumulated.toFixed(2) : "", valuation.bookValue ?? "", valuation.status === "ok" ? valuation.fullyDepreciatedOn : "",
     VALUATION_STATUS_LABELS[valuation.status], report.asOf,
   ]);
-  const csv = `﻿${[header, ...rows].map(row => row.map(escapeCsv).join(",")).join("\r\n")}`;
+  // SEC-12: toCsv เติม ' นำหน้าค่าที่ Excel จะตีความเป็นสูตร
+  const csv = toCsv([header, ...rows]);
   return new NextResponse(csv, {
     status: 200,
     headers: { "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": `attachment; filename="atacs-depreciation-fy${fiscalYear}.csv"` },

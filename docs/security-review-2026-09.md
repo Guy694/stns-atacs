@@ -14,6 +14,8 @@
 > งานที่ยังต้องทำด้วยมือ: รัน `database/add_thaid_link_approval.sql`, ตรวจบัญชี seed ด้วย `database/check_seed_accounts.sql`,
 > ตั้งค่า `AGENT_API_BASE_ALLOWED_HOSTS` และเปลี่ยน `ATACS_AGENT_INSTALL_KEY` เป็นคีย์รายหน่วยงาน,
 > และลบไฟล์ที่รั่วออกจาก git history พร้อมเปลี่ยนรหัสผ่าน/ข้อมูลที่หลุด
+>
+> **อัปเดต 24 ก.ย. 2569:** แก้ SEC-12 (CSV formula injection) เพิ่มอีกหนึ่งข้อระหว่างทำงานรอบปรับปรุงระบบ
 
 ---
 
@@ -119,7 +121,8 @@
 - **แนวทางแก้:** ติดตั้ง SheetJS ≥ 0.20.3 จาก `https://cdn.sheetjs.com/` หรือเปลี่ยนเป็น `exceljs`; ตรวจ `file.size` (≤ 5MB); `XLSX.read(..., { sheetRows: 5001 })` และปฏิเสธถ้าเกิน; รับเฉพาะ CSV (parser CSV) กับ XLSX (ตรวจ magic bytes `PK`)
 - **หมายเหตุ:** โค้ดฝั่งเขียน Excel ใช้ `lib/xlsx-writer.ts` ของโปรเจกต์เอง ไม่ได้พึ่ง `xlsx`
 
-### SEC-12 ☐ CSV/Excel formula injection ในไฟล์ส่งออก CSV
+### SEC-12 ☑ CSV/Excel formula injection ในไฟล์ส่งออก CSV
+- **แก้แล้ว:** 24 กันยายน 2569 — รวมการ escape ไว้ที่ `lib/csv.ts` (`escapeCsvValue`/`toCsv`) เติม `'` นำหน้าค่าที่ขึ้นต้นด้วย = + - @ แท็บ CR และเปลี่ยนให้ export ครุภัณฑ์/audit/ค่าเสื่อมราคาใช้ตัวเดียวกันทั้งหมด
 - **ไฟล์:** `escapeCsv` ใน `app/api/export/assets/route.ts` ~96, `app/api/export/audit/route.ts` ~18, `app/api/export/valuation/route.ts` ~11
 - **ปัญหา:** ค่าที่ขึ้นต้นด้วย `=`, `+`, `-`, `@`, Tab, CR ถูกส่งออกตรง ๆ — ชื่อครุภัณฑ์ (หรือ hostname จาก Agent ผ่าน `lib/agent.ts` ~222) เช่น `=HYPERLINK(...)` จะทำงานเมื่อแอดมินเปิดใน Excel
 - **แนวทางแก้:** ถ้าค่า (หลัง trim ซ้าย) ขึ้นต้นด้วยอักขระดังกล่าว ให้เติม `'` นำหน้าแล้วใส่เครื่องหมายคำพูด; ทำเป็นฟังก์ชันกลางใช้ทุก export

@@ -1,3 +1,6 @@
+import { toCsv } from "@/lib/csv";
+import { IMPORT_COLUMNS, IMPORT_HEADERS, importSampleRow, REQUIREMENT_LABELS } from "@/lib/asset-import-columns";
+import { writeWorkbook, type Cell } from "@/lib/xlsx-writer";
 import { DETAIL_COLUMNS } from "@/lib/asset-details";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -10,104 +13,87 @@ import { resolveFacilityFilter } from "@/lib/facility-scope";
 import { hasPermission } from "@/lib/role-permissions";
 import { readRequestIp, recordSecurityEvent } from "@/lib/security";
 
-const IMPORT_HEADERS = [
-  "id",
-  "work_group_id",
-  "asset_registration_no",
-  "asset_name",
-  "asset_class",
-  "asset_category",
-  "asset_group",
-  "device_type",
-  "manufacturer_brand",
-  "manufacturer_model",
-  "manufacturer_specification",
-  "serial_number",
-  "operating_system",
-  "operating_system_version",
-  "windows_license_status",
-  "private_ip",
-  "public_ip",
-  "owner_name",
-  "location_detail",
-  "current_status",
-  "purchase_price",
-  "purchase_date",
-  "purchase_order_no",
-  "maintenance_start_date",
-  "maintenance_end_date",
-  "installed_at",
-  "usage_description",
-  "subtype_id",
-  ...DETAIL_COLUMNS,
-  // Appended last so column positions used by older import files stay unchanged.
-  "useful_life_years",
-  "asset_code_prefix",
-  "asset_accounting_code",
-  "funding_source",
-  "acquisition_method",
-  "vendor_name",
-  "warranty_end_date",
-  "unit_name",
-];
 
-const IMPORT_SAMPLE_ROWS = [
-  [
-    "",
-    "",
-    "COM-2569-0001",
-    "คอมพิวเตอร์ตั้งโต๊ะตัวอย่าง",
-    "IT",
-    "Hardware",
-    "Computer",
-    "Desktop",
-    "Example Brand",
-    "Example Model",
-    "CPU i5 / RAM 16 GB / SSD 512 GB",
-    "EXAMPLE-SN-001",
-    "Windows",
-    "11 Pro",
-    "Genuine",
-    "192.168.1.10",
-    "",
-    "นายตัวอย่าง เจ้าหน้าที่",
-    "ห้องธุรการ ชั้น 1",
-    "Active",
-    "24500",
-    "2026-01-15",
-    "PO-2569-001",
-    "2026-01-15",
-    "2029-01-14",
-    "2026-01-20",
-    "สำหรับงานธุรการ",
-    "",
-    ...DETAIL_COLUMNS.map(() => ""),
-    "",
-    "สสจ.",
-    "110000490204",
-    "Budget",
-    "EMarket",
-    "บริษัท ตัวอย่าง จำกัด",
-    "2029-01-14",
-    "เครื่อง",
-  ],
-];
-
-function escapeCsv(value: unknown) {
-  const text = String(value ?? "");
-  if (text.includes(",") || text.includes('"') || text.includes("\n")) {
-    return `"${text.replace(/"/g, '""')}"`;
-  }
-  return text;
-}
 
 function csvResponse(rows: unknown[][], filename: string) {
-  const csv = `\ufeff${rows.map((row) => row.map(escapeCsv).join(",")).join("\r\n")}`;
+  // SEC-12: toCsv เติม ' นำหน้าค่าที่ Excel จะตีความเป็นสูตร
+  const csv = toCsv(rows);
   return new NextResponse(csv, {
     status: 200,
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
       "Content-Disposition": `attachment; filename="${filename}"`,
+    },
+  });
+}
+
+
+/** แถวตัวอย่างในไฟล์ต้นแบบ — ใช้ค่า example จากคำอธิบายคอลัมน์ เพื่อให้เอกสารกับไฟล์ตรงกันเสมอ */
+const IMPORT_SAMPLE_ROWS = [
+  importSampleRow({
+    ...Object.fromEntries(IMPORT_COLUMNS.map((column) => [column.column, column.example])),
+    // รหัสกลุ่มงานต่างกันในแต่ละหน่วยงาน จึงเว้นว่างในแถวตัวอย่าง (ดูรหัสจริงได้ที่หน้าจอนำเข้าข้อมูล)
+    work_group_id: "",
+    work_group_name: "",
+  }),
+];
+
+/**
+ * ไฟล์ Excel ต้นแบบ 2 ชีต
+ *   1) "ข้อมูล"           หัวคอลัมน์ + แถวตัวอย่าง (ลบแถวตัวอย่างออกก่อนนำเข้าจริง)
+ *   2) "คำอธิบายคอลัมน์"  ความหมาย ความจำเป็น รูปแบบ ค่าที่อนุญาต และตัวอย่างของทุกคอลัมน์
+ */
+function templateWorkbookResponse() {
+  const header = { bold: true, size: 10, border: true, fill: "D9E1F2", h: "center" as const, wrap: true };
+  const text = { size: 10, border: true, v: "top" as const };
+  const wrap = { ...text, wrap: true };
+
+  const dataSheet: Cell[][] = [
+    IMPORT_HEADERS.map((column) => ({ v: column, s: header })),
+    IMPORT_SAMPLE_ROWS[0].map((value) => ({ v: value, s: text })),
+  ];
+
+  const docRows: Cell[][] = [
+    [{ v: "คำอธิบายคอลัมน์ไฟล์นำเข้าทรัพย์สิน (ATACS)", s: { bold: true, size: 13 } }],
+    [{ v: "กรอกข้อมูลในชีต “ข้อมูล” · ห้ามแก้ชื่อหัวคอลัมน์ · ลบแถวตัวอย่างออกก่อนนำเข้าจริง · วันที่ทุกช่องใช้ ค.ศ. รูปแบบ YYYY-MM-DD", s: { size: 10 } }],
+    [{ v: "ตอนแก้ไขข้อมูลเดิม ให้ส่งออกข้อมูลปัจจุบันจากระบบมาแก้แล้วนำเข้ากลับ (คอลัมน์ id จะถูกใช้ระบุรายการ)", s: { size: 10 } }],
+    [null],
+    [
+      { v: "คอลัมน์", s: header },
+      { v: "ความหมาย", s: header },
+      { v: "ความจำเป็น", s: header },
+      { v: "รูปแบบ", s: header },
+      { v: "ค่าที่อนุญาต", s: header },
+      { v: "ตัวอย่าง", s: header },
+      { v: "หมายเหตุ", s: header },
+    ],
+    ...IMPORT_COLUMNS.map((column) => [
+      { v: column.column, s: text },
+      { v: column.label, s: wrap },
+      { v: REQUIREMENT_LABELS[column.requirement], s: text },
+      { v: column.format, s: wrap },
+      { v: column.allowed ?? "", s: wrap },
+      { v: column.example, s: wrap },
+      { v: column.note ?? "", s: wrap },
+    ]),
+  ];
+
+  const buffer = writeWorkbook([
+    { name: "ข้อมูล", rows: dataSheet, freezeRows: 1, cols: IMPORT_HEADERS.map(() => 22) },
+    {
+      name: "คำอธิบายคอลัมน์",
+      rows: docRows,
+      freezeRows: 5,
+      cols: [26, 30, 14, 24, 52, 24, 60],
+      merges: ["A1:G1", "A2:G2", "A3:G3"],
+    },
+  ]);
+
+  return new NextResponse(new Uint8Array(buffer), {
+    status: 200,
+    headers: {
+      "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "Content-Disposition": 'attachment; filename="atacs-assets-import-template.xlsx"',
     },
   });
 }
@@ -140,6 +126,9 @@ export async function GET(req: NextRequest) {
   const template = searchParams.get("template");
   if (template === "csv" || template === "1") {
     return csvResponse([IMPORT_HEADERS, ...IMPORT_SAMPLE_ROWS], "atacs-assets-import-example.csv");
+  }
+  if (template === "xlsx") {
+    return templateWorkbookResponse();
   }
 
   const requestedFacilityId = searchParams.get("facilityId") ? Number(searchParams.get("facilityId")) : undefined;
@@ -195,6 +184,7 @@ export async function GET(req: NextRequest) {
     asset.vendorName,
     asset.warrantyEndDate,
     asset.unitName,
+    asset.workGroupName ?? "",
   ]);
 
   const today = new Date().toISOString().slice(0, 10);

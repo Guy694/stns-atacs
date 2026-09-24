@@ -17,6 +17,7 @@ import { getAssetById, listAllFacilitiesForSelect } from "@/lib/assets";
 import { listFacilityWorkGroups } from "@/lib/facility-work-groups";
 import { listActiveDeviceTypes } from "@/lib/device-types";
 import { AssetFormModal } from "@/app/(main)/assets/_components/asset-form-modal";
+import { listAssetLocations } from "@/lib/asset-locations";
 import { DeleteAssetButton } from "@/app/(main)/assets/_components/delete-asset-button";
 import { QrDownloadButton } from "@/app/(main)/assets/_components/print-button";
 import { getAgentDeviceByLinkedAssetId, type AgentDevice } from "@/lib/agent";
@@ -31,7 +32,8 @@ import { isTerminalAssetStatus } from "@/lib/asset-status";
 import { listAssetTransfers } from "@/lib/asset-transfers";
 import { depreciationSchedule, fiscalYearOf, valueAsset } from "@/lib/asset-valuation";
 import { DISPOSAL_REQUEST_TYPE_LABELS } from "@/lib/disposal-options";
-import { DisposalHistorySection, RepairHistorySection, TransferHistorySection, ValuationSection } from "./_components/lifecycle-sections";
+import { AuditHistorySection, DisposalHistorySection, RepairHistorySection, TransferHistorySection, ValuationSection } from "./_components/lifecycle-sections";
+import { listAuditLogs, type AuditLog } from "@/lib/audit";
 import { InspectionCheckIn } from "./_components/inspection-check-in";
 import { listOpenInspectionsForAsset } from "@/lib/inspection";
 
@@ -163,10 +165,15 @@ export default async function AssetDetailPage({ params, searchParams }: Props) {
     listActiveDeviceTypes(),
     getAgentDeviceByLinkedAssetId(numId),
   ]);
+  // ประวัติการแก้ไขของครุภัณฑ์ชิ้นนี้ — ไม่ให้ล้มทั้งหน้าถ้ายังไม่มีตาราง audit_logs
+  const assetAuditHistory = await listAuditLogs({ entity: "information_assets", entityId: numId, limit: 30 })
+    .then((rows) => ({ rows, schemaReady: true }))
+    .catch(() => ({ rows: [] as AuditLog[], schemaReady: false }));
   if (!asset) notFound();
   if (!canAccessAssetFacility(user, asset.facilityId)) {
     redirect(user.facilityId ? "/facilities" : "/profile");
   }
+  const assetLocations = await listAssetLocations(asset.facilityId);
   const isIt = isItAsset(asset);
   const requestHeaders = await headers();
   const host = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host") ?? "";
@@ -280,6 +287,7 @@ export default async function AssetDetailPage({ params, searchParams }: Props) {
               facilities={user.role === "admin" ? facilitiesForSelect : facilitiesForSelect.filter((facility) => facility.id === asset.facilityId)}
               deviceTypes={deviceTypes}
               workGroups={user.role === "admin" ? workGroups : workGroups.filter((group) => group.facilityId === asset.facilityId)}
+              locations={assetLocations}
               updaterName={user.fullName}
               mode="edit"
               asset={asset}
@@ -465,6 +473,7 @@ export default async function AssetDetailPage({ params, searchParams }: Props) {
           <TransferHistorySection rows={transfers.rows} schemaReady={transfers.schemaReady} />
           {canViewRepairs && <RepairHistorySection rows={repairs.rows} schemaReady={repairs.schemaReady} />}
           <DisposalHistorySection rows={disposals.rows} />
+          <AuditHistorySection rows={assetAuditHistory.rows} schemaReady={assetAuditHistory.schemaReady} />
 
           {/* การดำเนินการด่วน */}
           <div className="glass-panel rounded-2xl p-5">

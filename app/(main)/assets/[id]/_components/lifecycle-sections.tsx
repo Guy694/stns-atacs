@@ -8,6 +8,7 @@ import { VALUATION_STATUS_LABELS, type ScheduleRow, type Valuation } from "@/lib
 import { formatThaiDate } from "@/lib/date-format";
 import { DISPOSAL_REQUEST_TYPE_LABELS, DISPOSAL_STATUS_LABELS, DISPOSAL_STATUS_TONES, disposalMethodLabel } from "@/lib/disposal-options";
 import { REPAIR_STATUS_LABELS, REPAIR_STATUS_TONES } from "@/lib/repair-options";
+import type { AuditLog } from "@/lib/audit";
 
 const baht = (value: number | null | undefined) => (value === null || value === undefined ? "-" : value.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
 const heading = "text-sm font-semibold uppercase tracking-[0.2em] text-[var(--muted)]";
@@ -160,6 +161,60 @@ export function DisposalHistorySection({ rows }: { rows: DisposalRequest[] }) {
           </li>
         ))}
       </ul>
+    </section>
+  );
+}
+
+const AUDIT_ACTION_LABEL: Record<string, string> = {
+  create: "สร้าง",
+  update: "แก้ไข",
+  delete: "ลบ",
+  transfer: "โอนย้าย",
+  dispose: "จำหน่าย/ชำรุด",
+  inspect: "ตรวจนับ",
+};
+
+const AUDIT_ACTION_TONE: Record<string, "success" | "info" | "danger" | "warning" | "neutral"> = {
+  create: "success",
+  update: "info",
+  delete: "danger",
+  transfer: "warning",
+  dispose: "warning",
+  inspect: "neutral",
+};
+
+/**
+ * ประวัติการเปลี่ยนแปลงของครุภัณฑ์ชิ้นนี้ (จาก audit_logs)
+ * ผู้ตรวจสอบมักขอดูว่าใครแก้อะไรเมื่อไร จึงแสดงไว้ในหน้ารายละเอียดโดยตรง
+ */
+export function AuditHistorySection({ rows, schemaReady = true }: { rows: AuditLog[]; schemaReady?: boolean }) {
+  return (
+    <section className="glass-panel rounded-2xl p-5" aria-labelledby="audit-history-heading">
+      <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
+        <h2 id="audit-history-heading" className={heading}>ประวัติการแก้ไขข้อมูล</h2>
+        <span className="text-xs text-[var(--muted)]">{rows.length > 0 ? `${rows.length} รายการล่าสุด` : ""}</span>
+      </div>
+      {!schemaReady ? (
+        <p className="text-sm text-[var(--muted)]">ยังไม่ได้เปิดใช้ (ต้องมีตาราง audit_logs)</p>
+      ) : rows.length === 0 ? (
+        <p className="text-sm text-[var(--muted)]">ยังไม่มีการแก้ไขที่บันทึกไว้สำหรับครุภัณฑ์นี้</p>
+      ) : (
+        <ol className="space-y-3">
+          {rows.map((row) => (
+            <li key={row.id} className="flex flex-wrap items-start gap-x-3 gap-y-1 border-b border-[var(--line)] pb-3 last:border-0 last:pb-0">
+              <StatusBadge tone={AUDIT_ACTION_TONE[row.action] ?? "neutral"}>
+                {AUDIT_ACTION_LABEL[row.action] ?? row.action}
+              </StatusBadge>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm">{row.summary || "-"}</p>
+                <p className="mt-0.5 text-xs text-[var(--muted)]">
+                  {row.userName || "ไม่ทราบผู้ใช้"} · {row.createdAt}
+                </p>
+              </div>
+            </li>
+          ))}
+        </ol>
+      )}
     </section>
   );
 }

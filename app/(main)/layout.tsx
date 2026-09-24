@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { MainNavbar } from "@/app/_components/main-navbar";
 import { Sidebar } from "@/app/_components/sidebar";
 import { IdleLogoutGuard } from "@/app/_components/idle-logout-guard";
+import { SchemaWarningBanner } from "@/app/_components/schema-warning-banner";
 import { SplashScreen } from "@/app/_components/splash-screen";
 import { SPLASH_SEEN_SCRIPT } from "@/lib/splash";
 import { getMenuVisibility } from "@/lib/app-settings";
@@ -56,6 +57,7 @@ export default async function MainLayout({ children }: { children: React.ReactNo
         <MainNavbar user={user} />
         {/* Mobile top padding to not overlap hamburger */}
         <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+          <SchemaWarningBanner canManageSystem={user.role === "admin"} />
           {children}
         </main>
         <footer className="px-4 pb-6 sm:px-6 lg:px-8">

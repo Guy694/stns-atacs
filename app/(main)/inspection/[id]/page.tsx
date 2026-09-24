@@ -289,9 +289,18 @@ export default async function InspectionDetailPage({ params, searchParams }: Ins
               {closed ? "ข้อมูล ณ เวลาปิดรอบ" : "ฉบับร่าง — ปิดรอบก่อนพิมพ์รายงานฉบับจริง"} · สรุปตามประเภทและผลตรวจ พร้อมรายการที่เสนอจำหน่าย/สอบข้อเท็จจริง และช่องลงนามคณะกรรมการ{report.moved.length ? <span className="font-semibold text-amber-800"> · พบต่างจากกลุ่มงาน/ที่ตั้งในทะเบียน {report.moved.length.toLocaleString("th-TH")} รายการ</span> : null}
             </p>
           </div>
-          <a href={`/api/export/inspection/${inspection.id}?type=report`} className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl border border-[var(--primary-soft-strong)] bg-[var(--primary-soft)] px-4 text-sm font-semibold text-[var(--primary-text)] hover:bg-[var(--primary-soft-strong)]">
-            <AppIcon name="download" className="h-4 w-4" /> รายงานผล Excel{closed ? "" : " (ร่าง)"}
-          </a>
+          <div className="flex flex-wrap gap-2">
+            <a href={`/api/export/inspection/${inspection.id}?type=report`} className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl border border-[var(--primary-soft-strong)] bg-[var(--primary-soft)] px-4 text-sm font-semibold text-[var(--primary-text)] hover:bg-[var(--primary-soft-strong)]">
+              <AppIcon name="download" className="h-4 w-4" /> รายงานผล Excel{closed ? "" : " (ร่าง)"}
+            </a>
+            {/* ใบตรวจสอบพัสดุประจำปี (A4 แนวนอน) พร้อมช่องลงนามจากคณะกรรมการของรอบนี้ */}
+            <a
+              href={`/print/assets/audit?facility=${inspection.facilityId}${inspection.workGroupId ? `&workGroup=${inspection.workGroupId}` : ""}&inspection=${inspection.id}`}
+              className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl border border-[var(--line)] bg-white px-4 text-sm font-semibold text-[var(--foreground)] hover:bg-[var(--primary-soft)]"
+            >
+              <AppIcon name="printer" className="h-4 w-4" /> ใบตรวจสอบพัสดุประจำปี (PDF)
+            </a>
+          </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[820px] text-sm">

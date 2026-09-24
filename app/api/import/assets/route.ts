@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import type { RowDataPacket } from "mysql2/promise";
 
+import { IMPORT_HEADERS } from "@/lib/asset-import-columns";
 import { parseAssetFields, type AssetFields, type ExistingAssetFields } from "@/lib/asset-input";
 import { isItAsset, parseAssetClass } from "@/lib/asset-policy";
 import { writeAuditLog } from "@/lib/audit";
@@ -41,6 +42,10 @@ function cell(row: ImportRow, key: string) {
 function optionalCell(row: ImportRow, key: string) {
   const value = cell(row, key);
   return value === "" ? undefined : value;
+}
+
+function normalizeWorkGroupName(value: string) {
+  return value.trim().toLowerCase().replace(/\s+/g, "");
 }
 
 function parsePositiveId(value: string, fieldLabel: string) {
@@ -198,14 +203,22 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "ไม่พบข้อมูลในไฟล์" }, { status: 400 });
   }
   if (!Object.keys(rows[0]).includes("asset_name")) {
-    return NextResponse.json({ error: "ไม่พบคอลัมน์ asset_name กรุณาใช้ไฟล์ตัวอย่างของระบบ" }, { status: 400 });
+    return NextResponse.json({ error: "ไม่พบคอลัมน์ asset_name กรุณาใช้ไฟล์ต้นแบบของระบบ (ดาวน์โหลดได้จากหน้าจอนำเข้าข้อมูล)" }, { status: 400 });
   }
+  // เตือนคอลัมน์ที่สะกดไม่ตรงกับที่ระบบรู้จัก จะได้ไม่เงียบหายไปโดยผู้ใช้ไม่รู้ตัว
+  const knownColumns = new Set<string>([...IMPORT_HEADERS, "id", "work_group_id", "work_group_name", "subtype_id"]);
+  const unknownColumns = Object.keys(rows[0]).filter((column) => column && !knownColumns.has(column));
 
-  const activeWorkGroups = await selectRows<RowDataPacket & { id: number }>(
-    "SELECT id FROM facility_work_groups WHERE facility_id = ? AND is_active = 1",
+  const activeWorkGroups = await selectRows<RowDataPacket & { id: number; work_group_name: string }>(
+    "SELECT id, work_group_name FROM facility_work_groups WHERE facility_id = ? AND is_active = 1",
     [facilityId]
   );
   const activeWorkGroupIds = new Set(activeWorkGroups.map((workGroup) => Number(workGroup.id)));
+  /** รองรับการกรอก work_group_name แทน work_group_id (เทียบแบบไม่สนตัวพิมพ์และช่องว่าง) */
+  const workGroupIdByName = new Map(
+    activeWorkGroups.map((workGroup) => [normalizeWorkGroupName(workGroup.work_group_name), Number(workGroup.id)])
+  );
+  const workGroupNameList = activeWorkGroups.map((workGroup) => workGroup.work_group_name).join(", ");
   const surveyId = await findOrCreateSurvey(facilityId);
   let created = 0;
   let updated = 0;
@@ -231,8 +244,22 @@ export async function POST(req: NextRequest) {
         if (Number(existingAsset.facility_id) !== facilityId) throw new Error("id นี้ไม่ได้อยู่ในหน่วยบริการที่เลือก");
         if (!canManageAssetRecord(user, existingAsset.facility_id)) throw new Error("คุณไม่มีสิทธิ์แก้ไขครุภัณฑ์รายการนี้");
       } else if (!canCreate) throw new Error("บัญชีนี้ไม่มีสิทธิ์เพิ่มทรัพย์สิน");
-      const workGroupId = parsePositiveId(cell(row, "work_group_id"), "work_group_id") ?? existingAsset?.work_group_id ?? undefined;
-      if (activeWorkGroupIds.size > 0 && !workGroupId) throw new Error("หน่วยบริการนี้ต้องระบุ work_group_id");
+      const workGroupName = cell(row, "work_group_name");
+      let workGroupIdFromName: number | undefined;
+      if (workGroupName) {
+        workGroupIdFromName = workGroupIdByName.get(normalizeWorkGroupName(workGroupName));
+        if (!workGroupIdFromName) {
+          throw new Error(`ไม่พบกลุ่มงานชื่อ "${workGroupName}" ในหน่วยบริการที่เลือก (กลุ่มงานที่เปิดใช้งาน: ${workGroupNameList || "ยังไม่มี"})`);
+        }
+      }
+      const workGroupId =
+        parsePositiveId(cell(row, "work_group_id"), "work_group_id")
+        ?? workGroupIdFromName
+        ?? existingAsset?.work_group_id
+        ?? undefined;
+      if (activeWorkGroupIds.size > 0 && !workGroupId) {
+        throw new Error(`หน่วยบริการนี้ต้องระบุกลุ่มงาน กรอก work_group_id หรือ work_group_name (กลุ่มงานที่เปิดใช้งาน: ${workGroupNameList})`);
+      }
       if (workGroupId && !activeWorkGroupIds.has(workGroupId)) throw new Error("work_group_id ไม่อยู่ในหน่วยบริการที่เลือกหรือถูกปิดใช้งาน");
       const input = buildInput(row, surveyId, workGroupId, user.fullName, existingAsset);
       if (assetId && existingAsset) {
@@ -309,5 +336,5 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  return NextResponse.json({ created, updated, skipped, errors: errors.slice(0, 30) });
+  return NextResponse.json({ created, updated, skipped, errors: errors.slice(0, 30), unknownColumns });
 }

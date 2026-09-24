@@ -3,7 +3,7 @@ import "server-only";
 import { formatThaiDateTime } from "@/lib/date-format";
 import { executeStatement } from "@/lib/mysql";
 
-export type TelegramAlertCategory = "security" | "registration" | "data" | "agent" | "lifecycle";
+export type TelegramAlertCategory = "security" | "registration" | "data" | "agent" | "lifecycle" | "error";
 
 type TelegramAlertInput = {
   category: TelegramAlertCategory;
@@ -18,6 +18,7 @@ const CATEGORY_META: Record<TelegramAlertCategory, { icon: string; label: string
   data: { icon: "📝", label: "บันทึกข้อมูล", level: "กิจกรรมระบบ" },
   agent: { icon: "🖥️", label: "ATACS Agent", level: "สถานะอุปกรณ์" },
   lifecycle: { icon: "📦", label: "งานทะเบียนครุภัณฑ์", level: "ติดตามการดำเนินงาน" },
+  error: { icon: "💥", label: "ข้อผิดพลาดของระบบ", level: "ตรวจสอบเมื่อสะดวก" },
 };
 
 function escapeHtml(value: unknown) {

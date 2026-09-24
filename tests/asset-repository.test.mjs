@@ -56,3 +56,43 @@ test("Hardware/Software filters always constrain IT and SQL values remain parame
   assert.ok(reads[0].values.includes("Office"));
   assert.deepEqual(Array.from(reads[0].values.slice(-2)), [25, 25]);
 });
+
+test("ช่องวันที่/ตัวเลขที่เว้นว่างตอนสร้างใหม่ ต้องบันทึกเป็น NULL ไม่ใช่ค่าว่าง", async () => {
+  // ฟอร์มและไฟล์นำเข้าส่งค่าว่างมาเป็น "" ซึ่ง MySQL ปฏิเสธในคอลัมน์ DATE
+  // (Incorrect date value: '' for column 'maintenance_start_date')
+  const { repository, writes } = setup();
+  await repository.createAsset({
+    surveyId: 1,
+    assetName: "เครื่องคอมพิวเตอร์",
+    assetCategory: "Hardware",
+    assetClass: "IT",
+    maintenanceStartDate: "",
+    maintenanceEndDate: "",
+    purchaseDate: "",
+    installedAt: "",
+    purchasePrice: "",
+    workGroupId: "",
+    locationDetail: "",
+  });
+  const insert = writes.find((write) => write.sql.includes("INSERT INTO information_assets"));
+  assert.ok(insert, "ต้องมีคำสั่ง INSERT");
+  assert.ok(!Array.from(insert.values).includes(""), `พบค่าว่างในคำสั่ง INSERT: ${JSON.stringify(Array.from(insert.values))}`);
+});
+
+test("ค่าที่กรอกจริงตอนสร้างใหม่ยังถูกบันทึกตามเดิม", async () => {
+  const { repository, writes } = setup();
+  await repository.createAsset({
+    surveyId: 1,
+    assetName: "เครื่องคอมพิวเตอร์",
+    assetCategory: "Hardware",
+    assetClass: "IT",
+    maintenanceStartDate: "2026-01-15",
+    purchasePrice: 24000,
+    currentStatus: "Broken",
+  });
+  const insert = writes.find((write) => write.sql.includes("INSERT INTO information_assets"));
+  const values = Array.from(insert.values);
+  assert.ok(values.includes("2026-01-15"));
+  assert.ok(values.includes(24000));
+  assert.ok(values.includes("Broken"));
+});

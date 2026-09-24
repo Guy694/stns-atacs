@@ -1,4 +1,4 @@
-ATACS database check · 2026-09-23T02:28:10.318Z
+ATACS database check · 2026-09-24T04:03:43.620Z
 Server: 8.0.44 (MySQL) · database: stn_atacs
 Charset: utf8mb4 / utf8mb4_general_ci
 
@@ -12,9 +12,12 @@ Charset: utf8mb4 / utf8mb4_general_ci
   [OK]   add_asset_extensions.sql
   [OK]   add_asset_lifecycle.sql
   [OK]   add_asset_codes_and_inspection_committee.sql
-  [OK]   add_inspection_close.sql
-  [OK]   add_inspection_found_location.sql
-  [OK]   add_registry_completeness.sql
+  [ขาด] add_inspection_close.sql: asset_inspections.round_status, asset_inspections.closed_at, asset_inspections.closed_by
+  [ขาด] add_inspection_found_location.sql: asset_inspection_items.found_work_group_id, asset_inspection_items.found_location, asset_inspection_items.registered_work_group_id
+  [ขาด] add_registry_completeness.sql: ตาราง asset_loans, information_assets.funding_source, information_assets.acquisition_method, information_assets.vendor_name, information_assets.warranty_end_date, information_assets.unit_name, asset_inspections.committee_order_no, asset_inspections.committee_order_date, asset_disposal_requests.fact_finding_note, asset_disposal_requests.executed_on, asset_disposal_requests.execution_document_no, asset_disposal_requests.execution_note, asset_disposal_requests.executed_by_user_id, asset_disposal_requests.executed_by, asset_disposal_requests.executed_recorded_at
+  [OK]   add_thaid_cid_encryption.sql
+  [ขาด] add_thaid_link_approval.sql (SEC-04): users.thaid_link_enabled, users.thaid_link_expected_hash
+  [OK]   agent_inventory.sql
 
 2) จำนวนข้อมูล
   health_facilities            74
@@ -25,9 +28,9 @@ Charset: utf8mb4 / utf8mb4_general_ci
   asset_transfers              0
   asset_disposal_requests      0
   asset_repairs                0
-  asset_loans                  0
+  asset_loans                  (ไม่มีตาราง)
   asset_status_history         508
-  audit_logs                   619
+  audit_logs                   613
   users                        38
 
 3) ความถูกต้องของข้อมูล (อ่านอย่างเดียว)
@@ -42,17 +45,13 @@ Charset: utf8mb4 / utf8mb4_general_ci
   [OK]   กลุ่มงานของครุภัณฑ์ไม่อยู่ในหน่วยงานเดียวกัน
   [OK]   รายการตรวจนับที่ครุภัณฑ์ถูกลบไปแล้ว
   [OK]   รายการตรวจนับที่รอบถูกลบไปแล้ว
-  [OK]   สถานะรอบตรวจนับไม่ถูกต้อง
   [OK]   รอบตรวจนับที่มีประธานกรรมการมากกว่า 1 คน
   [OK]   ครุภัณฑ์ที่มีคำขอจำหน่ายรออนุมัติมากกว่า 1 คำขอ
   [OK]   สถานะจำหน่าย/สูญหายที่ไม่มีคำขออนุมัติ (ข้อมูลก่อนมีระบบอนุมัติ)
   [OK]   คำขอที่อนุมัติแล้วแต่ครุภัณฑ์ไม่อยู่ในสถานะจำหน่าย/สูญหาย
   [OK]   ผู้เสนออนุมัติคำขอของตนเอง
-  [OK]   อนุมัติจำหน่ายแล้วแต่ยังไม่บันทึกผลการจำหน่าย
   [OK]   ครุภัณฑ์ที่มีงานซ่อมเปิดอยู่มากกว่า 1 งาน
   [OK]   งานซ่อมเปิดอยู่ของครุภัณฑ์ที่จำหน่าย/สูญหายแล้ว
-  [OK]   ครุภัณฑ์ที่ถูกยืมอยู่มากกว่า 1 รายการ
-  [OK]   การยืมที่เกินกำหนดคืน
   [OK]   ประวัติโอนย้ายที่หน่วยงานปลายทางไม่ตรงกับหน่วยงานปัจจุบัน (โอนล่าสุด)
 
 4) Foreign key ที่ระบบใช้
@@ -62,8 +61,7 @@ Charset: utf8mb4 / utf8mb4_general_ci
   [OK]   asset_disposal_requests → information_assets
   [OK]   asset_repairs → information_assets
   [OK]   asset_transfers → information_assets
-  [OK]   asset_loans → information_assets
   [OK]   asset_inspection_committee → asset_inspections
 
-สรุป: migration ครบทุกไฟล์
+สรุป: ยังต้องรัน 4 ไฟล์ตามลำดับ → add_inspection_close.sql → add_inspection_found_location.sql → add_registry_completeness.sql → add_thaid_link_approval.sql (SEC-04)
 ขั้นก่อนรัน migration: สำรองฐานข้อมูล (phpMyAdmin → Export หรือ mysqldump) และเปิดดูว่าไฟล์สำรองไม่ใช่ 0 ไบต์

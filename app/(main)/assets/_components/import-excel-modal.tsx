@@ -13,6 +13,8 @@ type ImportResult = {
   updated: number;
   skipped: number;
   errors: Array<{ row: number; message: string }>;
+  /** คอลัมน์ในไฟล์ที่ระบบไม่รู้จัก (สะกดผิดหรือเพิ่มเอง) — ข้อมูลในคอลัมน์เหล่านี้จะไม่ถูกนำเข้า */
+  unknownColumns?: string[];
 };
 
 type ImportFacility = { id: number; name: string; district_name: string | null };
@@ -158,7 +160,11 @@ export default function ImportExcelModal({
                   <section aria-live="polite" className="overflow-hidden rounded-xl border border-amber-200 bg-amber-50">
                     <div className="border-b border-amber-200 px-4 py-3">
                       <p className="text-sm font-bold text-amber-950">Work Group ของ {selectedFacility?.name ?? "หน่วยบริการที่เลือก"}</p>
-                      <p className="mt-1 text-xs leading-5 text-amber-900">ใช้ตัวเลขในคอลัมน์ <code className="rounded bg-white px-1 py-0.5">work_group_id</code> ของไฟล์ CSV เฉพาะเมื่อหน่วยบริการนี้มีกลุ่มงาน</p>
+                      <p className="mt-1 text-xs leading-5 text-amber-900">
+                        กรอกตัวเลขในคอลัมน์ <code className="rounded bg-white px-1 py-0.5">work_group_id</code>
+                        {" "}หรือพิมพ์ชื่อกลุ่มงานในคอลัมน์ <code className="rounded bg-white px-1 py-0.5">work_group_name</code> ก็ได้
+                        {" "}(จำเป็นเฉพาะหน่วยบริการที่มีกลุ่มงาน)
+                      </p>
                     </div>
                     {selectedWorkGroups.length > 0 ? (
                       <div className="max-h-44 overflow-y-auto bg-white">
@@ -200,16 +206,27 @@ export default function ImportExcelModal({
                     className="w-full text-sm"
                   />
                   <p className="text-xs leading-5" style={{ color: "var(--muted)" }}>
-                    คอลัมน์สำคัญ: id, work_group_id, asset_registration_no, asset_name, asset_class, asset_category, device_type, serial_number และข้อมูลรายละเอียดอื่น ๆ ตามไฟล์ตัวอย่าง
+                    ช่องที่ขาดไม่ได้มีเพียง <code className="rounded bg-stone-100 px-1 py-0.5">asset_name</code> ·
+                    เว้น <code className="rounded bg-stone-100 px-1 py-0.5">id</code> ว่าง = เพิ่มรายการใหม่, ใส่ id = แก้ไขรายการเดิม ·
+                    วันที่ใช้ ค.ศ. รูปแบบ YYYY-MM-DD · ราคาไม่ต้องใส่คอมมา ·
+                    คำอธิบายครบทุกคอลัมน์อยู่ในชีต “คำอธิบายคอลัมน์” ของไฟล์ Excel ต้นแบบ และในคู่มือด้านล่าง
                   </p>
                 </div>
 
                 <div className="flex flex-wrap gap-x-4 gap-y-2 text-xs font-semibold">
-                  <a href="/api/export/assets?template=csv" className="inline-flex items-center gap-1.5" style={{ color: "var(--accent)" }}>
-                    <AppIcon name="download" className="h-3.5 w-3.5" /> ดาวน์โหลดไฟล์ CSV ตัวอย่าง
+                  <a href="/api/export/assets?template=xlsx" className="inline-flex items-center gap-1.5" style={{ color: "var(--accent)" }}>
+                    <AppIcon name="download" className="h-3.5 w-3.5" /> ไฟล์ Excel ต้นแบบ (มีคำอธิบายคอลัมน์)
                   </a>
+                  <a href="/api/export/assets?template=csv" className="inline-flex items-center gap-1.5" style={{ color: "var(--accent)" }}>
+                    <AppIcon name="download" className="h-3.5 w-3.5" /> ไฟล์ CSV ตัวอย่าง
+                  </a>
+                  {selectedFacility && (
+                    <a href={`/api/export/assets?facilityId=${selectedFacility.id}`} className="inline-flex items-center gap-1.5" style={{ color: "var(--accent)" }}>
+                      <AppIcon name="download" className="h-3.5 w-3.5" /> ส่งออกข้อมูลเดิมของหน่วยงานนี้ (ใช้แก้ไขแล้วนำเข้ากลับ)
+                    </a>
+                  )}
                   <Link href="/assets/import-guide" className="inline-flex items-center gap-1.5" style={{ color: "var(--accent)" }}>
-                    อ่านคู่มือการนำเข้าและการใช้ id
+                    อ่านคู่มือและคำอธิบายคอลัมน์ทั้งหมด
                   </Link>
                 </div>
 
@@ -243,6 +260,14 @@ export default function ImportExcelModal({
                     <p className="rounded-lg bg-white px-2 py-2 text-amber-700">ข้าม<br /><strong>{result.skipped}</strong> รายการ</p>
                   </div>
                 </div>
+                {(result.unknownColumns?.length ?? 0) > 0 && (
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm">
+                    <p className="font-bold text-amber-900">คอลัมน์ที่ระบบไม่รู้จัก (ข้อมูลในคอลัมน์นี้ไม่ถูกนำเข้า)</p>
+                    <p className="mt-1 text-xs text-amber-900">
+                      {result.unknownColumns?.join(", ")} — ตรวจการสะกดกับไฟล์ต้นแบบ หรือลบคอลัมน์ที่เพิ่มเองออก
+                    </p>
+                  </div>
+                )}
                 {result.errors.length > 0 && (
                   <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm">
                     <p className="font-bold text-red-700">แถวที่มีข้อผิดพลาด</p>

@@ -504,37 +504,37 @@ export async function createAsset(input: AssetInput) {
        )`,
       [
         input.surveyId,
-        input.rowNo ?? null,
-        input.assetRegistrationNo ?? null,
+        blankToNull(input.rowNo),
+        blankToNull(input.assetRegistrationNo),
         input.assetName,
-        input.usageDescription ?? null,
-        input.ownerName ?? null,
-        input.workGroupId ?? null,
+        blankToNull(input.usageDescription),
+        blankToNull(input.ownerName),
+        blankToNull(input.workGroupId),
         parseAssetClass(input.assetClass),
         input.assetCategory,
-        input.assetGroup ?? null,
-        input.deviceType ?? null,
-        input.operatingSystem ?? null,
-        input.operatingSystemVersion ?? null,
-        input.windowsLicenseStatus ?? null,
-        input.privateIp ?? null,
-        input.publicIp ?? null,
-        input.locationDetail ?? null,
-        input.currentStatus ?? "Active",
-        input.updatedBy ?? null,
-        input.manufacturerBrand ?? null,
-        input.manufacturerModel ?? null,
-        input.manufacturerSpecification ?? null,
-        input.serialNumber ?? null,
-        input.purchasePrice ?? null,
-        input.purchaseDate ?? null,
-        input.purchaseOrderNo ?? null,
-        input.maintenanceStartDate ?? null,
-        input.maintenanceEndDate ?? null,
-        input.installedAt ?? null,
-        input.lastUpdatedAt ?? null,
-        input.assetImage1Url ?? null,
-        input.assetImage2Url ?? null,
+        blankToNull(input.assetGroup),
+        blankToNull(input.deviceType),
+        blankToNull(input.operatingSystem),
+        blankToNull(input.operatingSystemVersion),
+        blankToNull(input.windowsLicenseStatus),
+        blankToNull(input.privateIp),
+        blankToNull(input.publicIp),
+        blankToNull(input.locationDetail),
+        input.currentStatus || "Active",
+        blankToNull(input.updatedBy),
+        blankToNull(input.manufacturerBrand),
+        blankToNull(input.manufacturerModel),
+        blankToNull(input.manufacturerSpecification),
+        blankToNull(input.serialNumber),
+        blankToNull(input.purchasePrice),
+        blankToNull(input.purchaseDate),
+        blankToNull(input.purchaseOrderNo),
+        blankToNull(input.maintenanceStartDate),
+        blankToNull(input.maintenanceEndDate),
+        blankToNull(input.installedAt),
+        blankToNull(input.lastUpdatedAt),
+        blankToNull(input.assetImage1Url),
+        blankToNull(input.assetImage2Url),
       ]
     );
     // Columns from later migrations are written separately and only when provided, so creating assets keeps working before them.
@@ -557,6 +557,15 @@ export async function createAsset(input: AssetInput) {
     await saveAssetExtension(result.insertId, parseAssetClass(input.assetClass), input.subtypeId, input.details);
     return result;
   });
+}
+
+/**
+ * ช่องว่างจากฟอร์ม/ไฟล์นำเข้ามาเป็น "" ซึ่ง MySQL ปฏิเสธในคอลัมน์ DATE และตัวเลข
+ * (เช่น Incorrect date value: '' for column 'maintenance_start_date')
+ * จึงแปลงเป็น NULL ที่ขอบฐานข้อมูล เหมือนที่ updateAsset ทำอยู่แล้ว
+ */
+function blankToNull<T>(value: T | "" | undefined | null): T | null {
+  return value === undefined || value === null || value === "" ? null : value;
 }
 
 function optionalColumns(current: RowDataPacket | undefined, values: Record<string, string | null | undefined>) {

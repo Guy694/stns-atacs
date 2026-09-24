@@ -1,3 +1,4 @@
+import { toCsv } from "@/lib/csv";
 import { NextRequest, NextResponse } from "next/server";
 
 import { getCurrentUser } from "@/lib/auth";
@@ -15,13 +16,6 @@ type AuditExportRow = RowDataPacket & {
   summary: string | null;
 };
 
-function escapeCsv(value: string | null | undefined) {
-  const normalized = String(value ?? "");
-  if (normalized.includes(",") || normalized.includes('"') || normalized.includes("\n")) {
-    return `"${normalized.replace(/"/g, '""')}"`;
-  }
-  return normalized;
-}
 
 export async function GET(req: NextRequest) {
   const user = await getCurrentUser();
@@ -106,10 +100,8 @@ export async function GET(req: NextRequest) {
     row.summary ?? "",
   ]);
 
-  const csv = [
-    ["id", "created_at", "user_name", "action", "entity", "entity_id", "summary"].join(","),
-    ...csvRows.map((row) => row.map((value) => escapeCsv(String(value))).join(",")),
-  ].join("\r\n");
+  // SEC-12: toCsv เติม ' นำหน้าค่าที่ Excel จะตีความเป็นสูตร
+  const csv = toCsv([["id", "created_at", "user_name", "action", "entity", "entity_id", "summary"], ...csvRows], { bom: false });
 
   const today = new Date().toISOString().slice(0, 10);
   return new NextResponse("\ufeff" + csv, {

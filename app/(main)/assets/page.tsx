@@ -15,6 +15,7 @@ import { listFacilityWorkGroups } from "@/lib/facility-work-groups";
 import { canManageAsset, canSeeSensitiveAssetNetwork } from "@/lib/permissions";
 import { hasPermission } from "@/lib/role-permissions";
 import { AssetFormModal } from "./_components/asset-form-modal";
+import { listAssetLocations } from "@/lib/asset-locations";
 import { DeleteAssetButton } from "./_components/delete-asset-button";
 import ImportExcelModal from "./_components/import-excel-modal";
 
@@ -126,13 +127,14 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
     sort: ["updated_desc", "updated_asc", "name_asc", "name_desc", "ma_soon"].includes(sort) ? sort : undefined,
   };
 
-  const [totalAssets, facilitiesForSelect, facilities, deviceTypes, workGroups, subtypes] = await Promise.all([
+  const [totalAssets, facilitiesForSelect, facilities, deviceTypes, workGroups, subtypes, assetLocations] = await Promise.all([
     countAssets(assetFilter),
     listAllFacilitiesForSelect(),
     listFacilities(),
     listActiveDeviceTypes(),
     listFacilityWorkGroups(),
     listAssetSubtypes(),
+    listAssetLocations(),
   ]);
   const totalPages = Math.max(1, Math.ceil(totalAssets / perPage));
   const currentPage = Math.min(requestedPage, totalPages);
@@ -197,6 +199,7 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
               facilities={facilitiesForForm}
               deviceTypes={deviceTypes}
               workGroups={workGroups}
+              locations={assetLocations}
               updaterName={user.fullName}
               mode="create"
             >
@@ -274,6 +277,7 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
                             facilities={facilitiesForForm}
                             deviceTypes={deviceTypes}
                             workGroups={workGroups}
+                            locations={assetLocations}
                             updaterName={user.fullName}
                             mode="edit"
                             asset={asset}

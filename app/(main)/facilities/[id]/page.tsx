@@ -17,6 +17,7 @@ import { canAccessAssetFacility, canManageAssetRecord } from "@/lib/permissions"
 import { hasPermission } from "@/lib/role-permissions";
 import ImportExcelModal from "@/app/(main)/assets/_components/import-excel-modal";
 import { AssetFormModal } from "@/app/(main)/assets/_components/asset-form-modal";
+import { listAssetLocations } from "@/lib/asset-locations";
 import { DeleteAssetButton } from "@/app/(main)/assets/_components/delete-asset-button";
 import { FacilityAssetQrActions } from "@/app/(main)/facilities/[id]/_components/facility-asset-qr-actions";
 
@@ -108,6 +109,7 @@ export default async function FacilityDetailPage({ params, searchParams }: Props
   const districtName = allAssets[0]?.districtName ?? currentFacility.district_name ?? "";
 
   const canManageAssets = canManageAssetRecord(user, facilityId);
+  const assetLocations = await listAssetLocations(facilityId);
   const [canCreateAsset, canUpdateAsset] = await Promise.all([
     hasPermission(user.role, "assets.create"),
     hasPermission(user.role, "assets.update"),
@@ -204,6 +206,12 @@ export default async function FacilityDetailPage({ params, searchParams }: Props
             >
               <AppIcon name="printer" className="h-4 w-4" /> พิมพ์ทะเบียนคุมทรัพย์สิน (A4 แนวนอน)
             </a>
+            <a
+              href={`/print/assets/audit?facility=${facilityId}`}
+              className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-black/10 bg-white/85 px-4 py-2 text-xs font-semibold text-[var(--foreground)] transition hover:bg-white"
+            >
+              <AppIcon name="printer" className="h-4 w-4" /> พิมพ์ใบตรวจสอบพัสดุประจำปี (A4 แนวนอน)
+            </a>
             <FacilityAssetQrActions
               facilityId={facilityId}
               facilityName={facilityName}
@@ -218,6 +226,7 @@ export default async function FacilityDetailPage({ params, searchParams }: Props
                 facilities={facilitiesForSelect}
                 deviceTypes={deviceTypes}
                 workGroups={workGroups}
+                locations={assetLocations}
                 fixedFacilityId={facilityId}
                 updaterName={user.fullName}
                 mode="create"
@@ -295,6 +304,7 @@ export default async function FacilityDetailPage({ params, searchParams }: Props
                             facilities={facilitiesForSelect}
                             deviceTypes={deviceTypes}
                             workGroups={workGroups}
+                            locations={assetLocations}
                             fixedFacilityId={facilityId}
                             updaterName={user.fullName}
                             mode="edit"

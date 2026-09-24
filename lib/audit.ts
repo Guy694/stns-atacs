@@ -14,6 +14,8 @@ export type AuditLogFilter = {
   dateTo?: string;
   action?: AuditAction;
   entity?: string;
+  /** จำกัดเฉพาะระเบียนเดียว ใช้คู่กับ entity เช่นประวัติของครุภัณฑ์ชิ้นหนึ่ง */
+  entityId?: number;
   actor?: string;
   search?: string;
 };
@@ -120,6 +122,11 @@ function auditWhere(filter: AuditLogFilter) {
   if (filter.entity) {
     conditions.push("entity = ?");
     values.push(filter.entity);
+  }
+
+  if (Number.isSafeInteger(filter.entityId)) {
+    conditions.push("entity_id = ?");
+    values.push(filter.entityId);
   }
 
   if (filter.actor) {
