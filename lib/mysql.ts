@@ -7,11 +7,11 @@ declare global {
   var __atacsMysqlPool: Pool | undefined;
 }
 
-function getRequiredEnv(name: string) {
-  const value = process.env[name];
+function getRequiredEnv(name: string, fallbackName: string) {
+  const value = process.env[name]?.trim() || process.env[fallbackName]?.trim();
 
   if (!value) {
-    throw new Error(`Missing required environment variable: ${name}`);
+    throw new Error(`Missing required environment variable: ${name} or ${fallbackName}`);
   }
 
   return value;
@@ -19,11 +19,11 @@ function getRequiredEnv(name: string) {
 
 function createPool() {
   return mysql.createPool({
-    host: getRequiredEnv("MYSQL_HOST"),
-    port: Number(process.env.MYSQL_PORT ?? 3306),
-    user: getRequiredEnv("MYSQL_USER"),
-    password: getRequiredEnv("MYSQL_PASSWORD"),
-    database: getRequiredEnv("MYSQL_DATABASE"),
+    host: getRequiredEnv("MYSQL_HOST", "DB_HOST"),
+    port: Number(process.env.MYSQL_PORT?.trim() || process.env.DB_PORT?.trim() || 3306),
+    user: getRequiredEnv("MYSQL_USER", "DB_USER"),
+    password: getRequiredEnv("MYSQL_PASSWORD", "DB_PASSWORD"),
+    database: getRequiredEnv("MYSQL_DATABASE", "DB_NAME"),
     waitForConnections: true,
     connectionLimit: 10,
     queueLimit: 0,

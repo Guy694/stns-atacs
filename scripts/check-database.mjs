@@ -4,7 +4,7 @@ import mysql from "mysql2/promise";
 
 // Read-only health check of the ATACS database (MySQL or MariaDB/XAMPP).
 // Usage:  node scripts/check-database.mjs
-// Reads MYSQL_* from .env like the app. Makes no changes: SELECT and information_schema only.
+// Reads MYSQL_* or DB_* from the environment or .env. Makes no database changes.
 // Writes the result to database-check-report.txt in the project folder (no passwords or personal data).
 
 const lines = [];
@@ -12,13 +12,14 @@ const out = (text = "") => { lines.push(text); console.log(text); };
 const ok = (text) => out(`  [OK]   ${text}`);
 const bad = (text) => out(`  [ขาด] ${text}`);
 const warn = (text) => out(`  [เตือน] ${text}`);
+const databaseEnv = (name, fallbackName) => process.env[name]?.trim() || process.env[fallbackName]?.trim();
 
 const config = {
-  host: process.env.MYSQL_HOST,
-  port: Number(process.env.MYSQL_PORT ?? 3306),
-  user: process.env.MYSQL_USER,
-  password: process.env.MYSQL_PASSWORD,
-  database: process.env.MYSQL_DATABASE,
+  host: databaseEnv("MYSQL_HOST", "DB_HOST"),
+  port: Number(databaseEnv("MYSQL_PORT", "DB_PORT") || 3306),
+  user: databaseEnv("MYSQL_USER", "DB_USER"),
+  password: databaseEnv("MYSQL_PASSWORD", "DB_PASSWORD"),
+  database: databaseEnv("MYSQL_DATABASE", "DB_NAME"),
 };
 
 // What each migration adds; the app works without later ones but hides the related features.
@@ -29,7 +30,7 @@ const MIGRATIONS = JSON.parse(
 
 let connection;
 try {
-  if (!config.host || !config.user || !config.database) throw new Error("ไม่พบ MYSQL_HOST / MYSQL_USER / MYSQL_DATABASE ใน .env");
+  if (!config.host || !config.user || !config.database) throw new Error("ไม่พบ MYSQL_HOST/MYSQL_USER/MYSQL_DATABASE หรือ DB_HOST/DB_USER/DB_NAME");
   connection = await mysql.createConnection(config);
 } catch (error) {
   out(`เชื่อมต่อฐานข้อมูลไม่ได้: ${error.code ?? ""} ${error.message}`);

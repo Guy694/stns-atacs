@@ -177,7 +177,7 @@ export async function getPublicDashboardData(): Promise<PublicDashboardData> {
         count: Number(row.count ?? 0),
       })),
       dataSource: "database",
-      connectionMessage: `โหลดข้อมูลสรุป public จาก MySQL ฐาน ${process.env.MYSQL_DATABASE}`,
+      connectionMessage: `โหลดข้อมูลสรุป public จาก MySQL ฐาน ${process.env.MYSQL_DATABASE || process.env.DB_NAME}`,
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown database error";
