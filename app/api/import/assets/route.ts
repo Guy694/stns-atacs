@@ -19,6 +19,15 @@ import { notifyTelegramSafe } from "@/lib/telegram";
 
 type ImportRow = Record<string, unknown>;
 
+/** SEC-11: เพดานของไฟล์นำเข้า (ปรับได้ด้วย env บนเซิร์ฟเวอร์ที่มีหน่วยความจำมากกว่า) */
+function importLimit(name: "IMPORT_MAX_MB" | "IMPORT_MAX_ROWS", fallback: number) {
+  const raw = typeof process === "undefined" ? undefined : process.env?.[name];
+  const value = Number(raw);
+  return Number.isFinite(value) && value >= 1 ? Math.floor(value) : fallback;
+}
+const MAX_IMPORT_BYTES = importLimit("IMPORT_MAX_MB", 5) * 1024 * 1024;
+const MAX_IMPORT_ROWS = importLimit("IMPORT_MAX_ROWS", 5000);
+
 type ExistingAssetRow = RowDataPacket & {
   id: number;
   facility_id: number;
@@ -184,11 +193,23 @@ export async function POST(req: NextRequest) {
   if (!filename.endsWith(".csv") && !filename.endsWith(".xlsx") && !filename.endsWith(".xls")) {
     return NextResponse.json({ error: "รองรับเฉพาะไฟล์ CSV, XLSX หรือ XLS" }, { status: 400 });
   }
+  // SEC-11: ไลบรารีอ่าน Excel มีช่องโหว่ที่ยังไม่มีเวอร์ชันแก้บน npm
+  // จึงจำกัดขนาดไฟล์และจำนวนแถวไว้ ไม่ให้ไฟล์บีบอัดขนาดใหญ่ (zip bomb) หรือไฟล์หลายล้านแถวทำให้หน่วยความจำหมด
+  if (file.size > MAX_IMPORT_BYTES) {
+    return NextResponse.json(
+      { error: `ไฟล์ใหญ่เกิน ${Math.round(MAX_IMPORT_BYTES / (1024 * 1024))} MB กรุณาแบ่งไฟล์แล้วนำเข้าทีละส่วน` },
+      { status: 413 }
+    );
+  }
+  if (file.size === 0) {
+    return NextResponse.json({ error: "ไฟล์ว่าง กรุณาตรวจสอบไฟล์ที่เลือก" }, { status: 400 });
+  }
 
   let rows: ImportRow[];
   try {
     const buffer = Buffer.from(await file.arrayBuffer());
-    const workbook = XLSX.read(buffer, { type: "buffer", codepage: 65001, raw: false });
+    // sheetRows จำกัดจำนวนแถวที่ถอดรหัสจริง (อ่านเกินโควตา 1 แถวไว้ตรวจว่าเกินหรือไม่)
+    const workbook = XLSX.read(buffer, { type: "buffer", codepage: 65001, raw: false, sheetRows: MAX_IMPORT_ROWS + 2 });
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
     rows = XLSX.utils.sheet_to_json<ImportRow>(sheet, { defval: "", raw: false }).map((row) =>
       Object.fromEntries(
@@ -201,6 +222,12 @@ export async function POST(req: NextRequest) {
 
   if (rows.length === 0) {
     return NextResponse.json({ error: "ไม่พบข้อมูลในไฟล์" }, { status: 400 });
+  }
+  if (rows.length > MAX_IMPORT_ROWS) {
+    return NextResponse.json(
+      { error: `ไฟล์มีข้อมูลเกิน ${MAX_IMPORT_ROWS.toLocaleString("th-TH")} แถว กรุณาแบ่งไฟล์แล้วนำเข้าทีละส่วน` },
+      { status: 413 }
+    );
   }
   if (!Object.keys(rows[0]).includes("asset_name")) {
     return NextResponse.json({ error: "ไม่พบคอลัมน์ asset_name กรุณาใช้ไฟล์ต้นแบบของระบบ (ดาวน์โหลดได้จากหน้าจอนำเข้าข้อมูล)" }, { status: 400 });

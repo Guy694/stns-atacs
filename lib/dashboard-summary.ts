@@ -64,19 +64,21 @@ export function buildDashboardSummary(scopedSurveys: FacilitySurvey[], filters: 
   let undated = 0;
   // Fiscal-year and category filters apply everywhere; district/facility narrow the KPIs and charts but the
   // district comparison keeps every district so the selected one can still be compared with the others.
-  const baseItems = scopedSurveys.flatMap(survey => survey.assets.map(asset => {
+  const allItems = scopedSurveys.flatMap(survey => survey.assets.map(asset => {
     const categoryId = dashboardCategoryId(asset);
     return { asset, survey, categoryKey: categoryId === null ? "unclassified" : String(categoryId), status: overviewStatus(asset), fiscalYear: acquisitionFiscalYear(asset) };
-  })).filter(item => {
+  }));
+  const baseItemsIgnoringCategory = allItems.filter(item => {
     if (fy && item.fiscalYear === null) { if (inScope(item.survey)) undated += 1; return false; }
-    return (!fy || String(item.fiscalYear) === fy) && (!filters.category || item.categoryKey === filters.category);
+    return !fy || String(item.fiscalYear) === fy;
   });
+  const baseItems = baseItemsIgnoringCategory.filter(item => !filters.category || item.categoryKey === filters.category);
   const assets = baseItems.filter(item => inScope(item.survey));
 
   const statusCounts = emptyStatusCounts();
   let totalCost = 0;
   let priced = 0;
-  const categoryMap = new Map<string, { count: number; cost: number }>();
+  const categoryMap = new Map<string, { count: number; cost: number; statuses: StatusCounts }>();
   const districtMap = new Map<string, DistrictRow>();
   const facilityMap = new Map<number, FacilityBreakdown>();
   for (const name of districtOptions) {
@@ -94,9 +96,6 @@ export function buildDashboardSummary(scopedSurveys: FacilitySurvey[], filters: 
     statusCounts[item.status] += 1;
     const price = item.asset.purchasePrice;
     if (typeof price === "number" && Number.isFinite(price)) { priced += 1; totalCost += price; }
-    const category = categoryMap.get(item.categoryKey) ?? { count: 0, cost: 0 };
-    category.count += 1; category.cost += costOf(price);
-    categoryMap.set(item.categoryKey, category);
   }
   for (const item of baseItems) {
     const row = districtMap.get(item.survey.districtName);
@@ -105,11 +104,36 @@ export function buildDashboardSummary(scopedSurveys: FacilitySurvey[], filters: 
       if (target) { target.total += 1; target.cost += costOf(item.asset.purchasePrice); target.statuses[item.status] += 1; }
     }
   }
+  /**
+   * สรุปรายประเภท "ทุกประเภทในขอบเขตที่เลือก" โดยไม่สนตัวกรองประเภทปัจจุบัน
+   * เพื่อให้แถบเปรียบเทียบและปุ่มเลือกประเภทยังสลับไปประเภทอื่นได้ ขณะกำลังดูประเภทเดียวอยู่
+   */
+  let categoryScopeTotal = 0;
+  for (const item of baseItemsIgnoringCategory) {
+    if (!inScope(item.survey)) continue;
+    categoryScopeTotal += 1;
+    const category = categoryMap.get(item.categoryKey) ?? { count: 0, cost: 0, statuses: emptyStatusCounts() };
+    category.count += 1;
+    category.cost += costOf(item.asset.purchasePrice);
+    category.statuses[item.status] += 1;
+    categoryMap.set(item.categoryKey, category);
+  }
+
   const total = assets.length;
   const labelFor = (key: string) => key === "unclassified" ? "รอตรวจสอบประเภท" : DEPRECIATION_CATEGORIES.find(category => String(category.id) === key)?.label ?? key;
   const categories = [...categoryMap.entries()]
-    .map(([key, value]) => ({ key, label: labelFor(key), count: value.count, cost: Math.round(value.cost * 100) / 100, share: total ? value.count / total : 0 }))
+    .map(([key, value]) => ({
+      key,
+      label: labelFor(key),
+      count: value.count,
+      cost: Math.round(value.cost * 100) / 100,
+      share: categoryScopeTotal ? value.count / categoryScopeTotal : 0,
+      statuses: value.statuses,
+      active: value.statuses.Active,
+      activeRate: value.count ? value.statuses.Active / value.count : 0,
+    }))
     .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, "th"));
+
 
   return {
     filters: { fy, district, facility, category: filters.category },
@@ -125,6 +149,9 @@ export function buildDashboardSummary(scopedSurveys: FacilitySurvey[], filters: 
     undated,
     statuses: DASHBOARD_STATUSES.map(status => ({ ...status, count: statusCounts[status.value], share: total ? statusCounts[status.value] / total : 0 })),
     categories,
+    categoryCount: categories.length,
+    /** ป้ายของประเภทที่เลือกอยู่ ("" = ทุกประเภท) */
+    categoryLabel: filters.category ? labelFor(filters.category) : "",
     districts: [...districtMap.values()].map(row => ({
       ...row,
       cost: Math.round(row.cost * 100) / 100,

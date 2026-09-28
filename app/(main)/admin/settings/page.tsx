@@ -93,6 +93,13 @@ export default async function AdminSettingsPage() {
       permissionKey: "permissions.manage",
     },
     {
+      title: "ปิดปรับปรุงระบบ",
+      desc: "แจ้งผู้ใช้ว่าระบบปิดปรับปรุง และให้เฉพาะผู้ดูแลระบบเข้าใช้งานได้ชั่วคราว",
+      icon: "settings",
+      href: "/admin/settings/maintenance",
+      permissionKey: "permissions.manage",
+    },
+    {
       title: "Permission Matrix",
       desc: "กำหนดสิทธิ์รายบทบาทแบบละเอียด ทั้งเมนูและ action",
       icon: "shield",

@@ -1,7 +1,9 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 import {
   CategoryBars,
+  CategoryChips,
   compactBaht,
   DistrictColumns,
   DistrictComparison,
@@ -21,6 +23,8 @@ import { AppIcon } from "@/app/_components/ui/icon";
 import { getDashboardData } from "@/lib/atacs";
 import { buildDashboardSummary, readDashboardFilters } from "@/lib/dashboard-summary";
 import { formatThaiDateTime } from "@/lib/date-format";
+import { getCurrentUser } from "@/lib/auth";
+import { canBypassMaintenance, isMaintenanceEnabled } from "@/lib/maintenance";
 
 type Props = { searchParams: Promise<Record<string, string | string[] | undefined>> };
 
@@ -31,6 +35,12 @@ const BASE_PATH = "/";
  * serials, owners, locations or network data leave the server.
  */
 export default async function PublicDashboardPage({ searchParams }: Props) {
+  // ปิดปรับปรุงระบบ: หน้าสาธารณะแสดงสถานะแทนแดชบอร์ด (ผู้ดูแลระบบยังดูได้)
+  if (await isMaintenanceEnabled()) {
+    const viewer = await getCurrentUser().catch(() => null);
+    if (!canBypassMaintenance(viewer)) redirect("/maintenance");
+  }
+
   const params = await searchParams;
   const { facilitySurveys, dataSource } = await getDashboardData();
   const summary = buildDashboardSummary(facilitySurveys, readDashboardFilters(params));
@@ -53,9 +63,13 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
         <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-2xl">
             <p className="text-xs font-semibold tracking-[0.16em] text-sky-100">ATACS · สำนักงานสาธารณสุขจังหวัดสตูล</p>
-            <h1 id="public-heading" className="section-title mt-3 text-3xl font-semibold leading-tight sm:text-4xl">ทะเบียนทรัพย์สินและครุภัณฑ์ จ.สตูล</h1>
+            <h1 id="public-heading" className="section-title mt-3 text-3xl font-semibold leading-tight sm:text-4xl">
+              {summary.categoryLabel ? summary.categoryLabel.replace(/^\d+\.\s*/, "") : "ทะเบียนทรัพย์สินและครุภัณฑ์ จ.สตูล"}
+            </h1>
             <p className="mt-3 text-sm leading-7 text-sky-50">
-              ภาพรวมจำนวน สถานะการใช้งาน และมูลค่าครุภัณฑ์ของหน่วยบริการสาธารณสุขในจังหวัด แยกตามปีงบประมาณ อำเภอ หน่วยงาน และประเภท
+              {summary.categoryLabel
+                ? `ภาพรวมเฉพาะ${summary.categoryLabel.replace(/^\d+\.\s*/, "")} ของหน่วยบริการสาธารณสุขใน จ.สตูล — จำนวน สถานะการใช้งาน มูลค่า และการกระจายตามอำเภอ`
+                : "ภาพรวมจำนวน สถานะการใช้งาน และมูลค่าครุภัณฑ์ของหน่วยบริการสาธารณสุขในจังหวัด แยกตามปีงบประมาณ อำเภอ หน่วยงาน และประเภท"}
             </p>
           </div>
           <div className="flex flex-wrap gap-3">
@@ -84,12 +98,19 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
         categories={summary.categoryOptions}
       />
 
+      {/* เลือกประเภทแล้วทั้งหน้ากลายเป็นแดชบอร์ดของประเภทนั้น */}
+      <CategoryChips summary={summary} basePath={BASE_PATH} />
+
       <div className="grid gap-4 md:grid-cols-3">
         <StatTile
-          label="ครุภัณฑ์ทั้งหมด"
+          label={summary.categoryLabel ? summary.categoryLabel.replace(/^\d+\.\s*/, "") : "ครุภัณฑ์ทั้งหมด"}
           value={numberFormat.format(summary.total)}
           unit="รายการ"
-          detail={<>{numberFormat.format(summary.facilityCount)} หน่วยงาน · {numberFormat.format(summary.districtCount)} อำเภอ{summary.undated ? <><br />ไม่รวม {numberFormat.format(summary.undated)} รายการที่ไม่มีวันที่ได้มา</> : null}</>}
+          detail={<>
+            {numberFormat.format(summary.facilityCount)} หน่วยงาน · {numberFormat.format(summary.districtCount)} อำเภอ
+            {summary.categoryLabel ? null : <> · {numberFormat.format(summary.categoryCount)} ประเภท</>}
+            {summary.undated ? <><br />ไม่รวม {numberFormat.format(summary.undated)} รายการที่ไม่มีวันที่ได้มา</> : null}
+          </>}
         />
         <StatTile
           label="พร้อมใช้งาน"
@@ -106,7 +127,12 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-        <Panel id="category-share" title="สัดส่วนประเภทครุภัณฑ์" subtitle="จำนวนรายการตามประเภทในตารางอายุการใช้งาน · เลือกแถวเพื่อกรอง"
+        <Panel
+          id="category-share"
+          title={summary.categoryLabel ? "เทียบกับประเภทอื่น" : "สัดส่วนประเภทครุภัณฑ์"}
+          subtitle={summary.categoryLabel
+            ? "แถบแบ่งสีตามสถานะการใช้งาน · เลือกแถวเพื่อสลับไปดูประเภทนั้น"
+            : "จำนวนรายการและสถานะการใช้งานตามประเภท · เลือกแถวเพื่อดูเฉพาะประเภทนั้น"}
           action={filters.category ? <Link href={hrefWith(BASE_PATH, filters, { category: "" })} className="text-xs font-medium text-[var(--primary-text)] underline">ทุกประเภท</Link> : undefined}>
           <CategoryBars summary={summary} basePath={BASE_PATH} />
         </Panel>

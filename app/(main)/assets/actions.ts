@@ -9,6 +9,7 @@ import { redirect } from "next/navigation";
 import type { RowDataPacket } from "mysql2/promise";
 
 import { parseAssetFields, type AssetFields } from "@/lib/asset-input";
+import { findActiveFacilityWorkGroup, findOrCreateFacilityWorkGroup } from "@/lib/facility-work-groups";
 import { isMissingSchemaError } from "@/lib/schema-errors";
 import { getCurrentUser } from "@/lib/auth";
 import { recordAssetStatusHistory } from "@/lib/asset-status-history";
@@ -17,7 +18,7 @@ import { writeAuditLog } from "@/lib/audit";
 import { assetImageDir, assetImageUrl } from "@/lib/upload-storage";
 import { selectRows } from "@/lib/mysql";
 import { canManageAssetRecord, canMutateAssets } from "@/lib/permissions";
-import { hasPermission } from "@/lib/role-permissions";
+import { hasPermission, type AppRole } from "@/lib/role-permissions";
 
 async function requireAuth() {
   const user = await getCurrentUser();
@@ -167,7 +168,17 @@ function assetErrorMessage(err: unknown) {
   return err instanceof Error ? err.message : "เกิดข้อผิดพลาด กรุณาลองใหม่";
 }
 
-async function buildInput(fd: FormData, updaterName: string, currentAsset?: AssetWithFacility): Promise<AssetFormInput> {
+/** เพิ่มกลุ่มงานใหม่จากแบบฟอร์มได้เมื่อมีสิทธิ์จัดการกลุ่มงาน */
+async function canAddWorkGroups(user: { role: AppRole }) {
+  return user.role === "admin" || (await hasPermission(user.role, "work-groups.manage"));
+}
+
+async function buildInput(
+  fd: FormData,
+  updaterName: string,
+  currentAsset?: AssetWithFacility,
+  canAddWorkGroup = false
+): Promise<AssetFormInput> {
   const facilityId = Number(fd.get("facilityId"));
   if (!Number.isSafeInteger(facilityId) || facilityId <= 0) throw new Error("กรุณาเลือกหน่วยงาน");
   const fields: AssetFields = {};
@@ -178,6 +189,24 @@ async function buildInput(fd: FormData, updaterName: string, currentAsset?: Asse
   if (fd.has("workGroupId")) {
     workGroupId = workGroupIdRaw ? Number(workGroupIdRaw) : null;
     if (workGroupId !== null && (!Number.isSafeInteger(workGroupId) || workGroupId <= 0)) throw new Error("กลุ่มงานไม่ถูกต้อง");
+  }
+  /**
+   * กรอกกลุ่มงานเป็นข้อความได้ (เช่น งานธุรการ, สสอ., รพ.สต.)
+   * ถ้ายังไม่มีในหน่วยงานนั้น ระบบสร้างให้จากหน้าแบบฟอร์มเลย ไม่ต้องไปหน้าตั้งค่าก่อน
+   * ถ้าเลือกจากรายการอยู่แล้ว (มี workGroupId) จะใช้ค่านั้นเป็นหลัก
+   */
+  const workGroupName = readOptional(fd, "workGroupName");
+  if (!workGroupId && workGroupName) {
+    const existing = await findActiveFacilityWorkGroup(facilityId, workGroupName);
+    if (existing) {
+      workGroupId = existing.id;
+    } else {
+      if (!canAddWorkGroup) {
+        throw new Error(`ไม่พบกลุ่มงาน "${workGroupName}" ในหน่วยงานนี้ และบัญชีของคุณไม่มีสิทธิ์เพิ่มกลุ่มงานใหม่ กรุณาเลือกจากรายการหรือติดต่อผู้ดูแลระบบ`);
+      }
+      workGroupId = await findOrCreateFacilityWorkGroup(facilityId, workGroupName);
+      if (!workGroupId) throw new Error("ชื่อกลุ่มงานไม่ถูกต้อง");
+    }
   }
   const surveyId = currentAsset?.facilityId === facilityId ? currentAsset.surveyId : await findOrCreateSurvey(facilityId);
   return { ...parsed, surveyId, workGroupId, facilityId, updatedBy: updaterName, lastUpdatedAt: new Date().toISOString().slice(0, 10) };
@@ -192,7 +221,7 @@ export async function createAssetAction(_prev: string | null, fd: FormData): Pro
     const requestedFacilityId = Number(fd.get("facilityId"));
     if (!requestedFacilityId || isNaN(requestedFacilityId)) return "กรุณาเลือกหน่วยงาน";
     if (!canManageAssetRecord(user, requestedFacilityId)) return "คุณไม่มีสิทธิ์ดำเนินการกับหน่วยงานนี้";
-    const input = await buildInput(fd, user.fullName);
+    const input = await buildInput(fd, user.fullName, undefined, await canAddWorkGroups(user));
     await validateAssetBusinessRules(input);
     const imageUrls = await buildAssetImageUrls(fd);
     const result = await createAsset({ ...input, ...imageUrls });
@@ -229,7 +258,7 @@ export async function updateAssetAction(_prev: string | null, fd: FormData): Pro
     const requestedFacilityId = Number(fd.get("facilityId"));
     if (!requestedFacilityId || isNaN(requestedFacilityId)) return "กรุณาเลือกหน่วยงาน";
     if (!canManageAssetRecord(user, requestedFacilityId)) return "คุณไม่มีสิทธิ์ดำเนินการกับหน่วยงานนี้";
-    const input = await buildInput(fd, user.fullName, currentAsset);
+    const input = await buildInput(fd, user.fullName, currentAsset, await canAddWorkGroups(user));
     if (input.assetClass !== currentAsset.assetClass && readStr(fd, "confirmClassChange") !== "1") return "กรุณายืนยันการเปลี่ยนกลุ่มทรัพย์สิน";
     await validateAssetBusinessRules(input, id);
     const imageUrls = await buildAssetImageUrls(fd, currentAsset);

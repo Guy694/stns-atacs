@@ -53,3 +53,46 @@ test("KPIs, status mix, category share and district comparison agree", () => {
   const vehicles = buildDashboardSummary(surveys, { fy: "", district: "", facility: "", category: "4" }, "2026-09-22");
   assert.equal(vehicles.total, 1);
 });
+
+test("เลือกประเภทแล้ว KPI และสถานะนับเฉพาะประเภทนั้น", () => {
+  const all = buildDashboardSummary(surveys, { fy: "", district: "", facility: "", category: "" }, "2026-09-22");
+  // 12 = ครุภัณฑ์คอมพิวเตอร์ (assetClass IT)
+  const it = buildDashboardSummary(surveys, { fy: "", district: "", facility: "", category: "12" }, "2026-09-22");
+  assert.equal(all.total, 5);
+  assert.equal(it.total, 3, "IT มี 3 รายการ (id 1, 2, 4)");
+  assert.equal(it.filters.category, "12");
+  assert.ok(it.categoryLabel.includes("คอมพิวเตอร์"));
+  assert.equal(all.categoryLabel, "");
+  // สถานะต้องนับเฉพาะประเภทที่เลือก
+  const itBroken = it.statuses.find((status) => status.value === "Broken").count;
+  assert.equal(itBroken, 1);
+});
+
+test("แถบเปรียบเทียบยังแสดงทุกประเภท แม้กำลังดูประเภทเดียว เพื่อให้สลับได้", () => {
+  const it = buildDashboardSummary(surveys, { fy: "", district: "", facility: "", category: "12" }, "2026-09-22");
+  const keys = it.categories.map((row) => row.key);
+  assert.ok(keys.length >= 3, `ต้องเห็นทุกประเภท ไม่ใช่เฉพาะที่เลือก: ${JSON.stringify(keys)}`);
+  assert.equal(it.categoryCount, it.categories.length);
+  // สัดส่วนคิดจากทุกประเภทในขอบเขต จึงรวมกันได้ประมาณ 100%
+  const shareSum = it.categories.reduce((sum, row) => sum + row.share, 0);
+  assert.ok(Math.abs(shareSum - 1) < 0.001, `รวมสัดส่วน = ${shareSum}`);
+});
+
+test("แต่ละประเภทมีการแยกสถานะและอัตราพร้อมใช้งาน", () => {
+  const all = buildDashboardSummary(surveys, { fy: "", district: "", facility: "", category: "" }, "2026-09-22");
+  const itRow = all.categories.find((row) => row.key === "12");
+  assert.equal(itRow.count, 3);
+  assert.equal(itRow.statuses.Active, 1);
+  assert.equal(itRow.statuses.Broken, 1);
+  assert.equal(itRow.statuses.Disposed, 1);
+  assert.ok(Math.abs(itRow.activeRate - 1 / 3) < 0.001);
+  assert.equal(itRow.active, 1);
+});
+
+test("ตัวกรองอำเภอจำกัดรายการประเภทที่เลือกได้ด้วย", () => {
+  const ladu = buildDashboardSummary(surveys, { fy: "", district: "ละงู", facility: "", category: "" }, "2026-09-22");
+  const keys = ladu.categories.map((row) => row.key).sort();
+  // อ.ละงู มีเฉพาะ IT (id 4) และ ครุภัณฑ์สำนักงาน (id 5)
+  assert.equal(keys.length, 2, JSON.stringify(keys));
+  assert.equal(ladu.categories.reduce((sum, row) => sum + row.count, 0), 2);
+});

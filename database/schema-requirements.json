@@ -175,5 +175,32 @@
       "agent_enrollments"
     ],
     "columns": {}
+  },
+  {
+    "file": "auth.sql / add_password_auth.sql (บัญชีผู้ใช้และเซสชัน)",
+    "tables": [
+      "users",
+      "auth_sessions"
+    ],
+    "columns": {
+      "users": [
+        "username",
+        "password_hash"
+      ]
+    }
+  },
+  {
+    "file": "add_app_settings.sql (ตั้งค่าระบบ + โหมดปิดปรับปรุง)",
+    "tables": [
+      "app_settings"
+    ],
+    "columns": {}
+  },
+  {
+    "file": "add_security_events.sql (บันทึกความปลอดภัย + จำกัดการเดารหัสผ่าน SEC-08)",
+    "tables": [
+      "security_events"
+    ],
+    "columns": {}
   }
 ]

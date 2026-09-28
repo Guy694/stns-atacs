@@ -1,8 +1,5 @@
 "use client";
 
-import { useActionState } from "react";
-import { updateFacilityAction } from "@/app/(main)/profile/actions";
-
 type FacilityOption = {
   id: number;
   facility_name: string;
@@ -14,52 +11,34 @@ type Props = {
   facilities: FacilityOption[];
 };
 
+/**
+ * SEC-21: หน่วยงานที่สังกัดเป็นตัวกำหนดขอบเขตข้อมูลที่ผู้ใช้เห็นได้
+ * จึงแสดงอย่างเดียว ไม่ให้ผู้ใช้เปลี่ยนเอง (ผู้ดูแลระบบแก้ได้ที่หน้าจัดการผู้ใช้งาน)
+ */
 export function FacilityForm({ currentFacilityId, facilities }: Props) {
-  const [result, formAction, pending] = useActionState(updateFacilityAction, null);
+  const facility = facilities.find((item) => item.id === currentFacilityId);
 
   return (
     <div className="glass-panel rounded-2xl p-6">
       <h2 className="section-title text-lg font-semibold">หน่วยงานที่สังกัด</h2>
       <p className="mt-1 text-sm text-[var(--muted)]">
-        กำหนดหน่วยงานที่คุณสังกัด เพื่อให้ระบบแสดงข้อมูลและ agent token ที่ถูกต้อง
+        หน่วยงานเป็นตัวกำหนดข้อมูลที่คุณเข้าถึงได้ จึงแก้ไขได้โดยผู้ดูแลระบบเท่านั้น
       </p>
 
-      {result && (
-        <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-          {result}
-        </div>
-      )}
+      <div className="mt-4 rounded-xl border border-black/10 bg-black/5 px-4 py-3">
+        {facility ? (
+          <>
+            <p className="font-medium text-[var(--foreground)]">{facility.facility_name}</p>
+            {facility.district_name && <p className="mt-0.5 text-sm text-[var(--muted)]">อ.{facility.district_name}</p>}
+          </>
+        ) : (
+          <p className="text-sm text-[var(--muted)]">ยังไม่ได้กำหนดหน่วยงาน</p>
+        )}
+      </div>
 
-      <form action={formAction} className="mt-4 space-y-4">
-        <div>
-          <label className="block text-sm font-medium">
-            หน่วยงาน <span className="text-rose-500">*</span>
-          </label>
-          <select
-            name="facilityId"
-            required
-            defaultValue={currentFacilityId?.toString() ?? ""}
-            className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
-          >
-            <option value="">— เลือกหน่วยงาน —</option>
-            {facilities.map((f) => (
-              <option key={f.id} value={f.id}>
-                {f.facility_name}
-                {f.district_name ? ` · อ.${f.district_name}` : ""}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="flex justify-end">
-          <button
-            type="submit"
-            disabled={pending}
-            className="rounded-xl bg-[var(--accent-strong)] px-6 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
-          >
-            {pending ? "กำลังบันทึก…" : "บันทึกหน่วยงาน"}
-          </button>
-        </div>
-      </form>
+      <p className="mt-3 text-xs text-[var(--muted)]">
+        หากข้อมูลไม่ถูกต้องหรือย้ายหน่วยงาน กรุณาติดต่อผู้ดูแลระบบเพื่อแก้ไขให้
+      </p>
     </div>
   );
 }

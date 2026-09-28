@@ -1,11 +1,13 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+
+import { writeAuditLog } from "@/lib/audit";
 import { redirect } from "next/navigation";
 
 import type { RowDataPacket } from "mysql2/promise";
 
-import { getCurrentUser, hashPassword, splitDisplayName, verifyPassword } from "@/lib/auth";
+import { getCurrentUser, hashPassword, splitDisplayName, verifyPassword, revokeUserSessions } from "@/lib/auth";
 import { executeStatement, selectRows } from "@/lib/mysql";
 
 async function getUser() {
@@ -29,26 +31,26 @@ export async function updateProfileAction(_prev: string | null, fd: FormData): P
   return null;
 }
 
+/**
+ * SEC-21: เดิมเจ้าหน้าที่ที่ยังไม่มีหน่วยงาน เลือกหน่วยงานใดก็ได้ด้วยตัวเอง
+ * ซึ่งเท่ากับเลือกขอบเขตข้อมูลที่ตัวเองเห็นได้ ทุกเส้นทางการสมัคร (ThaiD / Google / Username)
+ * บันทึกหน่วยงานไว้ตั้งแต่ตอนลงทะเบียนอยู่แล้ว การแก้ไขภายหลังจึงเป็นงานของผู้ดูแลระบบ
+ * คงฟังก์ชันไว้เป็นด่านกันการเรียกตรง และบันทึก audit log ทุกครั้งที่มีการพยายาม
+ */
 export async function updateFacilityAction(_prev: string | null, fd: FormData): Promise<string | null> {
   const user = await getUser();
-  if (user.role !== "officer") return "เฉพาะ officer เท่านั้นที่สามารถเลือกหน่วยงานได้";
+  const requested = (fd.get("facilityId") as string | null)?.trim() ?? "";
 
-  const raw = (fd.get("facilityId") as string | null)?.trim() ?? "";
-  const facilityId = raw ? parseInt(raw, 10) : null;
-  if (!facilityId || isNaN(facilityId)) return "กรุณาเลือกหน่วยงาน";
-  if (user.facilityId && Number(user.facilityId) !== facilityId) {
-    return "คุณไม่มีสิทธิ์เปลี่ยนไปหน่วยงานอื่น กรุณาติดต่อผู้ดูแลระบบ";
-  }
+  await writeAuditLog({
+    userId: user.id,
+    userName: user.fullName,
+    action: "update",
+    entity: "users",
+    entityId: Number(user.id),
+    summary: `ปฏิเสธคำขอเปลี่ยนหน่วยงานของตนเอง${requested ? ` เป็นหน่วยงาน #${requested}` : ""} (ต้องให้ผู้ดูแลระบบกำหนด)`,
+  });
 
-  try {
-    await executeStatement("UPDATE users SET facility_id = ? WHERE id = ?", [facilityId, user.id]);
-  } catch {
-    return "ไม่สามารถบันทึกได้ — กรุณาตรวจสอบว่ารัน migration add_facility_approval.sql แล้ว";
-  }
-
-  revalidatePath("/profile");
-  revalidatePath("/agent-download");
-  return null;
+  return "หน่วยงานที่สังกัดกำหนดโดยผู้ดูแลระบบเท่านั้น กรุณาติดต่อผู้ดูแลระบบหากข้อมูลไม่ถูกต้อง";
 }
 
 export async function changePasswordAction(_prev: string | null, fd: FormData): Promise<string | null> {
@@ -73,5 +75,7 @@ export async function changePasswordAction(_prev: string | null, fd: FormData): 
 
   const newHash = hashPassword(newPassword);
   await executeStatement("UPDATE users SET password_hash = ? WHERE id = ?", [newHash, user.id]);
+  // SEC-09: เครื่องอื่นที่ยังค้างเซสชันเดิมอยู่ต้องหลุดทันที (เครื่องที่กำลังใช้อยู่ไม่หลุด)
+  await revokeUserSessions(Number(user.id), { keepCurrent: true });
   return null;
 }

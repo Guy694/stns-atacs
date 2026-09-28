@@ -186,6 +186,140 @@ function FacilityCombobox({
 }
 
 /**
+ * ช่อง "กลุ่มงาน" แบบพิมพ์ได้และเลือกได้
+ * - เลือกจากกลุ่มงานที่มีอยู่ของหน่วยงานนั้น (ส่ง workGroupId)
+ * - หรือพิมพ์ชื่อใหม่ เช่น งานธุรการ / สสอ. / รพ.สต. แล้วระบบจะสร้างให้ตอนบันทึก (ส่ง workGroupName)
+ */
+function WorkGroupCombobox({
+  options,
+  defaultWorkGroupId,
+  required,
+}: {
+  options: WorkGroupOption[];
+  defaultWorkGroupId: string;
+  required: boolean;
+}) {
+  const inputId = useId();
+  const listboxId = useId();
+  const selected = options.find((group) => String(group.id) === defaultWorkGroupId);
+  const [value, setValue] = useState(selected?.workGroupName ?? "");
+  const [workGroupId, setWorkGroupId] = useState(selected ? String(selected.id) : "");
+  const [open, setOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(0);
+
+  const filtered = useMemo(() => {
+    const query = value.trim().toLowerCase();
+    if (!query) return options;
+    return options.filter((group) => group.workGroupName.toLowerCase().includes(query));
+  }, [options, value]);
+
+  const activeOptionIndex = Math.min(activeIndex, Math.max(filtered.length - 1, 0));
+  const typed = value.trim();
+  const isNewValue = typed.length > 0 && !options.some((group) => group.workGroupName.toLowerCase() === typed.toLowerCase());
+
+  function choose(group: WorkGroupOption) {
+    setValue(group.workGroupName);
+    setWorkGroupId(String(group.id));
+    setActiveIndex(0);
+    setOpen(false);
+  }
+
+  return (
+    <div className="mt-1">
+      {/* เลือกจากรายการ = ส่ง id, พิมพ์ใหม่ = ส่งเฉพาะชื่อให้เซิร์ฟเวอร์สร้างให้ */}
+      <input type="hidden" name="workGroupId" value={workGroupId} />
+      <input type="hidden" name="workGroupName" value={workGroupId ? "" : typed} />
+      <input
+        id={inputId}
+        type="text"
+        role="combobox"
+        aria-autocomplete="list"
+        aria-controls={listboxId}
+        aria-expanded={open}
+        autoComplete="off"
+        required={required}
+        value={value}
+        placeholder="พิมพ์เพื่อค้นหา หรือพิมพ์ชื่อกลุ่มงานใหม่ เช่น งานธุรการ"
+        onFocus={() => setOpen(true)}
+        onBlur={() => window.setTimeout(() => setOpen(false), 120)}
+        onChange={(event) => {
+          setValue(event.target.value);
+          // พิมพ์แก้ = ยกเลิกการเลือกเดิม ให้เทียบชื่อใหม่ตอนบันทึก
+          setWorkGroupId("");
+          setActiveIndex(0);
+          setOpen(true);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "ArrowDown") {
+            event.preventDefault();
+            setOpen(true);
+            setActiveIndex((index) => Math.min(index + 1, Math.max(filtered.length - 1, 0)));
+          }
+          if (event.key === "ArrowUp") {
+            event.preventDefault();
+            setOpen(true);
+            setActiveIndex((index) => Math.max(index - 1, 0));
+          }
+          if (event.key === "Enter" && open && filtered[activeOptionIndex]) {
+            event.preventDefault();
+            choose(filtered[activeOptionIndex]);
+          }
+          if (event.key === "Escape") setOpen(false);
+        }}
+        className="w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+      />
+
+      {open && (options.length > 0 || isNewValue) && (
+        <div id={listboxId} role="listbox" className="mt-2 max-h-56 overflow-y-auto rounded-xl border border-black/10 bg-white shadow-sm">
+          {isNewValue && (
+            <button
+              type="button"
+              role="option"
+              aria-selected={false}
+              onMouseDown={(event) => {
+                event.preventDefault();
+                setValue(typed);
+                setWorkGroupId("");
+                setOpen(false);
+              }}
+              className="flex w-full items-center justify-between gap-3 border-b border-black/6 px-4 py-2.5 text-left text-sm hover:bg-[var(--accent)]/5"
+            >
+              <span className="min-w-0 truncate font-medium">เพิ่มกลุ่มงานใหม่ “{typed}”</span>
+              <span className="shrink-0 text-xs text-[var(--muted)]">สร้างเมื่อบันทึก</span>
+            </button>
+          )}
+          {filtered.length === 0 && !isNewValue ? (
+            <p className="px-4 py-4 text-center text-sm text-[var(--muted)]">
+              หน่วยงานนี้ยังไม่มีกลุ่มงาน พิมพ์ชื่อเพื่อเพิ่มใหม่ได้
+            </p>
+          ) : (
+            filtered.map((group, index) => (
+              <button
+                key={group.id}
+                type="button"
+                role="option"
+                aria-selected={String(group.id) === workGroupId}
+                onMouseEnter={() => setActiveIndex(index)}
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  choose(group);
+                }}
+                className={`flex w-full items-center justify-between gap-3 border-b border-black/6 px-4 py-2.5 text-left text-sm transition last:border-0 ${
+                  index === activeOptionIndex ? "bg-[var(--accent)]/8" : "hover:bg-[var(--accent)]/5"
+                }`}
+              >
+                <span className="min-w-0 truncate">{group.workGroupName}</span>
+                {String(group.id) === workGroupId && <span className="shrink-0 text-xs font-medium text-[var(--accent)]">เลือกอยู่</span>}
+              </button>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
  * ช่อง "ที่ตั้ง" แบบพิมพ์ได้และเลือกได้
  * - ตัวเลือกมาจากที่ตั้งที่เคยบันทึกไว้ในหน่วยงานนั้น และจากชื่อกลุ่มงานของหน่วยงานนั้น
  * - พิมพ์ที่ตั้งใหม่ได้ทันที (ไม่บังคับให้เลือกจากรายการ) ที่ตั้งใหม่จะกลายเป็นตัวเลือกให้ครั้งถัดไปเอง
@@ -460,27 +594,19 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
                 )}
               </div>
 
-              {selectedWorkGroups.length > 0 && (
+              {selectedFacilityId && (
                 <div>
                   <label className="block text-sm font-medium">
-                    กลุ่มงาน <span className="text-rose-500">*</span>
+                    กลุ่มงาน {selectedWorkGroups.length > 0 && <span className="text-rose-500">*</span>}
                   </label>
-                  <select
-                    name="workGroupId"
-                    value={selectedWorkGroupValue}
-                    onChange={(event) => setSelectedWorkGroupId(event.target.value)}
-                    required
-                    className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
-                  >
-                    <option value="">เลือกกลุ่มงาน</option>
-                    {selectedWorkGroups.map((group) => (
-                      <option key={group.id} value={group.id}>
-                        {group.workGroupName}
-                      </option>
-                    ))}
-                  </select>
+                  <WorkGroupCombobox
+                    key={`${selectedFacilityId}-${selectedWorkGroupValue || "none"}`}
+                    options={selectedWorkGroups}
+                    defaultWorkGroupId={selectedWorkGroupValue}
+                    required={selectedWorkGroups.length > 0}
+                  />
                   <p className="mt-1 text-xs text-[var(--muted)]">
-                    ดึงจากรายการกลุ่มงานของหน่วยงานที่สร้างไว้
+                    เลือกจากกลุ่มงานของหน่วยงานนี้ หรือพิมพ์ชื่อใหม่ (เช่น งานธุรการ, สสอ., รพ.สต.) ระบบจะเพิ่มให้เมื่อบันทึก
                   </p>
                 </div>
               )}

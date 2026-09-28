@@ -10,6 +10,7 @@ import {
   hashPassword,
   hashThaiCidForLookup,
   normalizeThaiCid,
+  revokeUserSessions,
   splitDisplayName,
 } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
@@ -291,6 +292,8 @@ export async function toggleUserActiveAction(userId: number, currentActive: bool
   if (Number(actor.id) === userId) return;
   const target = await getUserAuditRow(userId);
   await executeStatement("UPDATE users SET is_active = ? WHERE id = ?", [currentActive ? 0 : 1, userId]);
+  // SEC-09: ปิดใช้งานบัญชีแล้วต้องหลุดจากระบบทันที ไม่ใช่รอเซสชันหมดอายุ
+  if (currentActive) await revokeUserSessions(userId);
   await writeAuditLog({
     userId: actor.id,
     userName: actor.fullName,
@@ -372,6 +375,16 @@ export async function updateUserRoleAction(userId: number, newRole: "admin" | "o
   const actor = await requireAdmin();
   if (Number(actor.id) === userId) return;
   const before = await getUserAuditRow(userId);
+  // SEC-21: บทบาท officer ผูกกับขอบเขตหน่วยงาน ถ้าไม่มีหน่วยงานจะกลายเป็นสิทธิ์ที่ไม่มีขอบเขต
+  if (newRole === "officer") {
+    const rows = await selectRows<RowDataPacket & { facility_id: number | null }>(
+      "SELECT facility_id FROM users WHERE id = ? LIMIT 1",
+      [userId]
+    ).catch(() => []);
+    if (!rows[0]?.facility_id) {
+      throw new Error("กรุณากำหนดหน่วยงานให้ผู้ใช้ก่อนเปลี่ยนเป็นบทบาท Officer");
+    }
+  }
   await executeStatement("UPDATE users SET role = ? WHERE id = ?", [newRole, userId]);
   await writeAuditLog({
     userId: actor.id,
@@ -431,13 +444,15 @@ export async function resetUserPasswordAction(_prev: string | null, fd: FormData
   const target = await getUserAuditRow(userId);
   const hash = hashPassword(newPassword);
   await executeStatement("UPDATE users SET password_hash = ? WHERE id = ?", [hash, userId]);
+  // SEC-09: แอดมินรีเซ็ตรหัสผ่าน = เตะผู้ใช้คนนั้นออกจากทุกเครื่อง
+  const revoked = await revokeUserSessions(userId);
   await writeAuditLog({
     userId: actor.id,
     userName: actor.fullName,
     action: "update",
     entity: "users",
     entityId: userId,
-    summary: `รีเซ็ตรหัสผ่านผู้ใช้ ${target?.full_name ?? `#${userId}`}`,
+    summary: `รีเซ็ตรหัสผ่านผู้ใช้ ${target?.full_name ?? `#${userId}`}${revoked.revoked ? " และยกเลิกเซสชันเดิมทั้งหมด" : ""}`,
   });
   revalidatePath("/admin/users");
   return null;

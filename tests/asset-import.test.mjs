@@ -11,7 +11,7 @@ function load(file, dependencies) {
   const source = ts.transpileModule(fs.readFileSync(new URL(file, import.meta.url), "utf8"), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
   }).outputText;
-  vm.runInNewContext(source, { exports, Buffer, File, Error, require(id) {
+  vm.runInNewContext(source, { exports, Buffer, File, Error, Math, Number, process: { env: {} }, require(id) {
     if (!(id in dependencies)) throw new Error(`Unexpected dependency: ${id}`);
     return dependencies[id];
   } });
@@ -220,4 +220,29 @@ test("รายงานคอลัมน์ที่ระบบไม่ร�
   assert.ok(body.unknownColumns.includes("asset_nane"));
   assert.ok(body.unknownColumns.includes("ราคา"));
   assert.ok(!body.unknownColumns.includes("asset_name"));
+});
+
+test("SEC-11: ปฏิเสธไฟล์ที่ใหญ่เกินเพดาน ก่อนอ่านเนื้อไฟล์", async () => {
+  const ctx = setup();
+  const huge = "asset_name\n" + "เครื่องพิมพ์\n".repeat(400_000);
+  const result = await ctx.request({ csv: huge });
+  assert.equal(result.status, 413);
+  assert.match(result.body.error, /ใหญ่เกิน/);
+  assert.equal(ctx.writes.length, 0);
+});
+
+test("SEC-11: ปฏิเสธไฟล์ที่มีแถวเกินเพดาน", async () => {
+  const ctx = setup();
+  const rows = Array.from({ length: 5001 }, (_, index) => `เครื่องพิมพ์ ${index}`).join("\n");
+  const result = await ctx.request({ csv: `asset_name\n${rows}` });
+  assert.equal(result.status, 413);
+  assert.match(result.body.error, /เกิน/);
+  assert.equal(ctx.writes.length, 0);
+});
+
+test("SEC-11: ไฟล์ว่างถูกปฏิเสธพร้อมข้อความที่เข้าใจได้", async () => {
+  const ctx = setup();
+  const result = await ctx.request({ csv: "" });
+  assert.equal(result.status, 400);
+  assert.match(result.body.error, /ไฟล์ว่าง/);
 });

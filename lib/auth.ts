@@ -683,6 +683,38 @@ export async function destroySession() {
   cookieStore.delete(SESSION_COOKIE_NAME);
 }
 
+/**
+ * SEC-09: ยกเลิกเซสชันของผู้ใช้หลังเปลี่ยน/รีเซ็ตรหัสผ่าน
+ *
+ * keepCurrent = true  ใช้ตอนผู้ใช้เปลี่ยนรหัสผ่านเอง (ยังอยู่ในระบบต่อได้ แต่เครื่องอื่นหลุดหมด)
+ * keepCurrent = false ใช้ตอนแอดมินรีเซ็ตให้ (เตะออกทุกเครื่อง)
+ * ไม่โยน error เมื่อยังไม่มีตาราง auth_sessions เพื่อไม่ให้การเปลี่ยนรหัสผ่านล้มเหลวทั้งหมด
+ */
+export async function revokeUserSessions(userId: number, options: { keepCurrent?: boolean } = {}) {
+  let currentHash: string | null = null;
+  if (options.keepCurrent) {
+    try {
+      const cookieStore = await cookies();
+      const rawToken = cookieStore.get(SESSION_COOKIE_NAME)?.value;
+      currentHash = rawToken ? sha256(rawToken) : null;
+    } catch {
+      currentHash = null;
+    }
+  }
+
+  try {
+    if (currentHash) {
+      await executeStatement("DELETE FROM auth_sessions WHERE user_id = ? AND session_token_hash <> ?", [userId, currentHash]);
+    } else {
+      await executeStatement("DELETE FROM auth_sessions WHERE user_id = ?", [userId]);
+    }
+    return { revoked: true };
+  } catch (error) {
+    if (isMissingSchemaError(error)) return { revoked: false };
+    throw error;
+  }
+}
+
 export async function getCurrentUser() {
   const cookieStore = await cookies();
   const rawToken = cookieStore.get(SESSION_COOKIE_NAME)?.value;

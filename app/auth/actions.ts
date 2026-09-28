@@ -21,7 +21,9 @@ import {
   verifyPassword,
 } from "@/lib/auth";
 import { notifyTelegramSafe } from "@/lib/telegram";
-import { recordSecurityEvent } from "@/lib/security";
+import { readRequestIp, recordSecurityEvent } from "@/lib/security";
+import { checkLoginLock, loginLockMessage, LOGIN_SUCCESS_EVENT } from "@/lib/login-throttle";
+import { canBypassMaintenance, isMaintenanceEnabled } from "@/lib/maintenance";
 
 function toQuery(message: string) {
   return encodeURIComponent(message);
@@ -37,7 +39,8 @@ function safeNextPath(value: FormDataEntryValue | string | null | undefined) {
 async function requestDetails() {
   const requestHeaders = await headers();
   return {
-    IP: requestHeaders.get("x-forwarded-for")?.split(",")[0]?.trim() ?? requestHeaders.get("x-real-ip") ?? "unknown",
+    // SEC-08: อ่านตามจำนวนชั้น proxy ที่เชื่อถือได้ ไม่ใช่ค่าแรกของ X-Forwarded-For ที่ปลอมได้
+    IP: readRequestIp(requestHeaders),
     "User Agent": requestHeaders.get("user-agent") ?? "unknown",
   };
 }
@@ -248,6 +251,20 @@ export async function loginWithPasswordAction(formData: FormData) {
     redirect(`/login?tab=password&next=${encodeURIComponent(nextPath)}&error=${toQuery(inputError)}`);
   }
 
+  // SEC-08: ปฏิเสธก่อนตรวจรหัสผ่าน เมื่อใส่ผิดหลายครั้งเกินไปในช่วงเวลาที่กำหนด
+  const clientIp = readRequestIp(await headers());
+  const lock = await checkLoginLock(username, clientIp).catch(() => ({ locked: false, scope: null, retryAfterMinutes: 0 } as const));
+  if (lock.locked) {
+    await recordSecurityEvent({
+      eventType: "login_locked_out",
+      ipAddress: clientIp,
+      identity: username,
+      path: "/login",
+      detail: `ถูกจำกัดชั่วคราว (${lock.scope === "account" ? "ต่อบัญชี" : "ต่อ IP"})`,
+    });
+    redirect(`/login?tab=password&next=${encodeURIComponent(nextPath)}&error=${toQuery(loginLockMessage(lock) ?? "กรุณาลองใหม่ภายหลัง")}`);
+  }
+
   let user;
   try {
     user = await findUserByUsername(username);
@@ -279,12 +296,29 @@ export async function loginWithPasswordAction(formData: FormData) {
     redirect(`/login?tab=password&next=${encodeURIComponent(nextPath)}&error=${toQuery("บัญชีผู้ใช้ถูกระงับการใช้งาน")}`);
   }
 
+  // ปิดปรับปรุงระบบ: รับเฉพาะผู้ดูแลระบบ (ตรวจหลังยืนยันรหัสผ่าน เพื่อไม่ให้บอกใบ้ว่าบัญชีใดเป็นแอดมิน)
+  if (!canBypassMaintenance(user) && (await isMaintenanceEnabled())) {
+    await recordLoginSecurityEvent("login_blocked_maintenance", username, "ระบบอยู่ระหว่างปิดปรับปรุง");
+    redirect("/maintenance");
+  }
+
   try {
     await createSession(user.id);
   } catch (error) {
     console.error("Password login session creation failed", error);
     loginSystemErrorRedirect(nextPath);
   }
+
+  // SEC-08: บันทึกความสำเร็จเพื่อล้างตัวนับความล้มเหลวของบัญชีนี้
+  await recordSecurityEvent({
+    eventType: LOGIN_SUCCESS_EVENT,
+    ipAddress: clientIp,
+    identity: username,
+    path: "/login",
+    detail: "เข้าสู่ระบบด้วย Username/Password สำเร็จ",
+    // เข้าสู่ระบบสำเร็จบ่อย ๆ จากสำนักงานเดียวกันเป็นเรื่องปกติ ไม่ต้องแจ้งเตือน
+    skipBurstAlert: true,
+  });
 
   await notifyTelegramSafe({
     category: "security",

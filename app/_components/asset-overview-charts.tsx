@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import type { DashboardSummary } from "@/lib/dashboard-summary";
+import { DASHBOARD_STATUSES, type DashboardSummary } from "@/lib/dashboard-summary";
 import { baht, hrefWith, numberFormat, percent, Tip } from "@/app/_components/overview-format";
 
 export { baht, compactBaht, hrefWith, numberFormat, percent } from "@/app/_components/overview-format";
@@ -83,34 +83,125 @@ export function StatusDonut({ summary }: { summary: DashboardSummary }) {
   );
 }
 
+/**
+ * แถบเลือกประเภทครุภัณฑ์ด้านบนแดชบอร์ด
+ * กดแล้วทั้งหน้ากลายเป็นแดชบอร์ดของประเภทนั้น (KPI, สถานะ, รายอำเภอ ใช้ตัวกรองเดียวกันทั้งหมด)
+ * แสดง 6 ประเภทที่มีจำนวนมากที่สุด ที่เหลืออยู่ในรายการ "ประเภทอื่น"
+ */
+export function CategoryChips({ summary, basePath, visible = 6 }: { summary: DashboardSummary; basePath: string; visible?: number }) {
+  const picker = summary.categories;
+  if (picker.length === 0) return null;
+
+  const selected = summary.filters.category;
+  const selectedIndex = picker.findIndex((item) => item.key === selected);
+  // ประเภทที่เลือกอยู่ต้องเห็นเสมอ แม้จะอยู่นอก 6 อันดับแรก
+  const shown = selectedIndex >= visible ? [...picker.slice(0, visible - 1), picker[selectedIndex]] : picker.slice(0, visible);
+  const rest = picker.filter((item) => !shown.includes(item));
+
+  const chip = (active: boolean) =>
+    `inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3.5 text-xs font-medium transition ${
+      active
+        ? "border-transparent bg-[var(--primary)] text-white"
+        : "border-[var(--line)] bg-white text-[var(--foreground)] hover:bg-[var(--primary-soft)]"
+    }`;
+
+  return (
+    <nav aria-label="เลือกประเภทครุภัณฑ์" className="flex flex-wrap items-center gap-2">
+      <Link href={hrefWith(basePath, summary.filters, { category: "" })} className={chip(!selected)} aria-current={!selected ? "page" : undefined}>
+        ทุกประเภท
+      </Link>
+      {shown.map((item) => (
+        <Link
+          key={item.key}
+          href={hrefWith(basePath, summary.filters, { category: item.key })}
+          className={chip(item.key === selected)}
+          aria-current={item.key === selected ? "page" : undefined}
+        >
+          {item.label.replace(/^\d+\.\s*/, "")}
+          <span className={item.key === selected ? "text-white/80" : "text-[var(--muted)]"}>{numberFormat.format(item.count)}</span>
+        </Link>
+      ))}
+      {rest.length > 0 && (
+        <details className="relative">
+          <summary className={`${chip(false)} cursor-pointer list-none`}>+ ประเภทอื่น ({rest.length})</summary>
+          <div className="absolute right-0 z-20 mt-2 max-h-72 w-64 overflow-y-auto rounded-xl border border-[var(--line)] bg-white p-1 shadow-lg">
+            {rest.map((item) => (
+              <Link
+                key={item.key}
+                href={hrefWith(basePath, summary.filters, { category: item.key })}
+                className="flex items-center justify-between gap-3 rounded-lg px-3 py-2 text-xs hover:bg-[var(--primary-soft)]"
+              >
+                <span className="min-w-0 truncate">{item.label.replace(/^\d+\.\s*/, "")}</span>
+                <span className="shrink-0 tabular-nums text-[var(--muted)]">{numberFormat.format(item.count)}</span>
+              </Link>
+            ))}
+          </div>
+        </details>
+      )}
+    </nav>
+  );
+}
+
+/** สีตามสถานะ ใช้ชุดเดียวกับโดนัทสถานะ เพื่อให้อ่านข้ามกราฟได้ */
+const STATUS_COLOR = new Map(DASHBOARD_STATUSES.map((status) => [status.value, status.color]));
+
 export function CategoryBars({ summary, basePath }: { summary: DashboardSummary; basePath: string }) {
-  const top = summary.categories.slice(0, 8);
-  const rest = summary.categories.slice(8);
-  const rows = rest.length
-    ? [...top, { key: "", label: `อื่น ๆ (${rest.length} ประเภท)`, count: rest.reduce((s, r) => s + r.count, 0), cost: rest.reduce((s, r) => s + r.cost, 0), share: rest.reduce((s, r) => s + r.share, 0) }]
-    : top;
+  const rows = summary.categories.slice(0, 10);
   const max = Math.max(1, ...rows.map((row) => row.count));
   if (!rows.length) return <p className="py-10 text-center text-sm text-[var(--muted)]">ไม่มีครุภัณฑ์ตามตัวกรอง</p>;
   return (
     <ul className="space-y-3">
       {rows.map((row) => {
+        const selected = row.key === summary.filters.category;
+        // แต่ละแถบแบ่งเป็นช่วงตามสถานะ ความยาวรวมเทียบกับประเภทที่มากที่สุด
+        const widthOfRow = Math.max((row.count / max) * 100, 1);
         const content = (
           <>
             <span className="flex items-baseline justify-between gap-3 text-sm">
               <span className="min-w-0 truncate text-[var(--foreground)]">{row.label}</span>
-              <span className="whitespace-nowrap tabular-nums"><span className="font-semibold">{numberFormat.format(row.count)}</span> <span className="text-xs text-[var(--muted)]">{percent(row.share)}</span></span>
+              <span className="whitespace-nowrap tabular-nums">
+                <span className="font-semibold">{numberFormat.format(row.count)}</span>{" "}
+                <span className="text-xs text-[var(--muted)]">{percent(row.share)} · พร้อมใช้ {percent(row.activeRate)}</span>
+              </span>
             </span>
-            <span className="mt-1.5 block h-3 rounded-r-[4px] bg-[var(--line)]/40">
-              <span className="block h-3 rounded-r-[4px]" style={{ width: `${Math.max((row.count / max) * 100, 1)}%`, background: row.key ? BAR : BAR_MUTED }} />
+            <span className="mt-1.5 block h-3 rounded-r-[4px]" style={{ background: TRACK }}>
+              <span className="flex h-3 overflow-hidden rounded-r-[4px]" style={{ width: `${widthOfRow}%` }}>
+                {DASHBOARD_STATUSES.map((status) => {
+                  const count = row.statuses[status.value];
+                  if (!count) return null;
+                  return (
+                    <span
+                      key={status.value}
+                      style={{ width: `${(count / row.count) * 100}%`, background: selected || !summary.filters.category ? STATUS_COLOR.get(status.value) : BAR_MUTED }}
+                    />
+                  );
+                })}
+              </span>
             </span>
-            <Tip>{row.label}<br />{numberFormat.format(row.count)} รายการ · {percent(row.share)}<br />ราคาทุนรวม {baht(row.cost)} บาท</Tip>
+            <Tip>
+              {row.label}
+              <br />
+              {numberFormat.format(row.count)} รายการ · {percent(row.share)}
+              <br />
+              {DASHBOARD_STATUSES.filter((status) => row.statuses[status.value] > 0)
+                .map((status) => `${status.label} ${numberFormat.format(row.statuses[status.value])}`)
+                .join(" · ")}
+              <br />
+              ราคาทุนรวม {baht(row.cost)} บาท
+            </Tip>
           </>
         );
         return (
-          <li key={row.key || "other"} className="group relative">
-            {row.key && row.key !== summary.filters.category
-              ? <Link href={hrefWith(basePath, summary.filters, { category: row.key })} className="block rounded focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--primary)]">{content}</Link>
-              : <div tabIndex={0} className="rounded focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--primary)]">{content}</div>}
+          <li key={row.key} className="group relative">
+            {!selected ? (
+              <Link href={hrefWith(basePath, summary.filters, { category: row.key })} className="block rounded focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--primary)]">
+                {content}
+              </Link>
+            ) : (
+              <div tabIndex={0} className="rounded focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--primary)]">
+                {content}
+              </div>
+            )}
           </li>
         );
       })}
