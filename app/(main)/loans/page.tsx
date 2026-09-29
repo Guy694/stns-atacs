@@ -85,11 +85,12 @@ export default async function LoansPage() {
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[760px] text-sm">
                   <thead className="bg-slate-50/60 text-left text-xs text-[var(--muted)]">
-                    <tr>{["ครุภัณฑ์", "ผู้ยืม", "ยืม – กำหนดคืน", "คืนเมื่อ", "สภาพ / สถานะ"].map((h) => <th key={h} className="px-4 py-2.5 font-medium">{h}</th>)}</tr>
+                    <tr>{["ลำดับ", "ครุภัณฑ์", "ผู้ยืม", "ยืม – กำหนดคืน", "คืนเมื่อ", "สภาพ / สถานะ"].map((h) => <th key={h} className="px-4 py-2.5 font-medium">{h}</th>)}</tr>
                   </thead>
                   <tbody className="divide-y divide-black/4">
-                    {returned.map((loan) => (
+                    {returned.map((loan, rowIndex) => (
                       <tr key={loan.id}>
+                        <td className="px-4 py-2.5 tabular-nums text-[var(--muted)]">{(rowIndex + 1).toLocaleString("th-TH")}</td>
                         <td className="px-4 py-2.5"><Link href={`/assets/${loan.assetId}`} className="font-medium hover:underline">{loan.assetName}</Link><p className="font-mono text-xs text-[var(--muted)]">{loan.assetNumber}</p></td>
                         <td className="px-4 py-2.5">{loan.borrowerName}<p className="text-xs text-[var(--muted)]">{loan.borrowerUnit}</p></td>
                         <td className="px-4 py-2.5 text-xs">{formatThaiDate(loan.loanedOn)} – {formatThaiDate(loan.dueOn)}</td>

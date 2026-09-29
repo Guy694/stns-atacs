@@ -89,6 +89,7 @@ export function TransferHistorySection({ rows, schemaReady }: { rows: AssetTrans
           <table className="w-full min-w-[680px] text-sm">
             <thead className="bg-[var(--neutral-bg)] text-xs text-[var(--muted)]">
               <tr>
+                <th className="px-4 py-2.5 w-14 text-right font-medium">ลำดับ</th>
                 <th className="px-4 py-2.5 text-left font-medium">วันที่</th>
                 <th className="px-4 py-2.5 text-left font-medium">จาก</th>
                 <th className="px-4 py-2.5 text-left font-medium">ไป</th>
@@ -96,8 +97,9 @@ export function TransferHistorySection({ rows, schemaReady }: { rows: AssetTrans
               </tr>
             </thead>
             <tbody className="divide-y divide-black/5">
-              {rows.map((row) => (
+              {rows.map((row, rowIndex) => (
                 <tr key={row.id} className="align-top">
+                  <td className="px-4 py-2.5 text-right tabular-nums text-[var(--muted)]">{(rowIndex + 1).toLocaleString("th-TH")}</td>
                   <td className="whitespace-nowrap px-4 py-2.5 text-xs">{formatThaiDate(row.transferDate)}<p className="text-[var(--muted)]">{row.transferredBy}</p></td>
                   <td className="px-4 py-2.5 text-xs">{row.fromFacilityName}{row.fromWorkGroupName && <p className="text-[var(--muted)]">{row.fromWorkGroupName}</p>}<p className="text-[var(--muted)]">{[row.fromOwnerName, row.fromLocationDetail].filter(Boolean).join(" · ")}</p></td>
                   <td className="px-4 py-2.5 text-xs">{row.toFacilityName}{row.toWorkGroupName && <p className="text-[var(--muted)]">{row.toWorkGroupName}</p>}<p className="text-[var(--muted)]">{[row.toOwnerName, row.toLocationDetail].filter(Boolean).join(" · ")}</p></td>

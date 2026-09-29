@@ -196,6 +196,7 @@ export default async function TransferPage({ searchParams }: Props) {
             <table className="w-full min-w-[720px] text-sm">
               <thead className="bg-slate-50/60 text-xs text-[var(--muted)]">
                 <tr>
+                  <th className="px-4 py-2.5 w-14 text-right font-medium">ลำดับ</th>
                   <th className="px-4 py-2.5 text-left font-medium">วันที่</th>
                   <th className="px-4 py-2.5 text-left font-medium">ทรัพย์สิน</th>
                   <th className="px-4 py-2.5 text-left font-medium">จาก</th>
@@ -204,8 +205,9 @@ export default async function TransferPage({ searchParams }: Props) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-black/4">
-                {recent.rows.map((row) => (
+                {recent.rows.map((row, rowIndex) => (
                   <tr key={row.id}>
+                    <td className="px-4 py-2.5 text-xs text-right tabular-nums text-[var(--muted)]">{(rowIndex + 1).toLocaleString("th-TH")}</td>
                     <td className="whitespace-nowrap px-4 py-2.5 text-xs text-[var(--muted)]">{formatThaiDate(row.transferDate)}</td>
                     <td className="px-4 py-2.5">
                       <Link href={`/assets/${row.assetId}`} className="font-medium hover:underline">{row.assetName}</Link>

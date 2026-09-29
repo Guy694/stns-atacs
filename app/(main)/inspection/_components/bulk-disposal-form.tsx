@@ -30,6 +30,7 @@ export function BulkDisposalForm({ inspectionId, roundName, rows }: { inspection
         <table className="w-full min-w-[640px] text-sm">
           <thead className="bg-stone-50 text-xs text-[var(--muted)]">
             <tr>
+              <th className="px-3 py-2 w-14 text-right font-medium">ลำดับ</th>
               <th scope="col" className="w-10 px-3 py-2 text-left">
                 <input type="checkbox" aria-label="เลือกทั้งหมด" checked={allSelected} disabled={!selectable.length}
                   onChange={() => setSelected(allSelected ? new Set() : new Set(selectable.map((row) => row.assetId)))} />
@@ -40,8 +41,9 @@ export function BulkDisposalForm({ inspectionId, roundName, rows }: { inspection
             </tr>
           </thead>
           <tbody className="divide-y divide-black/5">
-            {rows.map((row) => (
+            {rows.map((row, rowIndex) => (
               <tr key={row.assetId} className={row.pendingRequestId ? "text-[var(--muted)]" : undefined}>
+                <td className="px-3 py-2 text-right tabular-nums text-[var(--muted)]">{(rowIndex + 1).toLocaleString("th-TH")}</td>
                 <td className="px-3 py-2">
                   {row.pendingRequestId ? null : (
                     <input type="checkbox" name="assetIds" value={row.assetId} checked={selected.has(row.assetId)} onChange={() => toggle(row.assetId)} aria-label={`เลือก ${row.number || row.name}`} />

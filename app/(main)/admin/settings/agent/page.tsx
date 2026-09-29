@@ -111,6 +111,7 @@ export default async function AgentSettingsPage() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-black/6 bg-stone-50/60 text-xs text-[var(--muted)]">
+                      <th className="px-4 py-3 w-14 text-right font-medium">ลำดับ</th>
                       <th className="px-4 py-3 text-left font-medium">หน่วยงาน</th>
                       <th className="px-4 py-3 text-left font-medium">ชื่อกำกับ</th>
                       <th className="px-4 py-3 text-left font-medium">กลุ่มงาน</th>
@@ -120,8 +121,9 @@ export default async function AgentSettingsPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-black/4">
-                    {enrollments.map((enrollment) => (
+                    {enrollments.map((enrollment, rowIndex) => (
                       <tr key={enrollment.id} className="transition hover:bg-white/50">
+                        <td className="px-4 py-3 text-right tabular-nums text-[var(--muted)]">{(rowIndex + 1).toLocaleString("th-TH")}</td>
                         <td className="px-4 py-3 font-medium">{enrollment.facilityName}</td>
                         <td className="px-4 py-3 text-[var(--muted)]">{enrollment.enrollmentName}</td>
                         <td className="px-4 py-3 text-[var(--muted)]">{enrollment.workGroupName ?? "-"}</td>
@@ -147,7 +149,7 @@ export default async function AgentSettingsPage() {
                     ))}
                     {enrollments.length === 0 && (
                       <tr>
-                        <td colSpan={6} className="px-4 py-10 text-center text-[var(--muted)]">ยังไม่มี enrollment token</td>
+                        <td colSpan={7} className="px-4 py-10 text-center text-[var(--muted)]">ยังไม่มี enrollment token</td>
                       </tr>
                     )}
                   </tbody>
@@ -164,6 +166,7 @@ export default async function AgentSettingsPage() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-black/6 bg-stone-50/60 text-xs text-[var(--muted)]">
+                      <th className="px-4 py-3 w-14 text-right font-medium">ลำดับ</th>
                       <th className="px-4 py-3 text-left font-medium">เครื่อง</th>
                       <th className="px-4 py-3 text-left font-medium">หน่วยงาน</th>
                       <th className="px-4 py-3 text-left font-medium">OS / IP</th>
@@ -172,8 +175,9 @@ export default async function AgentSettingsPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-black/4">
-                    {devices.map((device) => (
+                    {devices.map((device, rowIndex) => (
                       <tr key={device.id} className="transition hover:bg-white/50">
+                        <td className="px-4 py-3 text-right tabular-nums text-[var(--muted)]">{(rowIndex + 1).toLocaleString("th-TH")}</td>
                         <td className="px-4 py-3">
                           <p className="font-medium">{device.hostname ?? `Device #${device.id}`}</p>
                           <p className="mt-0.5 text-xs text-[var(--muted)]">{device.deviceType ?? "Computer"} · S/N {device.serialNumber ?? "-"}</p>
@@ -202,7 +206,7 @@ export default async function AgentSettingsPage() {
                     ))}
                     {devices.length === 0 && (
                       <tr>
-                        <td colSpan={5} className="px-4 py-10 text-center text-[var(--muted)]">ยังไม่มีเครื่องที่ enroll สำเร็จ</td>
+                        <td colSpan={6} className="px-4 py-10 text-center text-[var(--muted)]">ยังไม่มีเครื่องที่ enroll สำเร็จ</td>
                       </tr>
                     )}
                   </tbody>

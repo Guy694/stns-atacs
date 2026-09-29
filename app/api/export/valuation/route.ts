@@ -6,6 +6,7 @@ import { fiscalYearOf, summarizeValuation, VALUATION_STATUS_LABELS } from "@/lib
 import { getCurrentUser } from "@/lib/auth";
 import { listAssets } from "@/lib/assets";
 import { resolveFacilityFilter } from "@/lib/facility-scope";
+import { filterValuationAssets } from "@/lib/valuation-sheet";
 import { hasPermission } from "@/lib/role-permissions";
 import { readRequestIp, recordSecurityEvent } from "@/lib/security";
 
@@ -29,7 +30,8 @@ export async function GET(req: NextRequest) {
   if (!Number.isInteger(fiscalYear) || fiscalYear < 2500 || fiscalYear > 2700) return NextResponse.json({ error: "ปีงบประมาณไม่ถูกต้อง" }, { status: 400 });
 
   const assets = await listAssets({ facilityId });
-  const report = summarizeValuation(assets.map(asset => ({ ...asset, subtypeName: asset.extensions[asset.assetClass]?.subtypeName })), fiscalYear, today);
+  const assetClass = params.get("assetClass") ?? "";
+  const report = summarizeValuation(filterValuationAssets(assets.map(asset => ({ ...asset, subtypeName: asset.extensions[asset.assetClass]?.subtypeName })), { assetClass }), fiscalYear, today);
   const header = [
     "id", "asset_registration_no", "asset_name", "facility", "asset_class", "schedule_category", "current_status",
     "purchase_date", "purchase_price", "useful_life_years", "life_source", "annual_depreciation",

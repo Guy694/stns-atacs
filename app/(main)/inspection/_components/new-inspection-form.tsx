@@ -197,6 +197,7 @@ export default function NewInspectionForm({ facilities, workGroups = [] }: { fac
               <table className="w-full min-w-[760px] text-sm">
                 <thead>
                   <tr style={{ background: "rgba(99,102,241,0.04)", borderBottom: "1px solid var(--line)" }}>
+                    <th className="px-3 py-2 w-14 text-right font-medium">ลำดับ</th>
                     <th className="px-3 py-2 text-left font-semibold" style={{ color: "var(--muted)" }}>ทะเบียน</th>
                     <th className="px-3 py-2 text-left font-semibold" style={{ color: "var(--muted)" }}>ชื่อทรัพย์สิน</th>
                     <th className="px-3 py-2 text-left font-semibold" style={{ color: "var(--muted)" }}>กลุ่ม / ประเภท</th>
@@ -204,8 +205,9 @@ export default function NewInspectionForm({ facilities, workGroups = [] }: { fac
                   </tr>
                 </thead>
                 <tbody>
-                  {assets.map((a) => (
+                  {assets.map((a, rowIndex) => (
                     <tr key={a.id} style={{ borderBottom: "1px solid var(--line)" }}>
+                      <td className="px-3 py-2 text-right tabular-nums text-[var(--muted)]">{(rowIndex + 1).toLocaleString("th-TH")}</td>
                       <td className="px-3 py-2 font-mono text-xs" style={{ color: "var(--muted)" }}>
                         {a.assetNumber || a.assetRegistrationNo}
                       </td>

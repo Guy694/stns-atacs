@@ -409,6 +409,7 @@ export default async function AssetDetailPage({ params, searchParams }: Props) {
                 <table className="min-w-[760px] w-full text-left text-sm">
                   <thead className="border-b border-black/8 bg-[var(--neutral-bg)] text-xs text-[var(--muted)]">
                     <tr>
+                      <th className="px-4 py-3 w-14 text-right font-medium">ลำดับ</th>
                       <th className="px-4 py-3 font-medium">วันที่/เวลา</th>
                       <th className="px-4 py-3 font-medium">สถานะเดิม</th>
                       <th className="px-4 py-3 font-medium">สถานะใหม่</th>
@@ -417,8 +418,9 @@ export default async function AssetDetailPage({ params, searchParams }: Props) {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-black/6 bg-white/70">
-                    {statusHistory.map((entry) => (
+                    {statusHistory.map((entry, rowIndex) => (
                       <tr key={entry.id} className="align-top hover:bg-[var(--primary-soft)]/30">
+                        <td className="px-4 py-3 text-right tabular-nums text-[var(--muted)]">{(rowIndex + 1).toLocaleString("th-TH")}</td>
                         <td className="px-4 py-3 text-xs text-[var(--muted)]">{formatThaiDateTime(entry.changedAt)}</td>
                         <td className="px-4 py-3">
                           {entry.fromStatus ? (

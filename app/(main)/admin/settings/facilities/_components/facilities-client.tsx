@@ -111,13 +111,14 @@ function FacilityModal({
   );
 }
 
-function FacilityRow({ f, canToggleActive }: { f: FacilityAdminRow; canToggleActive: boolean }) {
+function FacilityRow({ f, canToggleActive, seq }: { f: FacilityAdminRow; canToggleActive: boolean; seq: number }) {
   const [editOpen, setEditOpen] = useState(false);
   const [togglePending, startToggle] = useTransition();
 
   return (
     <>
       <tr className="border-b border-black/5 transition hover:bg-white/40">
+        <td className="px-4 py-3 text-right tabular-nums text-[var(--muted)]">{seq.toLocaleString("th-TH")}</td>
         <td className="px-4 py-3">
           <p className="font-medium text-sm">{f.name}</p>
           <p className="text-xs text-[var(--muted)]">{f.tambon || "–"}</p>
@@ -207,6 +208,7 @@ export function FacilitiesClient({
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-black/6 bg-stone-50/60 text-xs text-[var(--muted)]">
+                <th className="w-14 px-4 py-2.5 text-right font-medium">ลำดับ</th>
                 <th className="px-4 py-2.5 text-left font-medium">ชื่อหน่วยงาน</th>
                 <th className="px-4 py-2.5 text-left font-medium">ประเภท</th>
                 <th className="px-4 py-2.5 text-left font-medium">อำเภอ</th>
@@ -216,9 +218,9 @@ export function FacilitiesClient({
               </tr>
             </thead>
             <tbody>
-              {filtered.map((f) => <FacilityRow key={f.id} f={f} canToggleActive={canToggleActive} />)}
+              {filtered.map((f, rowIndex) => <FacilityRow key={f.id} f={f} canToggleActive={canToggleActive} seq={rowIndex + 1} />)}
               {filtered.length === 0 && (
-                <tr><td colSpan={6} className="py-10 text-center text-sm text-[var(--muted)]">ไม่พบหน่วยงาน</td></tr>
+                <tr><td colSpan={7} className="py-10 text-center text-sm text-[var(--muted)]">ไม่พบหน่วยงาน</td></tr>
               )}
             </tbody>
           </table>

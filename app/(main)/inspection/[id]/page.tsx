@@ -429,6 +429,7 @@ export default async function InspectionDetailPage({ params, searchParams }: Ins
           <table className="w-full min-w-[1080px] text-sm">
             <thead>
               <tr className="border-b border-black/6 bg-stone-50/60 text-xs text-[var(--muted)]">
+                <th className="px-4 py-3 w-14 text-right font-medium">ลำดับ</th>
                 <th className="px-4 py-3 text-left font-medium">ทะเบียน</th>
                 <th className="px-4 py-3 text-left font-medium">ชื่อครุภัณฑ์</th>
                 <th className="px-4 py-3 text-left font-medium">ประเภท / ใช้ประจำที่</th>
@@ -437,10 +438,11 @@ export default async function InspectionDetailPage({ params, searchParams }: Ins
             </thead>
             <tbody className="divide-y divide-black/4">
               {visibleItems.length === 0 && (
-                <tr><td colSpan={4} className="px-4 py-10 text-center text-sm text-[var(--muted)]">ไม่มีรายการตามตัวกรอง</td></tr>
+                <tr><td colSpan={5} className="px-4 py-10 text-center text-sm text-[var(--muted)]">ไม่มีรายการตามตัวกรอง</td></tr>
               )}
-              {visibleItems.map((item) => (
+              {visibleItems.map((item, rowIndex) => (
                 <tr key={item.id} className={item.inspectionStatus === "Pending" ? "bg-amber-50/35" : "hover:bg-white/50"}>
+                  <td className="px-4 py-3 text-right tabular-nums text-[var(--muted)]">{(rowIndex + 1).toLocaleString("th-TH")}</td>
                   <td className="px-4 py-3 font-mono text-xs text-[var(--muted)]">
                     {item.assetNumber || "-"}
                   </td>

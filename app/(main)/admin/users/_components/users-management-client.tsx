@@ -154,6 +154,7 @@ export function UsersManagementClient({ users, facilities, currentUserId, thaidL
               <table className="w-full text-sm">
                 <thead className="bg-amber-50 text-xs text-amber-950">
                   <tr>
+                    <th className="px-4 py-3 w-14 text-right font-medium">ลำดับ</th>
                     <th className="w-12 px-4 py-3 text-left">
                       <input
                         type="checkbox"
@@ -170,8 +171,9 @@ export function UsersManagementClient({ users, facilities, currentUserId, thaidL
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-stone-100">
-                  {pendingRegistrations.map((user) => (
+                  {pendingRegistrations.map((user, rowIndex) => (
                     <tr key={user.id} className="hover:bg-amber-50/40">
+                      <td className="px-4 py-4 text-right tabular-nums text-[var(--muted)]">{(rowIndex + 1).toLocaleString("th-TH")}</td>
                       <td className="px-4 py-4">
                         <input
                           type="checkbox"
@@ -277,6 +279,7 @@ export function UsersManagementClient({ users, facilities, currentUserId, thaidL
             <table className="w-full text-sm">
               <thead className="bg-stone-50 text-xs text-stone-700">
                 <tr>
+                  <th className="px-4 py-3 w-14 text-right font-medium">ลำดับ</th>
                   <th className="px-4 py-3 text-left font-semibold">ผู้ใช้งาน</th>
                   <th className="px-4 py-3 text-left font-semibold">บัญชี</th>
                   <th className="px-4 py-3 text-left font-semibold">หน่วยงาน</th>
@@ -287,8 +290,9 @@ export function UsersManagementClient({ users, facilities, currentUserId, thaidL
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
-                {filteredUsers.map((user) => (
+                {filteredUsers.map((user, rowIndex) => (
                   <tr key={user.id} className="hover:bg-stone-50/70">
+                    <td className="px-4 py-4 text-right tabular-nums text-[var(--muted)]">{(rowIndex + 1).toLocaleString("th-TH")}</td>
                     <td className="px-4 py-4">
                       <p className="font-semibold">{user.full_name}</p>
                       <p className="mt-0.5 text-xs text-[var(--muted)]">{user.officer_position ?? "–"}</p>

@@ -1,5 +1,5 @@
-import { AssetCategorySummary } from "@/app/_components/asset-category-summary";
-import { summarizeDepreciationCategories } from "@/lib/asset-depreciation";
+import { CountBars, StatusPie } from "@/app/_components/status-pie";
+import { summarizeComputerDashboard } from "@/lib/computer-dashboard";
 import { isItAsset } from "@/lib/asset-policy";
 import Link from "next/link";
 
@@ -149,16 +149,12 @@ export default async function ItDashboard({ searchParams }: HomeProps) {
   const hasFilteredData = facilitySurveys.length > 0;
 
   const allAssets = facilitySurveys.flatMap((survey) =>
-    survey.assets.map((asset) => ({ ...asset, facilityName: survey.facilityName, districtName: survey.districtName }))
+    survey.assets
+      .filter((asset) => isItAsset(asset))
+      .map((asset) => ({ ...asset, facilityName: survey.facilityName, districtName: survey.districtName }))
   );
+  const computerSummary = summarizeComputerDashboard(allAssets, referenceDate.toISOString().slice(0, 10));
 
-  const totalAssets = allAssets.length;
-  const safeTotalAssets = Math.max(totalAssets, 1);
-  const activeAssets = allAssets.filter((a) => a.currentStatus === "Active").length;
-  const brokenAssets = allAssets.filter((a) => a.currentStatus === "Broken").length;
-  const inactiveAssets = allAssets.filter((a) => a.currentStatus === "Inactive").length;
-  const hardwareCount = allAssets.filter((a) => isItAsset(a) && a.assetGroup === "Hardware").length;
-  const softwareCount = allAssets.filter((a) => isItAsset(a) && a.assetGroup === "Software").length;
   const computerLicenseSummary = summarizeComputerLicenses(allAssets);
   const computerDistrictRows = uniqueSorted(facilitySurveys.map((survey) => survey.districtName)).map((districtName) => {
     const districtSurveys = facilitySurveys.filter((survey) => survey.districtName === districtName);
@@ -186,15 +182,14 @@ export default async function ItDashboard({ searchParams }: HomeProps) {
     );
   const computerRows = computerView === "facility" ? computerFacilityRows : computerDistrictRows;
   const totalDistricts = selectedDistrict ? 1 : new Set(facilitySurveys.map((s) => s.districtName)).size;
-  const activeRate = Math.round((activeAssets / safeTotalAssets) * 100);
 
   const districtMetrics = facilitySurveys.reduce<Record<string, { assets: number; facilities: number; activeAssets: number; completionTotal: number }>>(
     (acc, survey) => {
       const cur = acc[survey.districtName] ?? { assets: 0, facilities: 0, activeAssets: 0, completionTotal: 0 };
       acc[survey.districtName] = {
-        assets: cur.assets + survey.assets.length,
+        assets: cur.assets + survey.assets.filter((a) => isItAsset(a)).length,
         facilities: cur.facilities + 1,
-        activeAssets: cur.activeAssets + survey.assets.filter((a) => a.currentStatus === "Active").length,
+        activeAssets: cur.activeAssets + survey.assets.filter((a) => isItAsset(a) && a.currentStatus === "Active").length,
         completionTotal: cur.completionTotal + survey.completionRate,
       };
       return acc;
@@ -305,51 +300,6 @@ export default async function ItDashboard({ searchParams }: HomeProps) {
     (selectedGroupLabel ? `กลุ่ม${selectedGroupLabel}` : "") ||
     scopeFacilityName ||
     "ทุกหน่วยงาน";
-  const quickActions = [
-    {
-      href: assetQuickLink,
-      title: isScopedUser ? "ทรัพย์สินของหน่วยงาน" : "ทรัพย์สินทั้งหมด",
-      value: numberFormat.format(totalAssets),
-      unit: "รายการ",
-      detail: quickScopeLabel,
-      marker: "รวม",
-      className: "border-[var(--line)] bg-white text-[var(--foreground)] hover:border-sky-300 hover:bg-sky-50/30",
-      markerClassName: "bg-sky-50 text-sky-700",
-    },
-    {
-      href: brokenQuickLink,
-      title: "รายการชำรุด",
-      value: numberFormat.format(brokenAssets),
-      unit: "รายการ",
-      detail: brokenAssets > 0 ? "ควรตรวจสอบหรือส่งซ่อม" : "ยังไม่มีรายการชำรุดในตัวกรองนี้",
-      marker: "ซ่อม",
-      className: "border-[var(--line)] bg-white text-[var(--foreground)] hover:border-rose-300 hover:bg-rose-50/30",
-      markerClassName: "bg-rose-50 text-rose-700",
-    },
-    {
-      href: "/reports?view=expiring",
-      title: "MA ใกล้หมดอายุ",
-      value: numberFormat.format(expiringSoon.length),
-      unit: "รายการ",
-      detail:
-        expiringSoon.length > 0
-          ? `${criticalExpiringCount} วิกฤต · ${warningExpiringCount} เฝ้าระวัง`
-          : "ยังไม่มีสัญญาใกล้หมดอายุ",
-      marker: "MA",
-      className: "border-[var(--line)] bg-white text-[var(--foreground)] hover:border-amber-300 hover:bg-amber-50/30",
-      markerClassName: "bg-amber-50 text-amber-700",
-    },
-    {
-      href: activeQuickLink,
-      title: "พร้อมใช้งาน",
-      value: numberFormat.format(activeAssets),
-      unit: "รายการ",
-      detail: `${activeRate}% ของทรัพย์สินตามตัวกรอง`,
-      marker: "OK",
-      className: "border-[var(--line)] bg-white text-[var(--foreground)] hover:border-emerald-300 hover:bg-emerald-50/30",
-      markerClassName: "bg-emerald-50 text-emerald-700",
-    },
-  ];
   const expiringMaintenanceRows: ExpiringMaintenanceRow[] = expiringSoon.map((asset) => ({
     id: asset.id,
     assetName: asset.assetName,
@@ -378,51 +328,27 @@ export default async function ItDashboard({ searchParams }: HomeProps) {
     <div className="mx-auto flex w-full max-w-[1600px] flex-1 flex-col gap-6">
 
         {/* ── Page heading ─────────────────────────────────────────────────── */}
-        <section className="dashboard-hero relative isolate min-h-[240px] overflow-hidden rounded-[18px] px-5 py-6 text-white sm:px-8 sm:py-8 lg:px-10" aria-labelledby="dashboard-heading">
-          <div className="relative z-10 flex h-full items-center">
-            <div className="max-w-3xl xl:max-w-[58%]">
-              <p className="text-xs font-semibold tracking-[0.14em] text-sky-100">ATACS · ASSET MANAGEMENT SYSTEM</p>
-              <h1 id="dashboard-heading" className="section-title mt-3 max-w-2xl text-2xl font-semibold leading-tight text-balance sm:text-3xl lg:text-4xl">
-                {scopeFacilityName ? `ภาพรวมครุภัณฑ์ ${scopeFacilityName}` : "ยินดีต้อนรับสู่ระบบทะเบียนครุภัณฑ์"}
-              </h1>
-              <p className="mt-3 max-w-2xl text-sm leading-6 text-sky-50/90 sm:text-base">
-                จัดการทะเบียนทรัพย์สิน ตรวจสอบสถานะ บำรุงรักษา และติดตามครุภัณฑ์ของหน่วยงานได้จากระบบเดียว
-              </p>
-              <div className="mt-6 flex flex-wrap gap-3">
-                <Link href={assetQuickLink} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-[#15548f] transition hover:bg-sky-50">
-                  <AppIcon name="package" className="h-4 w-4" />
-                  จัดการครุภัณฑ์
-                </Link>
-                <Link href="/assets" className="inline-flex min-h-11 items-center rounded-xl border border-white/40 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-white/10">
-                  ดูทะเบียนทั้งหมด <span className="ml-2" aria-hidden="true">→</span>
-                </Link>
-              </div>
-            </div>
+        <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold tracking-[0.12em] text-[var(--accent-strong)]">ATACS · ครุภัณฑ์คอมพิวเตอร์</p>
+            <h1 id="dashboard-heading" className="section-title mt-1 text-2xl font-semibold sm:text-3xl">ภาพรวมครุภัณฑ์คอมพิวเตอร์</h1>
+            <p className="mt-1 text-sm text-[var(--muted)]">
+              {quickScopeLabel} · ข้อมูล ณ {renderedAt}
+              <span className="ml-2 inline-flex items-center gap-1.5 align-middle text-xs">
+                <span className={`h-2 w-2 rounded-full ${dataSource === "database" ? "bg-emerald-500" : "bg-amber-500"}`} />
+                {connectionMessage}
+              </span>
+            </p>
           </div>
-
-          <div className="pointer-events-none absolute inset-y-0 right-0 hidden w-[38%] xl:block" aria-hidden="true">
-            <div className="absolute right-10 top-9 w-56 rotate-2 rounded-2xl bg-white/95 p-4 text-[#18324a] shadow-lg">
-              <div className="flex items-center gap-3">
-                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-100 text-sky-700"><AppIcon name="monitor" /></span>
-                <div><p className="text-xs text-slate-500">ครุภัณฑ์ในระบบ</p><p className="text-xl font-bold">{numberFormat.format(totalAssets)}</p></div>
-              </div>
-              <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-sky-500" style={{ width: `${activeRate}%` }} /></div>
-            </div>
-            <div className="absolute bottom-7 right-52 -rotate-3 rounded-2xl bg-white/90 p-4 text-[#176c9e] shadow-lg">
-              <AppIcon name="database" className="h-7 w-7" />
-              <p className="mt-2 text-xs font-semibold">ข้อมูลเชื่อมต่อแล้ว</p>
-            </div>
-            <div className="absolute bottom-10 right-8 rounded-xl bg-sky-950/25 p-3 text-white ring-1 ring-white/30">
-              <AppIcon name="activity" className="h-6 w-6" />
-            </div>
+          <div className="flex flex-wrap gap-2">
+            <Link href="/dashboard" className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[var(--line)] bg-white px-4 text-sm font-medium text-[var(--foreground)] transition hover:bg-[var(--primary-soft)]">
+              ← ภาพรวมครุภัณฑ์ทั้งหมด
+            </Link>
+            <Link href={assetQuickLink} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[var(--primary)] px-4 text-sm font-semibold text-white transition hover:bg-[var(--primary-hover)]">
+              <AppIcon name="package" className="h-4 w-4" /> ทะเบียนครุภัณฑ์
+            </Link>
           </div>
-          <br />
-          <div className="relative z-10 mt-6 flex flex-wrap gap-2 border-t border-white/20 pt-4 text-xs text-sky-50 xl:absolute xl:bottom-5 xl:left-10 xl:mt-0 xl:border-0 xl:pt-0">
-            <span className="inline-flex items-center gap-2"><span className={`h-2 w-2 rounded-full ${dataSource === "database" ? "bg-emerald-300" : "bg-amber-300"}`} />{connectionMessage}</span>
-            <span className="text-white/45">•</span>
-            <span>ข้อมูลวันที่ {renderedAt}</span>
-          </div>
-        </section>
+        </header>
 
         {isViewer && (
           <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-700">
@@ -524,50 +450,6 @@ export default async function ItDashboard({ searchParams }: HomeProps) {
           )}
         </form>
 
-        <section className="pt-2" aria-labelledby="asset-overview-heading">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <p className="text-xs font-semibold tracking-[0.12em] text-[var(--accent-strong)]">ASSET OVERVIEW</p>
-              <h2 id="asset-overview-heading" className="section-title mt-1 text-2xl font-semibold text-[var(--foreground)]">ภาพรวมครุภัณฑ์</h2>
-              <p className="mt-1 text-sm text-[var(--muted)]">ข้อมูลสถานะครุภัณฑ์ตามขอบเขต: {quickScopeLabel}</p>
-            </div>
-            <span className="inline-flex w-fit rounded-full bg-[var(--primary-soft)] px-3 py-1 text-xs font-medium text-[var(--primary-text)]">
-              {activeFilterCount > 0 ? `${activeFilterCount} เงื่อนไข` : "ไม่จำกัดตัวกรอง"}
-            </span>
-          </div>
-
-          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            {quickActions.map((action) => (
-              <Link
-                key={action.title}
-                href={action.href}
-                aria-label={`เปิด${action.title}`}
-                className={`group flex min-h-36 flex-col justify-between rounded-2xl border p-5 transition duration-200 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] ${action.className}`}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold">{action.title}</p>
-                    <p className="mt-1 line-clamp-2 text-xs leading-5 opacity-75">{action.detail}</p>
-                  </div>
-                  <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${action.markerClassName}`}>
-                    {action.marker}
-                  </span>
-                </div>
-                <div className="mt-5 flex items-end justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-3xl font-semibold leading-none tracking-tight">{action.value}</p>
-                    <p className="mt-1 text-xs font-medium opacity-70">{action.unit}</p>
-                  </div>
-                  <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/85 text-lg font-semibold shadow-sm transition group-hover:translate-x-0.5">
-                    →
-                  </span>
-                </div>
-              </Link>
-            ))}
-          </div>
-        </section>
-
-        <AssetCategorySummary {...summarizeDepreciationCategories(allAssets)} />
 
         {isScopedUser && !missingFacilityAssignment && !hasScopedData && (
           <div className="glass-panel rounded-2xl p-8 text-center">
@@ -602,84 +484,136 @@ export default async function ItDashboard({ searchParams }: HomeProps) {
           ) : (
           <>
 
-        {/* ── KPI Strip ────────────────────────────────────────────────────── */}
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="rounded-2xl border border-[var(--line)] bg-white p-5">
-            <p className="text-xs font-medium text-[var(--muted)]">{scopeFacilityName ? "หน่วยงาน" : "หน่วยงาน"}</p>
-            <p className="mt-3 text-3xl font-semibold tracking-tight text-[var(--foreground)]">{facilitySurveys.length}</p>
-            <div className="mt-2 flex items-center gap-1.5 text-xs text-[var(--muted)]">
-              <span className="h-1.5 w-1.5 rounded-full bg-sky-500" />
-              {scopeFacilityName ? scopeFacilityName : `${totalDistricts} อำเภอ`}
-            </div>
-          </div>
-
-          <div className="rounded-2xl border border-[var(--line)] bg-white p-5">
-            <p className="text-xs font-medium text-[var(--muted)]">ทรัพย์สินรวม</p>
-            <p className="mt-3 text-3xl font-semibold tracking-tight text-[var(--foreground)]">{totalAssets}</p>
-            <div className="mt-2 flex items-center gap-2 text-xs text-[var(--muted)]">
-              <span>{hardwareCount}  ฮาร์ดแวร์</span>
-              <span className="text-slate-300">·</span>
-              <span>{softwareCount} ซอฟต์แวร์</span>
-            </div>
-          </div>
-
-          <div className="rounded-2xl border border-[var(--line)] bg-white p-5">
-            <p className="text-xs font-medium text-[var(--muted)]">พร้อมใช้งาน</p>
-            <p className="mt-3 text-3xl font-semibold tracking-tight text-emerald-700">{activeAssets}</p>
-            <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-emerald-100">
-              <div className="h-full rounded-full bg-emerald-500" style={{ width: `${activeRate}%` }} />
-            </div>
-            <p className="mt-1.5 text-xs text-[var(--muted)]">{activeRate}% ของทั้งหมด</p>
-          </div>
-
-          <div className={`glass-panel rounded-2xl p-5 ${expiringSoon.length > 0 ? "border-amber-300/50" : ""}`}>
-            <p className="text-xs font-medium text-[var(--muted)]">MA ใกล้หมดอายุ</p>
-            <p
-              className={`mt-3 text-3xl font-semibold tracking-tight ${expiringSoon.length > 0 ? "text-[var(--danger)]" : ""}`}
-            >
-              {expiringSoon.length}
-            </p>
-            <div className="mt-2 text-xs text-[var(--muted)]">
-              {expiringSoon.length > 0
-                ? `วิกฤต ${expiringSoon.filter((a) => a.daysRemaining <= 7).length} · เฝ้าระวัง ${expiringSoon.filter((a) => a.daysRemaining > 7).length}`
-                : "ไม่มีแจ้งเตือนภายใน 45 วัน"}
-            </div>
-          </div>
+        {/* ── KPI ──────────────────────────────────────────────────────────── */}
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          {[
+            { label: "ครุภัณฑ์คอมพิวเตอร์ทั้งหมด", value: computerSummary.total, unit: "รายการ", detail: `ฮาร์ดแวร์ ${numberFormat.format(computerSummary.hardware)} · ซอฟต์แวร์ ${numberFormat.format(computerSummary.software)}`, href: assetQuickLink, tone: "" },
+            { label: "เครื่องคอมพิวเตอร์", value: computerSummary.computers, unit: "เครื่อง", detail: `${facilitySurveys.length} หน่วยงาน · ${totalDistricts} อำเภอ`, tone: "text-sky-700" },
+            ...(isAdmin
+              ? [{ label: "Windows แท้", value: computerSummary.license.genuine, unit: "เครื่อง", detail: `${computerSummary.genuineRate}% ของคอมพิวเตอร์ · ไม่แท้ ${numberFormat.format(computerSummary.license.nonGenuine)} · ไม่ระบุ ${numberFormat.format(computerSummary.license.unreported)}`, tone: "text-emerald-700" }]
+              : [{ label: "พร้อมใช้งาน", value: computerSummary.status.active, unit: "รายการ", detail: `${computerSummary.activeRate}% ของทั้งหมด`, href: activeQuickLink, tone: "text-emerald-700" }]),
+            { label: "ชำรุด", value: computerSummary.status.broken, unit: "รายการ", detail: computerSummary.status.broken > 0 ? "ควรตรวจสอบหรือส่งซ่อม" : "ไม่มีรายการชำรุด", href: brokenQuickLink, tone: computerSummary.status.broken > 0 ? "text-rose-700" : "" },
+            { label: "MA ใกล้หมดอายุ (45 วัน)", value: expiringSoon.length, unit: "รายการ", detail: expiringSoon.length > 0 ? `วิกฤต ${criticalExpiringCount} · เฝ้าระวัง ${warningExpiringCount}` : "ไม่มีแจ้งเตือน", href: "/reports?view=expiring", tone: expiringSoon.length > 0 ? "text-amber-700" : "" },
+          ].map((kpi) => {
+            const body = (
+              <>
+                <p className="text-xs font-medium text-[var(--muted)]">{kpi.label}</p>
+                <p className="mt-2 flex items-baseline gap-1.5">
+                  <span className={`text-3xl font-semibold tracking-tight tabular-nums ${kpi.tone || "text-[var(--foreground)]"}`}>{numberFormat.format(kpi.value)}</span>
+                  <span className="text-xs text-[var(--muted)]">{kpi.unit}</span>
+                </p>
+                <p className="mt-2 text-xs leading-5 text-[var(--muted)]">{kpi.detail}</p>
+              </>
+            );
+            const className = "block min-w-0 rounded-2xl border border-[var(--line)] bg-white p-5";
+            return "href" in kpi && kpi.href ? (
+              <Link key={kpi.label} href={kpi.href} className={`${className} transition hover:border-[var(--primary-soft-strong)] hover:bg-[var(--primary-soft)]/40`}>{body}</Link>
+            ) : (
+              <div key={kpi.label} className={className}>{body}</div>
+            );
+          })}
         </div>
 
-        {/* ── Operational + Distribution ───────────────────────────────────── */}
-        <div className="grid gap-6">
-          {/* Operational Readiness */}
-          <div className="glass-panel rounded-2xl p-6">
-            <p className="text-xs font-medium uppercase tracking-[0.2em] text-[var(--muted)]">Operational Readiness</p>
-            <h2 className="section-title mt-1 text-xl font-semibold">สถานะการใช้งาน</h2>
-
-            <div className="mt-5 space-y-4">
-              {(
-                [
-	                  { label: assetStatusLabel("Active"), count: activeAssets, bar: "bg-emerald-500", bg: "bg-emerald-50", tone: "success" as const },
-	                  { label: assetStatusLabel("Inactive"), count: inactiveAssets, bar: "bg-amber-400", bg: "bg-amber-50", tone: "warning" as const },
-	                  { label: assetStatusLabel("Broken"), count: brokenAssets, bar: "bg-rose-500", bg: "bg-rose-50", tone: "danger" as const },
-	                ] as const
-	              ).map(({ label, count, bar, tone }) => (
-                <div key={label}>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-sm font-medium">
-                      <span className={`h-2 w-2 rounded-full ${bar}`} />
-                      {label}
-                    </div>
-	                    <StatusBadge tone={tone}>{count}</StatusBadge>
-                  </div>
-                  <div className="mt-2 h-2 overflow-hidden rounded-full bg-stone-100">
-                    <div className={`h-full rounded-full ${bar}`} style={{ width: `${(count / safeTotalAssets) * 100}%` }} />
-                  </div>
-                </div>
-              ))}
+        {/* ── Charts ───────────────────────────────────────────────────────── */}
+        <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+          <section className="rounded-2xl border border-[var(--line)] bg-white p-5" aria-labelledby="it-status-heading">
+            <h2 id="it-status-heading" className="text-base font-semibold">สถานะการใช้งาน</h2>
+            <p className="mt-0.5 text-xs text-[var(--muted)]">ครุภัณฑ์คอมพิวเตอร์ทั้งหมดตามตัวกรอง</p>
+            <div className="mt-4">
+              <StatusPie
+                ariaLabel="สถานะการใช้งาน"
+                items={[
+                  { label: assetStatusLabel("Active"), count: computerSummary.status.active, color: "#10b981" },
+                  { label: assetStatusLabel("Inactive"), count: computerSummary.status.inactive, color: "#f59e0b" },
+                  { label: assetStatusLabel("Broken"), count: computerSummary.status.broken, color: "#f43f5e" },
+                ]}
+              />
             </div>
+          </section>
 
-            {/* Public IP panel */}
-         
-          </div>
+          <section className="rounded-2xl border border-[var(--line)] bg-white p-5" aria-labelledby="it-group-heading">
+            <h2 id="it-group-heading" className="text-base font-semibold">ฮาร์ดแวร์และซอฟต์แวร์</h2>
+            <p className="mt-0.5 text-xs text-[var(--muted)]">สัดส่วนตามกลุ่มครุภัณฑ์</p>
+            <div className="mt-4">
+              <StatusPie
+                ariaLabel="ฮาร์ดแวร์และซอฟต์แวร์"
+                items={[
+                  { label: "ฮาร์ดแวร์", count: computerSummary.hardware, color: "#2563eb" },
+                  { label: "ซอฟต์แวร์", count: computerSummary.software, color: "#8b5cf6" },
+                ]}
+              />
+            </div>
+          </section>
+
+          {isAdmin ? (
+            <section className="rounded-2xl border border-[var(--line)] bg-white p-5" aria-labelledby="it-license-heading">
+              <h2 id="it-license-heading" className="text-base font-semibold">ลิขสิทธิ์ Windows</h2>
+              <p className="mt-0.5 text-xs text-[var(--muted)]">เฉพาะเครื่องคอมพิวเตอร์ {numberFormat.format(computerSummary.computers)} เครื่อง</p>
+              <div className="mt-4">
+                <StatusPie
+                  ariaLabel="ลิขสิทธิ์ Windows"
+                  totalLabel="เครื่อง"
+                  items={[
+                    { label: "Windows แท้", count: computerSummary.license.genuine, color: "#10b981" },
+                    { label: "Windows ไม่แท้", count: computerSummary.license.nonGenuine, color: "#f43f5e" },
+                    { label: "ยังไม่ระบุ", count: computerSummary.license.unreported, color: "#cbd5e1" },
+                  ]}
+                />
+              </div>
+            </section>
+          ) : (
+            <section className="rounded-2xl border border-[var(--line)] bg-white p-5" aria-labelledby="it-brand-heading">
+              <h2 id="it-brand-heading" className="text-base font-semibold">ยี่ห้อเครื่องคอมพิวเตอร์</h2>
+              <p className="mt-0.5 text-xs text-[var(--muted)]">6 ยี่ห้อที่มีมากที่สุด</p>
+              <div className="mt-4"><CountBars rows={computerSummary.brands} color="#0e7490" /></div>
+            </section>
+          )}
+
+          <section className="rounded-2xl border border-[var(--line)] bg-white p-5" aria-labelledby="it-device-heading">
+            <h2 id="it-device-heading" className="text-base font-semibold">ประเภทอุปกรณ์ฮาร์ดแวร์</h2>
+            <p className="mt-0.5 text-xs text-[var(--muted)]">จำนวนตามประเภทอุปกรณ์</p>
+            <div className="mt-4"><CountBars rows={computerSummary.deviceTypes} color="#2563eb" /></div>
+          </section>
+
+          <section className="rounded-2xl border border-[var(--line)] bg-white p-5" aria-labelledby="it-os-heading">
+            <h2 id="it-os-heading" className="text-base font-semibold">ระบบปฏิบัติการ</h2>
+            <p className="mt-0.5 text-xs text-[var(--muted)]">เฉพาะเครื่องคอมพิวเตอร์ · สีแดง = รุ่นที่ Microsoft เลิกสนับสนุนแล้ว</p>
+            <div className="mt-4">
+              <CountBars
+                rows={computerSummary.operatingSystems}
+                color="#0f766e"
+                highlight={(label) => (/^Windows (XP|7|8|8\.1|10)$/.test(label) ? "#f43f5e" : undefined)}
+              />
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-[var(--line)] bg-white p-5" aria-labelledby="it-age-heading">
+            <h2 id="it-age-heading" className="text-base font-semibold">อายุเครื่องคอมพิวเตอร์</h2>
+            <p className="mt-0.5 text-xs text-[var(--muted)]">นับจากวันที่ได้มา · เกิน 7 ปี {numberFormat.format(computerSummary.agingComputers)} เครื่อง ควรวางแผนทดแทน</p>
+            <div className="mt-4">
+              <CountBars
+                rows={computerSummary.computerAges}
+                color="#2563eb"
+                highlight={(label) => (label === "เกิน 7 ปี" ? "#f43f5e" : label === "5–7 ปี" ? "#f59e0b" : label === "ไม่ระบุวันที่ได้มา" ? "#cbd5e1" : undefined)}
+              />
+            </div>
+          </section>
+
+          {computerSummary.software > 0 && (
+            <section className="rounded-2xl border border-[var(--line)] bg-white p-5" aria-labelledby="it-software-heading">
+              <h2 id="it-software-heading" className="text-base font-semibold">ซอฟต์แวร์ตามประเภท</h2>
+              <p className="mt-0.5 text-xs text-[var(--muted)]">{numberFormat.format(computerSummary.software)} รายการ</p>
+              <div className="mt-4"><CountBars rows={computerSummary.softwareTypes} color="#8b5cf6" /></div>
+            </section>
+          )}
+
+          {isAdmin && (
+            <section className="rounded-2xl border border-[var(--line)] bg-white p-5" aria-labelledby="it-brand-heading">
+              <h2 id="it-brand-heading" className="text-base font-semibold">ยี่ห้อเครื่องคอมพิวเตอร์</h2>
+              <p className="mt-0.5 text-xs text-[var(--muted)]">6 ยี่ห้อที่มีมากที่สุด</p>
+              <div className="mt-4"><CountBars rows={computerSummary.brands} color="#0e7490" /></div>
+            </section>
+          )}
         </div>
 
         {isAdmin && (
@@ -687,7 +621,7 @@ export default async function ItDashboard({ searchParams }: HomeProps) {
             <div className="flex flex-col gap-4 border-b border-black/8 p-5 sm:flex-row sm:items-start sm:justify-between lg:p-6">
               <div>
                 <h2 id="computer-license-heading" className="section-title text-xl font-semibold">
-                  ภาพรวมคอมพิวเตอร์และลิขสิทธิ์ Windows
+                  ลิขสิทธิ์ Windows รายอำเภอ / รายหน่วยงาน
                 </h2>
                 <p className="mt-1 text-sm text-[var(--muted)]">
                   สรุปเฉพาะ Hardware ประเภทคอมพิวเตอร์ตามตัวกรองปัจจุบัน

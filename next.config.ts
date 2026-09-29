@@ -13,10 +13,11 @@ import type { NextConfig } from "next";
  */
 const LEAFLET_CDN = "https://unpkg.com";
 const MAP_TILES = "https://*.tile.openstreetmap.org";
+const IS_DEVELOPMENT = process.env.NODE_ENV === "development";
 
 const CONTENT_SECURITY_POLICY = [
   "default-src 'self'",
-  `script-src 'self' 'unsafe-inline' ${LEAFLET_CDN}`,
+  `script-src 'self' 'unsafe-inline'${IS_DEVELOPMENT ? " 'unsafe-eval'" : ""} ${LEAFLET_CDN}`,
   `style-src 'self' 'unsafe-inline' ${LEAFLET_CDN}`,
   `img-src 'self' data: blob: ${LEAFLET_CDN} ${MAP_TILES}`,
   `connect-src 'self' ${LEAFLET_CDN} ${MAP_TILES}`,

@@ -13,15 +13,17 @@ type MainNavbarProps = {
 
 export function MainNavbar({ user }: MainNavbarProps) {
   return (
-    <header className="sticky top-0 z-30 border-b border-[var(--line)] bg-white/95 px-3 py-2.5 pl-16 backdrop-blur-sm sm:px-6 sm:pl-6 lg:px-8">
-      <div className="mx-auto flex max-w-[1600px] flex-wrap items-center justify-between gap-2.5 sm:gap-3">
+    <header className="sticky top-0 z-30 bg-[var(--background)]/90 px-3 pt-3 pb-1 backdrop-blur-sm sm:px-6 lg:pl-0 lg:pr-3">
+      {/* การ์ดเดียวกับ sidebar: มุมโค้ง เส้นขอบ และระยะขอบบนเท่ากัน สูงเท่าส่วนหัวของ sidebar เพื่อให้เส้นล่างต่อกัน */}
+      <div className="flex min-h-[3.75rem] flex-wrap items-center justify-between gap-2.5 rounded-2xl border border-[var(--line)] bg-white px-3 py-2 pl-16 shadow-[0_1px_2px_rgba(15,23,42,0.04)] sm:gap-3 sm:px-5 sm:pl-5 lg:min-h-[76px] lg:px-6">
         <div className="flex min-w-0 items-center gap-3">
+          {/* โลโก้อยู่ใน sidebar แล้วบนจอใหญ่ จึงแสดงเฉพาะจอเล็กที่ sidebar ถูกซ่อน */}
           <Image
             src="/logo.png"
             alt="ATACS Logo"
             width={42}
             height={42}
-            className="h-9 w-9 rounded-xl border border-[var(--line)] bg-white object-contain p-1 sm:h-10 sm:w-10"
+            className="h-9 w-9 rounded-xl border border-[var(--line)] bg-white object-contain p-1 sm:h-10 sm:w-10 lg:hidden"
             priority
           />
           <div className="min-w-0">

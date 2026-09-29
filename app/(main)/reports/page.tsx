@@ -3,6 +3,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { AppIcon } from "@/app/_components/ui/icon";
+import { ASSET_CLASS_OPTIONS } from "@/lib/asset-classes";
+import { filterValuationAssets } from "@/lib/valuation-sheet";
 import { StatusBadge } from "@/app/_components/ui/status-badge";
 import { assetStatusLabel, assetStatusTone } from "@/lib/asset-status";
 import { getCurrentUser } from "@/lib/auth";
@@ -91,9 +93,19 @@ export default async function ReportsPage({ searchParams }: Props) {
   const depreciationRollup = view === "depreciation"
     ? buildDepreciationRollup(assets.map((a) => ({ ...a, subtypeName: a.extensions[a.assetClass]?.subtypeName })), fiscalYear)
     : null;
+  const valuationClass = ASSET_CLASS_OPTIONS.some((o) => o.value === readParam(params, "assetClass")) ? readParam(params, "assetClass") : "";
+  const valuationFacility = user.role === "admin" ? Number(readParam(params, "facility")) || undefined : undefined;
+  const valuationFacilities = user.role === "admin"
+    ? [...new Map(assets.map((a) => [a.facilityId, a.facilityName])).entries()].sort((a, b) => String(a[1]).localeCompare(String(b[1]), "th"))
+    : [];
   const valuationReport = view === "valuation"
-    ? summarizeValuation(assets.map((a) => ({ ...a, subtypeName: a.extensions[a.assetClass]?.subtypeName })), fiscalYear, todayIso)
+    ? summarizeValuation(
+        filterValuationAssets(assets.map((a) => ({ ...a, subtypeName: a.extensions[a.assetClass]?.subtypeName })), { assetClass: valuationClass, facilityId: valuationFacility }),
+        fiscalYear,
+        todayIso
+      )
     : null;
+  const valuationQuery = `fy=${fiscalYear}${valuationClass ? `&assetClass=${valuationClass}` : ""}${valuationFacility ? `&facility=${valuationFacility}` : ""}`;
   const [repairList, repairSummary, transferList, disposalList] = await Promise.all([
     view === "repairs" ? listRepairs({ facilityIds: scopeIds, dateFrom: fyRange.start, dateTo: fyRange.end, limit: 1000 }) : Promise.resolve(null),
     view === "repairs" ? summarizeRepairs({ facilityIds: scopeIds, dateFrom: fyRange.start, dateTo: fyRange.end }) : Promise.resolve(null),
@@ -346,6 +358,7 @@ export default async function ReportsPage({ searchParams }: Props) {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-black/6 bg-slate-50/60 text-xs text-[var(--muted)]">
+                    <th className="px-4 py-2.5 w-14 text-right font-medium">ลำดับ</th>
                     <th className="px-4 py-2.5 text-left font-medium">ทรัพย์สิน</th>
                     <th className="px-4 py-2.5 text-left font-medium">หน่วยงาน</th>
                     <th className="px-4 py-2.5 text-left font-medium">วันหมดอายุ</th>
@@ -354,8 +367,9 @@ export default async function ReportsPage({ searchParams }: Props) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-black/4">
-                  {expiring.map((a) => (
+                  {expiring.map((a, rowIndex) => (
                     <tr key={a.id} className="transition hover:bg-white/50">
+                      <td className="px-4 py-3 text-right tabular-nums text-[var(--muted)]">{(rowIndex + 1).toLocaleString("th-TH")}</td>
                       <td className="px-4 py-3">
                         <Link href={`/assets/${a.id}`} className="font-medium hover:text-[var(--accent-strong)] hover:underline">{a.assetName}</Link>
                         <p className="font-mono text-xs text-[var(--muted)]">{a.assetNumber}</p>
@@ -393,6 +407,7 @@ export default async function ReportsPage({ searchParams }: Props) {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-black/6 bg-slate-50/60 text-xs text-[var(--muted)]">
+                    <th className="px-4 py-2.5 w-14 text-right font-medium">ลำดับ</th>
                     <th className="px-4 py-2.5 text-left font-medium">ทรัพย์สิน</th>
                     <th className="px-4 py-2.5 text-left font-medium">หน่วยงาน</th>
                     <th className="px-4 py-2.5 text-left font-medium">ประเภท</th>
@@ -402,8 +417,9 @@ export default async function ReportsPage({ searchParams }: Props) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-black/4">
-                  {brokenList.map((a) => (
+                  {brokenList.map((a, rowIndex) => (
                     <tr key={a.id} className="transition hover:bg-white/50">
+                      <td className="px-4 py-3 text-right tabular-nums text-[var(--muted)]">{(rowIndex + 1).toLocaleString("th-TH")}</td>
                       <td className="px-4 py-3">
                         <Link href={`/assets/${a.id}`} className="font-medium hover:text-[var(--accent-strong)] hover:underline">{a.assetName}</Link>
                         <p className="font-mono text-xs text-[var(--muted)]">{a.assetNumber}</p>
@@ -477,6 +493,7 @@ export default async function ReportsPage({ searchParams }: Props) {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-black/6 bg-slate-50/60 text-xs text-[var(--muted)]">
+                    <th className="px-4 py-2.5 w-14 text-right font-medium">ลำดับ</th>
                     <th className="px-4 py-2.5 text-left font-medium">ความเร่งด่วน</th>
                     <th className="px-4 py-2.5 text-left font-medium">ทรัพย์สิน</th>
                     <th className="px-4 py-2.5 text-left font-medium">หน่วยงาน</th>
@@ -488,8 +505,9 @@ export default async function ReportsPage({ searchParams }: Props) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-black/4">
-                  {replacementPlan.items.slice(0, 500).map((item) => (
+                  {replacementPlan.items.slice(0, 500).map((item, rowIndex) => (
                     <tr key={item.asset.id} className="align-top transition hover:bg-white/50">
+                      <td className="px-4 py-3 text-right tabular-nums text-[var(--muted)]">{(rowIndex + 1).toLocaleString("th-TH")}</td>
                       <td className="px-4 py-3">
                         <StatusBadge tone={item.priority === "High" ? "danger" : item.priority === "Medium" ? "warning" : "neutral"}>{REPLACEMENT_PRIORITY_LABELS[item.priority]}</StatusBadge>
                       </td>
@@ -522,6 +540,24 @@ export default async function ReportsPage({ searchParams }: Props) {
           <select id="report-fy" name="fy" defaultValue={fiscalYear} className="filter-control">
             {fyOptions.map((year) => <option key={year} value={year}>{year}</option>)}
           </select>
+          {view === "valuation" && (
+            <>
+              <label htmlFor="report-class" className="text-[var(--muted)]">ประเภท</label>
+              <select id="report-class" name="assetClass" defaultValue={valuationClass} className="filter-control">
+                <option value="">ทุกประเภท</option>
+                {ASSET_CLASS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+              {valuationFacilities.length > 1 && (
+                <>
+                  <label htmlFor="report-facility" className="text-[var(--muted)]">หน่วยงาน</label>
+                  <select id="report-facility" name="facility" defaultValue={valuationFacility ?? ""} className="filter-control">
+                    <option value="">ทุกหน่วยงาน</option>
+                    {valuationFacilities.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+                  </select>
+                </>
+              )}
+            </>
+          )}
           <button className="rounded-lg border border-[var(--line)] bg-white px-3 py-1">แสดง</button>
           <span className="text-xs text-[var(--muted)]">{formatThaiDate(fyRange.start)} – {formatThaiDate(fyRange.end)}</span>
         </form>
@@ -640,7 +676,10 @@ export default async function ReportsPage({ searchParams }: Props) {
                 <p className="font-semibold">สรุปมูลค่าตามประเภททรัพย์สิน</p>
                 <p className="text-xs text-[var(--muted)]">ณ วันที่ {formatThaiDate(valuationReport.asOf)} · เส้นตรง ราคาซาก 1 บาท · ไม่รวมรายการจำหน่าย/สูญหาย {valuationReport.terminalCount} รายการ</p>
               </div>
-              <a href={`/api/export/valuation?fy=${fiscalYear}${scopedFacilityId ? `&facilityId=${scopedFacilityId}` : ""}`} className="inline-flex items-center gap-2 rounded-xl border border-[var(--primary-soft-strong)] bg-[var(--primary-soft)] px-4 py-2 text-sm font-medium text-[var(--primary-text)] hover:bg-[var(--primary-soft-strong)]">
+              <a href={`/print/assets/valuation?${valuationQuery}`} target="_blank" rel="noopener" className="inline-flex items-center gap-2 rounded-xl border border-[var(--primary-soft-strong)] bg-white px-4 py-2 text-sm font-medium text-[var(--primary-text)] hover:bg-[var(--primary-soft)]">
+                <AppIcon name="printer" className="h-4 w-4" /> พิมพ์ / PDF (A4)
+              </a>
+              <a href={`/api/export/valuation?fy=${fiscalYear}${scopedFacilityId ? `&facilityId=${scopedFacilityId}` : valuationFacility ? `&facilityId=${valuationFacility}` : ""}${valuationClass ? `&assetClass=${valuationClass}` : ""}`} className="inline-flex items-center gap-2 rounded-xl border border-[var(--primary-soft-strong)] bg-[var(--primary-soft)] px-4 py-2 text-sm font-medium text-[var(--primary-text)] hover:bg-[var(--primary-soft-strong)]">
                 <AppIcon name="download" className="h-4 w-4" /> ทะเบียนค่าเสื่อม CSV
               </a>
             </div>
@@ -737,12 +776,14 @@ export default async function ReportsPage({ searchParams }: Props) {
             <div className="glass-panel overflow-x-auto rounded-2xl">
               <table className="w-full min-w-[820px] text-sm">
                 <thead className="bg-slate-50/60 text-xs text-[var(--muted)]"><tr>
+                  <th className="px-4 py-2.5 w-14 text-right font-medium">ลำดับ</th>
                   <th className="px-4 py-2.5 text-left font-medium">งาน</th><th className="px-4 py-2.5 text-left font-medium">ทรัพย์สิน</th><th className="px-4 py-2.5 text-left font-medium">หน่วยงาน</th>
                   <th className="px-4 py-2.5 text-center font-medium">สถานะ</th><th className="px-4 py-2.5 text-left font-medium">ผู้ซ่อม</th><th className="px-4 py-2.5 text-right font-medium">ค่าใช้จ่าย</th>
                 </tr></thead>
                 <tbody className="divide-y divide-black/4">
-                  {repairList.rows.length === 0 ? <tr><td colSpan={6} className="px-4 py-8 text-center text-[var(--muted)]">ไม่มีงานซ่อมในปีงบประมาณนี้</td></tr> : repairList.rows.map((row) => (
+                  {repairList.rows.length === 0 ? <tr><td colSpan={7} className="px-4 py-8 text-center text-[var(--muted)]">ไม่มีงานซ่อมในปีงบประมาณนี้</td></tr> : repairList.rows.map((row, rowIndex) => (
                     <tr key={row.id}>
+                      <td className="px-4 py-2.5 text-right tabular-nums text-[var(--muted)]">{(rowIndex + 1).toLocaleString("th-TH")}</td>
                       <td className="px-4 py-2.5"><Link href={`/repairs/${row.id}`} className="font-mono text-xs font-semibold text-[var(--primary)] hover:underline">#{row.id}</Link><p className="text-xs text-[var(--muted)]">{formatThaiDate(row.reportedAt)}</p></td>
                       <td className="px-4 py-2.5"><Link href={`/assets/${row.assetId}`} className="hover:underline">{row.assetName}</Link><p className="font-mono text-xs text-[var(--muted)]">{row.assetRegistrationNo}</p></td>
                       <td className="px-4 py-2.5 text-xs text-[var(--muted)]">{row.facilityName}</td>
@@ -765,12 +806,14 @@ export default async function ReportsPage({ searchParams }: Props) {
             <div className="border-b border-black/6 px-5 py-3 font-semibold">การโอนย้ายในปีงบ {fiscalYear} <span className="ml-1 text-sm font-normal text-[var(--muted)]">{transferList.rows.length} รายการ</span></div>
             <table className="w-full min-w-[860px] text-sm">
               <thead className="bg-slate-50/60 text-xs text-[var(--muted)]"><tr>
+                <th className="px-4 py-2.5 w-14 text-right font-medium">ลำดับ</th>
                 <th className="px-4 py-2.5 text-left font-medium">วันที่</th><th className="px-4 py-2.5 text-left font-medium">ทรัพย์สิน</th><th className="px-4 py-2.5 text-left font-medium">จาก</th>
                 <th className="px-4 py-2.5 text-left font-medium">ไป</th><th className="px-4 py-2.5 text-left font-medium">เอกสาร / เหตุผล</th><th className="px-4 py-2.5 text-left font-medium">ผู้บันทึก</th>
               </tr></thead>
               <tbody className="divide-y divide-black/4">
-                {transferList.rows.length === 0 ? <tr><td colSpan={6} className="px-4 py-8 text-center text-[var(--muted)]">ไม่มีการโอนย้ายในปีงบประมาณนี้</td></tr> : transferList.rows.map((row) => (
+                {transferList.rows.length === 0 ? <tr><td colSpan={7} className="px-4 py-8 text-center text-[var(--muted)]">ไม่มีการโอนย้ายในปีงบประมาณนี้</td></tr> : transferList.rows.map((row, rowIndex) => (
                   <tr key={row.id} className="align-top">
+                    <td className="px-4 py-2.5 text-right tabular-nums text-[var(--muted)]">{(rowIndex + 1).toLocaleString("th-TH")}</td>
                     <td className="whitespace-nowrap px-4 py-2.5 text-xs">{formatThaiDate(row.transferDate)}</td>
                     <td className="px-4 py-2.5"><Link href={`/assets/${row.assetId}`} className="hover:underline">{row.assetName}</Link><p className="font-mono text-xs text-[var(--muted)]">{row.assetRegistrationNo}</p></td>
                     <td className="px-4 py-2.5 text-xs">{row.fromFacilityName}<p className="text-[var(--muted)]">{[row.fromOwnerName, row.fromLocationDetail].filter(Boolean).join(" · ")}</p></td>
@@ -805,12 +848,14 @@ export default async function ReportsPage({ searchParams }: Props) {
               <div className="glass-panel overflow-x-auto rounded-2xl">
                 <table className="w-full min-w-[900px] text-sm">
                   <thead className="bg-slate-50/60 text-xs text-[var(--muted)]"><tr>
+                    <th className="px-4 py-2.5 w-14 text-right font-medium">ลำดับ</th>
                     <th className="px-4 py-2.5 text-left font-medium">คำขอ</th><th className="px-4 py-2.5 text-left font-medium">ทรัพย์สิน</th><th className="px-4 py-2.5 text-left font-medium">ประเภท / วิธี</th>
                     <th className="px-4 py-2.5 text-right font-medium">ราคาทุน</th><th className="px-4 py-2.5 text-right font-medium">มูลค่าสุทธิ</th><th className="px-4 py-2.5 text-center font-medium">สถานะ</th><th className="px-4 py-2.5 text-left font-medium">หนังสืออนุมัติ</th>
                   </tr></thead>
                   <tbody className="divide-y divide-black/4">
-                    {disposalList.rows.length === 0 ? <tr><td colSpan={7} className="px-4 py-8 text-center text-[var(--muted)]">ไม่มีคำขอในปีงบประมาณนี้</td></tr> : disposalList.rows.map((row) => (
+                    {disposalList.rows.length === 0 ? <tr><td colSpan={8} className="px-4 py-8 text-center text-[var(--muted)]">ไม่มีคำขอในปีงบประมาณนี้</td></tr> : disposalList.rows.map((row, rowIndex) => (
                       <tr key={row.id}>
+                        <td className="px-4 py-2.5 text-right tabular-nums text-[var(--muted)]">{(rowIndex + 1).toLocaleString("th-TH")}</td>
                         <td className="px-4 py-2.5"><Link href={`/disposal?requestId=${row.id}`} className="font-mono text-xs font-semibold text-[var(--primary)] hover:underline">#{row.id}</Link><p className="text-xs text-[var(--muted)]">{formatThaiDate(row.requestedAt)}</p></td>
                         <td className="px-4 py-2.5"><Link href={`/assets/${row.assetId}`} className="hover:underline">{row.assetName}</Link><p className="font-mono text-xs text-[var(--muted)]">{row.assetRegistrationNo} · {row.facilityName}</p></td>
                         <td className="px-4 py-2.5 text-xs">{DISPOSAL_REQUEST_TYPE_LABELS[row.requestType]}{row.disposalMethod && <p className="text-[var(--muted)]">{disposalMethodLabel(row.disposalMethod)}</p>}</td>

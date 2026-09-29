@@ -26,6 +26,7 @@ function RequestTable({ rows, empty }: { rows: DisposalRequest[]; empty: string 
       <table className="w-full min-w-[760px] text-sm">
         <thead className="bg-slate-50/60 text-xs text-[var(--muted)]">
           <tr>
+            <th className="px-4 py-2.5 w-14 text-right font-medium">ลำดับ</th>
             <th className="px-4 py-2.5 text-left font-medium">คำขอ</th>
             <th className="px-4 py-2.5 text-left font-medium">ทรัพย์สิน</th>
             <th className="px-4 py-2.5 text-left font-medium">ประเภท</th>
@@ -35,8 +36,9 @@ function RequestTable({ rows, empty }: { rows: DisposalRequest[]; empty: string 
           </tr>
         </thead>
         <tbody className="divide-y divide-black/4">
-          {rows.map((row) => (
+          {rows.map((row, rowIndex) => (
             <tr key={row.id} className="hover:bg-white/50">
+              <td className="px-4 py-2.5 text-right tabular-nums text-[var(--muted)]">{(rowIndex + 1).toLocaleString("th-TH")}</td>
               <td className="px-4 py-2.5"><Link href={`/disposal?requestId=${row.id}`} className="font-mono text-xs font-semibold text-[var(--primary)] hover:underline">#{row.id}</Link><p className="text-xs text-[var(--muted)]">{formatThaiDate(row.requestedAt)}</p></td>
               <td className="px-4 py-2.5"><Link href={`/assets/${row.assetId}`} className="font-medium hover:underline">{row.assetName}</Link><p className="font-mono text-xs text-[var(--muted)]">{row.assetRegistrationNo} · {row.facilityName}</p></td>
               <td className="px-4 py-2.5 text-xs">{DISPOSAL_REQUEST_TYPE_LABELS[row.requestType]}{row.disposalMethod ? <p className="text-[var(--muted)]">{disposalMethodLabel(row.disposalMethod)}</p> : null}</td>

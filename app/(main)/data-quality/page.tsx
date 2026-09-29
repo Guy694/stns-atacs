@@ -131,11 +131,12 @@ export default async function DataQualityPage({ searchParams }: Props) {
             <div className="overflow-x-auto">
               <table className="w-full min-w-[720px] text-sm">
                 <thead className="bg-[var(--neutral-bg)] text-left text-xs text-[var(--muted)]">
-                  <tr>{["เลขครุภัณฑ์", "รายการ", "หน่วยงาน", "กลุ่มงาน", "มูลค่า (บาท)"].map((h) => <th key={h} className="px-4 py-2.5 font-semibold">{h}</th>)}</tr>
+                  <tr>{["ลำดับ", "เลขครุภัณฑ์", "รายการ", "หน่วยงาน", "กลุ่มงาน", "มูลค่า (บาท)"].map((h) => <th key={h} className="px-4 py-2.5 font-semibold">{h}</th>)}</tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--line)]">
-                  {incomplete.rows.map((row) => (
+                  {incomplete.rows.map((row, rowIndex) => (
                     <tr key={row.id}>
+                      <td className="px-4 py-2.5 tabular-nums text-[var(--muted)]">{(rowIndex + 1).toLocaleString("th-TH")}</td>
                       <td className="px-4 py-2.5 font-mono text-xs">{row.assetNumber}</td>
                       <td className="px-4 py-2.5"><Link href={`/assets/${row.id}`} className="font-medium text-[var(--primary-text)] hover:underline">{row.assetName}</Link></td>
                       <td className="px-4 py-2.5">{row.facilityName}</td>
@@ -162,6 +163,7 @@ export default async function DataQualityPage({ searchParams }: Props) {
             <table className="w-full min-w-[900px] text-sm">
               <thead className="bg-[var(--neutral-bg)] text-xs text-[var(--muted)]">
                 <tr>
+                  <th className="px-4 py-2.5 w-14 text-right font-medium">ลำดับ</th>
                   <th className="px-4 py-2.5 text-left font-semibold">หน่วยงาน</th>
                   <th className="px-3 py-2.5 text-right font-semibold">รายการ</th>
                   <th className="px-3 py-2.5 text-right font-semibold">คะแนน</th>
@@ -169,8 +171,9 @@ export default async function DataQualityPage({ searchParams }: Props) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--line)]">
-                {quality.facilities.map((row) => (
+                {quality.facilities.map((row, rowIndex) => (
                   <tr key={row.facilityId}>
+                    <td className="px-3 py-2.5 text-right tabular-nums text-[var(--muted)]">{(rowIndex + 1).toLocaleString("th-TH")}</td>
                     <th scope="row" className="px-4 py-2.5 text-left font-medium">
                       <Link href={hrefFor({ facility: String(row.facilityId), district: "" })} className="hover:underline">{row.facilityName}</Link>
                       {row.districtName && <span className="block text-xs font-normal text-[var(--muted)]">อ.{row.districtName}</span>}

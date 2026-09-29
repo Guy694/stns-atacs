@@ -165,7 +165,7 @@ export default async function InspectionPage({
             <table className="w-full min-w-[980px] text-sm">
               <thead>
 	                <tr style={{ borderBottom: "1px solid var(--line)", background: "var(--neutral-bg)" }}>
-                  {["รอบการตรวจนับ", "หน่วยบริการ", "ช่วงวันที่", "ผู้เปิดรอบ", "สถานะ", "เช็คแล้ว/ทั้งหมด", ""].map((h) => (
+                  {["ลำดับ", "รอบการตรวจนับ", "หน่วยบริการ", "ช่วงวันที่", "ผู้เปิดรอบ", "สถานะ", "เช็คแล้ว/ทั้งหมด", ""].map((h) => (
                     <th key={h} className="px-4 py-3 text-left font-semibold" style={{ color: "var(--muted)" }}>
                       {h}
                     </th>
@@ -173,7 +173,7 @@ export default async function InspectionPage({
                 </tr>
               </thead>
               <tbody>
-                {filteredInspections.map((ins) => {
+                {filteredInspections.map((ins, rowIndex) => {
                   const pct = ins.totalItems > 0 ? Math.round((ins.checkedItems / ins.totalItems) * 100) : 0;
                   return (
                     <tr
@@ -181,6 +181,7 @@ export default async function InspectionPage({
                       style={{ borderBottom: "1px solid var(--line)" }}
 	                      className="hover:bg-[var(--neutral-bg)] transition-colors"
                     >
+                      <td className="px-4 py-3 tabular-nums text-[var(--muted)]">{(rowIndex + 1).toLocaleString("th-TH")}</td>
                       <td className="px-4 py-3 font-medium" style={{ color: "var(--foreground)" }}>
                         {ins.roundName}
                         {ins.workGroupName && <p className="mt-1 text-xs font-medium text-[var(--primary-text)]">{ins.workGroupName}</p>}

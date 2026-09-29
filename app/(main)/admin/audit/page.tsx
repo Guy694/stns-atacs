@@ -168,7 +168,7 @@ export default async function AuditLogPage({ searchParams }: AuditPageProps) {
           <table className="w-full text-sm">
             <thead>
               <tr style={{ background: "var(--neutral-bg)", borderBottom: "1px solid var(--line)" }}>
-                {["วันที่/เวลา", "ผู้ใช้", "การดำเนินการ", "ข้อมูล", "รายละเอียด"].map((h) => (
+                {["ลำดับ", "วันที่/เวลา", "ผู้ใช้", "การดำเนินการ", "ข้อมูล", "รายละเอียด"].map((h) => (
                   <th key={h} className="px-4 py-3 text-left font-semibold" style={{ color: "var(--muted)" }}>
                     {h}
                   </th>
@@ -176,8 +176,9 @@ export default async function AuditLogPage({ searchParams }: AuditPageProps) {
               </tr>
             </thead>
             <tbody>
-              {logs.map((log) => (
+              {logs.map((log, rowIndex) => (
                 <tr key={log.id} style={{ borderBottom: "1px solid var(--line)" }} className="hover:bg-[var(--neutral-bg)]">
+                  <td className="px-4 py-3 text-xs tabular-nums text-[var(--muted)]">{((page - 1) * pageSize + rowIndex + 1).toLocaleString("th-TH")}</td>
                   <td className="px-4 py-3 text-xs font-mono" style={{ color: "var(--muted)" }}>
                     {formatThaiDateTime(log.createdAt)}
                   </td>

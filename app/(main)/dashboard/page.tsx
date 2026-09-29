@@ -71,7 +71,7 @@ export default async function DashboardPage({ searchParams }: Props) {
             <AppIcon name="check" className="h-4 w-4" /> ความครบถ้วนข้อมูล
           </Link>
           <Link href="/dashboard/it" className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[var(--line)] bg-white px-4 text-sm font-medium text-[var(--foreground)] transition hover:bg-[var(--primary-soft)]">
-            <AppIcon name="monitor" className="h-4 w-4" /> แดชบอร์ด IT
+            <AppIcon name="monitor" className="h-4 w-4" /> ภาพรวมครุภัณฑ์คอมพิวเตอร์
           </Link>
           <Link href={`/reports?view=valuation${filters.fy ? `&fy=${filters.fy}` : ""}`} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[var(--primary)] px-4 text-sm font-semibold text-white transition hover:bg-[var(--primary-hover)]">
             <AppIcon name="file-text" className="h-4 w-4" /> รายงานมูลค่า

@@ -87,13 +87,14 @@ function DeviceTypeModal({
   );
 }
 
-function DeviceTypeItem({ item }: { item: DeviceTypeRow }) {
+function DeviceTypeItem({ item, seq }: { item: DeviceTypeRow; seq: number }) {
   const [editOpen, setEditOpen] = useState(false);
   const [togglePending, startToggle] = useTransition();
 
   return (
     <>
       <tr className="border-b border-black/5 transition hover:bg-white/40">
+        <td className="px-4 py-3 text-right tabular-nums text-[var(--muted)]">{seq.toLocaleString("th-TH")}</td>
         <td className="px-4 py-3">
           <p className="text-sm font-medium">{item.name}</p>
         </td>
@@ -147,6 +148,7 @@ export function DeviceTypesClient({ items }: { items: DeviceTypeRow[] }) {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-black/6 text-xs text-[var(--muted)]">
+                  <th className="w-14 px-4 py-2.5 text-right font-medium">ลำดับ</th>
                   <th className="px-4 py-2.5 text-left font-medium">ชื่อประเภท</th>
                   <th className="px-4 py-2.5 text-left font-medium">หมวด</th>
                   <th className="px-4 py-2.5 text-left font-medium">สถานะ</th>
@@ -154,9 +156,9 @@ export function DeviceTypesClient({ items }: { items: DeviceTypeRow[] }) {
                 </tr>
               </thead>
               <tbody>
-                {data.map((item) => <DeviceTypeItem key={item.id} item={item} />)}
+                {data.map((item, rowIndex) => <DeviceTypeItem key={item.id} item={item} seq={rowIndex + 1} />)}
                 {data.length === 0 && (
-                  <tr><td colSpan={4} className="py-6 text-center text-sm text-[var(--muted)]">ยังไม่มีข้อมูล</td></tr>
+                  <tr><td colSpan={5} className="py-6 text-center text-sm text-[var(--muted)]">ยังไม่มีข้อมูล</td></tr>
                 )}
               </tbody>
             </table>

@@ -250,6 +250,7 @@ export default async function FacilityDetailPage({ params, searchParams }: Props
             <table className="min-w-[900px] w-full text-sm">
               <thead>
                 <tr className="border-b border-black/6 bg-stone-50/60 text-xs text-[var(--muted)]">
+                  <th className="px-4 py-2.5 w-14 text-right font-medium">ลำดับ</th>
                   <th className="px-4 py-2.5 text-left font-medium">เลขทะเบียน</th>
                   <th className="px-4 py-2.5 text-left font-medium">ชื่อทรัพย์สิน</th>
                   <th className="px-4 py-2.5 text-left font-medium">ประเภท</th>
@@ -261,8 +262,9 @@ export default async function FacilityDetailPage({ params, searchParams }: Props
                 </tr>
               </thead>
               <tbody className="divide-y divide-black/4">
-                {assets.map((asset) => (
+                {assets.map((asset, rowIndex) => (
                   <tr key={asset.id} className="transition hover:bg-white/50">
+                    <td className="px-4 py-3 text-right tabular-nums text-[var(--muted)]">{(rowIndex + 1).toLocaleString("th-TH")}</td>
                     <td className="px-4 py-3">
                       <Link
                         href={`/assets/${asset.id}`}

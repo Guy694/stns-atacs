@@ -121,6 +121,7 @@ export function ExpiringMaintenanceTable({
             <table className="min-w-[920px] w-full border-collapse text-left text-sm">
               <thead className="sticky top-0 z-10 border-b border-black/8 bg-[var(--neutral-bg)] text-xs text-[var(--muted)]">
                 <tr>
+                  <th className="px-4 py-3 w-14 text-right font-medium">ลำดับ</th>
                   <th className="w-28 px-4 py-3 font-medium">คงเหลือ</th>
                   <th className="px-4 py-3 font-medium">ทรัพย์สิน</th>
                   <th className="px-4 py-3 font-medium">หน่วยงาน</th>
@@ -131,8 +132,9 @@ export function ExpiringMaintenanceTable({
                 </tr>
               </thead>
               <tbody className="divide-y divide-black/6">
-                {rows.map((row) => (
+                {rows.map((row, rowIndex) => (
                   <tr key={row.id} className="align-top transition hover:bg-[var(--primary-soft)]/40">
+                    <td className="px-4 py-3 text-right tabular-nums text-[var(--muted)]">{(rowIndex + 1).toLocaleString("th-TH")}</td>
                     <td className="px-4 py-3">
                       <StatusBadge tone={urgencyTone(row.daysRemaining)} className="font-mono">
                         {row.daysRemaining} วัน

@@ -127,6 +127,7 @@ export default async function RepairsPage({ searchParams }: Props) {
                 <table className="w-full min-w-[900px] text-sm">
                   <thead className="bg-slate-50/60 text-xs text-[var(--muted)]">
                     <tr>
+                      <th className="px-4 py-2.5 w-14 text-right font-medium">ลำดับ</th>
                       <th className="px-4 py-2.5 text-left font-medium">งาน</th>
                       <th className="px-4 py-2.5 text-left font-medium">ทรัพย์สิน</th>
                       <th className="px-4 py-2.5 text-left font-medium">ปัญหา</th>
@@ -137,8 +138,9 @@ export default async function RepairsPage({ searchParams }: Props) {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-black/4">
-                    {list.rows.map((row) => (
+                    {list.rows.map((row, rowIndex) => (
                       <tr key={row.id} className="align-top hover:bg-white/50">
+                        <td className="px-4 py-3 text-right tabular-nums text-[var(--muted)]">{(rowIndex + 1).toLocaleString("th-TH")}</td>
                         <td className="px-4 py-3"><Link href={`/repairs/${row.id}`} className="font-mono text-xs font-semibold text-[var(--primary)] hover:underline">#{row.id}</Link><p className="text-xs text-[var(--muted)]">{formatThaiDate(row.reportedAt)}</p></td>
                         <td className="px-4 py-3"><Link href={`/assets/${row.assetId}`} className="font-medium hover:underline">{row.assetName}</Link><p className="font-mono text-xs text-[var(--muted)]">{row.assetRegistrationNo} · {row.facilityName}</p></td>
                         <td className="max-w-xs px-4 py-3 text-xs text-[var(--muted)]"><p className="line-clamp-2">{row.problem}</p></td>

@@ -105,11 +105,12 @@ export default async function InspectionCoveragePage({ searchParams }: Props) {
           <div className="overflow-x-auto">
             <table className="w-full min-w-[760px] text-sm">
               <thead className="bg-[var(--neutral-bg)] text-left text-xs text-[var(--muted)]">
-                <tr>{["เลขครุภัณฑ์", "รายการ", "หน่วยงาน", "กลุ่มงาน / ที่ตั้ง", "สถานะ"].map((h) => <th key={h} className="px-4 py-2.5 font-semibold">{h}</th>)}</tr>
+                <tr>{["ลำดับ", "เลขครุภัณฑ์", "รายการ", "หน่วยงาน", "กลุ่มงาน / ที่ตั้ง", "สถานะ"].map((h) => <th key={h} className="px-4 py-2.5 font-semibold">{h}</th>)}</tr>
               </thead>
               <tbody className="divide-y divide-[var(--line)]">
-                {uncovered.rows.map((row) => (
+                {uncovered.rows.map((row, rowIndex) => (
                   <tr key={row.id}>
+                    <td className="px-4 py-2.5 tabular-nums text-[var(--muted)]">{(rowIndex + 1).toLocaleString("th-TH")}</td>
                     <td className="px-4 py-2.5 font-mono text-xs">{row.assetNumber}</td>
                     <td className="px-4 py-2.5"><Link href={`/assets/${row.id}`} className="font-medium text-[var(--primary-text)] hover:underline">{row.assetName}</Link></td>
                     <td className="px-4 py-2.5">{row.facilityName}</td>

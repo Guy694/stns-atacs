@@ -79,6 +79,7 @@ export default async function FacilitiesPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-black/5 bg-black/[0.025] text-xs text-[var(--muted)]">
+                  <th className="px-5 py-3 w-14 text-right font-medium">ลำดับ</th>
                   <th className="px-5 py-3 text-left font-medium">ชื่อหน่วยบริการ</th>
                   <th className="px-4 py-3 text-left font-medium">ประเภท</th>
                   <th className="px-4 py-3 text-center font-medium">ทรัพย์สิน</th>
@@ -89,8 +90,9 @@ export default async function FacilitiesPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-black/5">
-                {facs.map((f) => (
+                {facs.map((f, rowIndex) => (
                   <tr key={f.id} className="transition-colors hover:bg-black/[0.02]">
+                    <td className="px-5 py-3 text-right tabular-nums text-[var(--muted)]">{(rowIndex + 1).toLocaleString("th-TH")}</td>
                     <td className="px-5 py-3 font-medium text-[var(--foreground)]">{f.name}</td>
                     <td className="px-4 py-3">
 	                      <StatusBadge tone={typeBadge(f.typecode)}>

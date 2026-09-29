@@ -175,6 +175,8 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
     (acc[a.districtName] ??= []).push(a);
     return acc;
   }, {});
+  // ลำดับที่ต่อเนื่องทั้งรายการตามลำดับที่แสดงบนจอ (ต่อจากหน้าก่อน ไม่เริ่มใหม่ในแต่ละอำเภอ)
+  const rowNumber = new Map(Object.values(byDistrict).flat().map((asset, index) => [asset.id, offset + index + 1]));
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6">
@@ -227,6 +229,7 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-black/6 bg-stone-50/60 text-xs text-[var(--muted)]">
+                  <th className="w-14 px-4 py-2.5 text-right font-medium">ลำดับ</th>
                   <th className="px-4 py-2.5 text-left font-medium">เลขทะเบียน</th>
                   <th className="px-4 py-2.5 text-left font-medium">ชื่อทรัพย์สิน</th>
                   <th className="px-4 py-2.5 text-left font-medium">หน่วยงาน</th>
@@ -240,6 +243,7 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
               <tbody className="divide-y divide-black/4">
                 {items.map((asset) => (
                   <tr key={asset.id} className="hover:bg-white/50 transition">
+                    <td className="px-4 py-3 text-right tabular-nums text-[var(--muted)]">{(rowNumber.get(asset.id) ?? 0).toLocaleString("th-TH")}</td>
                     <td className="px-4 py-3">
                       <Link href={`/assets/${asset.id}`} className="font-mono text-xs text-[var(--accent)] hover:underline">
                         {asset.assetNumber || `#${asset.id}`}

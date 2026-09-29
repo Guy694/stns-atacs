@@ -142,12 +142,13 @@ function WorkGroupModal({
   );
 }
 
-function WorkGroupRow({ workGroup }: { workGroup: FacilityWorkGroupManageRow }) {
+function WorkGroupRow({ workGroup, seq }: { workGroup: FacilityWorkGroupManageRow; seq: number }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
 
   return (
     <tr className="border-b border-black/5 transition hover:bg-white/40">
+      <td className="px-4 py-3 text-right tabular-nums text-[var(--muted)]">{seq.toLocaleString("th-TH")}</td>
       <td className="px-4 py-3">
         <p className="font-medium text-[var(--foreground)]">{workGroup.workGroupName}</p>
       </td>
@@ -228,6 +229,7 @@ export function WorkGroupsClient({ facilities, workGroups }: WorkGroupsClientPro
           <table className="w-full min-w-[720px] text-sm">
             <thead>
               <tr className="border-b border-black/6 bg-stone-50/60 text-xs text-[var(--muted)]">
+                <th className="w-14 px-4 py-3 text-right font-medium">ลำดับ</th>
                 <th className="px-4 py-3 text-left font-medium">กลุ่มงาน</th>
                 <th className="px-4 py-3 text-left font-medium">หน่วยงาน</th>
                 <th className="px-4 py-3 text-left font-medium">สถานะ</th>
@@ -235,12 +237,12 @@ export function WorkGroupsClient({ facilities, workGroups }: WorkGroupsClientPro
               </tr>
             </thead>
             <tbody>
-              {workGroups.map((workGroup) => (
-                <WorkGroupRow key={workGroup.id} workGroup={workGroup} />
+              {workGroups.map((workGroup, rowIndex) => (
+                <WorkGroupRow key={workGroup.id} workGroup={workGroup} seq={rowIndex + 1} />
               ))}
               {workGroups.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="px-4 py-10 text-center text-sm text-[var(--muted)]">
+                  <td colSpan={5} className="px-4 py-10 text-center text-sm text-[var(--muted)]">
                     ยังไม่มีกลุ่มงาน กดสร้างกลุ่มงานเพื่อเริ่มใช้งาน
                   </td>
                 </tr>
