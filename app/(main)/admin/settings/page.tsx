@@ -100,6 +100,13 @@ export default async function AdminSettingsPage() {
       permissionKey: "permissions.manage",
     },
     {
+      title: "ประกาศ / ประชาสัมพันธ์ (popup)",
+      desc: "แสดงข่าว ภาพ หรือแจ้งอัปเดตเวอร์ชันหลังเข้าสู่ระบบ เปิด/ปิดได้",
+      icon: "file-text",
+      href: "/admin/settings/announcement",
+      permissionKey: "permissions.manage",
+    },
+    {
       title: "Permission Matrix",
       desc: "กำหนดสิทธิ์รายบทบาทแบบละเอียด ทั้งเมนูและ action",
       icon: "shield",

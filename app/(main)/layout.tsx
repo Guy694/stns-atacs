@@ -3,10 +3,14 @@ import { redirect } from "next/navigation";
 import { MainNavbar } from "@/app/_components/main-navbar";
 import { Sidebar } from "@/app/_components/sidebar";
 import { IdleLogoutGuard } from "@/app/_components/idle-logout-guard";
+import { AnnouncementPopup } from "@/app/_components/announcement-popup";
 import { MaintenanceBanner } from "@/app/_components/maintenance-banner";
 import { SchemaWarningBanner } from "@/app/_components/schema-warning-banner";
 import { SplashScreen } from "@/app/_components/splash-screen";
 import { SPLASH_SEEN_SCRIPT } from "@/lib/splash";
+import { getAnnouncement } from "@/lib/announcement";
+import { ANNOUNCEMENT_IMAGE_URL_PREFIX, isAnnouncementVisible } from "@/lib/announcement-shared";
+import { APP_VERSION_LABEL } from "@/lib/app-version";
 import { getMenuVisibility } from "@/lib/app-settings";
 import { getCurrentUser } from "@/lib/auth";
 import { canBypassMaintenance, isMaintenanceEnabled } from "@/lib/maintenance";
@@ -20,9 +24,10 @@ export default async function MainLayout({ children }: { children: React.ReactNo
   if (!user) redirect("/login");
   // ปิดปรับปรุงระบบ: ผู้ใช้ทั่วไปออกไปหน้าแจ้งสถานะ ผู้ดูแลระบบยังทำงานต่อได้
   if (!canBypassMaintenance(user) && (await isMaintenanceEnabled())) redirect("/maintenance");
-  const [initialGrantedPermissions, menuVisibility] = await Promise.all([
+  const [initialGrantedPermissions, menuVisibility, announcement] = await Promise.all([
     listGrantedPermissions(user.role),
     getMenuVisibility(),
+    getAnnouncement(),
   ]);
   let grantedPermissions = initialGrantedPermissions;
   let pendingRegistrationCount = 0;
@@ -51,6 +56,15 @@ export default async function MainLayout({ children }: { children: React.ReactNo
       {/* Must follow the splash: hides it before first paint when this session has already seen it. */}
       <script dangerouslySetInnerHTML={{ __html: SPLASH_SEEN_SCRIPT }} />
       <IdleLogoutGuard />
+      {isAnnouncementVisible(announcement) && (
+        <AnnouncementPopup
+          revision={announcement.revision}
+          title={announcement.title}
+          version={announcement.version}
+          message={announcement.message}
+          imageUrl={announcement.imageName ? `${ANNOUNCEMENT_IMAGE_URL_PREFIX}${announcement.imageName}` : ""}
+        />
+      )}
       <Sidebar
         user={user}
         grantedPermissions={grantedPermissions}
@@ -66,8 +80,10 @@ export default async function MainLayout({ children }: { children: React.ReactNo
           {children}
         </main>
         <footer className="px-4 pb-6 sm:px-6 lg:px-8">
-          <div className="mx-auto max-w-[1600px] border-t border-[var(--line)] px-4 py-4 text-center text-xs text-[var(--muted)] sm:text-sm">
-            กลุ่มงานสุขภาพดิจิทัล สำนักงานสาธารณสุขจังหวัดสตูล
+          <div className="mx-auto grid max-w-[1600px] grid-cols-1 items-center gap-1 border-t border-[var(--line)] px-4 py-4 text-xs text-[var(--muted)] sm:grid-cols-[1fr_auto_1fr] sm:text-sm">
+            <span className="hidden sm:block" aria-hidden="true" />
+            <span className="text-center">กลุ่มงานสุขภาพดิจิทัล สำนักงานสาธารณสุขจังหวัดสตูล</span>
+            <span className="text-right font-medium tabular-nums" title="เวอร์ชันของระบบ">{APP_VERSION_LABEL}</span>
           </div>
         </footer>
       </div>
