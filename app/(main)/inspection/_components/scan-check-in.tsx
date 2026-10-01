@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { assetIdFromScan } from "@/lib/asset-scan";
+import { withBasePath } from "@/lib/base-path";
 import { ASSET_STATUS_LABELS, OPERATIONAL_ASSET_STATUSES } from "@/lib/asset-status";
 import {
   enqueueResult,
@@ -84,7 +85,7 @@ export function ScanCheckIn({ inspectionId, items, workGroups }: { inspectionId:
     try {
       for (let start = 0; start < pending.length; start += OFFLINE_BATCH_LIMIT) {
         const batch = pending.slice(start, start + OFFLINE_BATCH_LIMIT);
-        const response = await fetch(`/api/inspection/${inspectionId}/results`, {
+        const response = await fetch(withBasePath(`/api/inspection/${inspectionId}/results`), {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ results: batch }),

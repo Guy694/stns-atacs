@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { withBasePath } from "@/lib/base-path";
 
 /**
  * กันหน้าขาวเมื่อเกิดข้อผิดพลาดที่ระดับ root layout
@@ -8,7 +9,7 @@ import { useEffect } from "react";
  */
 export default function GlobalError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   useEffect(() => {
-    void fetch("/api/client-error", {
+    void fetch(withBasePath("/api/client-error"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

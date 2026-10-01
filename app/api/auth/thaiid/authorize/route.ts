@@ -4,11 +4,12 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { getThaiIdConfig } from "@/lib/thaiid";
 import { secureCookiesEnabled } from "@/lib/cookie-security";
+import { withBasePath } from "@/lib/base-path";
 
 const STATE_COOKIE_NAME = "atacs_thaid_state";
 
 function toLoginUrl(req: NextRequest, search: Record<string, string>) {
-  const url = new URL("/login", req.url);
+  const url = new URL(withBasePath("/login"), req.url);
   for (const [key, value] of Object.entries(search)) {
     url.searchParams.set(key, value);
   }

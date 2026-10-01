@@ -1,5 +1,7 @@
 import "server-only";
 
+import { withBasePath } from "@/lib/base-path";
+
 type GoogleAuthStatus = {
   enabled: boolean;
   reason: string | null;
@@ -14,7 +16,7 @@ type GoogleAuthConfig = GoogleAuthStatus & {
   userInfoUrl: string;
 };
 
-const GOOGLE_CALLBACK_PATH = "/api/auth/google/callback";
+const GOOGLE_CALLBACK_PATH = withBasePath("/api/auth/google/callback");
 const DEFAULT_AUTHORIZE_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const DEFAULT_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const DEFAULT_USERINFO_URL = "https://openidconnect.googleapis.com/v1/userinfo";

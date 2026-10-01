@@ -36,6 +36,7 @@ import { AuditHistorySection, DisposalHistorySection, RepairHistorySection, Tran
 import { listAuditLogs, type AuditLog } from "@/lib/audit";
 import { InspectionCheckIn } from "./_components/inspection-check-in";
 import { listOpenInspectionsForAsset } from "@/lib/inspection";
+import { withBasePath } from "@/lib/base-path";
 
 type Props = {
   params: Promise<{ id: string }>;
@@ -65,7 +66,7 @@ function AssetImageGallery({ images, assetName }: { images: string[]; assetName:
       {images.map((src, index) => (
         <div key={src} className="relative aspect-[4/3] min-h-44 overflow-hidden rounded-xl border border-black/10 bg-[var(--neutral-bg)]">
           <Image
-            src={src}
+            src={withBasePath(src)}
             alt={`${assetName} ภาพที่ ${index + 1}`}
             fill
             sizes={images.length === 1 ? "(max-width: 1024px) 100vw, 720px" : "(max-width: 640px) 100vw, 360px"}
@@ -178,7 +179,8 @@ export default async function AssetDetailPage({ params, searchParams }: Props) {
   const requestHeaders = await headers();
   const host = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host") ?? "";
   const protocol = requestHeaders.get("x-forwarded-proto") ?? (host.includes("localhost") ? "http" : "https");
-  const assetScanUrl = host ? `${protocol}://${host}/scan/assets/${asset.id}` : `/scan/assets/${asset.id}`;
+  const scanPath = withBasePath(`/scan/assets/${asset.id}`);
+  const assetScanUrl = host ? `${protocol}://${host}${scanPath}` : scanPath;
 
   const canMutateThisAsset = (await hasPermission(user.role, "assets.update")) && canManageAssetRecord(user, asset.facilityId);
   const canDeleteThisAsset = (await hasPermission(user.role, "assets.delete")) && canManageAssetRecord(user, asset.facilityId);
@@ -536,7 +538,7 @@ export default async function AssetDetailPage({ params, searchParams }: Props) {
             <p className="text-xs font-medium uppercase tracking-[0.2em] text-[var(--muted)]">QR Code ทรัพย์สิน</p>
             <div className="mx-auto mt-3 flex w-56 max-w-full items-center justify-center overflow-hidden rounded-xl border border-[var(--primary-soft-strong)] bg-white shadow-sm">
               <Image
-                src={`/api/qr/asset/${asset.id}`}
+                src={withBasePath(`/api/qr/asset/${asset.id}`)}
                 alt={`QR Code: ${asset.facilityName} ${asset.assetNumber || asset.assetName}`}
                 width={240}
                 height={300}
@@ -546,7 +548,7 @@ export default async function AssetDetailPage({ params, searchParams }: Props) {
             </div>
             <p className="mt-1 break-all text-[11px] leading-4 text-[var(--muted)]">{assetScanUrl}</p>
             <QrDownloadButton
-              downloadUrl={`/api/qr/asset/${asset.id}`}
+              downloadUrl={withBasePath(`/api/qr/asset/${asset.id}`)}
               filename={`${sanitizeDownloadName(`${asset.assetRegistrationNo || `asset-${asset.id}`} ${asset.assetName}`)}.svg`}
             />
           </div>

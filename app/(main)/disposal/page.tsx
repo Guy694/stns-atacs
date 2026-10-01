@@ -14,6 +14,7 @@ import { DISPOSAL_REQUEST_TYPE_LABELS, DISPOSAL_STATUS_LABELS, DISPOSAL_STATUS_T
 import { getFacilityScopeId } from "@/lib/facility-scope";
 import { canManageAsset, canMutateAssets } from "@/lib/permissions";
 import { hasPermission } from "@/lib/role-permissions";
+import { withBasePath } from "@/lib/base-path";
 import { DisposalForm } from "./_components/disposal-form";
 import { CancelDisposalForm, DisposalDecisionForm, DisposalExecutionForm } from "./_components/disposal-decision-form";
 
@@ -321,10 +322,10 @@ export default async function DisposalPage({ searchParams }: Props) {
             <h2 className="font-semibold">เอกสารจำหน่าย (Excel)</h2>
             <p className="mt-0.5 text-xs text-[var(--muted)]">พิมพ์แนบบันทึกขออนุมัติ หรือรายงานผลการจำหน่ายประจำปี{facilityScopeId ? "" : " (ทุกหน่วยงาน)"}</p>
             <div className="mt-3 flex flex-wrap items-end gap-3">
-              <a href="/api/export/disposal?type=pending" className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[var(--primary-soft-strong)] bg-[var(--primary-soft)] px-4 text-sm font-semibold text-[var(--primary-text)] hover:bg-[var(--primary-soft-strong)]">
+              <a href={withBasePath("/api/export/disposal?type=pending")} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[var(--primary-soft-strong)] bg-[var(--primary-soft)] px-4 text-sm font-semibold text-[var(--primary-text)] hover:bg-[var(--primary-soft-strong)]">
                 <AppIcon name="download" className="h-4 w-4" /> รายการขออนุมัติจำหน่าย ({pendingList.rows.length})
               </a>
-              <form method="GET" action="/api/export/disposal" className="flex items-end gap-2">
+              <form method="GET" action={withBasePath("/api/export/disposal")} className="flex items-end gap-2">
                 <input type="hidden" name="type" value="annual" />
                 <label className="text-xs text-[var(--muted)]">ปีงบประมาณ
                   <select name="fy" defaultValue={String(currentFy)} className="filter-control">

@@ -16,7 +16,9 @@ WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
 # Public URL baked into the client bundle (agent install commands). Example: https://atacs.example.go.th
 ARG NEXT_PUBLIC_APP_URL=""
+ARG NEXT_PUBLIC_BASE_PATH=""
 ENV NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL}
+ENV NEXT_PUBLIC_BASE_PATH=${NEXT_PUBLIC_BASE_PATH}
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN npm run build
@@ -24,8 +26,10 @@ RUN npm run build
 # ── 3) Runtime ──
 FROM ${NODE_IMAGE} AS runner
 WORKDIR /app
+ARG NEXT_PUBLIC_BASE_PATH=""
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
+    NEXT_PUBLIC_BASE_PATH=${NEXT_PUBLIC_BASE_PATH} \
     PORT=3000 \
     HOSTNAME=0.0.0.0 \
     TZ=Asia/Bangkok
@@ -51,5 +55,5 @@ VOLUME ["/app/storage/uploads"]
 USER nextjs
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
-  CMD curl -fsS -o /dev/null http://127.0.0.1:3000/login || exit 1
+  CMD curl -fsS -o /dev/null "http://127.0.0.1:3000${NEXT_PUBLIC_BASE_PATH}/login" || exit 1
 CMD ["node", "server.js"]

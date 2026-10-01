@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { withBasePath } from "@/lib/base-path";
 
 const IDLE_TIMEOUT_MS = 15 * 60 * 1000;
 const IDLE_NOTICE = "ไม่มีการใช้งานเกิน 15 นาที ระบบออกจากระบบอัตโนมัติ";
@@ -27,7 +28,7 @@ export function IdleLogoutGuard() {
       clearExistingTimer();
 
       try {
-        await fetch("/logout", {
+        await fetch(withBasePath("/logout"), {
           method: "POST",
           credentials: "same-origin",
           keepalive: true,
@@ -36,7 +37,7 @@ export function IdleLogoutGuard() {
         // Ignore network errors and still redirect to login.
       }
 
-      const loginUrl = `/login?notice=${encodeURIComponent(IDLE_NOTICE)}`;
+      const loginUrl = withBasePath(`/login?notice=${encodeURIComponent(IDLE_NOTICE)}`);
       window.location.replace(loginUrl);
     };
 

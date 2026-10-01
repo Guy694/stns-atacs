@@ -12,6 +12,7 @@ import {
 import { getThaiIdConfig } from "@/lib/thaiid";
 import { notifyTelegramSafe } from "@/lib/telegram";
 import { recordSecurityEvent } from "@/lib/security";
+import { withBasePath } from "@/lib/base-path";
 
 const STATE_COOKIE_NAME = "atacs_thaid_state";
 
@@ -25,7 +26,7 @@ type ThaiIdTokenResponse = {
 };
 
 function toLoginUrl(req: NextRequest, search: Record<string, string>) {
-  const url = new URL("/login", req.url);
+  const url = new URL(withBasePath("/login"), req.url);
   for (const [key, value] of Object.entries(search)) {
     url.searchParams.set(key, value);
   }
@@ -33,7 +34,7 @@ function toLoginUrl(req: NextRequest, search: Record<string, string>) {
 }
 
 function toRegisterUrl(req: NextRequest, search: Record<string, string>) {
-  const url = new URL("/register", req.url);
+  const url = new URL(withBasePath("/register"), req.url);
   for (const [key, value] of Object.entries(search)) {
     url.searchParams.set(key, value);
   }
@@ -203,7 +204,7 @@ export async function GET(req: NextRequest) {
           title: "บัญชีที่ยังไม่ได้รับอนุมัติพยายามเข้าสู่ระบบ",
           details: { ผู้ใช้: getUserDisplayName(user), วิธี: "ThaiD", ...context },
         });
-        const response = NextResponse.redirect(new URL("/pending-approval", req.url));
+        const response = NextResponse.redirect(new URL(withBasePath("/pending-approval"), req.url));
         response.cookies.delete(STATE_COOKIE_NAME);
         return response;
       }
@@ -216,7 +217,7 @@ export async function GET(req: NextRequest) {
         details: { ผู้ใช้: getUserDisplayName(user), วิธี: "ThaiD", ...requestDetails(req) },
       });
 
-      const response = NextResponse.redirect(new URL("/", req.url));
+      const response = NextResponse.redirect(new URL(withBasePath("/"), req.url));
       response.cookies.delete(STATE_COOKIE_NAME);
       return response;
     }

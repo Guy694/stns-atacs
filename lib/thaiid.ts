@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getBooleanSetting } from "@/lib/app-settings";
+import { withBasePath } from "@/lib/base-path";
 
 type ThaiIdStatus = {
   enabled: boolean;
@@ -23,7 +24,7 @@ const DEFAULT_AUTHORIZE_URL = "https://imauth.bora.dopa.go.th/api/v2/oauth2/auth
 const DEFAULT_TOKEN_URL = "https://imauth.bora.dopa.go.th/api/v2/oauth2/token/";
 const DEFAULT_USERINFO_URL = "https://imauth.bora.dopa.go.th/api/v2/oauth2/userinfo/";
 
-const THAIID_CALLBACK_PATH = "/api/auth/thaiid/callback";
+const THAIID_CALLBACK_PATH = withBasePath("/api/auth/thaiid/callback");
 const THAI_D_ENABLED_KEY = "auth.thaid.enabled";
 
 function isEnabledByFlag() {

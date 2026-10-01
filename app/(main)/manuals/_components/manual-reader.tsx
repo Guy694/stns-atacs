@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import { AppIcon } from "@/app/_components/ui/icon";
 import { MANUAL_TOPICS, type ManualTopic } from "@/lib/user-manual";
+import { withBasePath } from "@/lib/base-path";
 
 function subscribeToTopic(callback: () => void) {
   window.addEventListener("hashchange", callback);
@@ -18,7 +19,7 @@ function currentTopic() {
 
 function ManualImage({ topic }: { topic: ManualTopic }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
-  const src = `/manuals/images/${topic.image}`;
+  const src = withBasePath(`/manuals/images/${topic.image}`);
 
   return (
     <figure className="my-6 overflow-hidden rounded-xl border border-[var(--line)] bg-white">

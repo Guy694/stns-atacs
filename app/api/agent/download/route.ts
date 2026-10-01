@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { withBasePath } from "@/lib/base-path";
 
 const FILE_TO_STATIC_PATH: Record<string, string> = {
   "windows-agent": "/agent/windows/atacs-agent.ps1",
@@ -15,6 +16,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Unknown file" }, { status: 404 });
   }
 
-  const downloadUrl = new URL(staticPath, req.nextUrl.origin);
+  const downloadUrl = new URL(withBasePath(staticPath), req.nextUrl.origin);
   return NextResponse.redirect(downloadUrl, { status: 307 });
 }

@@ -6,6 +6,9 @@
     build:
       context: ../stn-atacs
       dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_APP_URL: https://stn.moph.go.th/stns-atacs
+        NEXT_PUBLIC_BASE_PATH: /stns-atacs
 
     container_name: stn-atacs-app
     restart: always
@@ -22,7 +25,7 @@
       DB_NAME: stn_atacs
       DATABASE_URL: mysql://root:${MYSQL_ROOT_PASSWORD}@db:3306/stn_atacs
 
-      NEXT_PUBLIC_BASE_PATH: /stn-atacs
+      NEXT_PUBLIC_BASE_PATH: /stns-atacs
       NODE_ENV: ${NODE_ENV}
 
     ports:
@@ -40,14 +43,9 @@
 
 
 # ================= reverse_proxy  STN-atacs ==========================
-   location = /stns-atacs {
+    location ~ ^/stns-atacs(?:/|$) {
 
-        return 301 $scheme://$http_host/stns-atacs/;
-    }
-
-    location /stns-atacs/ {
-
-        proxy_pass http://203.157.238.51;
+        proxy_pass http://127.0.0.1:3003;
 
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;

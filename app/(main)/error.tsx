@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect } from "react";
+import { withBasePath } from "@/lib/base-path";
 
 /** ข้อผิดพลาดภายในหน้าใดหน้าหนึ่ง — เมนู/เลย์เอาต์ยังอยู่ ผู้ใช้ไปหน้าอื่นต่อได้ */
 export default function MainSegmentError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   useEffect(() => {
-    void fetch("/api/client-error", {
+    void fetch(withBasePath("/api/client-error"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -29,7 +30,7 @@ export default function MainSegmentError({ error, reset }: { error: Error & { di
         <button type="button" onClick={reset} className="filter-button bg-[var(--accent-strong)] text-white">
           ลองใหม่อีกครั้ง
         </button>
-        <a href="/dashboard" className="filter-button border border-[var(--line)] text-[var(--primary-text)]">
+        <a href={withBasePath("/dashboard")} className="filter-button border border-[var(--line)] text-[var(--primary-text)]">
           ไปหน้าแดชบอร์ด
         </a>
       </div>

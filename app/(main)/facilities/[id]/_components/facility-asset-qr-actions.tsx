@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { AppIcon } from "@/app/_components/ui/icon";
+import { withBasePath } from "@/lib/base-path";
 
 type AssetQrItem = {
   id: number;
@@ -56,7 +57,7 @@ export function FacilityAssetQrActions({ assets, facilityId, facilityName }: Fac
 
     setIsDownloading(true);
     try {
-      const response = await fetch("/api/qr/assets", {
+      const response = await fetch(withBasePath("/api/qr/assets"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

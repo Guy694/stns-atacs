@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 
 import { AppIcon, type IconName } from "@/app/_components/ui/icon";
 import { APP_MENU_GROUPS, APP_MENU_ITEMS, type AppMenuGroupKey } from "@/lib/menu";
+import { withBasePath } from "@/lib/base-path";
 
 type NavUser = {
   fullName: string;
@@ -130,7 +131,7 @@ export function Sidebar({ user, grantedPermissions, pendingRegistrationCount, me
       {/* Brand */}
       <div className="flex items-center gap-3 border-b border-[var(--line)] px-4 py-4">
         <Image
-          src="/logo.png"
+          src={withBasePath("/logo.png")}
           alt="ตราสัญลักษณ์ ATACS"
           width={44}
           height={44}

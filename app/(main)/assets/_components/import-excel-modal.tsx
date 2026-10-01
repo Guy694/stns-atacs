@@ -6,6 +6,7 @@ import { useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { AppIcon } from "@/app/_components/ui/icon";
+import { withBasePath } from "@/lib/base-path";
 import type { FacilityWorkGroupOption } from "@/lib/facility-work-groups";
 
 type ImportResult = {
@@ -64,7 +65,7 @@ export default function ImportExcelModal({
     formData.append("facilityId", facilityId);
 
     try {
-      const response = await fetch("/api/import/assets", { method: "POST", body: formData });
+      const response = await fetch(withBasePath("/api/import/assets"), { method: "POST", body: formData });
       const data = await response.json();
       if (!response.ok) {
         setError(data.error ?? "เกิดข้อผิดพลาดในการนำเข้า");
@@ -214,14 +215,14 @@ export default function ImportExcelModal({
                 </div>
 
                 <div className="flex flex-wrap gap-x-4 gap-y-2 text-xs font-semibold">
-                  <a href="/api/export/assets?template=xlsx" className="inline-flex items-center gap-1.5" style={{ color: "var(--accent)" }}>
+                  <a href={withBasePath("/api/export/assets?template=xlsx")} className="inline-flex items-center gap-1.5" style={{ color: "var(--accent)" }}>
                     <AppIcon name="download" className="h-3.5 w-3.5" /> ไฟล์ Excel ต้นแบบ (มีคำอธิบายคอลัมน์)
                   </a>
-                  <a href="/api/export/assets?template=csv" className="inline-flex items-center gap-1.5" style={{ color: "var(--accent)" }}>
+                  <a href={withBasePath("/api/export/assets?template=csv")} className="inline-flex items-center gap-1.5" style={{ color: "var(--accent)" }}>
                     <AppIcon name="download" className="h-3.5 w-3.5" /> ไฟล์ CSV ตัวอย่าง
                   </a>
                   {selectedFacility && (
-                    <a href={`/api/export/assets?facilityId=${selectedFacility.id}`} className="inline-flex items-center gap-1.5" style={{ color: "var(--accent)" }}>
+                    <a href={withBasePath(`/api/export/assets?facilityId=${selectedFacility.id}`)} className="inline-flex items-center gap-1.5" style={{ color: "var(--accent)" }}>
                       <AppIcon name="download" className="h-3.5 w-3.5" /> ส่งออกข้อมูลเดิมของหน่วยงานนี้ (ใช้แก้ไขแล้วนำเข้ากลับ)
                     </a>
                   )}

@@ -2,6 +2,7 @@
 
 import { useId, useState } from "react";
 import type { CategoryCounts, DepreciationRow } from "@/lib/asset-depreciation";
+import { withBasePath } from "@/lib/base-path";
 
 type Props = { rows: DepreciationRow[]; unclassified: CategoryCounts; total: number };
 const number = new Intl.NumberFormat("th-TH");
@@ -34,7 +35,7 @@ export function AssetCategorySummary({ rows, unclassified, total }: Props) {
           <h2 id={`${id}-heading`} className="text-xl font-semibold">ครุภัณฑ์ตามประเภททรัพย์สิน</h2>
           <p className="mt-1 max-w-[70ch] text-sm leading-6 text-[var(--muted)]">20 ประเภทตามตารางอายุการใช้งานและอัตราค่าเสื่อมราคา สำนักงานปลัดกระทรวงสาธารณสุข</p>
         </div>
-        <a href="/references/asset-useful-life.pdf" target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-lg border border-[var(--line)] px-3 text-sm font-medium text-[var(--primary-text)] hover:bg-[var(--primary-soft)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]">เปิดเอกสารอ้างอิง <span className="sr-only">PDF ในแท็บใหม่</span><span aria-hidden="true" className="ml-2">↗</span></a>
+        <a href={withBasePath("/references/asset-useful-life.pdf")} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-lg border border-[var(--line)] px-3 text-sm font-medium text-[var(--primary-text)] hover:bg-[var(--primary-soft)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]">เปิดเอกสารอ้างอิง <span className="sr-only">PDF ในแท็บใหม่</span><span aria-hidden="true" className="ml-2">↗</span></a>
       </div>
 
       <div className="flex flex-col gap-3 px-5 py-4 sm:px-6 lg:flex-row lg:items-center lg:justify-between">

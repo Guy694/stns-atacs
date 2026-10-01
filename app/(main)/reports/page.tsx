@@ -8,6 +8,7 @@ import { filterValuationAssets } from "@/lib/valuation-sheet";
 import { StatusBadge } from "@/app/_components/ui/status-badge";
 import { assetStatusLabel, assetStatusTone } from "@/lib/asset-status";
 import { getCurrentUser } from "@/lib/auth";
+import { withBasePath } from "@/lib/base-path";
 import { formatThaiDate } from "@/lib/date-format";
 import { getFacilityById, listAssets } from "@/lib/assets";
 import { hasPermission } from "@/lib/role-permissions";
@@ -80,7 +81,7 @@ export default async function ReportsPage({ searchParams }: Props) {
     scopedFacilityId ? getFacilityById(scopedFacilityId) : Promise.resolve(null),
   ]);
   const reportScopeLabel = scopedFacility?.name ?? (scopedFacilityId ? "หน่วยงานของคุณ" : "ทุกหน่วยงาน");
-  const exportHref = scopedFacilityId ? `/api/export/assets?facilityId=${scopedFacilityId}` : "/api/export/assets";
+  const exportHref = withBasePath(scopedFacilityId ? `/api/export/assets?facilityId=${scopedFacilityId}` : "/api/export/assets");
   const total = assets.length;
   const active = assets.filter((a) => a.currentStatus === "Active").length;
   const broken = assets.filter((a) => a.currentStatus === "Broken").length;
@@ -467,7 +468,7 @@ export default async function ReportsPage({ searchParams }: Props) {
                 — คะแนนรวมกำหนดความเร่งด่วน งบประมาณประมาณการจากราคาทุนเดิม
               </p>
             </div>
-            <a href={`/api/export/replacement${scopedFacilityId ? `?facilityId=${scopedFacilityId}` : ""}`}
+            <a href={withBasePath(`/api/export/replacement${scopedFacilityId ? `?facilityId=${scopedFacilityId}` : ""}`)}
               className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl border border-[var(--primary-soft-strong)] bg-[var(--primary-soft)] px-4 text-sm font-semibold text-[var(--primary-text)] hover:bg-[var(--primary-soft-strong)]">
               <AppIcon name="download" className="h-4 w-4" /> แผนทดแทน Excel
             </a>
@@ -676,10 +677,10 @@ export default async function ReportsPage({ searchParams }: Props) {
                 <p className="font-semibold">สรุปมูลค่าตามประเภททรัพย์สิน</p>
                 <p className="text-xs text-[var(--muted)]">ณ วันที่ {formatThaiDate(valuationReport.asOf)} · เส้นตรง ราคาซาก 1 บาท · ไม่รวมรายการจำหน่าย/สูญหาย {valuationReport.terminalCount} รายการ</p>
               </div>
-              <a href={`/print/assets/valuation?${valuationQuery}`} target="_blank" rel="noopener" className="inline-flex items-center gap-2 rounded-xl border border-[var(--primary-soft-strong)] bg-white px-4 py-2 text-sm font-medium text-[var(--primary-text)] hover:bg-[var(--primary-soft)]">
+              <a href={withBasePath(`/print/assets/valuation?${valuationQuery}`)} target="_blank" rel="noopener" className="inline-flex items-center gap-2 rounded-xl border border-[var(--primary-soft-strong)] bg-white px-4 py-2 text-sm font-medium text-[var(--primary-text)] hover:bg-[var(--primary-soft)]">
                 <AppIcon name="printer" className="h-4 w-4" /> พิมพ์ / PDF (A4)
               </a>
-              <a href={`/api/export/valuation?fy=${fiscalYear}${scopedFacilityId ? `&facilityId=${scopedFacilityId}` : valuationFacility ? `&facilityId=${valuationFacility}` : ""}${valuationClass ? `&assetClass=${valuationClass}` : ""}`} className="inline-flex items-center gap-2 rounded-xl border border-[var(--primary-soft-strong)] bg-[var(--primary-soft)] px-4 py-2 text-sm font-medium text-[var(--primary-text)] hover:bg-[var(--primary-soft-strong)]">
+              <a href={withBasePath(`/api/export/valuation?fy=${fiscalYear}${scopedFacilityId ? `&facilityId=${scopedFacilityId}` : valuationFacility ? `&facilityId=${valuationFacility}` : ""}${valuationClass ? `&assetClass=${valuationClass}` : ""}`)} className="inline-flex items-center gap-2 rounded-xl border border-[var(--primary-soft-strong)] bg-[var(--primary-soft)] px-4 py-2 text-sm font-medium text-[var(--primary-text)] hover:bg-[var(--primary-soft-strong)]">
                 <AppIcon name="download" className="h-4 w-4" /> ทะเบียนค่าเสื่อม CSV
               </a>
             </div>

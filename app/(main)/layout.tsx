@@ -10,6 +10,7 @@ import { SplashScreen } from "@/app/_components/splash-screen";
 import { SPLASH_SEEN_SCRIPT } from "@/lib/splash";
 import { getAnnouncement } from "@/lib/announcement";
 import { ANNOUNCEMENT_IMAGE_URL_PREFIX, isAnnouncementVisible } from "@/lib/announcement-shared";
+import { withBasePath } from "@/lib/base-path";
 import { APP_VERSION_LABEL } from "@/lib/app-version";
 import { getMenuVisibility } from "@/lib/app-settings";
 import { getCurrentUser } from "@/lib/auth";
@@ -62,7 +63,7 @@ export default async function MainLayout({ children }: { children: React.ReactNo
           title={announcement.title}
           version={announcement.version}
           message={announcement.message}
-          imageUrl={announcement.imageName ? `${ANNOUNCEMENT_IMAGE_URL_PREFIX}${announcement.imageName}` : ""}
+          imageUrl={announcement.imageName ? withBasePath(`${ANNOUNCEMENT_IMAGE_URL_PREFIX}${announcement.imageName}`) : ""}
         />
       )}
       <Sidebar

@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useLayoutEffect, useState } from "react";
 
 import { ROUTE_LOADING_ID, SPLASH_SEEN_KEY } from "@/lib/splash";
+import { withBasePath } from "@/lib/base-path";
 
 const MIN_VISIBLE_MS = 1200;
 const MAX_VISIBLE_MS = 8000;
@@ -78,7 +79,7 @@ export function SplashScreen() {
     >
       <div className="atacs-splash__inner">
         <div className="atacs-splash__logo">
-          <Image src="/logo.png" alt="" width={112} height={112} priority className="h-full w-full object-contain" />
+          <Image src={withBasePath("/logo.png")} alt="" width={112} height={112} priority className="h-full w-full object-contain" />
         </div>
         <p className="atacs-splash__brand">ATACS Satun</p>
         <p className="atacs-splash__sub">Asset Tracking and Control System</p>

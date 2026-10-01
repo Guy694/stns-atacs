@@ -5,6 +5,7 @@ import { useActionState, useEffect, useState } from "react";
 
 import { StatusBadge } from "@/app/_components/ui/status-badge";
 import { assetClassLabel } from "@/lib/asset-classes";
+import { withBasePath } from "@/lib/base-path";
 import { assetStatusLabel, assetStatusTone } from "@/lib/asset-status";
 import type { FacilityRow } from "@/lib/assets";
 import { createInspectionAction } from "../actions";
@@ -38,7 +39,7 @@ export default function NewInspectionForm({ facilities, workGroups = [] }: { fac
 
   useEffect(() => {
     if (!selectedFacilityId) return;
-    fetch(`/api/assets?facilityId=${selectedFacilityId}`)
+    fetch(withBasePath(`/api/assets?facilityId=${selectedFacilityId}`))
       .then((r) => r.json())
       .then((data) => setAssets(data))
       .catch(() => setAssets([]));

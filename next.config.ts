@@ -14,6 +14,11 @@ import type { NextConfig } from "next";
 const LEAFLET_CDN = "https://unpkg.com";
 const MAP_TILES = "https://*.tile.openstreetmap.org";
 const IS_DEVELOPMENT = process.env.NODE_ENV === "development";
+const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH?.trim().replace(/\/+$/, "") || "";
+
+if (BASE_PATH && (!BASE_PATH.startsWith("/") || BASE_PATH === "/")) {
+  throw new Error("NEXT_PUBLIC_BASE_PATH must be empty or start with '/', for example /stns-atacs");
+}
 
 const CONTENT_SECURITY_POLICY = [
   "default-src 'self'",
@@ -47,6 +52,8 @@ const HSTS_HEADER = { key: "Strict-Transport-Security", value: "max-age=63072000
 const nextConfig: NextConfig = {
   // Self-contained server bundle for the Docker image (ignored by Vercel).
   output: "standalone",
+  // This is inlined into client bundles by Next.js and therefore must be set at build time.
+  basePath: BASE_PATH,
   // Tiny QR stickers encode the URL in upper case (smaller QR); the short path is matched case-sensitively.
   async rewrites() {
     return [{ source: "/Q/:id(\\d+)", destination: "/q/:id" }];

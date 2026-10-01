@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import Swal from "sweetalert2";
 
 import { resetSplash } from "@/app/_components/splash-screen";
+import { withBasePath } from "@/lib/base-path";
 
 type LogoutConfirmFormProps = {
   buttonClassName: string;
@@ -45,7 +46,7 @@ export function LogoutConfirmForm({ buttonClassName, buttonContent, ariaLabel, t
   }
 
   return (
-    <form action="/logout" method="post" onSubmit={handleSubmit}>
+    <form action={withBasePath("/logout")} method="post" onSubmit={handleSubmit}>
       <button type="submit" className={buttonClassName} aria-label={ariaLabel} title={title}>
         {buttonContent ?? "ออกจากระบบ"}
       </button>

@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { loginWithPasswordAction, registerOfficerWithPasswordAction } from "@/app/auth/actions";
 import { listAllFacilitiesForSelect } from "@/lib/assets";
 import { getCurrentUser } from "@/lib/auth";
+import { withBasePath } from "@/lib/base-path";
 import { getGoogleAuthStatus } from "@/lib/google-auth";
 import { getThaiIdStatus } from "@/lib/thaiid";
 
@@ -59,7 +60,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
         <div className="relative z-10">
           <div className="flex items-center gap-3 mb-8">
             <div className="w-16 h-16 rounded-2xl bg-[var(--accent)]/20 flex items-center justify-center text-lg">
-              <Image src="/logo.png" alt="ATACS Satun Logo" width={48} height={48} className="h-12 w-12 object-contain" />
+              <Image src={withBasePath("/logo.png")} alt="ATACS Satun Logo" width={48} height={48} className="h-12 w-12 object-contain" />
             </div>
             <div>
               <p className="text-white font-bold text-lg leading-tight">ATACS</p>
@@ -104,7 +105,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
         {/* Mobile logo */}
         <div className="lg:hidden flex items-center gap-3 mb-8">
           <div className="w-20 h-20 rounded-2xl bg-[var(--accent)]/20 flex items-center justify-center text-lg">
-            <Image src="/logo.png" alt="ATACS Satun Logo" width={56} height={56} className="h-14 w-14 object-contain" />
+            <Image src={withBasePath("/logo.png")} alt="ATACS Satun Logo" width={56} height={56} className="h-14 w-14 object-contain" />
           </div>
           <div>
             <p className="font-bold" style={{ color: "var(--foreground)" }}>ATACS Satun</p>
@@ -389,7 +390,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
                           background: "rgba(21,128,61,0.06)",
                         }}
                       >
-                        <Image src="/thaid.png" alt="ThaiD" width={32} height={32} className="h-8 w-8 rounded-full" /> เข้าสู่ระบบด้วย ThaiD
+                        <Image src={withBasePath("/thaid.png")} alt="ThaiD" width={32} height={32} className="h-8 w-8 rounded-full" /> เข้าสู่ระบบด้วย ThaiD
                       </Link>
                     ) : null}
 

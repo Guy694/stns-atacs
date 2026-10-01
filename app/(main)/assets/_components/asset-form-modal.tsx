@@ -12,6 +12,7 @@ import { ASSET_CLASS_OPTIONS } from "@/lib/asset-classes";
 import { DEPRECIATION_CATEGORIES } from "@/lib/asset-depreciation";
 import { isItAsset, requiresWindowsLicense } from "@/lib/asset-policy";
 import type { AssetWithFacility } from "@/lib/assets";
+import { withBasePath } from "@/lib/base-path";
 import { isComputerDeviceType, type WindowsLicenseStatus } from "@/lib/windows-license";
 
 type FacilityOption = { id: number; facility_name: string | null; district_name: string | null; asset_code_prefix?: string | null };
@@ -668,7 +669,7 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
-                <div className="sm:col-span-2 text-sm leading-6 text-[var(--muted)]">เลือกประเภทตามตารางอายุการใช้งาน 20 ประเภท แล้วกรอกรายละเอียดของครุภัณฑ์ <a href="/references/asset-useful-life.pdf" target="_blank" rel="noreferrer" className="text-[var(--primary-text)] underline">ดูเอกสารอ้างอิง</a></div>
+                <div className="sm:col-span-2 text-sm leading-6 text-[var(--muted)]">เลือกประเภทตามตารางอายุการใช้งาน 20 ประเภท แล้วกรอกรายละเอียดของครุภัณฑ์ <a href={withBasePath("/references/asset-useful-life.pdf")} target="_blank" rel="noreferrer" className="text-[var(--primary-text)] underline">ดูเอกสารอ้างอิง</a></div>
                 {/* หมวด */}
                 <div>
                   <label htmlFor={`${titleId}-class`} className="block text-sm font-medium">ประเภททรัพย์สินตามเอกสาร <span className="text-rose-500">*</span></label>
@@ -986,7 +987,7 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
                       <input id={titleId + "image" + slot} name={"assetImage" + slot} type="file" accept="image/jpeg,image/png,image/webp" className="mt-1 block w-full text-sm" />
                       {imageUrl && (
                         <div className="mt-2 flex flex-wrap items-center gap-4 text-sm">
-                          <a href={imageUrl} target="_blank" rel="noreferrer" className="underline">ดูรูปปัจจุบัน</a>
+                          <a href={withBasePath(imageUrl)} target="_blank" rel="noreferrer" className="underline">ดูรูปปัจจุบัน</a>
                           <label className="flex items-center gap-2"><input type="checkbox" name={"removeAssetImage" + slot} value="1" />ลบรูปปัจจุบัน</label>
                         </div>
                       )}

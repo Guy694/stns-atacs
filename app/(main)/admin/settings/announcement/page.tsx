@@ -11,6 +11,7 @@ import {
   ANNOUNCEMENT_TITLE_MAX,
   ANNOUNCEMENT_VERSION_MAX,
 } from "@/lib/announcement-shared";
+import { withBasePath } from "@/lib/base-path";
 import { APP_VERSION } from "@/lib/app-version";
 import { getCurrentUser } from "@/lib/auth";
 import { formatThaiDateTime } from "@/lib/date-format";
@@ -31,7 +32,7 @@ export default async function AnnouncementSettingsPage({ searchParams }: Props) 
   const error = one(params.error);
   const preview = one(params.preview) === "1";
   const state = await getAnnouncement();
-  const imageUrl = state.imageName ? `${ANNOUNCEMENT_IMAGE_URL_PREFIX}${state.imageName}` : "";
+  const imageUrl = state.imageName ? withBasePath(`${ANNOUNCEMENT_IMAGE_URL_PREFIX}${state.imageName}`) : "";
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6">

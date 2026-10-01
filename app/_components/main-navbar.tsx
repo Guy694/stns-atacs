@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { LogoutConfirmForm } from "@/app/_components/logout-confirm-form";
 import { AppIcon } from "@/app/_components/ui/icon";
+import { withBasePath } from "@/lib/base-path";
 
 type MainNavbarProps = {
   user: {
@@ -19,7 +20,7 @@ export function MainNavbar({ user }: MainNavbarProps) {
         <div className="flex min-w-0 items-center gap-3">
           {/* โลโก้อยู่ใน sidebar แล้วบนจอใหญ่ จึงแสดงเฉพาะจอเล็กที่ sidebar ถูกซ่อน */}
           <Image
-            src="/logo.png"
+            src={withBasePath("/logo.png")}
             alt="ATACS Logo"
             width={42}
             height={42}

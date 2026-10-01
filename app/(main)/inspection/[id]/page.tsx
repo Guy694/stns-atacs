@@ -21,6 +21,7 @@ import { committeeOrderText, foundLocationText, isFoundElsewhere, registeredLoca
 import { canManageFacility, canMutateAssets } from "@/lib/permissions";
 import { listFacilityWorkGroups } from "@/lib/facility-work-groups";
 import { hasPermission } from "@/lib/role-permissions";
+import { withBasePath } from "@/lib/base-path";
 
 type InspectionDetailPageProps = {
   params: Promise<{ id: string }>;
@@ -290,7 +291,7 @@ export default async function InspectionDetailPage({ params, searchParams }: Ins
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <a href={`/api/export/inspection/${inspection.id}?type=report`} className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl border border-[var(--primary-soft-strong)] bg-[var(--primary-soft)] px-4 text-sm font-semibold text-[var(--primary-text)] hover:bg-[var(--primary-soft-strong)]">
+            <a href={withBasePath(`/api/export/inspection/${inspection.id}?type=report`)} className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl border border-[var(--primary-soft-strong)] bg-[var(--primary-soft)] px-4 text-sm font-semibold text-[var(--primary-text)] hover:bg-[var(--primary-soft-strong)]">
               <AppIcon name="download" className="h-4 w-4" /> รายงานผล Excel{closed ? "" : " (ร่าง)"}
             </a>
             {/* ใบตรวจสอบพัสดุประจำปี (A4 แนวนอน) พร้อมช่องลงนามจากคณะกรรมการของรอบนี้ */}
@@ -397,7 +398,7 @@ export default async function InspectionDetailPage({ params, searchParams }: Ins
               บันทึกผลตรวจรายรายการ และเลือกสถานะครุภัณฑ์ล่าสุดเพื่ออัปเดตข้อมูลอุปกรณ์
             </p>
           </div>
-          <a href={exportHref} className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl bg-[var(--primary)] px-4 text-sm font-semibold text-white transition hover:bg-[var(--primary-hover)]">
+          <a href={withBasePath(exportHref)} className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl bg-[var(--primary)] px-4 text-sm font-semibold text-white transition hover:bg-[var(--primary-hover)]">
             <AppIcon name="download" className="h-4 w-4" /> ใบตรวจนับ Excel{activeFilterCount ? " (ตามตัวกรอง)" : ""}
           </a>
         </div>
