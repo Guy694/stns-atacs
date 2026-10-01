@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getGoogleAuthConfig } from "@/lib/google-auth";
 import { secureCookiesEnabled } from "@/lib/cookie-security";
 import { withBasePath } from "@/lib/base-path";
+import { getPublicRequestOrigin, getPublicRequestUrl } from "@/lib/request-url";
 
 const STATE_COOKIE_NAME = "atacs_google_state";
 const NEXT_COOKIE_NAME = "atacs_google_next";
@@ -17,9 +18,9 @@ function safeNextPath(value: string | null) {
 }
 
 export async function GET(req: NextRequest) {
-  const config = getGoogleAuthConfig(req.nextUrl.origin);
+  const config = getGoogleAuthConfig(getPublicRequestOrigin(req));
   if (!config.enabled) {
-    return NextResponse.redirect(new URL(withBasePath(`/login?error=${encodeURIComponent(config.reason ?? "Google ไม่พร้อมใช้งาน")}`), req.url));
+    return NextResponse.redirect(getPublicRequestUrl(req, withBasePath(`/login?error=${encodeURIComponent(config.reason ?? "Google ไม่พร้อมใช้งาน")}`)));
   }
 
   const state = `${crypto.randomUUID()}-${crypto.randomBytes(8).toString("hex")}`;

@@ -14,6 +14,7 @@ import { getGoogleAuthConfig } from "@/lib/google-auth";
 import { notifyTelegramSafe } from "@/lib/telegram";
 import { recordSecurityEvent } from "@/lib/security";
 import { withBasePath } from "@/lib/base-path";
+import { getPublicRequestOrigin, getPublicRequestUrl } from "@/lib/request-url";
 
 const STATE_COOKIE_NAME = "atacs_google_state";
 const NEXT_COOKIE_NAME = "atacs_google_next";
@@ -44,7 +45,7 @@ function safeNextPath(value: string | undefined) {
 }
 
 function loginUrl(req: NextRequest, message: string, nextPath = "/dashboard") {
-  const url = new URL(withBasePath("/login"), req.url);
+  const url = getPublicRequestUrl(req, withBasePath("/login"));
   url.searchParams.set("error", message);
   if (nextPath !== "/dashboard") url.searchParams.set("next", nextPath);
   return url;
@@ -70,7 +71,7 @@ async function recordGoogleSecurityEvent(req: NextRequest, eventType: string, de
 }
 
 export async function GET(req: NextRequest) {
-  const config = getGoogleAuthConfig(req.nextUrl.origin);
+  const config = getGoogleAuthConfig(getPublicRequestOrigin(req));
   const stateCookie = req.cookies.get(STATE_COOKIE_NAME)?.value;
   const nextPath = safeNextPath(req.cookies.get(NEXT_COOKIE_NAME)?.value);
   const queryState = req.nextUrl.searchParams.get("state")?.trim();
@@ -154,7 +155,7 @@ export async function GET(req: NextRequest) {
           title: "บัญชีที่ยังไม่ได้รับอนุมัติพยายามเข้าสู่ระบบ",
           details: { ผู้ใช้: getUserDisplayName(user), อีเมล: email, วิธี: "Google", ...context },
         });
-        return redirectWithDeletedState(new URL(withBasePath("/pending-approval"), req.url));
+        return redirectWithDeletedState(getPublicRequestUrl(req, withBasePath("/pending-approval")));
       }
       await clearPendingRegistrationClaim();
       await createSession(user.id);
@@ -163,11 +164,11 @@ export async function GET(req: NextRequest) {
         title: "เข้าสู่ระบบสำเร็จ",
         details: { ผู้ใช้: getUserDisplayName(user), อีเมล: email, วิธี: "Google", ...requestDetails(req) },
       });
-      return redirectWithDeletedState(new URL(withBasePath(nextPath), req.url));
+      return redirectWithDeletedState(getPublicRequestUrl(req, withBasePath(nextPath)));
     }
 
     await setPendingGoogleRegistrationClaim(googleSub, email, displayName);
-    const registerUrl = new URL(withBasePath("/register"), req.url);
+    const registerUrl = getPublicRequestUrl(req, withBasePath("/register"));
     registerUrl.searchParams.set("notice", "ไม่พบอีเมลนี้ในระบบ กรุณากรอกข้อมูลลงทะเบียนครั้งแรก");
     return redirectWithDeletedState(registerUrl);
   } catch (error) {

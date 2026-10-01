@@ -45,7 +45,7 @@ export default async function MaintenancePage() {
         {state.startedAt && (
           <p className="mt-3 text-xs text-[var(--muted)]">
             เริ่มปิดปรับปรุงเมื่อ {formatThaiDateTime(state.startedAt)}
-            {state.startedBy ? ` โดย ${state.startedBy}` : ""}
+            
           </p>
         )}
 

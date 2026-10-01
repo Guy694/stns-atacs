@@ -52,3 +52,4 @@ next-env.d.ts
 /database/seed_*.sql
 /database/stn_atacs.sql
 /.vscode/
+.env*.local

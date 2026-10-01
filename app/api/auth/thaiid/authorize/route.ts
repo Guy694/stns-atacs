@@ -5,11 +5,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { getThaiIdConfig } from "@/lib/thaiid";
 import { secureCookiesEnabled } from "@/lib/cookie-security";
 import { withBasePath } from "@/lib/base-path";
+import { getPublicRequestOrigin, getPublicRequestUrl } from "@/lib/request-url";
 
 const STATE_COOKIE_NAME = "atacs_thaid_state";
 
 function toLoginUrl(req: NextRequest, search: Record<string, string>) {
-  const url = new URL(withBasePath("/login"), req.url);
+  const url = getPublicRequestUrl(req, withBasePath("/login"));
   for (const [key, value] of Object.entries(search)) {
     url.searchParams.set(key, value);
   }
@@ -17,7 +18,7 @@ function toLoginUrl(req: NextRequest, search: Record<string, string>) {
 }
 
 export async function GET(req: NextRequest) {
-  const config = await getThaiIdConfig(req.nextUrl.origin);
+  const config = await getThaiIdConfig(getPublicRequestOrigin(req));
 
   if (!config.enabled) {
     return NextResponse.redirect(
