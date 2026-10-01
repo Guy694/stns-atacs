@@ -218,7 +218,7 @@ export async function GET(req: NextRequest) {
         details: { ผู้ใช้: getUserDisplayName(user), วิธี: "ThaiD", ...requestDetails(req) },
       });
 
-      const response = NextResponse.redirect(getPublicRequestUrl(req, withBasePath("/")));
+      const response = NextResponse.redirect(getPublicRequestUrl(req, withBasePath("/dashboard/")));
       response.cookies.delete(STATE_COOKIE_NAME);
       return response;
     }

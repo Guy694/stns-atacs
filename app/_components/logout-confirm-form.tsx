@@ -46,7 +46,7 @@ export function LogoutConfirmForm({ buttonClassName, buttonContent, ariaLabel, t
   }
 
   return (
-    <form action={withBasePath("/logout")} method="post" onSubmit={handleSubmit}>
+    <form action={withBasePath("/logout/")} method="post" onSubmit={handleSubmit}>
       <button type="submit" className={buttonClassName} aria-label={ariaLabel} title={title}>
         {buttonContent ?? "ออกจากระบบ"}
       </button>

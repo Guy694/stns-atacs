@@ -118,7 +118,7 @@ export async function registerFirstTimeAction(formData: FormData) {
         redirect("/pending-approval");
       }
       await createSession(existingUser.id);
-      redirect("/");
+      redirect("/dashboard");
     }
 
     try {
@@ -232,7 +232,7 @@ export async function registerOfficerWithPasswordAction(formData: FormData) {
 
 export async function logoutAction() {
   await destroySession();
-  redirect("/login?notice=ออกจากระบบเรียบร้อยแล้ว");
+  redirect("/");
 }
 
 export async function loginWithPasswordAction(formData: FormData) {

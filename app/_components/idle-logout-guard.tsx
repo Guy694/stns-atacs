@@ -28,7 +28,7 @@ export function IdleLogoutGuard() {
       clearExistingTimer();
 
       try {
-        await fetch(withBasePath("/logout"), {
+        await fetch(withBasePath("/logout/"), {
           method: "POST",
           credentials: "same-origin",
           keepalive: true,
