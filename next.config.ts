@@ -54,6 +54,8 @@ const nextConfig: NextConfig = {
   output: "standalone",
   // This is inlined into client bundles by Next.js and therefore must be set at build time.
   basePath: BASE_PATH,
+  // The host Nginx canonicalizes mounted apps to a trailing slash (/stns-atacs/).
+  trailingSlash: true,
   // Tiny QR stickers encode the URL in upper case (smaller QR); the short path is matched case-sensitively.
   async rewrites() {
     return [{ source: "/Q/:id(\\d+)", destination: "/q/:id" }];

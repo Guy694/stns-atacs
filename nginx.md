@@ -43,7 +43,11 @@
 
 
 # ================= reverse_proxy  STN-atacs ==========================
-    location ~ ^/stns-atacs(?:/|$) {
+    location = /stns-atacs {
+        return 301 /stns-atacs/;
+    }
+
+    location /stns-atacs/ {
 
         proxy_pass http://127.0.0.1:3003;
 

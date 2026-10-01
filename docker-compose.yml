@@ -40,7 +40,7 @@ services:
       context: .
       args:
         NEXT_PUBLIC_APP_URL: ${APP_URL:-}
-        NEXT_PUBLIC_BASE_PATH: ${NEXT_PUBLIC_BASE_PATH:-}
+        NEXT_PUBLIC_BASE_PATH: ${NEXT_PUBLIC_BASE_PATH:-/stns-atacs}
     image: atacs-app:latest
     restart: unless-stopped
     # Only what the app needs (the database root password stays out of this container).
@@ -118,7 +118,7 @@ services:
     restart: unless-stopped
     environment:
       CRON_SECRET: ${CRON_SECRET:-}
-      APP_BASE_PATH: ${NEXT_PUBLIC_BASE_PATH:-}
+      APP_BASE_PATH: ${NEXT_PUBLIC_BASE_PATH:-/stns-atacs}
       CRON_INTERVAL_SECONDS: ${CRON_INTERVAL_SECONDS:-3600}
       DAILY_SUMMARY_TIME: ${DAILY_SUMMARY_TIME:-08:00}
       TZ: Asia/Bangkok

@@ -16,7 +16,7 @@ WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
 # Public URL baked into the client bundle (agent install commands). Example: https://atacs.example.go.th
 ARG NEXT_PUBLIC_APP_URL=""
-ARG NEXT_PUBLIC_BASE_PATH=""
+ARG NEXT_PUBLIC_BASE_PATH="/stns-atacs"
 ENV NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL}
 ENV NEXT_PUBLIC_BASE_PATH=${NEXT_PUBLIC_BASE_PATH}
 COPY --from=deps /app/node_modules ./node_modules
@@ -26,7 +26,7 @@ RUN npm run build
 # ── 3) Runtime ──
 FROM ${NODE_IMAGE} AS runner
 WORKDIR /app
-ARG NEXT_PUBLIC_BASE_PATH=""
+ARG NEXT_PUBLIC_BASE_PATH="/stns-atacs"
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
     NEXT_PUBLIC_BASE_PATH=${NEXT_PUBLIC_BASE_PATH} \
