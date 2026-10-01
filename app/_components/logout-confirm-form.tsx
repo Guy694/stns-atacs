@@ -6,6 +6,8 @@ import Swal from "sweetalert2";
 import { resetSplash } from "@/app/_components/splash-screen";
 import { withBasePath } from "@/lib/base-path";
 
+const LOGOUT_NOTICE = "ออกจากระบบเรียบร้อยแล้ว";
+
 type LogoutConfirmFormProps = {
   buttonClassName: string;
   buttonContent?: ReactNode;
@@ -39,8 +41,21 @@ export function LogoutConfirmForm({ buttonClassName, buttonContent, ariaLabel, t
       },
     });
 
-    if (result.isConfirmed) {
-      resetSplash();
+    if (!result.isConfirmed) return;
+
+    resetSplash();
+    try {
+      // ลบ session ฝั่งเซิร์ฟเวอร์ก่อน แล้วพาไปหน้า login ทันที (replace = กด Back กลับมาหน้าเดิมไม่ได้)
+      const response = await fetch(withBasePath("/logout/"), {
+        method: "POST",
+        credentials: "same-origin",
+        redirect: "manual",
+        cache: "no-store",
+      });
+      if (response.type !== "opaqueredirect" && !response.ok) throw new Error(`logout failed: ${response.status}`);
+      window.location.replace(withBasePath(`/login?notice=${encodeURIComponent(LOGOUT_NOTICE)}`));
+    } catch {
+      // ถ้า fetch ใช้ไม่ได้ ให้ส่งฟอร์มแบบปกติ (เซิร์ฟเวอร์จะ redirect ไปหน้า login เอง)
       form.submit();
     }
   }

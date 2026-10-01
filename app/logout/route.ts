@@ -7,8 +7,10 @@ import { secureCookiesEnabled } from "@/lib/cookie-security";
 
 export async function POST(request: Request) {
   await destroySession();
-  // POST/Redirect/GET: 303 forces the browser to open the public home page with GET.
-  const response = NextResponse.redirect(getPublicRequestUrl(request, withBasePath("/")), 303);
+  // POST/Redirect/GET: 303 forces the browser to open the login page with GET.
+  const loginPath = withBasePath(`/login/?notice=${encodeURIComponent("ออกจากระบบเรียบร้อยแล้ว")}`);
+  const response = NextResponse.redirect(getPublicRequestUrl(request, loginPath), 303);
+  response.headers.set("cache-control", "no-store");
 
   response.cookies.set("atacs_session", "", {
     httpOnly: true,

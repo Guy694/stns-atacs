@@ -232,7 +232,7 @@ export async function registerOfficerWithPasswordAction(formData: FormData) {
 
 export async function logoutAction() {
   await destroySession();
-  redirect("/");
+  redirect(`/login?notice=${encodeURIComponent("ออกจากระบบเรียบร้อยแล้ว")}`);
 }
 
 export async function loginWithPasswordAction(formData: FormData) {
