@@ -1,7 +1,8 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState } from "react";
+import { useActionState, useEffect, useRef, useState, useId } from "react";
 import { createUserAction } from "@/app/(main)/admin/users/actions";
+import { submitWithoutReset } from "@/app/_components/ui/submit-without-reset";
 
 type FacilityOption = {
   id: number;
@@ -13,6 +14,7 @@ type FacilityOption = {
 type Props = { children: React.ReactNode; facilities: FacilityOption[] };
 
 export function CreateUserModal({ children, facilities }: Props) {
+  const fieldId = useId();
   const [open, setOpen] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
   const facilityRef = useRef<HTMLSelectElement>(null);
@@ -72,38 +74,38 @@ export function CreateUserModal({ children, facilities }: Props) {
               <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>
             )}
 
-            <form ref={formRef} action={formAction} className="mt-5 space-y-4">
+            <form ref={formRef} onSubmit={submitWithoutReset(formAction)} className="mt-5 space-y-4">
               <div>
-                <label className="block text-sm font-medium">ชื่อ-นามสกุล <span className="text-rose-500">*</span></label>
-                <input name="fullName" required placeholder="เช่น นายสมชาย ใจดี" className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]" />
+                <label htmlFor={`${fieldId}-fullName`} className="block text-sm font-medium">ชื่อ-นามสกุล <span className="text-rose-500">*</span></label>
+                <input id={`${fieldId}-fullName`} name="fullName" required placeholder="เช่น นายสมชาย ใจดี" className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]" />
               </div>
 
               <div>
-                <label className="block text-sm font-medium">Email</label>
-                <input name="email" type="email" placeholder="example@moph.go.th" className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]" />
+                <label htmlFor={`${fieldId}-email`} className="block text-sm font-medium">Email</label>
+                <input id={`${fieldId}-email`} name="email" type="email" placeholder="example@moph.go.th" className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]" />
               </div>
 
               <div className="rounded-xl border border-black/8 bg-stone-50/60 p-4 space-y-3">
                 <p className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">วิธีเข้าสู่ระบบ (อย่างน้อย 1 วิธี)</p>
                 <div>
-                  <label className="block text-sm font-medium">ThaiD (เลขบัตรประชาชน 13 หลัก)</label>
-                  <input name="thaidCid" placeholder="XXXXXXXXXXXXX" maxLength={13} className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 font-mono text-sm outline-none focus:border-[var(--accent)]" />
+                  <label htmlFor={`${fieldId}-thaidCid`} className="block text-sm font-medium">ThaiD (เลขบัตรประชาชน 13 หลัก)</label>
+                  <input id={`${fieldId}-thaidCid`} name="thaidCid" placeholder="XXXXXXXXXXXXX" maxLength={13} className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 font-mono text-sm outline-none focus:border-[var(--accent)]" />
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div>
-                    <label className="block text-sm font-medium">Username</label>
-                    <input name="username" placeholder="เช่น somchai.j" className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]" />
+                    <label htmlFor={`${fieldId}-username`} className="block text-sm font-medium">Username</label>
+                    <input id={`${fieldId}-username`} name="username" placeholder="เช่น somchai.j" className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]" />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium">รหัสผ่าน</label>
-                    <input name="password" type="password" placeholder="≥ 8 ตัวอักษร" className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]" />
+                    <label htmlFor={`${fieldId}-password`} className="block text-sm font-medium">รหัสผ่าน</label>
+                    <input id={`${fieldId}-password`} name="password" type="password" placeholder="≥ 8 ตัวอักษร" className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]" />
                   </div>
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium">Role</label>
-                <select
+                <label htmlFor={`${fieldId}-role`} className="block text-sm font-medium">Role</label>
+                <select id={`${fieldId}-role`}
                   name="role"
                   value={role}
                   onChange={(e) => handleRoleChange(e.target.value as "admin" | "officer" | "viewer")}
@@ -118,12 +120,12 @@ export function CreateUserModal({ children, facilities }: Props) {
               {role === "officer" ? (
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium">ตำแหน่งเจ้าหน้าที่</label>
-                    <input name="officerPosition" required maxLength={150} placeholder="เช่น นักวิชาการคอมพิวเตอร์" className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]" />
+                    <label htmlFor={`${fieldId}-officerPosition`} className="block text-sm font-medium">ตำแหน่งเจ้าหน้าที่</label>
+                    <input id={`${fieldId}-officerPosition`} name="officerPosition" required maxLength={150} placeholder="เช่น นักวิชาการคอมพิวเตอร์" className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]" />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium">หน่วยงานของเจ้าหน้าที่</label>
-                  <select
+                    <label htmlFor={`${fieldId}-facilityId`} className="block text-sm font-medium">หน่วยงานของเจ้าหน้าที่</label>
+                  <select id={`${fieldId}-facilityId`}
                     ref={facilityRef}
                     name="facilityId"
                     value={facilityId}

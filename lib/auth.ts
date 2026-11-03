@@ -8,6 +8,7 @@ import { cookies } from "next/headers";
 import { executeStatement, selectRows } from "@/lib/mysql";
 import { isMissingSchemaError } from "@/lib/schema-errors";
 import { secureCookiesEnabled } from "@/lib/cookie-security";
+import { googleLinkForLogin } from "@/lib/google-link";
 
 const SESSION_COOKIE_NAME = "atacs_session";
 const REGISTRATION_COOKIE_NAME = "atacs_registration_claim";
@@ -183,7 +184,9 @@ function decodeClaim(value: string): RegistrationClaim | null {
     return null;
   }
 
-  if (signClaimPayload(payloadBase64) !== signature) {
+  const expected = Buffer.from(signClaimPayload(payloadBase64), "utf8");
+  const received = Buffer.from(signature, "utf8");
+  if (expected.length !== received.length || !crypto.timingSafeEqual(expected, received)) {
     return null;
   }
 
@@ -422,11 +425,16 @@ export async function findOrLinkUserByVerifiedThaiD(input: {
    * SEC-04: ห้ามผูกบัญชีด้วยชื่อ-นามสกุลอย่างเดียว
    * - บัญชีบทบาท admin ห้ามผูกอัตโนมัติเสมอ (แม้ยังไม่ได้รัน migration)
    * - บัญชีอื่นต้องให้ผู้ดูแลระบบเปิด thaid_link_enabled หรือบันทึก thaid_link_expected_hash ไว้ก่อน
+   * - ถ้ายังไม่ได้รัน migration (ไม่มีคอลัมน์ดังกล่าว) ห้ามผูกเลย
    */
   if (candidate.role === "admin") {
     throw new Error("บัญชีผู้ดูแลระบบต้องให้ผู้ดูแลระบบเป็นผู้เชื่อมต่อ ThaiD ให้ ไม่สามารถเชื่อมต่ออัตโนมัติได้");
   }
-  if (thaidLinkColumnsPresent) {
+  if (!thaidLinkColumnsPresent) {
+    // Without the approval columns there is no admin consent to check: never link by name alone.
+    throw new Error("ระบบยังไม่พร้อมเชื่อมต่อ ThaiD กับบัญชีเดิม กรุณาแจ้งผู้ดูแลระบบให้รัน database/add_thaid_link_approval.sql");
+  }
+  {
     const expectedHash = (candidate.thaid_link_expected_hash ?? "").trim().toLowerCase();
     const matchesExpectedCid = expectedHash.length > 0 && expectedHash === hashThaiCidForLookup(input.thaiCid).toLowerCase();
     if (!matchesExpectedCid && Number(candidate.thaid_link_enabled ?? 0) !== 1) {
@@ -626,6 +634,17 @@ export async function createOfficerFromPassword(input: {
   return result.insertId;
 }
 
+/**
+ * Called after a user signed in with the account's own method (password or ThaiD).
+ * Links a Google identity that was waiting for this e-mail (see lib/google-link.ts) and drops the claim.
+ */
+export async function linkPendingGoogleIdentity(user: Pick<UserRecord, "id" | "email" | "google_sub">) {
+  const googleSub = googleLinkForLogin(await getPendingRegistrationClaim(), user);
+  if (googleSub) await linkGoogleIdentity(user.id, googleSub);
+  await clearPendingRegistrationClaim();
+  return Boolean(googleSub);
+}
+
 export async function linkGoogleIdentity(userId: number, googleSub: string) {
   await executeStatement(
     `UPDATE users SET google_sub = ? WHERE id = ? AND (google_sub IS NULL OR google_sub = ?)`,
@@ -742,10 +761,11 @@ export async function getCurrentUser() {
         INNER JOIN users u ON u.id = s.user_id
         WHERE s.session_token_hash = ?
           AND s.expires_at > NOW()
+          AND s.created_at > DATE_SUB(NOW(), INTERVAL ? DAY)
           AND u.is_active = 1
         LIMIT 1
       `,
-      [tokenHash]
+      [tokenHash, SESSION_TTL_DAYS]
     );
   } catch (error) {
     try {
@@ -764,10 +784,11 @@ export async function getCurrentUser() {
           INNER JOIN users u ON u.id = s.user_id
           WHERE s.session_token_hash = ?
             AND s.expires_at > NOW()
+            AND s.created_at > DATE_SUB(NOW(), INTERVAL ? DAY)
             AND u.is_active = 1
           LIMIT 1
         `,
-        [tokenHash]
+        [tokenHash, SESSION_TTL_DAYS]
       );
     } catch (fallbackError) {
       console.error("Session lookup failed", fallbackError instanceof Error ? fallbackError.message : error);

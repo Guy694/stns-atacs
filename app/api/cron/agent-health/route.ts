@@ -3,11 +3,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { findOfflineAgentDevices } from "@/lib/agent";
 import { notifyTelegramSafe } from "@/lib/telegram";
 import { readRequestIp, recordSecurityEvent } from "@/lib/security";
+import { isAuthorizedCronHeader } from "@/lib/cron-auth";
 
 function isAuthorized(req: NextRequest) {
-  const secret = process.env.CRON_SECRET?.trim();
-  if (!secret) return false;
-  return req.headers.get("authorization") === `Bearer ${secret}`;
+  return isAuthorizedCronHeader(req.headers.get("authorization"));
 }
 
 export async function GET(req: NextRequest) {

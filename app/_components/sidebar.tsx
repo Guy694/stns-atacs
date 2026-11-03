@@ -36,18 +36,28 @@ type NavItem = {
   exact?: boolean;
 };
 
+function matchesPath(item: NavItem, pathname: string) {
+  if (item.exact) return pathname === item.href;
+  return pathname === item.href || pathname.startsWith(item.href.endsWith("/") ? item.href : `${item.href}/`);
+}
+
+/** Only the most specific matching item is active (/admin/settings/work-groups must not also light up /admin/settings). */
+function activeHrefFor(items: NavItem[], pathname: string) {
+  return items.filter((item) => matchesPath(item, pathname)).sort((a, b) => b.href.length - a.href.length)[0]?.href ?? null;
+}
+
 function NavLink({
   item,
-  pathname,
+  activeHref,
   pendingRegistrationCount,
   onClick,
 }: {
   item: NavItem;
-  pathname: string;
+  activeHref: string | null;
   pendingRegistrationCount: number;
   onClick?: () => void;
 }) {
-  const isActive = item.exact ? pathname === item.href : pathname.startsWith(item.href);
+  const isActive = item.href === activeHref;
   const badgeCount = item.href === "/admin/users" ? pendingRegistrationCount : 0;
   return (
     <Link
@@ -126,6 +136,8 @@ export function Sidebar({ user, grantedPermissions, pendingRegistrationCount, me
         })
       : baseItems;
 
+  const activeHref = activeHrefFor(items, pathname);
+
   const sidebarContent = (
     <div className="flex h-full flex-col">
       {/* Brand */}
@@ -158,7 +170,7 @@ export function Sidebar({ user, grantedPermissions, pendingRegistrationCount, me
                   <NavLink
                     key={item.href}
                     item={item}
-                    pathname={pathname}
+                    activeHref={activeHref}
                     pendingRegistrationCount={pendingRegistrationCount}
                     onClick={() => setMobileOpen(false)}
                   />

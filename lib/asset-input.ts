@@ -5,6 +5,7 @@ import { ASSET_ACCOUNTING_CODE_MAX, ASSET_CODE_PREFIX_MAX } from "@/lib/asset-nu
 import { isTerminalAssetStatus, OPERATIONAL_ASSET_STATUSES } from "@/lib/asset-status";
 import { parseAcquisitionMethod, parseFundingSource, UNIT_NAME_MAX, VENDOR_NAME_MAX } from "@/lib/acquisition-options";
 import { WINDOWS_LICENSE_STATUS_VALUES, type WindowsLicenseStatus } from "@/lib/windows-license";
+import { todayBangkok } from "@/lib/local-date";
 
 export type AssetFields = Record<string, string | undefined>;
 export type ExistingAssetFields = Partial<Omit<AssetInput, "rowNo">> & { extensions?: AssetExtensions };
@@ -92,7 +93,7 @@ export function parseAssetFields(fields: AssetFields, existing?: ExistingAssetFi
     }
     result[key] = value;
   }
-  if (result.purchaseDate && result.purchaseDate > new Date().toISOString().slice(0, 10)) throw new Error("วันที่ซื้อห้ามเกินวันที่ปัจจุบัน");
+  if (result.purchaseDate && result.purchaseDate > todayBangkok()) throw new Error("วันที่ซื้อห้ามเกินวันที่ปัจจุบัน");
   const start = result.maintenanceStartDate ?? existing?.maintenanceStartDate;
   const end = result.maintenanceEndDate ?? existing?.maintenanceEndDate;
   if (start && end && end < start) throw new Error("วันสิ้นสุดสัญญาต้องไม่ก่อนวันเริ่มสัญญา");

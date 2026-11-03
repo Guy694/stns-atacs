@@ -16,6 +16,7 @@ import {
   type RepairStatus,
 } from "@/lib/repair-options";
 import { isMissingSchemaError } from "@/lib/schema-errors";
+import { todayBangkok, dbDateTime } from "@/lib/local-date";
 
 export type Repair = {
   id: number;
@@ -54,7 +55,7 @@ type RepairRow = RowDataPacket & {
   started_at: Date | string | null; completed_at: Date | string | null; updated_by: string | null; updated_at: Date | string;
 };
 
-const dateTime = (value: Date | string | null) => (value ? (value instanceof Date ? value.toISOString() : String(value)).slice(0, 19).replace("T", " ") : "");
+const dateTime = (value: Date | string | null) => (value ? dbDateTime(value) : "");
 
 function toRepair(row: RepairRow): Repair {
   return {
@@ -146,7 +147,7 @@ export async function createRepair(input: CreateRepairInput) {
     await insertLog(repairId, null, "Reported", problem, input.userId, input.userName);
 
     if (input.markBroken && asset.current_status !== "Broken") {
-      await updateAsset(input.assetId, { currentStatus: "Broken", updatedBy: input.userName, lastUpdatedAt: new Date().toISOString().slice(0, 10) });
+      await updateAsset(input.assetId, { currentStatus: "Broken", updatedBy: input.userName, lastUpdatedAt: todayBangkok() });
       await insertAssetStatusHistory({ assetId: input.assetId, fromStatus: asset.current_status, toStatus: "Broken", note: `[แจ้งซ่อม #${repairId}] ${problem}`, changedByUserId: input.userId ?? null, changedBy: input.userName });
     }
     return { repairId, facilityId: Number(asset.facility_id) };
@@ -206,7 +207,7 @@ export async function updateRepair(input: UpdateRepairInput) {
     if (closing && input.assetOutcome) {
       const [asset] = await selectRows<RowDataPacket & { current_status: string | null }>("SELECT current_status FROM information_assets WHERE id = ? FOR UPDATE", [repair.asset_id]);
       if (asset && !isTerminalAssetStatus(asset.current_status) && asset.current_status !== input.assetOutcome) {
-        await updateAsset(repair.asset_id, { currentStatus: input.assetOutcome, updatedBy: input.userName, lastUpdatedAt: new Date().toISOString().slice(0, 10) });
+        await updateAsset(repair.asset_id, { currentStatus: input.assetOutcome, updatedBy: input.userName, lastUpdatedAt: todayBangkok() });
         await insertAssetStatusHistory({
           assetId: repair.asset_id,
           fromStatus: asset.current_status,

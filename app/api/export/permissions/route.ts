@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { getRolePermissionMatrix, PERMISSION_DEFINITIONS } from "@/lib/role-permissions";
 import { readRequestIp, recordSecurityEvent } from "@/lib/security";
+import { todayBangkok } from "@/lib/local-date";
 
 export async function GET(req: NextRequest) {
   const user = await getCurrentUser();
@@ -38,7 +39,7 @@ export async function GET(req: NextRequest) {
     },
     {
       headers: {
-        "Content-Disposition": `attachment; filename=\"atacs-permissions-${new Date().toISOString().slice(0, 10)}.json\"`,
+        "Content-Disposition": `attachment; filename=\"atacs-permissions-${todayBangkok()}.json\"`,
       },
     }
   );

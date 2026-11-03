@@ -101,17 +101,45 @@ export async function POST(req: NextRequest) {
           agentVersion: body.agentVersion,
         });
 
-    await notifyTelegramSafe({
-      category: "agent",
-      title: result.wasExisting ? "Agent ลงทะเบียนใหม่บนเครื่องเดิม" : "ติดตั้ง Agent สำเร็จ",
-      details: {
-        เครื่อง: body.hostname ?? `Device #${result.deviceId}`,
-        หน่วยงาน: result.facilityName,
-        กลุ่มงาน: result.workGroupName ?? "-",
-        "Agent ID": result.agentId,
-        เวอร์ชัน: body.agentVersion,
-      },
-    });
+    if (result.previous) {
+      // S2: re-enrolment replaces the key of an existing device, so the old agent stops reporting.
+      // Usually a reinstall on the same machine; if not expected, revoke the enrollment token/install key.
+      const ip = readRequestIp(req.headers);
+      await recordSecurityEvent({
+        eventType: "agent_reenrolled",
+        ipAddress: ip,
+        identity: body.hostname ?? fingerprint,
+        path: req.nextUrl.pathname,
+        detail: `Device #${result.deviceId} เดิม ${result.previous.hostname ?? "-"} (ล่าสุด ${result.previous.lastSeenAt ?? "-"})`,
+      });
+      await notifyTelegramSafe({
+        category: "security",
+        title: "Agent ลงทะเบียนซ้ำบนเครื่องเดิม — key เดิมถูกยกเลิก",
+        throttle: false,
+        details: {
+          "เครื่องใหม่": body.hostname ?? "-",
+          "เครื่องเดิม": result.previous.hostname ?? "-",
+          "เดิมออนไลน์ล่าสุด": result.previous.lastSeenAt ?? "-",
+          "สถานะเดิม": result.previous.wasActive ? result.previous.status ?? "-" : "ปิดใช้งาน",
+          หน่วยงาน: result.facilityName,
+          "Device": `#${result.deviceId}`,
+          IP: ip,
+          "ถ้าไม่ได้ติดตั้งใหม่": "ปิด token/install key ของหน่วยงานนี้ที่ ตั้งค่าระบบ › Agent",
+        },
+      });
+    } else {
+      await notifyTelegramSafe({
+        category: "agent",
+        title: "ติดตั้ง Agent สำเร็จ",
+        details: {
+          เครื่อง: body.hostname ?? `Device #${result.deviceId}`,
+          หน่วยงาน: result.facilityName,
+          กลุ่มงาน: result.workGroupName ?? "-",
+          "Agent ID": result.agentId,
+          เวอร์ชัน: body.agentVersion,
+        },
+      });
+    }
 
     return NextResponse.json({
       ok: true,

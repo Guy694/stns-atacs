@@ -1,9 +1,11 @@
 "use client";
 
-import { useActionState, useRef, useState, useTransition } from "react";
+import { useActionState, useEffect, useRef, useState, useTransition, useId } from "react";
 
+import { SortableTh, TablePagination } from "@/app/_components/ui/data-table";
 import { StatusBadge, activeTone } from "@/app/_components/ui/status-badge";
 import { ActionIconButton } from "@/app/_components/ui/action-icon-button";
+import { useTableState } from "@/app/_components/ui/use-table-state";
 import { createFacilityAction, toggleFacilityActiveAction, updateFacilityAction } from "../actions";
 import type { FacilityAdminRow } from "@/lib/assets";
 
@@ -19,6 +21,7 @@ function FacilityModal({
   facility?: FacilityAdminRow;
   onClose: () => void;
 }) {
+  const fieldId = useId();
   const formRef = useRef<HTMLFormElement>(null);
   const action = mode === "create" ? createFacilityAction : updateFacilityAction;
 
@@ -31,37 +34,43 @@ function FacilityModal({
     null
   );
 
+  useEffect(() => {
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); };
+    document.addEventListener("keydown", closeOnEscape);
+    return () => document.removeEventListener("keydown", closeOnEscape);
+  }, [onClose]);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative z-10 w-full max-w-lg overflow-y-auto rounded-2xl bg-[var(--surface-strong)] p-6 shadow-2xl">
+      <div role="dialog" aria-modal="true" aria-labelledby={`${fieldId}-title`} className="relative z-10 w-full max-w-lg overflow-y-auto rounded-2xl bg-[var(--surface-strong)] p-6 shadow-2xl">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">{mode === "create" ? "เพิ่มหน่วยงานใหม่" : `แก้ไข: ${facility?.name}`}</h2>
-          <button onClick={onClose} className="text-[var(--muted)] hover:text-[var(--foreground)]">✕</button>
+          <h2 id={`${fieldId}-title`} className="text-lg font-semibold">{mode === "create" ? "เพิ่มหน่วยงานใหม่" : `แก้ไข: ${facility?.name}`}</h2>
+          <button type="button" onClick={onClose} aria-label="ปิดหน้าต่างหน่วยงาน" className="min-h-11 min-w-11 rounded-xl text-[var(--muted)] hover:bg-stone-100 hover:text-[var(--foreground)]">✕</button>
         </div>
 
-        {error && <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</div>}
+        {error && <div role="alert" className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</div>}
 
         <form ref={formRef} action={formAction} className="mt-4 space-y-3">
           {mode === "edit" && <input type="hidden" name="id" value={facility?.id} />}
 
           <div>
-            <label className="block text-sm font-medium">ชื่อหน่วยงาน <span className="text-rose-500">*</span></label>
-            <input name="name" defaultValue={facility?.name ?? ""} required
+            <label htmlFor={`${fieldId}-name`} className="block text-sm font-medium">ชื่อหน่วยงาน <span className="text-rose-500">*</span></label>
+            <input id={`${fieldId}-name`} name="name" defaultValue={facility?.name ?? ""} required
               className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]" />
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
-              <label className="block text-sm font-medium">ประเภท <span className="text-rose-500">*</span></label>
-              <select name="typecode" defaultValue={facility?.typecode ?? "รพ.สต."} required
+              <label htmlFor={`${fieldId}-typecode`} className="block text-sm font-medium">ประเภท <span className="text-rose-500">*</span></label>
+              <select id={`${fieldId}-typecode`} name="typecode" defaultValue={facility?.typecode ?? "รพ.สต."} required
                 className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]">
                 {TYPECODES.map((t) => <option key={t} value={t}>{t}</option>)}
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium">อำเภอ <span className="text-rose-500">*</span></label>
-              <select name="districtName" defaultValue={facility?.district_name ?? ""} required
+              <label htmlFor={`${fieldId}-districtName`} className="block text-sm font-medium">อำเภอ <span className="text-rose-500">*</span></label>
+              <select id={`${fieldId}-districtName`} name="districtName" defaultValue={facility?.district_name ?? ""} required
                 className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]">
                 <option value="">-- เลือกอำเภอ --</option>
                 {DISTRICTS.map((d) => <option key={d} value={d}>{d}</option>)}
@@ -77,20 +86,20 @@ function FacilityModal({
           </div>
 
           <div>
-            <label className="block text-sm font-medium">ตำบล</label>
-            <input name="tambon" defaultValue={facility?.tambon ?? ""}
+            <label htmlFor={`${fieldId}-tambon`} className="block text-sm font-medium">ตำบล</label>
+            <input id={`${fieldId}-tambon`} name="tambon" defaultValue={facility?.tambon ?? ""}
               className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]" />
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
-              <label className="block text-sm font-medium">ละติจูด (lat)</label>
-              <input name="lat" type="number" step="any" defaultValue={facility?.lat ?? ""}
+              <label htmlFor={`${fieldId}-lat`} className="block text-sm font-medium">ละติจูด (lat)</label>
+              <input id={`${fieldId}-lat`} name="lat" type="number" step="any" defaultValue={facility?.lat ?? ""}
                 className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm font-mono outline-none focus:border-[var(--accent)]" />
             </div>
             <div>
-              <label className="block text-sm font-medium">ลองจิจูด (lon)</label>
-              <input name="lon" type="number" step="any" defaultValue={facility?.lon ?? ""}
+              <label htmlFor={`${fieldId}-lon`} className="block text-sm font-medium">ลองจิจูด (lon)</label>
+              <input id={`${fieldId}-lon`} name="lon" type="number" step="any" defaultValue={facility?.lon ?? ""}
                 className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm font-mono outline-none focus:border-[var(--accent)]" />
             </div>
           </div>
@@ -170,6 +179,14 @@ export function FacilitiesClient({
     return matchSearch && matchDistrict;
   });
 
+  const t = useTableState(filtered, {
+    name: (f) => f.name,
+    typecode: (f) => f.typecode,
+    district: (f) => f.district_name,
+    assets: (f) => Number(f.asset_count),
+    status: (f) => (f.is_active ? 0 : 1),
+  });
+
   return (
     <>
       {/* Toolbar */}
@@ -178,12 +195,12 @@ export function FacilitiesClient({
           type="text"
           placeholder="ค้นหาชื่อหน่วยงาน..."
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => { setSearch(e.target.value); t.resetPage(); }}
           className="rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)] w-56"
         />
         <select
           value={districtFilter}
-          onChange={(e) => setDistrictFilter(e.target.value)}
+          onChange={(e) => { setDistrictFilter(e.target.value); t.resetPage(); }}
           className="rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
         >
           <option value="">ทุกอำเภอ</option>
@@ -209,22 +226,23 @@ export function FacilitiesClient({
             <thead>
               <tr className="border-b border-black/6 bg-stone-50/60 text-xs text-[var(--muted)]">
                 <th className="w-14 px-4 py-2.5 text-right font-medium">ลำดับ</th>
-                <th className="px-4 py-2.5 text-left font-medium">ชื่อหน่วยงาน</th>
-                <th className="px-4 py-2.5 text-left font-medium">ประเภท</th>
-                <th className="px-4 py-2.5 text-left font-medium">อำเภอ</th>
-                <th className="px-4 py-2.5 text-center font-medium">ทรัพย์สิน</th>
-                <th className="px-4 py-2.5 text-left font-medium">สถานะ</th>
+                <SortableTh label="ชื่อหน่วยงาน" sortKey="name" sort={t.sort} onSort={t.onSort} />
+                <SortableTh label="ประเภท" sortKey="typecode" sort={t.sort} onSort={t.onSort} />
+                <SortableTh label="อำเภอ" sortKey="district" sort={t.sort} onSort={t.onSort} />
+                <SortableTh label="ทรัพย์สิน" sortKey="assets" sort={t.sort} onSort={t.onSort} align="center" />
+                <SortableTh label="สถานะ" sortKey="status" sort={t.sort} onSort={t.onSort} />
                 <th className="px-4 py-2.5 text-right font-medium">จัดการ</th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map((f, rowIndex) => <FacilityRow key={f.id} f={f} canToggleActive={canToggleActive} seq={rowIndex + 1} />)}
+              {t.rows.map((f, rowIndex) => <FacilityRow key={f.id} f={f} canToggleActive={canToggleActive} seq={t.start + rowIndex} />)}
               {filtered.length === 0 && (
                 <tr><td colSpan={7} className="py-10 text-center text-sm text-[var(--muted)]">ไม่พบหน่วยงาน</td></tr>
               )}
             </tbody>
           </table>
         </div>
+        <TablePagination {...t} onPage={t.onPage} label="แบ่งหน้าหน่วยงาน" className="border-t border-black/6" />
       </div>
 
       {createOpen && <FacilityModal mode="create" onClose={() => setCreateOpen(false)} />}

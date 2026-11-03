@@ -99,6 +99,16 @@ export const APP_MENU_ITEMS: AppMenuItem[] = [
     permissionKey: "loans.view",
   },
   {
+    key: "agent-monitor",
+    href: "/agent-monitor",
+    label: "สุขภาพเครื่องคอมพิวเตอร์",
+    description: "ติดตามปัญหาเครื่องจาก ATACS Agent เช่น ดิสก์ใกล้เต็ม ฮาร์ดดิสก์เสีย ไม่อัปเดต",
+    icon: "monitor",
+    group: "system",
+    hideForViewer: true,
+    permissionKey: "agent.manage",
+  },
+  {
     key: "agent-download",
     href: "/agent-download",
     label: "ดาวน์โหลด Agent",

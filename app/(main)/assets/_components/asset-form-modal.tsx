@@ -14,6 +14,9 @@ import { isItAsset, requiresWindowsLicense } from "@/lib/asset-policy";
 import type { AssetWithFacility } from "@/lib/assets";
 import { withBasePath } from "@/lib/base-path";
 import { isComputerDeviceType, type WindowsLicenseStatus } from "@/lib/windows-license";
+import { todayBangkok } from "@/lib/local-date";
+import { submitWithoutReset } from "@/app/_components/ui/submit-without-reset";
+import { confirmAction } from "@/app/_components/ui/confirm";
 
 type FacilityOption = { id: number; facility_name: string | null; district_name: string | null; asset_code_prefix?: string | null };
 type DeviceTypeOption = { name: string; category: string };
@@ -44,12 +47,16 @@ function FacilityCombobox({
   facilities,
   defaultFacilityId,
   onSelectedFacilityIdChange,
+  inputId: externalInputId,
 }: {
+  /** Lets the field <label htmlFor> point at the visible input. */
+  inputId?: string;
   facilities: FacilityOption[];
   defaultFacilityId?: number | null;
   onSelectedFacilityIdChange?: (facilityId: number | null) => void;
 }) {
-  const inputId = useId();
+  const generatedInputId = useId();
+  const inputId = externalInputId ?? generatedInputId;
   const listboxId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
   const defaultFacility = facilities.find((facility) => facility.id === defaultFacilityId);
@@ -195,12 +202,16 @@ function WorkGroupCombobox({
   options,
   defaultWorkGroupId,
   required,
+  inputId: externalInputId,
 }: {
+  /** Lets the field <label htmlFor> point at the visible input. */
+  inputId?: string;
   options: WorkGroupOption[];
   defaultWorkGroupId: string;
   required: boolean;
 }) {
-  const inputId = useId();
+  const generatedInputId = useId();
+  const inputId = externalInputId ?? generatedInputId;
   const listboxId = useId();
   const selected = options.find((group) => String(group.id) === defaultWorkGroupId);
   const [value, setValue] = useState(selected?.workGroupName ?? "");
@@ -330,13 +341,17 @@ function LocationCombobox({
   defaultValue,
   suggestions,
   workGroupName,
+  inputId: externalInputId,
 }: {
+  /** Lets the field <label htmlFor> point at the visible input. */
+  inputId?: string;
   name: string;
   defaultValue: string;
   suggestions: string[];
   workGroupName?: string;
 }) {
-  const inputId = useId();
+  const generatedInputId = useId();
+  const inputId = externalInputId ?? generatedInputId;
   const listboxId = useId();
   const [value, setValue] = useState(defaultValue);
   const [open, setOpen] = useState(false);
@@ -459,6 +474,7 @@ function LocationCombobox({
 }
 
 export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], locations = [], fixedFacilityId, mode, asset, children }: Props) {
+  const fieldId = useId();
   const [open, setOpen] = useState(false);
   const [subtypePending, setSubtypePending] = useState(false);
   const [selectedFacilityId, setSelectedFacilityId] = useState<number | null>(fixedFacilityId ?? asset?.facilityId ?? null);
@@ -480,7 +496,7 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
   const titleId = useId();
   const mounted = typeof document !== "undefined";
   const formRef = useRef<HTMLFormElement>(null);
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayBangkok();
   const selectedDeviceType = asset?.deviceType?.trim() ?? "";
   const requiresWindowsLicenseStatus = requiresWindowsLicense({ assetClass, assetCategory, deviceType });
   const hasSelectedDeviceType = Boolean(
@@ -544,7 +560,13 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
         open &&
         createPortal(
           <div className="fixed inset-0 z-50 flex items-center justify-center">
-            <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setOpen(false)} />
+            <div
+              className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+              onClick={async () => {
+                // A stray click outside must not throw away a long, half-filled form.
+                if (await confirmAction({ title: "ปิดโดยไม่บันทึก?", text: "ข้อมูลที่กรอกในฟอร์มนี้จะไม่ถูกบันทึก", confirmText: "ปิดฟอร์ม" })) setOpen(false);
+              }}
+            />
             <div
               role="dialog"
               aria-modal="true"
@@ -567,13 +589,13 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
                 <div role="alert" className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>
               )}
 
-              <form ref={formRef} action={formAction} className="mt-5 space-y-4">
+              <form ref={formRef} onSubmit={submitWithoutReset(formAction)} className="mt-5 space-y-4">
                 {mode === "edit" && <input type="hidden" name="assetId" value={asset?.id} />}
 
               <h3 className="text-base font-semibold">ข้อมูลทั่วไป</h3>
               {/* Survey / หน่วยงาน */}
               <div>
-                <label className="block text-sm font-medium">หน่วยงาน <span className="text-rose-500">*</span></label>
+                <label htmlFor={fixedFacilityId ? undefined : `${fieldId}-facility`} className="block text-sm font-medium">หน่วยงาน <span className="text-rose-500">*</span></label>
                 {fixedFacilityId ? (
                   <>
                     <input type="hidden" name="facilityId" value={fixedFacilityId} />
@@ -583,6 +605,7 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
                   </>
                 ) : (
                   <FacilityCombobox
+                    inputId={`${fieldId}-facility`}
                     facilities={facilities}
                     defaultFacilityId={asset?.facilityId}
                     onSelectedFacilityIdChange={(facilityId) => {
@@ -597,10 +620,11 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
 
               {selectedFacilityId && (
                 <div>
-                  <label className="block text-sm font-medium">
+                  <label htmlFor={`${fieldId}-workGroup`} className="block text-sm font-medium">
                     กลุ่มงาน {selectedWorkGroups.length > 0 && <span className="text-rose-500">*</span>}
                   </label>
                   <WorkGroupCombobox
+                    inputId={`${fieldId}-workGroup`}
                     key={`${selectedFacilityId}-${selectedWorkGroupValue || "none"}`}
                     options={selectedWorkGroups}
                     defaultWorkGroupId={selectedWorkGroupValue}
@@ -657,8 +681,8 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
               <div className="grid gap-4 sm:grid-cols-2">
                 {/* ชื่อ */}
                 <div>
-                  <label className="block text-sm font-medium">ชื่อทรัพย์สิน <span className="text-rose-500">*</span></label>
-                  <input
+                  <label htmlFor={`${fieldId}-assetName`} className="block text-sm font-medium">ชื่อทรัพย์สิน <span className="text-rose-500">*</span></label>
+                  <input id={`${fieldId}-assetName`}
                     name="assetName"
                     defaultValue={asset?.assetName ?? ""}
                     required
@@ -686,8 +710,8 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
                   </select>
                 </div>
                 <fieldset hidden={!isIt} disabled={!isIt}>
-                  <label className="block text-sm font-medium">ลักษณะทรัพย์สิน IT <span className="text-rose-500">*</span></label>
-                  <select
+                  <label htmlFor={`${fieldId}-assetCategory`} className="block text-sm font-medium">ลักษณะทรัพย์สิน IT <span className="text-rose-500">*</span></label>
+                  <select id={`${fieldId}-assetCategory`}
                     name="assetCategory"
                     value={assetCategory}
                     onChange={(event) => {
@@ -704,8 +728,8 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
                 {isIt && mode === "create" && <p className="text-xs leading-5 text-[var(--muted)] sm:col-span-2">หากเพิ่มโปรแกรมหรือซอฟต์แวร์ ให้เลือกประเภท 20. สินทรัพย์ไม่มีตัวตน</p>}
                 {/* ประเภททรัพย์สิน */}
                 <fieldset hidden={!isIt} disabled={!isIt} className="sm:col-span-2">
-                  <label className="block text-sm font-medium">ประเภทอุปกรณ์ IT</label>
-                  <select
+                  <label htmlFor={`${fieldId}-deviceType`} className="block text-sm font-medium">ประเภทอุปกรณ์ IT</label>
+                  <select id={`${fieldId}-deviceType`}
                     name="deviceType"
                     value={deviceType}
                     onChange={(event) => {
@@ -731,10 +755,10 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
                 </fieldset>
                 {requiresWindowsLicenseStatus && (
                   <div className="sm:col-span-2">
-                    <label className="block text-sm font-medium">
+                    <label htmlFor={`${fieldId}-windowsLicenseStatus`} className="block text-sm font-medium">
                       สถานะลิขสิทธิ์ Windows <span className="text-rose-500">*</span>
                     </label>
-                    <select
+                    <select id={`${fieldId}-windowsLicenseStatus`}
                       name="windowsLicenseStatus"
                       value={windowsLicenseStatus}
                       onChange={(event) => setWindowsLicenseStatus(event.target.value as WindowsLicenseStatus | "")}
@@ -771,8 +795,8 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
                 <legend className="mb-3 text-base font-semibold">ข้อมูล IT</legend>
                 {/* OS */}
                 <div>
-                  <label className="block text-sm font-medium">ระบบปฏิบัติการ</label>
-                  <input
+                  <label htmlFor={`${fieldId}-operatingSystem`} className="block text-sm font-medium">ระบบปฏิบัติการ</label>
+                  <input id={`${fieldId}-operatingSystem`}
                     name="operatingSystem"
                     defaultValue={asset?.operatingSystem ?? ""}
                     className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
@@ -780,8 +804,8 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
                 </div>
                 {/* Private IP */}
                 <div>
-                  <label className="block text-sm font-medium">Private IP</label>
-                  <input
+                  <label htmlFor={`${fieldId}-privateIp`} className="block text-sm font-medium">Private IP</label>
+                  <input id={`${fieldId}-privateIp`}
                     name="privateIp"
                     defaultValue={asset?.privateIp ?? ""}
                     placeholder="เช่น 10.0.0.1 หรือ 10.0.0.1/24"
@@ -793,8 +817,8 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
               <div className="grid gap-4 sm:grid-cols-2">
                 {/* Owner */}
                 <div>
-                  <label className="block text-sm font-medium">ผู้รับผิดชอบ</label>
-                  <input
+                  <label htmlFor={`${fieldId}-ownerName`} className="block text-sm font-medium">ผู้รับผิดชอบ</label>
+                  <input id={`${fieldId}-ownerName`}
                     name="ownerName"
                     defaultValue={asset?.ownerName ?? ""}
                     className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
@@ -802,8 +826,9 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
                 </div>
                 {/* Location */}
                 <div>
-                  <label className="block text-sm font-medium">ที่ตั้ง / Location</label>
+                  <label htmlFor={`${fieldId}-location`} className="block text-sm font-medium">ที่ตั้ง / Location</label>
                   <LocationCombobox
+                    inputId={`${fieldId}-location`}
                     key={`${selectedFacilityId ?? "none"}-${selectedWorkGroupValue || "none"}`}
                     name="locationDetail"
                     defaultValue={asset?.locationDetail ?? ""}
@@ -835,8 +860,8 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
               <div className="grid gap-4 sm:grid-cols-3">
                 {/* Serial */}
                 <div>
-                  <label className="block text-sm font-medium">Serial Number</label>
-                  <input
+                  <label htmlFor={`${fieldId}-serialNumber`} className="block text-sm font-medium">Serial Number</label>
+                  <input id={`${fieldId}-serialNumber`}
                     name="serialNumber"
                     defaultValue={asset?.serialNumber ?? ""}
                     className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 font-mono text-sm outline-none focus:border-[var(--accent)]"
@@ -845,8 +870,8 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
                 </div>
                 {/* MA Start */}
                 <div>
-                  <label className="block text-sm font-medium">วันเริ่มสัญญา</label>
-                    <input
+                  <label htmlFor={`${fieldId}-maintenanceStartDate`} className="block text-sm font-medium">วันเริ่มสัญญา</label>
+                    <input id={`${fieldId}-maintenanceStartDate`}
                       type="date"
                       name="maintenanceStartDate"
                       defaultValue={asset?.maintenanceStartDate ?? ""}
@@ -855,8 +880,8 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
                 </div>
                 {/* MA End */}
                 <div>
-                  <label className="block text-sm font-medium">วันสิ้นสุดสัญญา</label>
-                  <input
+                  <label htmlFor={`${fieldId}-maintenanceEndDate`} className="block text-sm font-medium">วันสิ้นสุดสัญญา</label>
+                  <input id={`${fieldId}-maintenanceEndDate`}
                     type="date"
                     name="maintenanceEndDate"
                     defaultValue={asset?.maintenanceEndDate ?? ""}
@@ -868,8 +893,8 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
               {/* ── ข้อมูลราคาและการจัดซื้อ ── */}
               <div className="grid gap-4 sm:grid-cols-3">
                 <div>
-                  <label className="block text-sm font-medium">ราคาที่ซื้อ (บาท)</label>
-                  <input
+                  <label htmlFor={`${fieldId}-purchasePrice`} className="block text-sm font-medium">ราคาที่ซื้อ (บาท)</label>
+                  <input id={`${fieldId}-purchasePrice`}
                     type="number"
                     name="purchasePrice"
                     min="0"
@@ -880,8 +905,8 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium">วันที่ซื้อ / ได้รับมอบ</label>
-                  <input
+                  <label htmlFor={`${fieldId}-purchaseDate`} className="block text-sm font-medium">วันที่ซื้อ / ได้รับมอบ</label>
+                  <input id={`${fieldId}-purchaseDate`}
                     type="date"
                     name="purchaseDate"
                     defaultValue={asset?.purchaseDate ?? ""}
@@ -890,8 +915,8 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium">เลขที่สัญญา / PO</label>
-                  <input
+                  <label htmlFor={`${fieldId}-purchaseOrderNo`} className="block text-sm font-medium">เลขที่สัญญา / PO</label>
+                  <input id={`${fieldId}-purchaseOrderNo`}
                     name="purchaseOrderNo"
                     defaultValue={asset?.purchaseOrderNo ?? ""}
                     placeholder="เช่น 65-045/2567"
@@ -925,8 +950,8 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
                   <input id="warrantyEndDate" type="date" name="warrantyEndDate" defaultValue={asset?.warrantyEndDate ?? ""} className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]" />
                 </div>
                 <div className="sm:col-span-3">
-                  <label className="block text-sm font-medium">อายุการใช้งานสำหรับคิดค่าเสื่อม (ปี)</label>
-                  <input
+                  <label htmlFor={`${fieldId}-usefulLifeYears`} className="block text-sm font-medium">อายุการใช้งานสำหรับคิดค่าเสื่อม (ปี)</label>
+                  <input id={`${fieldId}-usefulLifeYears`}
                     type="number"
                     name="usefulLifeYears"
                     min="1"
@@ -942,11 +967,11 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
 
               {/* Status */}
               <div>
-                <label className="block text-sm font-medium">สถานะ</label>
+                <label htmlFor={`${fieldId}-status`} className="block text-sm font-medium">สถานะ</label>
                 {asset && (asset.currentStatus === "Disposed" || asset.currentStatus === "Lost") ? (
                   <>
                     {/* A disabled control is not submitted, so the approved terminal status is preserved. */}
-                    <select disabled value={asset.currentStatus} className="mt-1 w-full rounded-xl border border-black/10 bg-stone-100 px-3 py-2 text-sm text-stone-600">
+                    <select id={`${fieldId}-status`} disabled value={asset.currentStatus} className="mt-1 w-full rounded-xl border border-black/10 bg-stone-100 px-3 py-2 text-sm text-stone-600">
                       <option value="Disposed">จำหน่ายแล้ว</option>
                       <option value="Lost">สูญหาย</option>
                     </select>
@@ -954,6 +979,7 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
                   </>
                 ) : (
                 <select
+                  id={`${fieldId}-status`}
                   name="currentStatus"
                   defaultValue={asset?.currentStatus ?? "Active"}
                   className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
@@ -967,8 +993,8 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
 
               {/* Description */}
               <div>
-                <label className="block text-sm font-medium">คำอธิบายการใช้งาน</label>
-                <textarea
+                <label htmlFor={`${fieldId}-usageDescription`} className="block text-sm font-medium">คำอธิบายการใช้งาน</label>
+                <textarea id={`${fieldId}-usageDescription`}
                   name="usageDescription"
                   defaultValue={asset?.usageDescription ?? ""}
                   rows={2}

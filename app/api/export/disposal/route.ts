@@ -8,6 +8,7 @@ import { buildDisposalWorkbook } from "@/lib/disposal-report";
 import { getFacilityScopeId } from "@/lib/facility-scope";
 import { hasPermission } from "@/lib/role-permissions";
 import { readRequestIp, recordSecurityEvent } from "@/lib/security";
+import { todayBangkok } from "@/lib/local-date";
 
 /**
  * Disposal documents (.xlsx): ?type=pending (รายการขออนุมัติจำหน่าย) or ?type=annual&fy=2570 (รายงานการจำหน่ายประจำปี).
@@ -32,7 +33,7 @@ export async function GET(req: NextRequest) {
   const facilityId = scopeId ?? (Number.isSafeInteger(requested) && requested > 0 ? requested : undefined);
   const kind = req.nextUrl.searchParams.get("type") === "annual" ? "annual" : "pending";
   const fyParam = Number(req.nextUrl.searchParams.get("fy"));
-  const fiscalYear = Number.isInteger(fyParam) && fyParam >= 2500 && fyParam <= 2700 ? fyParam : fiscalYearOf(new Date().toISOString().slice(0, 10));
+  const fiscalYear = Number.isInteger(fyParam) && fyParam >= 2500 && fyParam <= 2700 ? fyParam : fiscalYearOf(todayBangkok());
 
   const { rows, schemaReady } = await listDisposalReportRows({ kind, fiscalYear, facilityIds: facilityId ? [facilityId] : undefined });
   if (!schemaReady) return NextResponse.json({ error: "ต้องรัน database/add_asset_lifecycle.sql ก่อน" }, { status: 409 });

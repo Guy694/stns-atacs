@@ -7,6 +7,7 @@ import { inspectionDeadline, summarizeInspectionProgress, type FacilityProgressR
 import { formatAssetNumber } from "@/lib/asset-number";
 import { selectRows } from "@/lib/mysql";
 import { isMissingSchemaError } from "@/lib/schema-errors";
+import { todayBangkok, dbDate } from "@/lib/local-date";
 
 /** `null` = every facility (admins); an empty list means the user may see nothing. */
 export type FacilityScope = number[] | null;
@@ -185,7 +186,7 @@ export type WorkQueue = {
 };
 
 /** Counts for the "งานรอดำเนินการ" panel. Every source falls back to zero before its migration runs. */
-export async function getWorkQueue(facilityIds: FacilityScope, today = new Date().toISOString().slice(0, 10)): Promise<WorkQueue> {
+export async function getWorkQueue(facilityIds: FacilityScope, today = todayBangkok()): Promise<WorkQueue> {
   const empty: WorkQueue = { pendingDisposals: 0, awaitingExecution: 0, openRepairs: 0, urgentRepairs: 0, overdueLoans: 0, activeLoans: 0, openRounds: [] };
   if (facilityIds && !facilityIds.length) return empty;
   const count = async (sql: string, column: string, extra: unknown[] = []) => {
@@ -217,7 +218,7 @@ export async function getWorkQueue(facilityIds: FacilityScope, today = new Date(
      LIMIT 200`,
     scope.values
   ), [] as RoundRow[]);
-  const day = (value: Date | string | null) => (value ? (value instanceof Date ? value.toISOString() : String(value)).slice(0, 10) : "");
+  const day = (value: Date | string | null) => (value ? dbDate(value) : "");
   const openRounds = roundRows
     .map((row) => {
       const startDate = day(row.start_date) || day(row.inspected_at);

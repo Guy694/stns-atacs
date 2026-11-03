@@ -17,6 +17,12 @@ import {
   type RepairStatus,
 } from "@/lib/repair-options";
 import { hasPermission } from "@/lib/role-permissions";
+import { todayBangkok } from "@/lib/local-date";
+import { SortableTh, TablePagination } from "@/app/_components/ui/data-table";
+import { pageHref, paginate, readPage, readSort, sortHref, sortRows } from "@/lib/table-sort";
+
+const LIST_CAP = 2000;
+const PRIORITY_RANK: Record<string, number> = { Urgent: 0, High: 1, Normal: 2, Low: 3 };
 
 type Props = { searchParams: Promise<Record<string, string | string[] | undefined>> };
 const readParam = (p: Record<string, string | string[] | undefined>, key: string) => (Array.isArray(p[key]) ? p[key]?.[0] : p[key]) ?? "";
@@ -33,14 +39,30 @@ export default async function RepairsPage({ searchParams }: Props) {
   const params = await searchParams;
   const statusParam = readParam(params, "status") || "open";
   const status = statusParam === "all" ? undefined : statusParam === "open" ? "open" : (REPAIR_STATUSES as readonly string[]).includes(statusParam) ? (statusParam as RepairStatus) : "open";
-  const currentFiscalYear = fiscalYearOf(new Date().toISOString().slice(0, 10));
+  const currentFiscalYear = fiscalYearOf(todayBangkok());
   const fiscalYear = Number(readParam(params, "fy")) || currentFiscalYear;
   const range = fiscalYearRange(fiscalYear);
 
   const [list, summary] = await Promise.all([
-    listRepairs({ facilityIds: scopeIds, status, limit: 500 }),
+    listRepairs({ facilityIds: scopeIds, status, limit: LIST_CAP }),
     summarizeRepairs({ facilityIds: scopeIds, dateFrom: range.start, dateTo: range.end }),
   ]);
+
+  const sort = readSort(params, ["id", "reported", "asset", "problem", "priority", "status", "assignee", "cost"]);
+  const sorted = sortRows(list.rows, sort, {
+    id: (r) => r.id,
+    reported: (r) => r.reportedAt,
+    asset: (r) => r.assetName,
+    problem: (r) => r.problem,
+    priority: (r) => PRIORITY_RANK[r.priority] ?? 9,
+    status: (r) => (REPAIR_STATUSES as readonly string[]).indexOf(r.status),
+    assignee: (r) => r.assignedTo || r.vendorName,
+    cost: (r) => r.cost,
+  });
+  const paged = paginate(sorted, readPage(params));
+  const th = (key: string, label: string, align: "left" | "right" | "center" = "left") => (
+    <SortableTh key={key} label={label} sortKey={key} sort={sort} align={align} href={sortHref("/repairs", params, key, sort)} />
+  );
 
   const tabs = [
     { key: "open", label: "งานค้าง" },
@@ -128,19 +150,19 @@ export default async function RepairsPage({ searchParams }: Props) {
                   <thead className="bg-slate-50/60 text-xs text-[var(--muted)]">
                     <tr>
                       <th className="px-4 py-2.5 w-14 text-right font-medium">ลำดับ</th>
-                      <th className="px-4 py-2.5 text-left font-medium">งาน</th>
-                      <th className="px-4 py-2.5 text-left font-medium">ทรัพย์สิน</th>
-                      <th className="px-4 py-2.5 text-left font-medium">ปัญหา</th>
-                      <th className="px-4 py-2.5 text-center font-medium">ความเร่งด่วน</th>
-                      <th className="px-4 py-2.5 text-center font-medium">สถานะ</th>
-                      <th className="px-4 py-2.5 text-left font-medium">ผู้รับผิดชอบ</th>
-                      <th className="px-4 py-2.5 text-right font-medium">ค่าใช้จ่าย</th>
+                      {th("reported", "งาน / วันที่แจ้ง")}
+                      {th("asset", "ทรัพย์สิน")}
+                      {th("problem", "ปัญหา")}
+                      {th("priority", "ความเร่งด่วน", "center")}
+                      {th("status", "สถานะ", "center")}
+                      {th("assignee", "ผู้รับผิดชอบ")}
+                      {th("cost", "ค่าใช้จ่าย", "right")}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-black/4">
-                    {list.rows.map((row, rowIndex) => (
+                    {paged.rows.map((row, rowIndex) => (
                       <tr key={row.id} className="align-top hover:bg-white/50">
-                        <td className="px-4 py-3 text-right tabular-nums text-[var(--muted)]">{(rowIndex + 1).toLocaleString("th-TH")}</td>
+                        <td className="px-4 py-3 text-right tabular-nums text-[var(--muted)]">{(paged.start + rowIndex).toLocaleString("th-TH")}</td>
                         <td className="px-4 py-3"><Link href={`/repairs/${row.id}`} className="font-mono text-xs font-semibold text-[var(--primary)] hover:underline">#{row.id}</Link><p className="text-xs text-[var(--muted)]">{formatThaiDate(row.reportedAt)}</p></td>
                         <td className="px-4 py-3"><Link href={`/assets/${row.assetId}`} className="font-medium hover:underline">{row.assetName}</Link><p className="font-mono text-xs text-[var(--muted)]">{row.assetRegistrationNo} · {row.facilityName}</p></td>
                         <td className="max-w-xs px-4 py-3 text-xs text-[var(--muted)]"><p className="line-clamp-2">{row.problem}</p></td>
@@ -153,6 +175,10 @@ export default async function RepairsPage({ searchParams }: Props) {
                   </tbody>
                 </table>
               </div>
+            )}
+            <TablePagination {...paged} hrefFor={(page) => pageHref("/repairs", params, page)} label="แบ่งหน้างานซ่อม" className="border-t border-black/6" />
+            {list.rows.length >= LIST_CAP && (
+              <p className="border-t border-black/6 px-4 py-2 text-xs text-amber-700">แสดง {LIST_CAP.toLocaleString("th-TH")} รายการล่าสุด กรุณาเลือกสถานะเพื่อจำกัดรายการ</p>
             )}
           </section>
         </>

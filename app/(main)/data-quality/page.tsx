@@ -11,6 +11,8 @@ import { QUALITY_CHECKS, QUALITY_GRADE_LABELS, qualityCheck, type QualityGrade }
 import { getDataQuality, listIncompleteAssets, listSerialDuplicates } from "@/lib/data-quality-db";
 import { getAssetFacilityScopeIds } from "@/lib/facility-scope";
 import { hasPermission } from "@/lib/role-permissions";
+import { SortableTh, TablePagination } from "@/app/_components/ui/data-table";
+import { pageHref, paginate, readPage, readSort, sortHref, sortRows } from "@/lib/table-sort";
 
 type Props = { searchParams: Promise<Record<string, string | string[] | undefined>> };
 
@@ -20,6 +22,7 @@ const read = (params: Record<string, string | string[] | undefined>, key: string
 };
 
 const GRADE_TONES: Record<QualityGrade, "success" | "warning" | "danger"> = { good: "success", fair: "warning", poor: "danger" };
+const LIST_CAP = 2000;
 const barColor = (rate: number) => (rate >= 0.9 ? "#0ca30c" : rate >= 0.7 ? "#fab219" : "#d03b3b");
 
 /** How complete each facility's register is, with drill-down to the assets missing a given field. */
@@ -43,7 +46,7 @@ export default async function DataQualityPage({ searchParams }: Props) {
   const [quality, duplicates, incomplete] = await Promise.all([
     getDataQuality(selected.map((f) => ({ id: f.id, name: f.name, district: f.district_name ?? "" })), facilityIds),
     listSerialDuplicates(facilityIds),
-    check ? listIncompleteAssets(check.key, facilityIds) : Promise.resolve(null),
+    check ? listIncompleteAssets(check.key, facilityIds, LIST_CAP) : Promise.resolve(null),
   ]);
   const hrefFor = (patch: Record<string, string>) => {
     const query = new URLSearchParams();
@@ -53,6 +56,32 @@ export default async function DataQualityPage({ searchParams }: Props) {
   };
   const scopeLabel = facilityId ? selected[0]?.name : district ? `อำเภอ${district}` : "ทุกหน่วยงานในขอบเขตของคุณ";
   const available = QUALITY_CHECKS.filter((c) => quality.availableKeys.includes(c.key));
+
+  // ตารางรายการที่ขาดข้อมูล: ?sort=&dir=&page=
+  const sort = readSort(params, ["number", "name", "facility", "workGroup", "price"]);
+  const incompleteSorted = sortRows(incomplete?.rows ?? [], sort, {
+    number: (row) => row.assetNumber,
+    name: (row) => row.assetName,
+    facility: (row) => row.facilityName,
+    workGroup: (row) => row.workGroupName,
+    price: (row) => row.purchasePrice,
+  });
+  const paged = paginate(incompleteSorted, readPage(params));
+  const th = (key: string, label: string, align: "left" | "right" = "left") => (
+    <SortableTh key={key} label={label} sortKey={key} sort={sort} align={align} className="px-4 py-2.5 font-semibold" href={sortHref("/data-quality", params, key, sort)} />
+  );
+
+  // ตารางคะแนนรายหน่วยงาน (เรียงอย่างเดียว ไม่แบ่งหน้า): ?fsort=&fdir=
+  const fsort = readSort(params, ["facility", "assets", "score", ...available.map((c) => `check-${c.key}`)], null, "f");
+  const facilityRows = sortRows(quality.facilities, fsort, {
+    facility: (row) => row.facilityName,
+    assets: (row) => row.assets,
+    score: (row) => row.score,
+    ...Object.fromEntries(available.map((c) => [`check-${c.key}`, (row: (typeof quality.facilities)[number]) => row.checks[c.key]?.missing ?? 0])),
+  });
+  const fth = (key: string, label: string, align: "left" | "right" = "right", className = "px-3 py-2.5 font-semibold") => (
+    <SortableTh key={key} label={label} sortKey={key} sort={fsort} align={align} className={className} href={sortHref("/data-quality", params, key, fsort, "f", key === "facility" ? "asc" : "desc")} />
+  );
 
   return (
     <div id="top" className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-5">
@@ -67,6 +96,10 @@ export default async function DataQualityPage({ searchParams }: Props) {
 
       <form method="GET" className="grid gap-3 rounded-2xl border border-[var(--line)] bg-white p-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
         {check && <input type="hidden" name="check" value={check.key} />}
+        {sort && <input type="hidden" name="sort" value={sort.key} />}
+        {sort && <input type="hidden" name="dir" value={sort.dir} />}
+        {fsort && <input type="hidden" name="fsort" value={fsort.key} />}
+        {fsort && <input type="hidden" name="fdir" value={fsort.dir} />}
         <label className="text-xs">
           <span className="mb-1 block text-xs text-[var(--muted)]">อำเภอ</span>
           <select name="district" defaultValue={district} className="filter-control w-full">
@@ -131,12 +164,19 @@ export default async function DataQualityPage({ searchParams }: Props) {
             <div className="overflow-x-auto">
               <table className="w-full min-w-[720px] text-sm">
                 <thead className="bg-[var(--neutral-bg)] text-left text-xs text-[var(--muted)]">
-                  <tr>{["ลำดับ", "เลขครุภัณฑ์", "รายการ", "หน่วยงาน", "กลุ่มงาน", "มูลค่า (บาท)"].map((h) => <th key={h} className="px-4 py-2.5 font-semibold">{h}</th>)}</tr>
+                  <tr>
+                    <th className="px-4 py-2.5 font-semibold">ลำดับ</th>
+                    {th("number", "เลขครุภัณฑ์")}
+                    {th("name", "รายการ")}
+                    {th("facility", "หน่วยงาน")}
+                    {th("workGroup", "กลุ่มงาน")}
+                    {th("price", "มูลค่า (บาท)", "right")}
+                  </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--line)]">
-                  {incomplete.rows.map((row, rowIndex) => (
+                  {paged.rows.map((row, rowIndex) => (
                     <tr key={row.id}>
-                      <td className="px-4 py-2.5 tabular-nums text-[var(--muted)]">{(rowIndex + 1).toLocaleString("th-TH")}</td>
+                      <td className="px-4 py-2.5 tabular-nums text-[var(--muted)]">{(paged.start + rowIndex).toLocaleString("th-TH")}</td>
                       <td className="px-4 py-2.5 font-mono text-xs">{row.assetNumber}</td>
                       <td className="px-4 py-2.5"><Link href={`/assets/${row.id}`} className="font-medium text-[var(--primary-text)] hover:underline">{row.assetName}</Link></td>
                       <td className="px-4 py-2.5">{row.facilityName}</td>
@@ -148,13 +188,14 @@ export default async function DataQualityPage({ searchParams }: Props) {
               </table>
             </div>
           )}
+          <TablePagination {...paged} hrefFor={(page) => pageHref("/data-quality", params, page)} label="แบ่งหน้ารายการที่ขาดข้อมูล" className="border-t border-black/6" />
         </section>
       )}
 
       <section aria-labelledby="facility-heading" className="overflow-hidden rounded-2xl border border-[var(--line)] bg-white">
         <div className="border-b border-[var(--line)] px-5 py-4">
           <h2 id="facility-heading" className="text-base font-semibold">คะแนนรายหน่วยงาน</h2>
-          <p className="mt-0.5 text-xs text-[var(--muted)]">เรียงจากคะแนนต่ำสุด · ตัวเลขในตารางคือจำนวนรายการที่ยังขาดข้อมูล</p>
+          <p className="mt-0.5 text-xs text-[var(--muted)]">{fsort ? "กดหัวตารางเพื่อเปลี่ยนการเรียง" : "เรียงจากคะแนนต่ำสุด"} · ตัวเลขในตารางคือจำนวนรายการที่ยังขาดข้อมูล</p>
         </div>
         {quality.facilities.length === 0 ? (
           <p className="px-5 py-8 text-center text-sm text-[var(--muted)]">ไม่มีครุภัณฑ์ในขอบเขตที่เลือก</p>
@@ -164,14 +205,14 @@ export default async function DataQualityPage({ searchParams }: Props) {
               <thead className="bg-[var(--neutral-bg)] text-xs text-[var(--muted)]">
                 <tr>
                   <th className="px-4 py-2.5 w-14 text-right font-medium">ลำดับ</th>
-                  <th className="px-4 py-2.5 text-left font-semibold">หน่วยงาน</th>
-                  <th className="px-3 py-2.5 text-right font-semibold">รายการ</th>
-                  <th className="px-3 py-2.5 text-right font-semibold">คะแนน</th>
-                  {available.map((c) => <th key={c.key} className="px-3 py-2.5 text-right font-semibold">{c.label.replace(/ \(.*\)$/, "")}</th>)}
+                  {fth("facility", "หน่วยงาน", "left", "px-4 py-2.5 font-semibold")}
+                  {fth("assets", "รายการ")}
+                  {fth("score", "คะแนน")}
+                  {available.map((c) => fth(`check-${c.key}`, c.label.replace(/ \(.*\)$/, "")))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--line)]">
-                {quality.facilities.map((row, rowIndex) => (
+                {facilityRows.map((row, rowIndex) => (
                   <tr key={row.facilityId}>
                     <td className="px-3 py-2.5 text-right tabular-nums text-[var(--muted)]">{(rowIndex + 1).toLocaleString("th-TH")}</td>
                     <th scope="row" className="px-4 py-2.5 text-left font-medium">

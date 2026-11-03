@@ -5,6 +5,24 @@ import { withBasePath } from "@/lib/base-path";
 
 const IDLE_TIMEOUT_MS = 15 * 60 * 1000;
 const IDLE_NOTICE = "ไม่มีการใช้งานเกิน 15 นาที ระบบออกจากระบบอัตโนมัติ";
+// Shared by all tabs (the session cookie is shared): activity in any tab keeps every tab signed in.
+const ACTIVITY_KEY = "atacs:last-activity";
+
+function readSharedActivity() {
+  try {
+    return Number(window.localStorage.getItem(ACTIVITY_KEY)) || 0;
+  } catch {
+    return 0; // storage blocked (private mode): fall back to this tab only
+  }
+}
+
+function writeSharedActivity(at: number) {
+  try {
+    window.localStorage.setItem(ACTIVITY_KEY, String(at));
+  } catch {
+    // ignore
+  }
+}
 
 export function IdleLogoutGuard() {
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -21,6 +39,14 @@ export function IdleLogoutGuard() {
 
     const logoutForIdle = async () => {
       if (isLoggingOutRef.current) {
+        return;
+      }
+
+      // Another tab may have been used since this timer started.
+      const idleFor = Date.now() - Math.max(readSharedActivity(), lastResetRef.current);
+      if (idleFor < IDLE_TIMEOUT_MS) {
+        clearExistingTimer();
+        timeoutRef.current = setTimeout(logoutForIdle, IDLE_TIMEOUT_MS - idleFor);
         return;
       }
 
@@ -62,8 +88,14 @@ export function IdleLogoutGuard() {
       }
 
       lastResetRef.current = now;
+      writeSharedActivity(now);
       resetIdleTimer();
     };
+
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === ACTIVITY_KEY) resetIdleTimer();
+    };
+    window.addEventListener("storage", onStorage);
 
     const passiveOptions: AddEventListenerOptions = { passive: true };
     const activityEvents = [
@@ -89,6 +121,7 @@ export function IdleLogoutGuard() {
 
     return () => {
       clearExistingTimer();
+      window.removeEventListener("storage", onStorage);
       activityEvents.forEach((eventName) => {
         if (eventName === "visibilitychange") {
           document.removeEventListener(eventName, onActivity);

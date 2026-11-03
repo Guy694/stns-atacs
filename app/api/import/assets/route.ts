@@ -1,5 +1,4 @@
 import { DETAIL_COLUMNS } from "@/lib/asset-details";
-import * as XLSX from "xlsx";
 import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import type { RowDataPacket } from "mysql2/promise";
@@ -12,10 +11,12 @@ import { getCurrentUser } from "@/lib/auth";
 import { createAsset, findOrCreateSurvey, updateAsset, type AssetInput } from "@/lib/assets";
 import { recordAssetStatusHistory } from "@/lib/asset-status-history";
 import { selectRows } from "@/lib/mysql";
+import { parseImportFile } from "@/lib/spreadsheet-parse";
 import { canManageAssetRecord, canMutateAssets } from "@/lib/permissions";
 import { hasPermission } from "@/lib/role-permissions";
 import { readRequestIp, recordSecurityEvent } from "@/lib/security";
 import { notifyTelegramSafe } from "@/lib/telegram";
+import { dbDate, todayBangkok } from "@/lib/local-date";
 
 type ImportRow = Record<string, unknown>;
 
@@ -97,7 +98,7 @@ function buildInput(row: ImportRow, surveyId: number, workGroupId: number | unde
     fields[field] = optionalCell(row, column);
     if (existingRow) {
       const value = existingRow[column];
-      existing[field] = value instanceof Date ? value.toISOString().slice(0, 10) : value;
+      existing[field] = value instanceof Date ? dbDate(value) : value;
     }
   }
   fields.subtypeId = optionalCell(row, "subtype_id");
@@ -114,7 +115,7 @@ function buildInput(row: ImportRow, surveyId: number, workGroupId: number | unde
   const parsed = parseAssetFields(fields, existingRow ? existing as ExistingAssetFields : undefined);
   return {
     ...parsed, surveyId: existingRow?.survey_id ?? surveyId, workGroupId: workGroupId ?? existingRow?.work_group_id ?? null,
-    lastUpdatedAt: new Date().toISOString().slice(0, 10), updatedBy,
+    lastUpdatedAt: todayBangkok(), updatedBy,
   };
 }
 
@@ -193,8 +194,8 @@ export async function POST(req: NextRequest) {
   if (!filename.endsWith(".csv") && !filename.endsWith(".xlsx") && !filename.endsWith(".xls")) {
     return NextResponse.json({ error: "รองรับเฉพาะไฟล์ CSV, XLSX หรือ XLS" }, { status: 400 });
   }
-  // SEC-11: ไลบรารีอ่าน Excel มีช่องโหว่ที่ยังไม่มีเวอร์ชันแก้บน npm
-  // จึงจำกัดขนาดไฟล์และจำนวนแถวไว้ ไม่ให้ไฟล์บีบอัดขนาดใหญ่ (zip bomb) หรือไฟล์หลายล้านแถวทำให้หน่วยความจำหมด
+  // SEC-11: ไลบรารีอ่าน Excel มีช่องโหว่ที่ยังไม่มีเวอร์ชันแก้บน npm จึงอ่านใน worker แยก (ดู lib/spreadsheet-parse.ts)
+  // และจำกัดขนาดไฟล์และจำนวนแถวไว้ ไม่ให้ไฟล์บีบอัดขนาดใหญ่ (zip bomb) หรือไฟล์หลายล้านแถวทำให้หน่วยความจำหมด
   if (file.size > MAX_IMPORT_BYTES) {
     return NextResponse.json(
       { error: `ไฟล์ใหญ่เกิน ${Math.round(MAX_IMPORT_BYTES / (1024 * 1024))} MB กรุณาแบ่งไฟล์แล้วนำเข้าทีละส่วน` },
@@ -207,15 +208,8 @@ export async function POST(req: NextRequest) {
 
   let rows: ImportRow[];
   try {
-    const buffer = Buffer.from(await file.arrayBuffer());
-    // sheetRows จำกัดจำนวนแถวที่ถอดรหัสจริง (อ่านเกินโควตา 1 แถวไว้ตรวจว่าเกินหรือไม่)
-    const workbook = XLSX.read(buffer, { type: "buffer", codepage: 65001, raw: false, sheetRows: MAX_IMPORT_ROWS + 2 });
-    const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    rows = XLSX.utils.sheet_to_json<ImportRow>(sheet, { defval: "", raw: false }).map((row) =>
-      Object.fromEntries(
-        Object.entries(row).map(([key, value]) => [key.replace(/^\uFEFF/, "").trim(), value])
-      )
-    );
+    // CSV อ่านด้วยตัวอ่านของระบบ ส่วน Excel อ่านใน worker thread ที่จำกัดเวลาและหน่วยความจำ (lib/spreadsheet-parse.ts)
+    rows = await parseImportFile(new Uint8Array(await file.arrayBuffer()), filename, MAX_IMPORT_ROWS);
   } catch {
     return NextResponse.json({ error: "ไม่สามารถอ่านไฟล์ CSV หรือ Excel ได้" }, { status: 400 });
   }

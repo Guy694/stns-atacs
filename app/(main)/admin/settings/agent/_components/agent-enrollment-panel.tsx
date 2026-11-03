@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState } from "react";
+import { useActionState, useEffect, useRef, useState, useId } from "react";
 
 import {
   createAgentEnrollmentAction,
@@ -60,6 +60,7 @@ function requiresWorkGroup(typecode: string | null | undefined) {
 }
 
 export function AgentEnrollmentPanel({ facilities, workGroups, staticInstallKey }: AgentEnrollmentPanelProps) {
+  const fieldId = useId();
   const [selectedFacilityId, setSelectedFacilityId] = useState("");
   const [facilityLabel, setFacilityLabel] = useState("");
   const [workGroupId, setWorkGroupId] = useState("");
@@ -101,8 +102,8 @@ export function AgentEnrollmentPanel({ facilities, workGroups, staticInstallKey 
 
       <form action={formAction} className="mt-5 grid gap-4 lg:grid-cols-[1.2fr_1fr_auto]">
         <div>
-          <label className="block text-sm font-medium">หน่วยงาน</label>
-          <select
+          <label htmlFor={`${fieldId}-facilityId`} className="block text-sm font-medium">หน่วยงาน</label>
+          <select id={`${fieldId}-facilityId`}
             name="facilityId"
             value={selectedFacilityId}
             onChange={(event) => {
@@ -123,8 +124,8 @@ export function AgentEnrollmentPanel({ facilities, workGroups, staticInstallKey 
         </div>
 
         <div>
-          <label className="block text-sm font-medium">ชื่อกลุ่มงาน</label>
-          <select
+          <label htmlFor={`${fieldId}-workGroupId`} className="block text-sm font-medium">ชื่อกลุ่มงาน</label>
+          <select id={`${fieldId}-workGroupId`}
             name="workGroupId"
             value={workGroupId}
             onChange={(event) => setWorkGroupId(event.target.value)}
@@ -151,8 +152,8 @@ export function AgentEnrollmentPanel({ facilities, workGroups, staticInstallKey 
         </div>
 
         <div>
-          <label className="block text-sm font-medium">หมดอายุ</label>
-          <input
+          <label htmlFor={`${fieldId}-expiresAt`} className="block text-sm font-medium">หมดอายุ</label>
+          <input id={`${fieldId}-expiresAt`}
             type="datetime-local"
             name="expiresAt"
             className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"

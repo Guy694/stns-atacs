@@ -9,6 +9,8 @@ import { resolveFacilityFilter } from "@/lib/facility-scope";
 import { filterValuationAssets } from "@/lib/valuation-sheet";
 import { hasPermission } from "@/lib/role-permissions";
 import { readRequestIp, recordSecurityEvent } from "@/lib/security";
+import { todayBangkok } from "@/lib/local-date";
+import { attachDisposalDates } from "@/lib/asset-disposal-dates";
 
 /** Depreciation register (ทะเบียนค่าเสื่อมราคา) for one fiscal year, scoped like the reports page. */
 export async function GET(req: NextRequest) {
@@ -25,11 +27,11 @@ export async function GET(req: NextRequest) {
   const requestedFacilityId = params.get("facilityId") ? Number(params.get("facilityId")) : undefined;
   const facilityId = resolveFacilityFilter(user, requestedFacilityId);
   if (facilityId === null) return NextResponse.json({ error: "No facility scope" }, { status: 403 });
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayBangkok();
   const fiscalYear = Number(params.get("fy")) || fiscalYearOf(today);
   if (!Number.isInteger(fiscalYear) || fiscalYear < 2500 || fiscalYear > 2700) return NextResponse.json({ error: "ปีงบประมาณไม่ถูกต้อง" }, { status: 400 });
 
-  const assets = await listAssets({ facilityId });
+  const assets = await attachDisposalDates(await listAssets({ facilityId }));
   const assetClass = params.get("assetClass") ?? "";
   const report = summarizeValuation(filterValuationAssets(assets.map(asset => ({ ...asset, subtypeName: asset.extensions[asset.assetClass]?.subtypeName })), { assetClass }), fiscalYear, today);
   const header = [

@@ -13,6 +13,7 @@ import {
   findUserByThaiCid,
   findUserByUsername,
   getUserDisplayName,
+  linkPendingGoogleIdentity,
   getPendingRegistrationClaim,
   normalizeDisplayName,
   normalizeThaiCid,
@@ -303,6 +304,7 @@ export async function loginWithPasswordAction(formData: FormData) {
   }
 
   try {
+    await linkPendingGoogleIdentity(user);
     await createSession(user.id);
   } catch (error) {
     console.error("Password login session creation failed", error);
@@ -323,6 +325,7 @@ export async function loginWithPasswordAction(formData: FormData) {
   await notifyTelegramSafe({
     category: "security",
     title: "เข้าสู่ระบบสำเร็จ",
+    throttle: false,
     details: { ผู้ใช้: getUserDisplayName(user), Username: username, วิธี: "Username/Password", ...(await requestDetails()) },
   });
   redirect(nextPath);

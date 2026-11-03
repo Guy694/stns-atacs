@@ -1,3 +1,4 @@
+import { todayBangkok } from "@/lib/local-date";
 /** Loans (ยืม-คืน): statuses and the pure rules shared by the server and the forms. */
 export type LoanStatus = "OnLoan" | "Returned" | "Cancelled";
 export type LoanState = "on-loan" | "due-soon" | "overdue" | "returned" | "cancelled";
@@ -28,7 +29,7 @@ const DAY = 86_400_000;
 const isDate = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(new Date(`${value}T00:00:00Z`).getTime()) && new Date(`${value}T00:00:00Z`).toISOString().slice(0, 10) === value;
 const days = (from: string, to: string) => Math.round((new Date(`${to}T00:00:00Z`).getTime() - new Date(`${from}T00:00:00Z`).getTime()) / DAY);
 
-export function loanState(loan: { status: LoanStatus; dueOn: string }, today = new Date().toISOString().slice(0, 10)): { state: LoanState; daysLeft: number } {
+export function loanState(loan: { status: LoanStatus; dueOn: string }, today = todayBangkok()): { state: LoanState; daysLeft: number } {
   if (loan.status === "Returned") return { state: "returned", daysLeft: 0 };
   if (loan.status === "Cancelled") return { state: "cancelled", daysLeft: 0 };
   const daysLeft = days(today, loan.dueOn);
@@ -39,7 +40,7 @@ export function loanState(loan: { status: LoanStatus; dueOn: string }, today = n
 
 export type LoanInput = { borrowerName: string; borrowerUnit?: string; borrowerContact?: string; purpose: string; loanedOn: string; dueOn: string };
 
-export function validateLoanInput(input: LoanInput, today = new Date().toISOString().slice(0, 10)) {
+export function validateLoanInput(input: LoanInput, today = todayBangkok()) {
   const borrowerName = input.borrowerName.trim();
   const purpose = input.purpose.trim();
   if (!borrowerName) throw new Error("กรุณาระบุชื่อผู้ยืม");
@@ -59,7 +60,7 @@ export function validateLoanInput(input: LoanInput, today = new Date().toISOStri
   };
 }
 
-export function validateReturn(input: { returnedOn: string; condition: string; loanedOn: string }, today = new Date().toISOString().slice(0, 10)) {
+export function validateReturn(input: { returnedOn: string; condition: string; loanedOn: string }, today = todayBangkok()) {
   if (!isDate(input.returnedOn) || input.returnedOn > today) throw new Error("วันที่คืนไม่ถูกต้องหรือเกินวันที่ปัจจุบัน");
   if (input.returnedOn < input.loanedOn) throw new Error("วันที่คืนต้องไม่ก่อนวันที่ยืม");
   if (input.condition !== "Good" && input.condition !== "Damaged") throw new Error("กรุณาเลือกสภาพเมื่อรับคืน");

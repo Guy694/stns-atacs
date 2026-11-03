@@ -1,6 +1,8 @@
 import { dashboardCategoryId, DEPRECIATION_CATEGORIES } from "@/lib/asset-depreciation";
 import { normalizeAssetClass } from "@/lib/asset-classes";
 import type { AssetClassification } from "@/lib/asset-policy";
+import { todayBangkok } from "@/lib/local-date";
+import { buildRegisterSchedule, type RegisterSchedule } from "@/lib/asset-register";
 
 /**
  * Straight-line depreciation estimate for the asset register (ทะเบียนคุมทรัพย์สิน).
@@ -13,6 +15,7 @@ import type { AssetClassification } from "@/lib/asset-policy";
  * Figures are an operational estimate for planning and reporting, not a general-ledger posting.
  */
 export const SALVAGE_VALUE = 1;
+/** Accounting threshold (บัญชีครุภัณฑ์ต่ำกว่าเกณฑ์). Not a depreciation cut-off: every item is depreciated. */
 export const CAPITALIZATION_THRESHOLD = 10_000;
 
 export type ValuationInput = AssetClassification & {
@@ -23,7 +26,20 @@ export type ValuationInput = AssetClassification & {
   subtypeName?: string;
   extensions?: Record<string, { subtypeName: string }>;
   currentStatus?: string;
+  /** Date the asset left the register (execution date, else approval date); see lib/asset-disposal-dates.ts. */
+  disposedOn?: string | null;
 };
+
+/**
+ * Disposed/Lost assets leave a report only from the period in which they left the register, so a
+ * past year's figures do not change when something is disposed later. Without a known date the
+ * asset is excluded, as before.
+ */
+export function isDisposedBy(asset: Pick<ValuationInput, "currentStatus" | "disposedOn">, periodEnd: string) {
+  if (asset.currentStatus !== "Disposed" && asset.currentStatus !== "Lost") return false;
+  const disposedOn = asset.disposedOn ? String(asset.disposedOn).slice(0, 10) : "";
+  return !disposedOn || disposedOn <= periodEnd;
+}
 
 export type UsefulLife = {
   years: number | null;
@@ -34,7 +50,7 @@ export type UsefulLife = {
   source: "override" | "schedule" | "none";
 };
 
-export type ValuationStatus = "ok" | "below-threshold" | "missing-price" | "missing-date" | "no-life" | "future";
+export type ValuationStatus = "ok" | "missing-price" | "missing-date" | "no-life" | "future";
 
 export type Valuation = {
   status: ValuationStatus;
@@ -104,42 +120,35 @@ export function resolveUsefulLife(asset: ValuationInput): UsefulLife {
 const dayCount = (from: Date, to: Date) => Math.round((to.getTime() - from.getTime()) / DAY) + 1;
 
 /**
- * Walks fiscal years: each year is charged cost/years × (days held ÷ days in that fiscal year),
- * so every full year carries exactly the annual charge and the first/last years are prorated by day.
+ * One depreciation method for the whole system: the government register's (lib/asset-register.ts).
+ * Annual charge = cost × table rate (e.g. 33% for computers), prorated by day within each fiscal year,
+ * capped at cost − 1 baht with the remainder charged in the last period of the useful life.
+ * Partial periods (an `asOf` inside a fiscal year) are prorated by day within that period.
  */
-function walkDepreciation(cost: number, startDate: string, years: number, asOf: string) {
-  const start = parseDate(startDate);
-  const until = parseDate(asOf);
-  const depreciable = Math.max(0, cost - SALVAGE_VALUE);
-  if (!start || !until || years <= 0 || depreciable === 0 || until < start) return { accumulated: 0, fullyDepreciatedOn: null as string | null };
-  const annual = depreciable / years;
+function registerScheduleFor(cost: number, startDate: string, years: number, ratePercent?: number | null) {
+  return buildRegisterSchedule({ cost, acquiredOn: startDate, lifeYears: years, annualRatePercent: ratePercent ?? null });
+}
+
+function accumulatedFromSchedule(schedule: RegisterSchedule | null, asOf: string) {
+  if (!schedule) return 0;
   let accumulated = 0;
-  for (let fiscalYear = fiscalYearOf(start); ; fiscalYear += 1) {
-    const range = fiscalYearRange(fiscalYear);
-    const fyStart = parseDate(range.start)!;
-    const fyEnd = parseDate(range.end)!;
-    const periodStart = start > fyStart ? start : fyStart;
-    const periodEnd = until < fyEnd ? until : fyEnd;
-    const daysInYear = dayCount(fyStart, fyEnd);
-    const charge = annual * dayCount(periodStart, periodEnd) / daysInYear;
-    if (accumulated + charge >= depreciable - 0.005) {
-      const neededDays = Math.ceil(((depreciable - accumulated) / annual) * daysInYear - 1e-9);
-      const reachedOn = new Date(periodStart.getTime() + (neededDays - 1) * DAY);
-      return { accumulated: depreciable, fullyDepreciatedOn: reachedOn <= until ? toIso(reachedOn) : null, reachedOn: toIso(reachedOn) };
+  for (const row of schedule.rows) {
+    if (asOf >= row.endDate) {
+      accumulated = row.accumulated;
+      continue;
     }
-    accumulated += charge;
-    if (periodEnd >= until) return { accumulated: round2(accumulated), fullyDepreciatedOn: null };
+    if (asOf >= row.startOn) {
+      const elapsed = dayCount(parseDate(row.startOn)!, parseDate(asOf)!);
+      accumulated = round2(accumulated + (row.depreciation * elapsed) / row.days);
+    }
+    break;
   }
+  return accumulated;
 }
 
-/** Accumulated straight-line depreciation up to and including `asOf`. */
-export function accumulatedDepreciation(cost: number, startDate: string, years: number, asOf: string) {
-  return round2(walkDepreciation(cost, startDate, years, asOf).accumulated);
-}
-
-function fullyDepreciatedDate(cost: number, startDate: string, years: number) {
-  const result = walkDepreciation(cost, startDate, years, "9999-09-30") as { reachedOn?: string };
-  return result.reachedOn ?? null;
+/** Accumulated depreciation up to and including `asOf` (register method). */
+export function accumulatedDepreciation(cost: number, startDate: string, years: number, asOf: string, ratePercent?: number | null) {
+  return accumulatedFromSchedule(registerScheduleFor(cost, startDate, years, ratePercent), asOf);
 }
 
 export function valueAsset(asset: ValuationInput, asOf: string): Valuation {
@@ -148,19 +157,19 @@ export function valueAsset(asset: ValuationInput, asOf: string): Valuation {
   const startDate = parseDate(asset.purchaseDate) ? asset.purchaseDate!.slice(0, 10) : parseDate(asset.installedAt) ? asset.installedAt!.slice(0, 10) : null;
   const empty = { cost, startDate, life, annualDepreciation: 0, accumulated: 0, fullyDepreciatedOn: null, isFullyDepreciated: false };
   if (cost === null || !Number.isFinite(cost)) return { ...empty, status: "missing-price", bookValue: null };
-  if (cost < CAPITALIZATION_THRESHOLD) return { ...empty, status: "below-threshold", bookValue: cost };
   if (!startDate) return { ...empty, status: "missing-date", bookValue: cost };
   if (!life.years) return { ...empty, status: "no-life", bookValue: cost };
   if (startDate > asOf) return { ...empty, status: "future", bookValue: cost };
-  const accumulated = accumulatedDepreciation(cost, startDate, life.years, asOf);
-  const fullyDepreciatedOn = fullyDepreciatedDate(cost, startDate, life.years) ?? toIso(new Date(addYears(parseDate(startDate)!, life.years).getTime() - DAY));
+  const schedule = registerScheduleFor(cost, startDate, life.years, life.annualRate);
+  const accumulated = accumulatedFromSchedule(schedule, asOf);
+  const fullyDepreciatedOn = schedule?.rows.at(-1)?.endDate ?? toIso(new Date(addYears(parseDate(startDate)!, life.years).getTime() - DAY));
   const bookValue = round2(cost - accumulated);
   return {
     status: "ok",
     cost,
     startDate,
     life,
-    annualDepreciation: round2(Math.max(0, cost - SALVAGE_VALUE) / life.years),
+    annualDepreciation: schedule?.annualAmount ?? 0,
     accumulated,
     bookValue,
     fullyDepreciatedOn,
@@ -180,7 +189,7 @@ export function depreciationSchedule(asset: ValuationInput): ScheduleRow[] {
   let previous = 0;
   for (let fiscalYear = firstYear; fiscalYear <= lastYear; fiscalYear += 1) {
     const range = fiscalYearRange(fiscalYear);
-    const accumulated = accumulatedDepreciation(valuation.cost, valuation.startDate, valuation.life.years, range.end);
+    const accumulated = accumulatedDepreciation(valuation.cost, valuation.startDate, valuation.life.years, range.end, valuation.life.annualRate);
     rows.push({ fiscalYear, ...range, depreciation: round2(accumulated - previous), accumulated, bookValue: round2(valuation.cost - accumulated) });
     previous = accumulated;
   }
@@ -193,12 +202,11 @@ export function depreciationForFiscalYear(asset: ValuationInput, fiscalYearBE: n
   const valuation = valueAsset(asset, end);
   if (valuation.status !== "ok" || !valuation.startDate || !valuation.life.years || valuation.cost === null) return 0;
   const before = new Date(parseDate(start)!.getTime() - DAY);
-  return round2(valuation.accumulated - accumulatedDepreciation(valuation.cost, valuation.startDate, valuation.life.years, toIso(before)));
+  return round2(valuation.accumulated - accumulatedDepreciation(valuation.cost, valuation.startDate, valuation.life.years, toIso(before), valuation.life.annualRate));
 }
 
 export const VALUATION_STATUS_LABELS: Record<ValuationStatus, string> = {
   ok: "คิดค่าเสื่อม",
-  "below-threshold": `ต่ำกว่าเกณฑ์ ${CAPITALIZATION_THRESHOLD.toLocaleString("th-TH")} บาท (ไม่คิดค่าเสื่อม)`,
   "missing-price": "ยังไม่ระบุราคา",
   "missing-date": "ยังไม่ระบุวันที่ได้มา",
   "no-life": "ไม่มีอายุการใช้งานตามตาราง (ระบุอายุเฉพาะรายการ)",
@@ -222,27 +230,24 @@ export type ValuationReport<T> = {
   rows: ValuationSummaryRow[];
   totals: Omit<ValuationSummaryRow, "categoryId" | "categoryLabel">;
   excluded: Record<Exclude<ValuationStatus, "ok">, number>;
-  belowThresholdCost: number;
   terminalCount: number;
   items: Array<{ asset: T; valuation: Valuation; depreciationThisYear: number }>;
 };
 
 /** Register valuation for one fiscal year. Disposed/Lost assets are excluded from the register totals. */
-export function summarizeValuation<T extends ValuationInput>(assets: T[], fiscalYearBE: number, today = new Date().toISOString().slice(0, 10)): ValuationReport<T> {
+export function summarizeValuation<T extends ValuationInput>(assets: T[], fiscalYearBE: number, today = todayBangkok()): ValuationReport<T> {
   const { end } = fiscalYearRange(fiscalYearBE);
   const asOf = end < today ? end : today;
   const byCategory = new Map<string, ValuationSummaryRow>();
   const totals = { count: 0, cost: 0, depreciationThisYear: 0, accumulated: 0, bookValue: 0, fullyDepreciated: 0 };
-  const excluded = { "below-threshold": 0, "missing-price": 0, "missing-date": 0, "no-life": 0, future: 0 };
-  let belowThresholdCost = 0;
+  const excluded = { "missing-price": 0, "missing-date": 0, "no-life": 0, future: 0 };
   let terminalCount = 0;
   const items: ValuationReport<T>["items"] = [];
   for (const asset of assets) {
-    if (asset.currentStatus === "Disposed" || asset.currentStatus === "Lost") { terminalCount += 1; continue; }
+    if (isDisposedBy(asset, asOf)) { terminalCount += 1; continue; }
     const valuation = valueAsset(asset, asOf);
     if (valuation.status !== "ok") {
       excluded[valuation.status] += 1;
-      if (valuation.status === "below-threshold") belowThresholdCost += valuation.cost ?? 0;
       items.push({ asset, valuation, depreciationThisYear: 0 });
       continue;
     }
@@ -262,5 +267,5 @@ export function summarizeValuation<T extends ValuationInput>(assets: T[], fiscal
   }
   const roundRow = <R extends typeof totals>(row: R) => ({ ...row, cost: round2(row.cost), depreciationThisYear: round2(row.depreciationThisYear), accumulated: round2(row.accumulated), bookValue: round2(row.bookValue) });
   const rows = [...byCategory.values()].map(roundRow).sort((a, b) => (a.categoryId ?? 99) - (b.categoryId ?? 99));
-  return { fiscalYear: fiscalYearBE, asOf, rows, totals: roundRow(totals), excluded, belowThresholdCost: round2(belowThresholdCost), terminalCount, items };
+  return { fiscalYear: fiscalYearBE, asOf, rows, totals: roundRow(totals), excluded, terminalCount, items };
 }

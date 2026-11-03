@@ -20,6 +20,8 @@ import { AssetFormModal } from "@/app/(main)/assets/_components/asset-form-modal
 import { listAssetLocations } from "@/lib/asset-locations";
 import { DeleteAssetButton } from "@/app/(main)/assets/_components/delete-asset-button";
 import { FacilityAssetQrActions } from "@/app/(main)/facilities/[id]/_components/facility-asset-qr-actions";
+import { SortableTh, TablePagination } from "@/app/_components/ui/data-table";
+import { pageHref, paginate, readPage, readSort, sortHref, sortRows, type SortState } from "@/lib/table-sort";
 
 type Props = {
   params: Promise<{ id: string }>;
@@ -32,6 +34,13 @@ const STATUS_LABELS: Record<string, string> = {
   Broken: "ชำรุด",
   Disposed: "จำหน่ายแล้ว",
   Lost: "สูญหาย",
+};
+const STATUS_RANK: Record<string, number> = { Active: 0, Inactive: 1, Broken: 2, Lost: 3, Disposed: 4 };
+// ค่าเรียงลำดับเดิมจากตัวกรอง (?sort=name_asc ฯลฯ) ที่ตรงกับคอลัมน์ในตาราง
+const LEGACY_COLUMN_SORT: Record<string, SortState> = {
+  name_asc: { key: "name", dir: "asc" },
+  name_desc: { key: "name", dir: "desc" },
+  ma_soon: { key: "ma", dir: "asc" },
 };
 const STATUS_TONE = {
   Active: "success",
@@ -114,6 +123,24 @@ export default async function FacilityDetailPage({ params, searchParams }: Props
     hasPermission(user.role, "assets.create"),
     hasPermission(user.role, "assets.update"),
   ]);
+
+  // ตารางเรียง/แบ่งหน้าในหน่วยความจำ: หัวคอลัมน์ (?sort=<คอลัมน์>) มาก่อน ถ้าไม่มีใช้ค่าจากตัวกรองเดิม
+  const columnKeys = ["number", "name", "class", "status", "ma", ...(canManageAssets ? ["ip", "serial"] : [])];
+  const tableSort = readSort(query, columnKeys) ?? (normalizedSort ? LEGACY_COLUMN_SORT[normalizedSort] ?? null : null);
+  const sortedAssets = sortRows(assets, tableSort, {
+    number: (a) => a.assetNumber || `#${a.id}`,
+    name: (a) => a.assetName,
+    class: (a) => assetClassLabel(a.assetClass),
+    status: (a) => STATUS_RANK[a.currentStatus] ?? 9,
+    ip: (a) => (isItAsset(a) ? a.privateIp : "") || a.locationDetail,
+    serial: (a) => a.serialNumber,
+    ma: (a) => a.maintenanceEndDate,
+  });
+  const paged = paginate(sortedAssets, readPage(query));
+  const basePath = `/facilities/${facilityId}`;
+  const th = (key: string, label: string) => (
+    <SortableTh key={key} label={label} sortKey={key} sort={tableSort} href={sortHref(basePath, query, key, tableSort)} />
+  );
 
   const totalAssets = allAssets.length;
   const activeCount = allAssets.filter((a) => a.currentStatus === "Active").length;
@@ -251,20 +278,20 @@ export default async function FacilityDetailPage({ params, searchParams }: Props
               <thead>
                 <tr className="border-b border-black/6 bg-stone-50/60 text-xs text-[var(--muted)]">
                   <th className="px-4 py-2.5 w-14 text-right font-medium">ลำดับ</th>
-                  <th className="px-4 py-2.5 text-left font-medium">เลขทะเบียน</th>
-                  <th className="px-4 py-2.5 text-left font-medium">ชื่อทรัพย์สิน</th>
-                  <th className="px-4 py-2.5 text-left font-medium">ประเภท</th>
-                  <th className="px-4 py-2.5 text-left font-medium">สถานะ</th>
-                  {canManageAssets && <th className="px-4 py-2.5 text-left font-medium">IP / Location</th>}
-                  {canManageAssets && <th className="px-4 py-2.5 text-left font-medium">Serial</th>}
-                  <th className="px-4 py-2.5 text-left font-medium">MA หมด</th>
+                  {th("number", "เลขทะเบียน")}
+                  {th("name", "ชื่อทรัพย์สิน")}
+                  {th("class", "ประเภท")}
+                  {th("status", "สถานะ")}
+                  {canManageAssets && th("ip", "IP / Location")}
+                  {canManageAssets && th("serial", "Serial")}
+                  {th("ma", "MA หมด")}
                   {canManageAssets && <th className="px-4 py-2.5 text-right font-medium">จัดการ</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-black/4">
-                {assets.map((asset, rowIndex) => (
+                {paged.rows.map((asset, rowIndex) => (
                   <tr key={asset.id} className="transition hover:bg-white/50">
-                    <td className="px-4 py-3 text-right tabular-nums text-[var(--muted)]">{(rowIndex + 1).toLocaleString("th-TH")}</td>
+                    <td className="px-4 py-3 text-right tabular-nums text-[var(--muted)]">{(paged.start + rowIndex).toLocaleString("th-TH")}</td>
                     <td className="px-4 py-3">
                       <Link
                         href={`/assets/${asset.id}`}
@@ -324,6 +351,7 @@ export default async function FacilityDetailPage({ params, searchParams }: Props
             </table>
           </div>
         )}
+        <TablePagination {...paged} hrefFor={(page) => pageHref(basePath, query, page)} label="แบ่งหน้ารายการทรัพย์สิน" className="border-t border-black/6" />
       </div>
     </div>
   );

@@ -12,6 +12,7 @@ import { DashboardFilters } from "@/app/_components/dashboard-filters";
 import { InspectionProgressPanel, WorkQueuePanel } from "@/app/_components/work-panels";
 import { fiscalYearOf } from "@/lib/asset-valuation";
 import { getInspectionProgress, getWorkQueue } from "@/lib/dashboard-work";
+import { todayBangkok } from "@/lib/local-date";
 
 type Props = { searchParams: Promise<Record<string, string | string[] | undefined>> };
 
@@ -44,7 +45,7 @@ export default async function DashboardPage({ searchParams }: Props) {
   // Inspection progress and the work queue follow the same facility scope as the KPIs above.
   const progressFacilities = summary.facilityOptions.filter((f) => !filters.facility || String(f.id) === filters.facility);
   const facilityIds = user.role === "admin" && !filters.district && !filters.facility ? null : progressFacilities.map((f) => f.id);
-  const inspectionYear = filters.fy ? Number(filters.fy) : fiscalYearOf(new Date().toISOString().slice(0, 10));
+  const inspectionYear = filters.fy ? Number(filters.fy) : fiscalYearOf(todayBangkok());
   const [progress, queue] = await Promise.all([
     getInspectionProgress(inspectionYear, progressFacilities, facilityIds),
     getWorkQueue(facilityIds),

@@ -96,3 +96,30 @@ test("ค่าที่กรอกจริงตอนสร้างให�
   assert.ok(values.includes(24000));
   assert.ok(values.includes("Broken"));
 });
+
+test("header sorting maps whitelisted columns to SQL with blanks last and a stable tie-break", async () => {
+  const { repository, reads } = setup();
+  await repository.listAssets({ orderBy: { key: "facility", dir: "desc" }, limit: 25 });
+  assert.match(reads[0].sql, /ORDER BY \(hf\.name IS NULL OR hf\.name = ''\), hf\.name DESC, a\.id DESC LIMIT \? OFFSET \?$/);
+  await repository.listAssets({ orderBy: { key: "ma", dir: "asc" } });
+  assert.match(reads.at(-1).sql, /ORDER BY \(a\.maintenance_end_date IS NULL\), a\.maintenance_end_date ASC, a\.id ASC$/);
+});
+
+test("an unknown sort column falls back to the default register order", async () => {
+  const { repository, reads } = setup();
+  await repository.listAssets({ orderBy: { key: "password_hash; DROP", dir: "asc" } });
+  assert.match(reads[0].sql, /ORDER BY hf\.district_name, hf\.name, a\.row_no, a\.id$/);
+});
+
+test("a database outage is reported instead of looking like an empty register", async () => {
+  const repository = loadTs("lib/assets.ts", {
+    "@/app/atacs-data": { facilitySurveys: [] },
+    "@/lib/mysql": {
+      withTransaction: async (work) => work(),
+      selectRows: async () => { throw Object.assign(new Error("connect ECONNREFUSED"), { code: "ECONNREFUSED" }); },
+      executeStatement: async () => ({}),
+    },
+  });
+  await assert.rejects(repository.listAssets({}), /ECONNREFUSED/);
+  await assert.rejects(repository.countAssets({}), /ECONNREFUSED/);
+});

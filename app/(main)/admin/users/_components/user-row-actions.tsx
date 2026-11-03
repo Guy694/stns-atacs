@@ -1,9 +1,11 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState, useTransition } from "react";
+import { useActionState, useEffect, useRef, useState, useTransition, useId } from "react";
 import { createPortal } from "react-dom";
 import { setThaidLinkEnabledAction, toggleUserActiveAction, resetUserPasswordAction, updateUserProfileAction } from "@/app/(main)/admin/users/actions";
 import { ActionIconButton } from "@/app/_components/ui/action-icon-button";
+import { submitWithoutReset } from "@/app/_components/ui/submit-without-reset";
+import { confirmAction } from "@/app/_components/ui/confirm";
 
 type FacilityOption = {
   id: number;
@@ -46,6 +48,7 @@ export function UserRowActions({
   thaidLinkEnabled = false,
   thaidLinkColumnAvailable = false,
 }: Props) {
+  const fieldId = useId();
   const mounted = typeof document !== "undefined";
   const [showActions, setShowActions] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
@@ -87,7 +90,7 @@ export function UserRowActions({
   const [editError, editAction, editPending] = useActionState(
     async (prev: string | null, fd: FormData) => {
       const nextRole = String(fd.get("role") ?? currentRole);
-      if (nextRole !== currentRole && !window.confirm(`ยืนยันเปลี่ยนสิทธิ์ของ ${fullName} จาก ${currentRole} เป็น ${nextRole}?`)) {
+      if (nextRole !== currentRole && !(await confirmAction({ title: "เปลี่ยนสิทธิ์ผู้ใช้?", text: `${fullName}: ${currentRole} → ${nextRole}`, confirmText: "เปลี่ยนสิทธิ์" }))) {
         return "ยกเลิกการเปลี่ยนสิทธิ์แล้ว";
       }
       const res = await updateUserProfileAction(prev, fd);
@@ -154,10 +157,10 @@ export function UserRowActions({
                 <button
                   type="button"
                   disabled={linkPending}
-                  onClick={() => {
+                  onClick={async () => {
                     const next = !thaidLinkEnabled;
                     const label = next ? "อนุญาต" : "ยกเลิกการอนุญาต";
-                    if (!window.confirm(`ยืนยัน${label}ให้บัญชี ${fullName} ผูกบัญชี ThaiD ด้วยชื่อ-นามสกุล?`)) return;
+                    if (!(await confirmAction({ title: `${label}เชื่อมต่อ ThaiD?`, text: `บัญชี ${fullName} ผูกบัญชี ThaiD ด้วยชื่อ-นามสกุล`, confirmText: label }))) return;
                     setLinkError(null);
                     startLink(async () => {
                       const error = await setThaidLinkEnabledAction(userId, next);
@@ -179,9 +182,9 @@ export function UserRowActions({
                 <button
                   type="button"
                   disabled={togglePending}
-                  onClick={() => {
+                  onClick={async () => {
                     const nextAction = currentActive ? "ปิดใช้งาน" : "เปิดใช้งาน";
-                    if (!window.confirm(`ยืนยัน${nextAction}บัญชี ${fullName}?`)) return;
+                    if (!(await confirmAction({ title: `${nextAction}บัญชี?`, text: fullName, confirmText: nextAction, danger: currentActive }))) return;
                     startToggle(async () => {
                       await toggleUserActiveAction(userId, currentActive);
                       setShowActions(false);
@@ -211,11 +214,11 @@ export function UserRowActions({
               <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{resetError}</div>
             )}
 
-            <form ref={formRef} action={resetAction} className="mt-4 space-y-3">
+            <form ref={formRef} onSubmit={submitWithoutReset(resetAction)} className="mt-4 space-y-3">
               <input type="hidden" name="userId" value={userId} />
               <div>
-                <label className="block text-sm font-medium">รหัสผ่านใหม่ (≥ 8 ตัวอักษร)</label>
-                <input
+                <label htmlFor={`${fieldId}-newPassword`} className="block text-sm font-medium">รหัสผ่านใหม่ (≥ 8 ตัวอักษร)</label>
+                <input id={`${fieldId}-newPassword`}
                   name="newPassword"
                   type="password"
                   required
@@ -247,26 +250,26 @@ export function UserRowActions({
               <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{editError}</div>
             )}
 
-            <form ref={editFormRef} action={editAction} className="mt-4 space-y-3">
+            <form ref={editFormRef} onSubmit={submitWithoutReset(editAction)} className="mt-4 space-y-3">
               <input type="hidden" name="userId" value={userId} />
               <div>
-                <label className="block text-sm font-medium">ชื่อ-นามสกุล</label>
-                <input name="fullName" required defaultValue={fullName} className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]" />
+                <label htmlFor={`${fieldId}-fullName`} className="block text-sm font-medium">ชื่อ-นามสกุล</label>
+                <input id={`${fieldId}-fullName`} name="fullName" required defaultValue={fullName} className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]" />
               </div>
               {editRole === "officer" && (
                 <div>
-                  <label className="block text-sm font-medium">ตำแหน่งเจ้าหน้าที่</label>
-                  <input name="officerPosition" required maxLength={150} defaultValue={officerPosition ?? ""} className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]" />
+                  <label htmlFor={`${fieldId}-officerPosition`} className="block text-sm font-medium">ตำแหน่งเจ้าหน้าที่</label>
+                  <input id={`${fieldId}-officerPosition`} name="officerPosition" required maxLength={150} defaultValue={officerPosition ?? ""} className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]" />
                 </div>
               )}
               <div className="grid gap-3 sm:grid-cols-2">
                 <div>
-                  <label className="block text-sm font-medium">Email</label>
-                  <input name="email" type="email" defaultValue={email ?? ""} className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]" />
+                  <label htmlFor={`${fieldId}-email`} className="block text-sm font-medium">Email</label>
+                  <input id={`${fieldId}-email`} name="email" type="email" defaultValue={email ?? ""} className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium">Role</label>
-                  <select
+                  <label htmlFor={`${fieldId}-role`} className="block text-sm font-medium">Role</label>
+                  <select id={`${fieldId}-role`}
                     name="role"
                     value={editRole}
                     onChange={(e) => handleEditRoleChange(e.target.value as "admin" | "officer" | "viewer")}
@@ -280,18 +283,18 @@ export function UserRowActions({
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <div>
-                  <label className="block text-sm font-medium">Username</label>
-                  <input name="username" defaultValue={username ?? ""} className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]" />
+                  <label htmlFor={`${fieldId}-username`} className="block text-sm font-medium">Username</label>
+                  <input id={`${fieldId}-username`} name="username" defaultValue={username ?? ""} className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium">ThaiD CID</label>
-                  <input name="thaidCid" defaultValue={thaidCid ?? ""} className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 font-mono text-sm outline-none focus:border-[var(--accent)]" />
+                  <label htmlFor={`${fieldId}-thaidCid`} className="block text-sm font-medium">ThaiD CID</label>
+                  <input id={`${fieldId}-thaidCid`} name="thaidCid" defaultValue={thaidCid ?? ""} className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 font-mono text-sm outline-none focus:border-[var(--accent)]" />
                 </div>
               </div>
               {editRole === "officer" ? (
                 <div>
-                  <label className="block text-sm font-medium">หน่วยงาน (สำหรับ Officer)</label>
-                  <select
+                  <label htmlFor={`${fieldId}-facilityId`} className="block text-sm font-medium">หน่วยงาน (สำหรับ Officer)</label>
+                  <select id={`${fieldId}-facilityId`}
                     ref={editFacilityRef}
                     name="facilityId"
                     value={editFacilityId}

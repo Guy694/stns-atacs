@@ -82,7 +82,7 @@ export function AgentDeviceLinkCell({
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
           onClick={(e) => { if (e.target === e.currentTarget) setOpen(false); }}
         >
-          <div className="glass-panel w-full max-w-lg rounded-2xl p-5 shadow-2xl">
+          <div role="dialog" aria-modal="true" aria-label="ผูก Agent Device กับ Asset" className="glass-panel w-full max-w-lg rounded-2xl p-5 shadow-2xl">
             <div className="mb-4 flex items-start justify-between gap-4">
               <div>
                 <h3 className="text-lg font-semibold">ผูก Agent Device กับ Asset</h3>

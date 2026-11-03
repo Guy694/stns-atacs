@@ -10,7 +10,16 @@ import { getAssetFacilityScopeIds } from "@/lib/facility-scope";
 import { LOAN_STATE_LABELS, LOAN_STATE_TONES, loanState, RETURN_CONDITION_LABELS } from "@/lib/loan-options";
 import { canManageAssetRecord, canMutateAssets } from "@/lib/permissions";
 import { hasPermission } from "@/lib/role-permissions";
+import { SortableTh, TablePagination } from "@/app/_components/ui/data-table";
+import { pageHref, paginate, readPage, readSort, sortHref, sortRows } from "@/lib/table-sort";
 import { CancelLoanButton, ReturnLoanForm } from "./_components/loan-forms";
+
+// listLoans clamps its limit to 1,000 rows, so that is the effective cap.
+const LIST_CAP = 1000;
+const ACTIVE_PREFIX = "a";
+const HISTORY_PREFIX = "h";
+
+type Props = { searchParams: Promise<Record<string, string | string[] | undefined>> };
 
 function LoanState({ loan }: { loan: AssetLoan }) {
   const { state, daysLeft } = loanState(loan);
@@ -18,7 +27,7 @@ function LoanState({ loan }: { loan: AssetLoan }) {
   return <StatusBadge tone={LOAN_STATE_TONES[state]}>{LOAN_STATE_LABELS[state]}{detail}</StatusBadge>;
 }
 
-export default async function LoansPage() {
+export default async function LoansPage({ searchParams }: Props) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
   if (!(await hasPermission(user.role, "loans.view"))) redirect("/dashboard");
@@ -27,11 +36,27 @@ export default async function LoansPage() {
   const canManage = canMutateAssets(user) && (await hasPermission(user.role, "loans.manage"));
 
   const [active, history] = await Promise.all([
-    listLoans({ facilityIds: scopeIds, status: "OnLoan", limit: 500 }),
-    listLoans({ facilityIds: scopeIds, limit: 60 }),
+    listLoans({ facilityIds: scopeIds, status: "OnLoan", limit: LIST_CAP }),
+    listLoans({ facilityIds: scopeIds, limit: LIST_CAP }),
   ]);
+  const params = await searchParams;
   const returned = history.rows.filter((loan) => loan.status !== "OnLoan");
   const overdue = active.rows.filter((loan) => loanState(loan).state === "overdue").length;
+  const activePaged = paginate(active.rows, readPage(params, ACTIVE_PREFIX));
+
+  const sort = readSort(params, ["asset", "borrower", "loaned", "returned", "condition"], { key: "returned", dir: "desc" }, HISTORY_PREFIX);
+  const sorted = sortRows(returned, sort, {
+    asset: (loan) => loan.assetName,
+    borrower: (loan) => loan.borrowerName,
+    loaned: (loan) => loan.loanedOn,
+    returned: (loan) => loan.returnedOn,
+    // ยกเลิก → ชำรุด → คืนปกติ
+    condition: (loan) => (loan.status === "Cancelled" ? 0 : loan.returnCondition === "Damaged" ? 1 : 2),
+  });
+  const paged = paginate(sorted, readPage(params, HISTORY_PREFIX));
+  const th = (key: string, label: string, align: "left" | "right" | "center" = "left") => (
+    <SortableTh key={key} label={label} sortKey={key} sort={sort} align={align} href={sortHref("/loans", params, key, sort, HISTORY_PREFIX)} />
+  );
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6">
@@ -56,7 +81,7 @@ export default async function LoansPage() {
               <p className="px-5 py-8 text-center text-sm text-[var(--muted)]">ไม่มีครุภัณฑ์ที่ถูกยืมอยู่</p>
             ) : (
               <ul className="divide-y divide-black/5">
-                {active.rows.map((loan) => (
+                {activePaged.rows.map((loan) => (
                   <li key={loan.id} className="space-y-2 px-5 py-4">
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <div className="min-w-0">
@@ -75,6 +100,10 @@ export default async function LoansPage() {
                 ))}
               </ul>
             )}
+            <TablePagination {...activePaged} hrefFor={(page) => pageHref("/loans", params, page, ACTIVE_PREFIX)} label="แบ่งหน้ารายการที่กำลังถูกยืม" className="border-t border-black/6" />
+            {active.rows.length >= LIST_CAP && (
+              <p className="border-t border-black/6 px-4 py-2 text-xs text-amber-700">แสดง {LIST_CAP.toLocaleString("th-TH")} รายการแรกตามกำหนดคืน</p>
+            )}
           </section>
 
           <section className="glass-panel overflow-hidden rounded-2xl" aria-labelledby="history-heading">
@@ -85,12 +114,19 @@ export default async function LoansPage() {
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[760px] text-sm">
                   <thead className="bg-slate-50/60 text-left text-xs text-[var(--muted)]">
-                    <tr>{["ลำดับ", "ครุภัณฑ์", "ผู้ยืม", "ยืม – กำหนดคืน", "คืนเมื่อ", "สภาพ / สถานะ"].map((h) => <th key={h} className="px-4 py-2.5 font-medium">{h}</th>)}</tr>
+                    <tr>
+                      <th className="w-14 px-4 py-2.5 font-medium">ลำดับ</th>
+                      {th("asset", "ครุภัณฑ์")}
+                      {th("borrower", "ผู้ยืม")}
+                      {th("loaned", "ยืม – กำหนดคืน")}
+                      {th("returned", "คืนเมื่อ")}
+                      {th("condition", "สภาพ / สถานะ")}
+                    </tr>
                   </thead>
                   <tbody className="divide-y divide-black/4">
-                    {returned.map((loan, rowIndex) => (
+                    {paged.rows.map((loan, rowIndex) => (
                       <tr key={loan.id}>
-                        <td className="px-4 py-2.5 tabular-nums text-[var(--muted)]">{(rowIndex + 1).toLocaleString("th-TH")}</td>
+                        <td className="px-4 py-2.5 tabular-nums text-[var(--muted)]">{(paged.start + rowIndex).toLocaleString("th-TH")}</td>
                         <td className="px-4 py-2.5"><Link href={`/assets/${loan.assetId}`} className="font-medium hover:underline">{loan.assetName}</Link><p className="font-mono text-xs text-[var(--muted)]">{loan.assetNumber}</p></td>
                         <td className="px-4 py-2.5">{loan.borrowerName}<p className="text-xs text-[var(--muted)]">{loan.borrowerUnit}</p></td>
                         <td className="px-4 py-2.5 text-xs">{formatThaiDate(loan.loanedOn)} – {formatThaiDate(loan.dueOn)}</td>
@@ -101,6 +137,10 @@ export default async function LoansPage() {
                   </tbody>
                 </table>
               </div>
+            )}
+            <TablePagination {...paged} hrefFor={(page) => pageHref("/loans", params, page, HISTORY_PREFIX)} label="แบ่งหน้าประวัติการคืน" className="border-t border-black/6" />
+            {history.rows.length >= LIST_CAP && (
+              <p className="border-t border-black/6 px-4 py-2 text-xs text-amber-700">ดึงข้อมูลการยืมสูงสุด {LIST_CAP.toLocaleString("th-TH")} รายการ ประวัติที่เก่ากว่านี้อาจไม่แสดง</p>
             )}
           </section>
         </>

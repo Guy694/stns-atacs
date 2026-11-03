@@ -7,6 +7,7 @@ import { inspectionDeadline } from "@/lib/inspection-progress";
 import { selectRows } from "@/lib/mysql";
 import { isMissingSchemaError } from "@/lib/schema-errors";
 import type { DailySummaryData, DailySummaryThresholds, SummarySection } from "@/lib/daily-summary-format";
+import { dbDate } from "@/lib/local-date";
 
 const LIMIT = 20;
 const EMPTY: SummarySection = { count: 0, items: [] };
@@ -23,11 +24,7 @@ async function section(work: () => Promise<SummarySection>): Promise<SummarySect
 
 const day = (value: Date | string | null | undefined) => {
   if (!value) return "";
-  if (value instanceof Date) {
-    const local = new Date(value.getTime() - value.getTimezoneOffset() * 60000);
-    return local.toISOString().slice(0, 10);
-  }
-  return String(value).slice(0, 10);
+  return dbDate(value);
 };
 
 type AssetCols = { asset_code_prefix?: string | null; asset_registration_no: string | null; asset_name: string | null; facility_name: string | null };

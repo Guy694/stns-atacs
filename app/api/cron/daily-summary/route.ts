@@ -4,11 +4,10 @@ import { collectDailySummary } from "@/lib/daily-summary";
 import { buildDailySummaryDetails, dailySummaryEventKey, hasSummaryContent, summaryThresholdsFromEnv } from "@/lib/daily-summary-format";
 import { readRequestIp, recordSecurityEvent } from "@/lib/security";
 import { notifyTelegramSafe } from "@/lib/telegram";
+import { isAuthorizedCronHeader } from "@/lib/cron-auth";
 
 function isAuthorized(req: NextRequest) {
-  const secret = process.env.CRON_SECRET?.trim();
-  if (!secret) return false;
-  return req.headers.get("authorization") === `Bearer ${secret}`;
+  return isAuthorizedCronHeader(req.headers.get("authorization"));
 }
 
 /** Thai calendar date (Asia/Bangkok) regardless of the server time zone. */

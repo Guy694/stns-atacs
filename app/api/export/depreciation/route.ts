@@ -8,6 +8,8 @@ import { buildDepreciationRollup } from "@/lib/depreciation-rollup";
 import { resolveFacilityFilter } from "@/lib/facility-scope";
 import { hasPermission } from "@/lib/role-permissions";
 import { readRequestIp, recordSecurityEvent } from "@/lib/security";
+import { todayBangkok } from "@/lib/local-date";
+import { attachDisposalDates } from "@/lib/asset-disposal-dates";
 
 /** งบแสดงการเปลี่ยนแปลงค่าเสื่อมราคาต่อปีงบประมาณ แยกตามหน่วยงาน (สำหรับส่งงานการเงิน) */
 export async function GET(req: NextRequest) {
@@ -37,12 +39,12 @@ export async function GET(req: NextRequest) {
   const facilityId = resolveFacilityFilter(user, requestedFacilityId);
   if (facilityId === null) return NextResponse.json({ error: "No facility scope" }, { status: 403 });
 
-  const fiscalYear = Number(params.get("fy")) || fiscalYearOf(new Date().toISOString().slice(0, 10));
+  const fiscalYear = Number(params.get("fy")) || fiscalYearOf(todayBangkok());
   if (!Number.isInteger(fiscalYear) || fiscalYear < 2500 || fiscalYear > 2700) {
     return NextResponse.json({ error: "ปีงบประมาณไม่ถูกต้อง" }, { status: 400 });
   }
 
-  const assets = await listAssets({ facilityId });
+  const assets = await attachDisposalDates(await listAssets({ facilityId }));
   const rollup = buildDepreciationRollup(
     assets.map((asset) => ({ ...asset, subtypeName: asset.extensions[asset.assetClass]?.subtypeName })),
     fiscalYear

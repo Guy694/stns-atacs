@@ -58,3 +58,17 @@ test("SEC-09: ยังไม่มีตาราง auth_sessions ต้อง
   }, { process: { env: { AUTH_SECRET: "test-only", THAID_CID_ENCRYPTION_KEY: "ab".repeat(32) } } });
   assert.deepEqual({ ...(await auth.revokeUserSessions(42)) }, { revoked: false });
 });
+
+test("a session is refused after AUTH_SESSION_DAYS even when it is used often (idle refresh never extends it forever)", async () => {
+  const reads = [];
+  const auth = loadTs("lib/auth.ts", {
+    "node:crypto": { __esModule: true, default: crypto },
+    "next/headers": { cookies: async () => ({ get: (name) => ({ name, value: "tok" }) }) },
+    "@/lib/mysql": { selectRows: async (sql, values) => { reads.push({ sql, values }); return []; }, executeStatement: async () => ({}) },
+    "@/lib/cookie-security": { secureCookiesEnabled: () => false },
+    "@/lib/schema-errors": { isMissingSchemaError: () => false },
+  }, { process: { env: { AUTH_SECRET: "test-only", THAID_CID_ENCRYPTION_KEY: "ab".repeat(32) } } });
+  assert.equal(await auth.getCurrentUser(), null);
+  assert.match(reads[0].sql, /s\.created_at > DATE_SUB\(NOW\(\), INTERVAL \? DAY\)/);
+  assert.equal(Array.from(reads[0].values)[1], 7);
+});

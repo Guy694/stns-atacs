@@ -13,7 +13,11 @@ import { getFacilityScopeId } from "@/lib/facility-scope";
 import { canManageFacility } from "@/lib/permissions";
 import { hasPermission } from "@/lib/role-permissions";
 import { listFacilityWorkGroups } from "@/lib/facility-work-groups";
+import { SortableTh, TablePagination } from "@/app/_components/ui/data-table";
+import { pageHref, paginate, readPage, readSort, sortHref, sortRows } from "@/lib/table-sort";
 import NewInspectionForm from "./_components/new-inspection-form";
+
+const SORT_KEYS = ["round", "facility", "dates", "inspectedBy", "status", "progress"] as const;
 
 function readParam(params: Record<string, string | string[] | undefined>, key: string) {
   const value = params[key];
@@ -68,6 +72,21 @@ export default async function InspectionPage({
   });
   const hasActiveFilters = Boolean(search || statusFilter);
 
+  const sort = readSort(params, SORT_KEYS);
+  const sorted = sortRows(filteredInspections, sort, {
+    round: (ins) => ins.roundName,
+    facility: (ins) => ins.facilityName,
+    dates: (ins) => ins.startDate || ins.inspectedAt,
+    inspectedBy: (ins) => ins.inspectedBy,
+    // ยังตรวจไม่ครบ → ตรวจครบแล้ว → ปิดรอบแล้ว
+    status: (ins) => (ins.roundStatus === "Closed" ? 2 : ins.remainingItems === 0 ? 1 : 0),
+    progress: (ins) => (ins.totalItems > 0 ? ins.checkedItems / ins.totalItems : 0),
+  });
+  const paged = paginate(sorted, readPage(params));
+  const th = (key: (typeof SORT_KEYS)[number], label: string) => (
+    <SortableTh key={key} label={label} sortKey={key} sort={sort} className="px-4 py-3 font-semibold" href={sortHref("/inspection", params, key, sort)} />
+  );
+
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6">
       {/* Header */}
@@ -115,6 +134,8 @@ export default async function InspectionPage({
       {view !== "new" && (
         <div className="glass-panel rounded-2xl overflow-hidden">
           <form method="GET" className="grid gap-3 border-b border-black/6 bg-[var(--neutral-bg)]/60 px-4 py-4 sm:grid-cols-[minmax(240px,1fr)_180px_auto_auto]">
+            {sort && <input type="hidden" name="sort" value={sort.key} />}
+            {sort && <input type="hidden" name="dir" value={sort.dir} />}
             <label htmlFor="inspection-search" className="sr-only">ค้นหารอบตรวจนับ</label>
             <input
               id="inspection-search"
@@ -164,16 +185,19 @@ export default async function InspectionPage({
             <div className="overflow-x-auto">
             <table className="w-full min-w-[980px] text-sm">
               <thead>
-	                <tr style={{ borderBottom: "1px solid var(--line)", background: "var(--neutral-bg)" }}>
-                  {["ลำดับ", "รอบการตรวจนับ", "หน่วยบริการ", "ช่วงวันที่", "ผู้เปิดรอบ", "สถานะ", "เช็คแล้ว/ทั้งหมด", ""].map((h) => (
-                    <th key={h} className="px-4 py-3 text-left font-semibold" style={{ color: "var(--muted)" }}>
-                      {h}
-                    </th>
-                  ))}
+                <tr style={{ borderBottom: "1px solid var(--line)", background: "var(--neutral-bg)", color: "var(--muted)" }}>
+                  <th className="px-4 py-3 text-left font-semibold">ลำดับ</th>
+                  {th("round", "รอบการตรวจนับ")}
+                  {th("facility", "หน่วยบริการ")}
+                  {th("dates", "ช่วงวันที่")}
+                  {th("inspectedBy", "ผู้เปิดรอบ")}
+                  {th("status", "สถานะ")}
+                  {th("progress", "เช็คแล้ว/ทั้งหมด")}
+                  <th className="px-4 py-3 text-left font-semibold"><span className="sr-only">การดำเนินการ</span></th>
                 </tr>
               </thead>
               <tbody>
-                {filteredInspections.map((ins, rowIndex) => {
+                {paged.rows.map((ins, rowIndex) => {
                   const pct = ins.totalItems > 0 ? Math.round((ins.checkedItems / ins.totalItems) * 100) : 0;
                   return (
                     <tr
@@ -181,7 +205,7 @@ export default async function InspectionPage({
                       style={{ borderBottom: "1px solid var(--line)" }}
 	                      className="hover:bg-[var(--neutral-bg)] transition-colors"
                     >
-                      <td className="px-4 py-3 tabular-nums text-[var(--muted)]">{(rowIndex + 1).toLocaleString("th-TH")}</td>
+                      <td className="px-4 py-3 tabular-nums text-[var(--muted)]">{(paged.start + rowIndex).toLocaleString("th-TH")}</td>
                       <td className="px-4 py-3 font-medium" style={{ color: "var(--foreground)" }}>
                         {ins.roundName}
                         {ins.workGroupName && <p className="mt-1 text-xs font-medium text-[var(--primary-text)]">{ins.workGroupName}</p>}
@@ -261,6 +285,9 @@ export default async function InspectionPage({
               </tbody>
             </table>
             </div>
+          )}
+          {filteredInspections.length > 0 && (
+            <TablePagination {...paged} hrefFor={(page) => pageHref("/inspection", params, page)} label="แบ่งหน้ารอบตรวจนับ" className="border-t border-black/6" />
           )}
         </div>
       )}

@@ -28,6 +28,8 @@ import {
   type ReplacementReason,
 } from "@/lib/replacement-plan";
 import { getPendingDisposalAssetIds, getRepairStats } from "@/lib/replacement-plan-db";
+import { todayBangkok } from "@/lib/local-date";
+import { attachDisposalDates } from "@/lib/asset-disposal-dates";
 
 type Props = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -69,7 +71,7 @@ export default async function ReportsPage({ searchParams }: Props) {
 
   const params = await searchParams;
   const view = (readParam(params, "view") || "summary") as View;
-  const todayIso = TODAY.toISOString().slice(0, 10);
+  const todayIso = todayBangkok(TODAY);
   const currentFiscalYear = fiscalYearOf(todayIso);
   const fiscalYear = Number(readParam(params, "fy")) || currentFiscalYear;
   const fyRange = fiscalYearRange(fiscalYear);
@@ -77,7 +79,7 @@ export default async function ReportsPage({ searchParams }: Props) {
 
   const scopedFacilityId = user.role === "admin" ? undefined : Number(user.facilityId);
   const [assets, scopedFacility] = await Promise.all([
-    listAssets({ facilityId: scopedFacilityId }),
+    listAssets({ facilityId: scopedFacilityId }).then(attachDisposalDates),
     scopedFacilityId ? getFacilityById(scopedFacilityId) : Promise.resolve(null),
   ]);
   const reportScopeLabel = scopedFacility?.name ?? (scopedFacilityId ? "หน่วยงานของคุณ" : "ทุกหน่วยงาน");
@@ -572,7 +574,7 @@ export default async function ReportsPage({ searchParams }: Props) {
             <h2 className="text-base font-semibold">งบแสดงการเปลี่ยนแปลงค่าเสื่อมราคา ปีงบประมาณ {fiscalYear}</h2>
             <p className="mt-1 text-xs text-[var(--muted)]">
               {reportScopeLabel} · รอบบัญชี {formatThaiDate(depreciationRollup.periodStart)} – {formatThaiDate(depreciationRollup.periodEnd)} ·
-              ปิดยอดทุก 30 กันยายน · ไม่นับครุภัณฑ์ที่จำหน่าย/สูญหายแล้ว {depreciationRollup.excludedTerminal.toLocaleString("th-TH")} รายการ
+              ปิดยอดทุก 30 กันยายน · ไม่นับครุภัณฑ์ที่จำหน่าย/สูญหายภายในปีงบนี้หรือก่อนหน้า {depreciationRollup.excludedTerminal.toLocaleString("th-TH")} รายการ
             </p>
           </div>
 
@@ -598,7 +600,7 @@ export default async function ReportsPage({ searchParams }: Props) {
 
           <div className="flex flex-wrap items-center gap-2">
             <a
-              href={`/api/export/depreciation?fy=${fiscalYear}${scopedFacilityId ? `&facilityId=${scopedFacilityId}` : ""}`}
+              href={withBasePath(`/api/export/depreciation?fy=${fiscalYear}${scopedFacilityId ? `&facilityId=${scopedFacilityId}` : ""}`)}
               className="filter-button border border-[var(--line)] text-[var(--primary-text)]"
             >
               ดาวน์โหลด CSV
@@ -738,7 +740,7 @@ export default async function ReportsPage({ searchParams }: Props) {
                 </li>
               ))}
             </ul>
-            <p className="mt-2 text-xs text-[var(--muted)]">ครุภัณฑ์ราคาต่ำกว่า {CAPITALIZATION_THRESHOLD.toLocaleString("th-TH")} บาท มูลค่ารวม {baht(valuationReport.belowThresholdCost)} บาท แสดงในทะเบียนแต่ไม่คิดค่าเสื่อม · ตัวเลขเป็นการประมาณการเพื่อบริหารทรัพย์สิน ไม่ใช่การบันทึกบัญชีแยกประเภท</p>
+            <p className="mt-2 text-xs text-[var(--muted)]">คิดค่าเสื่อมทุกรายการ (รวมครุภัณฑ์ราคาต่ำกว่า {CAPITALIZATION_THRESHOLD.toLocaleString("th-TH")} บาท) ด้วยวิธีเดียวกับทะเบียนคุม · ตัวเลขเป็นการประมาณการเพื่อบริหารทรัพย์สิน ไม่ใช่การบันทึกบัญชีแยกประเภท</p>
           </div>
           {(() => {
             const replace = valuationReport.items.filter((item) => item.valuation.isFullyDepreciated && item.asset.currentStatus === "Active").slice(0, 100);

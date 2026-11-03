@@ -18,6 +18,7 @@ import { listInspectionHistoryForAsset } from "@/lib/inspection";
 import { canAccessAssetFacility } from "@/lib/permissions";
 import { REPAIR_STATUS_LABELS } from "@/lib/repair-options";
 import { hasPermission } from "@/lib/role-permissions";
+import { todayBangkok } from "@/lib/local-date";
 
 type Props = { params: Promise<{ id: string }> };
 
@@ -46,7 +47,7 @@ export default async function AssetCardPage({ params }: Props) {
     listInspectionHistoryForAsset(asset.id),
     listLoans({ assetId: asset.id, limit: 50 }),
   ]);
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayBangkok();
   const valuationInput = { ...asset, subtypeName: asset.extensions[asset.assetClass]?.subtypeName };
   const valuation = valueAsset(valuationInput, today);
   const schedule = depreciationSchedule(valuationInput);
@@ -100,7 +101,6 @@ export default async function AssetCardPage({ params }: Props) {
         <h2 className="mt-4 text-sm font-bold">รายการได้มาและค่าเสื่อมราคา</h2>
         <p className="text-[10px]">
           อายุการใช้งาน {valuation.life.years ?? "-"} ปี · อัตราค่าเสื่อม {valuation.life.rateLabel || "-"} · วิธีเส้นตรง คงมูลค่าซาก 1 บาท
-          {valuation.status === "below-threshold" ? " · ราคาต่ำกว่าเกณฑ์ 10,000 บาท ไม่คิดค่าเสื่อม" : ""}
         </p>
         <table className="mt-1 w-full border-collapse">
           <thead>

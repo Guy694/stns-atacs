@@ -3,6 +3,8 @@
 import { useActionState } from "react";
 
 import { cancelDisposalAction, decideDisposalAction, recordExecutionAction } from "@/app/(main)/disposal/actions";
+import { todayBangkok } from "@/lib/local-date";
+import { SubmitButton } from "@/app/_components/ui/submit-button";
 
 const field = "w-full rounded-xl border border-[var(--line)] bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/15";
 
@@ -36,13 +38,17 @@ export function DisposalDecisionForm({ requestId, requestType }: { requestId: nu
 }
 
 export function CancelDisposalForm({ requestId }: { requestId: number }) {
-  const [error, formAction, pending] = useActionState(cancelDisposalAction, null);
+  const [error, formAction] = useActionState(cancelDisposalAction, null);
   return (
     <form action={formAction} className="inline-flex flex-col gap-1">
       <input type="hidden" name="requestId" value={requestId} />
-      <button disabled={pending} className="rounded-xl border border-[var(--line)] bg-white px-4 py-2 text-sm font-medium text-[var(--muted)] transition hover:bg-stone-50 disabled:opacity-60">
+      <SubmitButton
+        pendingText="กำลังยกเลิก…"
+        confirm={{ title: "ยกเลิกคำขอจำหน่ายนี้?", text: "คำขอจะถูกปิดและต้องยื่นใหม่หากต้องการจำหน่าย", confirmText: "ยกเลิกคำขอ", danger: true }}
+        className="rounded-xl border border-[var(--line)] bg-white px-4 py-2 text-sm font-medium text-[var(--muted)] transition hover:bg-stone-50"
+      >
         ยกเลิกคำขอ
-      </button>
+      </SubmitButton>
       {error && <span role="alert" className="text-xs text-rose-700">{error}</span>}
     </form>
   );
@@ -51,7 +57,7 @@ export function CancelDisposalForm({ requestId }: { requestId: number }) {
 /** After approval: when and how the item actually left the register, with the money received. */
 export function DisposalExecutionForm({ requestId, defaults }: { requestId: number; defaults?: { executedOn?: string; documentNo?: string; proceedsAmount?: number | null; note?: string } }) {
   const [error, formAction, pending] = useActionState(recordExecutionAction, null);
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayBangkok();
   return (
     <form action={formAction} className="space-y-3">
       <input type="hidden" name="requestId" value={requestId} />

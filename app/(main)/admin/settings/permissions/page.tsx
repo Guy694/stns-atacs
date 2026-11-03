@@ -13,6 +13,7 @@ import {
   type PermissionKey,
 } from "@/lib/role-permissions";
 import { PermissionsMatrixClient } from "./_components/permissions-matrix-client";
+import { withBasePath } from "@/lib/base-path";
 
 export const dynamic = "force-dynamic";
 
@@ -52,7 +53,7 @@ export default async function AdminPermissionsPage() {
         </p>
         <div className="mt-3">
           <a
-            href="/api/export/permissions"
+            href={withBasePath("/api/export/permissions")}
             className="secondary-action"
           >
             Export Policy JSON

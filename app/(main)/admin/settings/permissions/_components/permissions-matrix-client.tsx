@@ -3,6 +3,7 @@
 import { useTransition } from "react";
 
 import { updateRolePermissionAction } from "@/app/(main)/admin/settings/permissions/actions";
+import { showError } from "@/app/_components/ui/confirm";
 import { APP_ROLES, type AppRole, type PermissionKey } from "@/lib/permission-definitions";
 
 type PermissionDefinition = {
@@ -65,16 +66,19 @@ export function PermissionsMatrixClient({ definitions, matrix }: Props) {
                             form.set("role", role);
                             form.set("permission", definition.key);
                             form.set("isAllowed", checked ? "0" : "1");
-                            await updateRolePermissionAction(null, form);
+                            const error = await updateRolePermissionAction(null, form);
+                            if (error) await showError(error, "บันทึกสิทธิ์ไม่สำเร็จ");
                           });
                         }}
+                        aria-pressed={checked}
+                        aria-label={`${definition.label} สำหรับ ${ROLE_LABEL[role]}: ${checked ? "อนุญาต" : "ไม่อนุญาต"} (กดเพื่อเปลี่ยน)`}
                         className={`inline-flex min-w-16 items-center justify-center rounded-full border px-3 py-1 text-xs font-semibold transition ${
                           checked
                             ? "border-[var(--state-success-border)] bg-[var(--state-success-bg)] text-[var(--state-success-fg)]"
                             : "border-[var(--state-neutral-border)] bg-[var(--state-neutral-bg)] text-[var(--state-neutral-fg)]"
                         } disabled:opacity-50`}
                       >
-                        {checked ? "Allow" : "Deny"}
+                        {checked ? "อนุญาต" : "ไม่อนุญาต"}
                       </button>
                     </td>
                   );

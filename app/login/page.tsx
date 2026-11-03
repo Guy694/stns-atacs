@@ -8,6 +8,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { withBasePath } from "@/lib/base-path";
 import { getGoogleAuthStatus } from "@/lib/google-auth";
 import { getThaiIdStatus } from "@/lib/thaiid";
+import { SubmitButton } from "@/app/_components/ui/submit-button";
 
 type LoginPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -271,12 +272,11 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
                       />
                     </div>
                   </div>
-                  <button
-                    type="submit"
+                  <SubmitButton pendingText="กำลังส่งคำขอ…"
                     className="w-full rounded-2xl bg-[var(--accent-strong)] py-3 text-sm font-bold text-white transition hover:opacity-90 active:scale-[0.98]"
                   >
                     ส่งคำขอลงทะเบียน
-                  </button>
+                  </SubmitButton>
                 </form>
                 <div className="text-center">
                   <Link href="/login" className="text-sm font-semibold hover:underline" style={{ color: "var(--accent)" }}>
@@ -294,13 +294,13 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
                   </p>
                 </div>
                 <>
-                  <Link
-                    href="/api/auth/thaiid/authorize"
+                  <a
+                    href={withBasePath("/api/auth/thaiid/authorize")}
                     className="flex items-center justify-center gap-2 w-full rounded-2xl py-3 text-sm font-bold text-white transition hover:opacity-90 active:scale-[0.98]"
                     style={{ background: "linear-gradient(135deg, var(--accent) 0%, var(--accent-strong) 100%)", boxShadow: "0 4px 16px rgba(21,128,61,0.28)" }}
                   >
                     🪪 ดำเนินการผ่าน ThaiD →
-                  </Link>
+                  </a>
                   <p className="text-xs text-center" style={{ color: "var(--muted)" }}>
                     หากไม่พบข้อมูลผู้ใช้งาน ระบบจะพาไปหน้าสมัครสมาชิกอัตโนมัติ
                   </p>
@@ -347,13 +347,12 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
                       />
                     </div>
                   </div>
-                  <button
-                    type="submit"
+                  <SubmitButton pendingText="กำลังเข้าสู่ระบบ…"
                     className="w-full rounded-2xl py-3 text-sm font-bold text-white transition hover:opacity-90 active:scale-[0.98]"
                     style={{ background: "linear-gradient(135deg, var(--accent) 0%, var(--accent-strong) 100%)", boxShadow: "0 4px 16px rgba(21,128,61,0.28)" }}
                   >
                     เข้าสู่ระบบ →
-                  </button>
+                  </SubmitButton>
                 </form>
 
                 {showTestCredentials ? (
@@ -395,13 +394,13 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
                     ) : null}
 
                     {googleAuthStatus.enabled ? (
-                      <Link
-                        href={`/api/auth/google/authorize${nextPath !== "/" ? `?next=${encodeURIComponent(nextPath)}` : ""}`}
+                      <a
+                        href={withBasePath(`/api/auth/google/authorize${nextPath !== "/" ? `?next=${encodeURIComponent(nextPath)}` : ""}`)}
                         className="flex items-center justify-center gap-3 w-full rounded-2xl border border-stone-300 bg-white py-3 text-sm font-bold text-stone-700 transition hover:bg-stone-50 active:scale-[0.98]"
                       >
                         <span className="text-lg font-bold text-blue-600">G</span>
                         เข้าสู่ระบบด้วย Gmail
-                      </Link>
+                      </a>
                     ) : null}
                   </>
                 ) : null}

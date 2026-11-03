@@ -3,6 +3,8 @@
 import { useActionState } from "react";
 
 import { cancelLoanAction, createLoanAction, returnLoanAction } from "@/app/(main)/loans/actions";
+import { todayBangkok } from "@/lib/local-date";
+import { SubmitButton } from "@/app/_components/ui/submit-button";
 
 const field = "mt-1 w-full rounded-xl border border-[var(--line)] bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/15";
 
@@ -14,7 +16,7 @@ function addDays(date: string, days: number) {
 
 export function NewLoanForm({ assetId }: { assetId: number }) {
   const [error, formAction, pending] = useActionState(createLoanAction, null);
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayBangkok();
   return (
     <form action={formAction} className="space-y-4">
       <input type="hidden" name="assetId" value={assetId} />
@@ -51,7 +53,7 @@ export function NewLoanForm({ assetId }: { assetId: number }) {
 
 export function ReturnLoanForm({ loanId, loanedOn }: { loanId: number; loanedOn: string }) {
   const [result, formAction, pending] = useActionState(returnLoanAction, null);
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayBangkok();
   if (result === "saved") return <p role="status" className="text-sm text-[#006300]">บันทึกการรับคืนแล้ว</p>;
   return (
     <form action={formAction} className="grid gap-2 sm:grid-cols-[9rem_9rem_minmax(0,1fr)_auto] sm:items-end">
@@ -75,12 +77,18 @@ export function ReturnLoanForm({ loanId, loanedOn }: { loanId: number; loanedOn:
 }
 
 export function CancelLoanButton({ loanId }: { loanId: number }) {
-  const [result, formAction, pending] = useActionState(cancelLoanAction, null);
+  const [result, formAction] = useActionState(cancelLoanAction, null);
   if (result === "saved") return <span className="text-xs text-[var(--muted)]">ยกเลิกแล้ว</span>;
   return (
     <form action={formAction} className="inline">
       <input type="hidden" name="loanId" value={loanId} />
-      <button disabled={pending} className="text-xs text-rose-700 hover:underline disabled:opacity-60">ยกเลิก (บันทึกผิด)</button>
+      <SubmitButton
+        pendingText="กำลังยกเลิก…"
+        confirm={{ title: "ยกเลิกรายการยืมนี้?", text: "ใช้เมื่อบันทึกผิดเท่านั้น รายการจะถูกทำเครื่องหมายว่ายกเลิก", confirmText: "ยกเลิกรายการยืม", danger: true }}
+        className="text-xs text-rose-700 hover:underline"
+      >
+        ยกเลิก (บันทึกผิด)
+      </SubmitButton>
       {result && <span role="alert" className="ml-2 text-xs text-rose-700">{result}</span>}
     </form>
   );

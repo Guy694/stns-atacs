@@ -28,7 +28,7 @@ import { canBypassMaintenance, isMaintenanceEnabled } from "@/lib/maintenance";
 
 type Props = { searchParams: Promise<Record<string, string | string[] | undefined>> };
 
-const BASE_PATH = "/";
+const BASE_PATH = "/public";
 
 /**
  * Public landing page before login. Shows aggregates only: no asset names, registration numbers,

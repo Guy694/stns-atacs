@@ -6,6 +6,7 @@ import { parseAssetListQuery } from "@/lib/asset-list-query";
 import { assetTypeLabel } from "@/lib/asset-policy";
 import { resolveFacilityFilter } from "@/lib/facility-scope";
 import { readRequestIp, recordSecurityEvent } from "@/lib/security";
+import { hasPermission } from "@/lib/role-permissions";
 
 export async function GET(req: NextRequest) {
   const user = await getCurrentUser();
@@ -17,6 +18,10 @@ export async function GET(req: NextRequest) {
       detail: "พยายามอ่านข้อมูลทรัพย์สินโดยไม่มี session",
     });
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  if (!(await hasPermission(user.role, "assets.view"))) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   const requestedFacilityId = req.nextUrl.searchParams.get("facilityId")

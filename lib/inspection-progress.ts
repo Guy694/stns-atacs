@@ -1,3 +1,4 @@
+import { todayBangkok } from "@/lib/local-date";
 /**
  * Annual inspection progress and deadlines (pure functions; the queries live in lib/dashboard-work.ts).
  *
@@ -46,7 +47,7 @@ export const DEADLINE_LABELS: Record<DeadlineState, string> = {
   "no-date": "ไม่ได้ระบุวันเริ่มตรวจ",
 };
 
-export function inspectionDeadline(round: { startDate: string; roundStatus: "Open" | "Closed" }, today = new Date().toISOString().slice(0, 10)): InspectionDeadline {
+export function inspectionDeadline(round: { startDate: string; roundStatus: "Open" | "Closed" }, today = todayBangkok()): InspectionDeadline {
   const dueDate = round.startDate ? addWorkingDays(round.startDate, INSPECTION_REPORT_WORKING_DAYS) : "";
   const daysLeft = dueDate ? daysBetween(today, dueDate) : 0;
   if (round.roundStatus === "Closed") return { dueDate, daysLeft, state: "closed" };

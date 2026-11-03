@@ -12,6 +12,7 @@ import { listActiveDeviceTypes } from "@/lib/device-types";
 import { listFacilityWorkGroups } from "@/lib/facility-work-groups";
 import { canAccessAssetFacility } from "@/lib/permissions";
 import { hasPermission } from "@/lib/role-permissions";
+import { withBasePath } from "@/lib/base-path";
 
 const REQUIREMENT_TONE: Record<ImportColumnRequirement, string> = {
   key: "bg-slate-100 text-slate-700",
@@ -56,8 +57,8 @@ export default async function AssetImportGuidePage() {
         <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">คู่มือนำเข้าครุภัณฑ์ด้วย CSV</h1>
         <p className="mt-3 max-w-3xl text-sm leading-6 text-sky-50 sm:text-base">ใช้หน้านี้เพื่อเตรียมไฟล์ CSV สำหรับเพิ่มหรือแก้ไขครุภัณฑ์ ตรวจสอบการใช้ <Code>id</Code> และค้นหา <Code>work_group_id</Code> ของแต่ละหน่วยบริการก่อนนำเข้า</p>
         <div className="mt-5 flex flex-wrap gap-3">
-          <Link href="/api/export/assets?template=xlsx" className="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-[#15548f] transition hover:bg-sky-50">ดาวน์โหลดไฟล์ Excel ต้นแบบ (มีคำอธิบายคอลัมน์)</Link>
-          <Link href="/api/export/assets?template=csv" className="rounded-xl border border-white/40 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/10">ไฟล์ CSV ตัวอย่าง</Link>
+          <a href={withBasePath("/api/export/assets?template=xlsx")} className="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-[#15548f] transition hover:bg-sky-50">ดาวน์โหลดไฟล์ Excel ต้นแบบ (มีคำอธิบายคอลัมน์)</a>
+          <a href={withBasePath("/api/export/assets?template=csv")} className="rounded-xl border border-white/40 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/10">ไฟล์ CSV ตัวอย่าง</a>
           <Link href="/assets" className="rounded-xl border border-white/40 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/10">กลับไปรายการทรัพย์สิน</Link>
         </div>
       </header>

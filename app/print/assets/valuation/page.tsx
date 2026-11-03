@@ -9,6 +9,8 @@ import { formatThaiDate } from "@/lib/date-format";
 import { resolveFacilityFilter } from "@/lib/facility-scope";
 import { hasPermission } from "@/lib/role-permissions";
 import { buildValuationSheet, filterValuationAssets } from "@/lib/valuation-sheet";
+import { todayBangkok } from "@/lib/local-date";
+import { attachDisposalDates } from "@/lib/asset-disposal-dates";
 
 type Props = { searchParams: Promise<Record<string, string | string[] | undefined>> };
 
@@ -40,13 +42,13 @@ export default async function ValuationPrintPage({ searchParams }: Props) {
   const facilityId = resolveFacilityFilter(user, requestedFacility);
   if (facilityId === null) redirect("/profile");
 
-  const todayIso = new Date().toISOString().slice(0, 10);
+  const todayIso = todayBangkok();
   const fiscalYear = Number(one(params.fy)) || fiscalYearOf(todayIso);
   if (!Number.isInteger(fiscalYear) || fiscalYear < 2500 || fiscalYear > 2700) redirect("/reports?view=valuation");
   const assetClass = ASSET_CLASS_OPTIONS.some((option) => option.value === one(params.assetClass)) ? one(params.assetClass) : "";
   const showDetail = one(params.detail) !== "0";
 
-  const all = await listAssets({ facilityId });
+  const all = await attachDisposalDates(await listAssets({ facilityId }));
   const scoped = filterValuationAssets(
     all.map((asset) => ({ ...asset, subtypeName: asset.extensions[asset.assetClass]?.subtypeName })),
     { assetClass }
@@ -175,9 +177,8 @@ export default async function ValuationPrintPage({ searchParams }: Props) {
           )}
 
           <p className="val-note">
-            หมายเหตุ: คิดค่าเสื่อมราคาแบบเส้นตรง ราคาซาก 1 บาท คำนวณเป็นรายวันตามวันที่ได้มา · ไม่รวมรายการจำหน่าย/สูญหาย {report.terminalCount.toLocaleString("th-TH")} รายการ ·
-            ครุภัณฑ์ราคาต่ำกว่า {CAPITALIZATION_THRESHOLD.toLocaleString("th-TH")} บาท ไม่คิดค่าเสื่อม
-            {report.belowThresholdCost > 0 ? ` (มูลค่ารวม ${baht(report.belowThresholdCost)} บาท)` : ""}
+            หมายเหตุ: คิดค่าเสื่อมราคาแบบเส้นตรงตามอัตราในตาราง (วิธีเดียวกับทะเบียนคุม) ราคาซาก 1 บาท คำนวณเป็นรายวันตามวันที่ได้มา · ไม่รวมรายการจำหน่าย/สูญหาย {report.terminalCount.toLocaleString("th-TH")} รายการ ·
+            คิดค่าเสื่อมทุกรายการ รวมครุภัณฑ์ราคาต่ำกว่า {CAPITALIZATION_THRESHOLD.toLocaleString("th-TH")} บาท
             {excludedEntries.length > 0 && (
               <> · รายการที่ไม่นำมาคำนวณ: {excludedEntries.map((key) => `${VALUATION_STATUS_LABELS[key]} ${report.excluded[key].toLocaleString("th-TH")} รายการ`).join(", ")}</>
             )}

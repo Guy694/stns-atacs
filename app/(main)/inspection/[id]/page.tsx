@@ -22,6 +22,7 @@ import { canManageFacility, canMutateAssets } from "@/lib/permissions";
 import { listFacilityWorkGroups } from "@/lib/facility-work-groups";
 import { hasPermission } from "@/lib/role-permissions";
 import { withBasePath } from "@/lib/base-path";
+import { SubmitButton } from "@/app/_components/ui/submit-button";
 
 type InspectionDetailPageProps = {
   params: Promise<{ id: string }>;
@@ -114,12 +115,11 @@ function InspectionItemForm({ item, canMutate, workGroups }: { item: InspectionI
           placeholder="หมายเหตุ / สภาพครุภัณฑ์"
           className="min-h-10 min-w-0 rounded-xl border border-black/10 bg-white/85 px-3 py-2 text-xs outline-none focus:border-[var(--accent)]"
         />
-        <button
-          type="submit"
+        <SubmitButton pendingText="กำลังบันทึก…"
           className="min-h-10 rounded-xl bg-[var(--accent-strong)] px-3 py-2 text-xs font-semibold text-white transition hover:opacity-90"
         >
           บันทึก
-        </button>
+        </SubmitButton>
       </form>
       {item.inspectionStatus === "Missing" && (
         <Link href={`/disposal?assetId=${item.assetId}&type=Lost`} className="mt-1 inline-block text-xs font-medium text-rose-700 hover:underline">

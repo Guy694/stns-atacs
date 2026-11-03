@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useState, useId } from "react";
 import Link from "next/link";
 
 import { StatusBadge } from "@/app/_components/ui/status-badge";
@@ -8,6 +8,8 @@ import { disposalAssetAction } from "@/app/(main)/disposal/actions";
 import { assetStatusLabel, assetStatusTone } from "@/lib/asset-status";
 import type { AssetWithFacility } from "@/lib/assets";
 import { DISPOSAL_METHODS } from "@/lib/disposal-options";
+import { todayBangkok } from "@/lib/local-date";
+import { submitWithoutReset } from "@/app/_components/ui/submit-without-reset";
 
 type Props = { asset: AssetWithFacility; defaultType?: string; hasPendingRequest?: boolean };
 
@@ -43,12 +45,13 @@ const DISPOSAL_TYPES = [
 ] as const;
 
 export function DisposalForm({ asset, defaultType = "", hasPendingRequest = false }: Props) {
+  const fieldId = useId();
   const [error, formAction, pending] = useActionState(disposalAssetAction, null);
   const [type, setType] = useState(defaultType);
   const needsApproval = type === "Disposed" || type === "Lost";
 
   return (
-    <form action={formAction} className="space-y-5">
+    <form onSubmit={submitWithoutReset(formAction)} className="space-y-5">
       <input type="hidden" name="assetId" value={asset.id} />
 
       {error && (
@@ -82,10 +85,10 @@ export function DisposalForm({ asset, defaultType = "", hasPendingRequest = fals
 
       {/* Disposal type */}
       <div>
-        <label className="mb-2 block text-sm font-medium">
+        <p id={`${fieldId}-disposalType`} className="mb-2 block text-sm font-medium">
           ประเภทการดำเนินการ <span className="text-rose-500">*</span>
-        </label>
-        <div className="grid gap-2 sm:grid-cols-2">
+        </p>
+        <div role="radiogroup" aria-labelledby={`${fieldId}-disposalType`} className="grid gap-2 sm:grid-cols-2">
           {DISPOSAL_TYPES.map((t) => {
             const blocked = hasPendingRequest && (t.value === "Disposed" || t.value === "Lost");
             return (
@@ -103,8 +106,8 @@ export function DisposalForm({ asset, defaultType = "", hasPendingRequest = fals
 
       {type === "Disposed" && (
         <div>
-          <label className="mb-1 block text-sm font-medium">วิธีการจำหน่าย <span className="text-rose-500">*</span></label>
-          <select name="disposalMethod" required defaultValue="" className="w-full rounded-xl border border-[var(--line)] bg-white/80 px-3 py-2.5 text-sm outline-none focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/15">
+          <label htmlFor={`${fieldId}-disposalMethod`} className="mb-1 block text-sm font-medium">วิธีการจำหน่าย <span className="text-rose-500">*</span></label>
+          <select id={`${fieldId}-disposalMethod`} name="disposalMethod" required defaultValue="" className="w-full rounded-xl border border-[var(--line)] bg-white/80 px-3 py-2.5 text-sm outline-none focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/15">
             <option value="" disabled>-- เลือกวิธีการจำหน่าย --</option>
             {DISPOSAL_METHODS.map((method) => <option key={method.value} value={method.value}>{method.label}</option>)}
           </select>
@@ -119,22 +122,22 @@ export function DisposalForm({ asset, defaultType = "", hasPendingRequest = fals
 
       {/* Date */}
       <div>
-        <label className="mb-1 block text-sm font-medium">{type === "Lost" ? "วันที่ตรวจพบว่าสูญหาย" : "วันที่ดำเนินการ"}</label>
-        <input
+        <label htmlFor={`${fieldId}-noteDate`} className="mb-1 block text-sm font-medium">{type === "Lost" ? "วันที่ตรวจพบว่าสูญหาย" : "วันที่ดำเนินการ"}</label>
+        <input id={`${fieldId}-noteDate`}
           type="date"
           name="noteDate"
-          defaultValue={new Date().toISOString().slice(0, 10)}
-          max={new Date().toISOString().slice(0, 10)}
+          defaultValue={todayBangkok()}
+          max={todayBangkok()}
           className="rounded-xl border border-[var(--line)] bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/15"
         />
       </div>
 
       {/* Reason */}
       <div>
-        <label className="mb-1 block text-sm font-medium">
+        <label htmlFor={`${fieldId}-reason`} className="mb-1 block text-sm font-medium">
           เหตุผล / รายละเอียด <span className="text-rose-500">*</span>
         </label>
-        <textarea
+        <textarea id={`${fieldId}-reason`}
           name="reason"
           rows={4}
           required

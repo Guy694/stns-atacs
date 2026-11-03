@@ -1,0 +1,272 @@
+import Link from "next/link";
+import { redirect } from "next/navigation";
+
+import { StatusBadge } from "@/app/_components/ui/status-badge";
+import { listAgentDevices } from "@/lib/agent";
+import {
+  HEALTH_ISSUE_LABELS,
+  SEVERITY_LABELS,
+  SEVERITY_RANK,
+  summarizeAgentMonitor,
+  type HealthIssueCode,
+  type HealthSeverity,
+} from "@/lib/agent-health";
+import { AGENT_LATEST_VERSION } from "@/lib/agent-payload";
+import { getCurrentUser } from "@/lib/auth";
+import { listAllFacilitiesForSelect } from "@/lib/assets";
+import { formatThaiDateTime } from "@/lib/date-format";
+import { getFacilityScopeId } from "@/lib/facility-scope";
+import { hasPermission } from "@/lib/role-permissions";
+import { SortableTh, TablePagination } from "@/app/_components/ui/data-table";
+import { pageHref, paginate, readPage, readSort, sortHref, sortRows } from "@/lib/table-sort";
+
+type Props = { searchParams: Promise<Record<string, string | string[] | undefined>> };
+
+const one = (value: string | string[] | undefined) => (Array.isArray(value) ? value[0] : value) ?? "";
+const TONE: Record<HealthSeverity, "danger" | "warning" | "info"> = { critical: "danger", warning: "warning", info: "info" };
+const SEVERITY_FILTERS = [
+  { key: "", label: "มีปัญหาทั้งหมด" },
+  { key: "critical", label: "วิกฤต" },
+  { key: "warning", label: "วิกฤต + ควรแก้ไข" },
+  { key: "all", label: "ทุกเครื่อง" },
+] as const;
+
+function DiskBar({ volume }: { volume: { mount: string; totalGb: number; freeGb: number } | null }) {
+  if (!volume) return <span className="text-xs text-[var(--muted)]">-</span>;
+  const usedPercent = Math.min(100, Math.max(0, 100 - (volume.freeGb / volume.totalGb) * 100));
+  const color = usedPercent >= 95 ? "bg-red-500" : usedPercent >= 90 ? "bg-amber-500" : "bg-emerald-500";
+  return (
+    <div className="min-w-[140px]">
+      <div className="flex justify-between text-xs">
+        <span className="font-medium">{volume.mount}</span>
+        <span className="text-[var(--muted)]">ว่าง {volume.freeGb.toLocaleString("th-TH", { maximumFractionDigits: 1 })} / {volume.totalGb.toLocaleString("th-TH", { maximumFractionDigits: 0 })} GB</span>
+      </div>
+      <div className="mt-1 h-2 overflow-hidden rounded-full bg-black/10" role="img" aria-label={`ใช้ไป ${usedPercent.toFixed(0)}%`}>
+        <div className={`h-full ${color}`} style={{ width: `${usedPercent}%` }} />
+      </div>
+    </div>
+  );
+}
+
+export default async function AgentMonitorPage({ searchParams }: Props) {
+  const user = await getCurrentUser();
+  if (!user) redirect("/login");
+  const allowed = user.role === "admin" || (await hasPermission(user.role, "agent.manage"));
+  if (!allowed || user.role === "viewer") redirect("/dashboard");
+
+  const facilityScopeId = getFacilityScopeId(user);
+  if (facilityScopeId === null) redirect("/profile");
+
+  const params = await searchParams;
+  const requestedFacility = Number(one(params.facility)) || 0;
+  // เจ้าหน้าที่เห็นเฉพาะหน่วยงานตัวเองเสมอ ตัวกรองหน่วยงานใช้ได้เฉพาะผู้ดูแลระบบ
+  const facilityId = facilityScopeId ?? (requestedFacility > 0 ? requestedFacility : undefined);
+  const severity = one(params.severity);
+  const issue = one(params.issue) as HealthIssueCode | "";
+  const query = one(params.q).trim().toLowerCase().slice(0, 100);
+
+  let devices: Awaited<ReturnType<typeof listAgentDevices>> = [];
+  let dbError = "";
+  try {
+    devices = await listAgentDevices(facilityId ? { facilityId } : undefined);
+  } catch {
+    dbError = "ยังไม่พบตาราง Agent กรุณารัน database/agent_inventory.sql";
+  }
+  const facilities = facilityScopeId ? [] : await listAllFacilitiesForSelect();
+  const summary = summarizeAgentMonitor(devices);
+
+  const visibleRows = summary.rows.filter((row) => {
+    if (issue && !row.issues.some((item) => item.code === issue)) return false;
+    if (severity === "critical" && row.worst !== "critical") return false;
+    if (severity === "warning" && row.worst !== "critical" && row.worst !== "warning") return false;
+    if (!severity && !issue && row.issues.every((item) => item.code === "agent-outdated" || item.code === "no-serial")) return false;
+    if (query) {
+      const haystack = [row.device.hostname, row.device.currentUser, row.device.facilityName, row.device.linkedAssetRegistrationNo, row.device.manufacturerModel]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      if (!haystack.includes(query)) return false;
+    }
+    return true;
+  });
+
+  const sort = readSort(params, ["device", "disk", "issues", "lastSeen"]);
+  const sorted = sortRows(visibleRows, sort, {
+    device: (row) => row.device.hostname ?? `Device #${row.device.id}`,
+    disk: (row) => (row.volume && row.volume.totalGb > 0 ? 100 - (row.volume.freeGb / row.volume.totalGb) * 100 : null),
+    issues: (row) => (row.worst ? SEVERITY_RANK[row.worst] : 0) * 1000 + row.issues.length,
+    lastSeen: (row) => row.device.lastSeenAt,
+  });
+  const paged = paginate(sorted, readPage(params));
+  const th = (key: string, label: string, firstDir: "asc" | "desc" = "asc") => (
+    <SortableTh key={key} label={label} sortKey={key} sort={sort} className="px-4 py-3 font-medium" href={sortHref("/agent-monitor", params, key, sort, "", firstDir)} />
+  );
+
+  const linkWith = (patch: Record<string, string>) => {
+    const next = new URLSearchParams();
+    const merged = { facility: facilityScopeId ? "" : String(facilityId ?? ""), severity, issue, q: query, sort: sort?.key ?? "", dir: sort?.dir ?? "", ...patch };
+    for (const [key, value] of Object.entries(merged)) if (value) next.set(key, value);
+    const text = next.toString();
+    return text ? `/agent-monitor?${text}` : "/agent-monitor";
+  };
+
+  return (
+    <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6">
+      <div>
+        <p className="text-xs font-semibold tracking-[0.12em] text-[var(--accent-strong)]">IT · DEVICE HEALTH</p>
+        <h1 className="section-title mt-1 text-3xl font-semibold">สุขภาพเครื่องคอมพิวเตอร์</h1>
+        <p className="mt-1 text-sm text-[var(--muted)]">
+          ข้อมูลจาก ATACS Agent ที่ติดตั้งในเครื่อง (ส่งทุก 4 ชั่วโมงและตอนเปิดเครื่อง) เรียงจากปัญหาหนักที่สุด
+        </p>
+      </div>
+
+      {dbError && <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">{dbError}</div>}
+
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        {[
+          { label: "เครื่องที่ติดตั้ง Agent", value: summary.total, tone: "" },
+          { label: "ส่งข้อมูลภายใน 3 วัน", value: summary.reportingRecently, tone: "" },
+          { label: "ปัญหาวิกฤต", value: summary.critical, tone: "text-red-600" },
+          { label: "ควรแก้ไข", value: summary.warning, tone: "text-amber-600" },
+          { label: `มีข้อมูลสุขภาพ (Agent ${AGENT_LATEST_VERSION})`, value: summary.withHealthData, tone: "" },
+        ].map((tile) => (
+          <div key={tile.label} className="glass-panel rounded-2xl p-4">
+            <p className="text-xs text-[var(--muted)]">{tile.label}</p>
+            <p className={`mt-1 text-2xl font-semibold tabular-nums ${tile.tone}`}>{tile.value.toLocaleString("th-TH")}</p>
+          </div>
+        ))}
+      </div>
+
+      {summary.total > 0 && summary.withHealthData < summary.total && (
+        <p className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+          มี {(summary.total - summary.withHealthData).toLocaleString("th-TH")} เครื่องที่ยังใช้ Agent รุ่นเก่า ระบบตรวจได้เฉพาะพื้นที่ดิสก์รวม รุ่น OS และ RAM
+          — ติดตั้ง Agent ใหม่จากเมนูดาวน์โหลด Agent เพื่อดูไดรฟ์รายตัว สถานะฮาร์ดดิสก์ แอนตี้ไวรัส Windows Update และการ Activate
+          (ผู้ดูแลระบบต้องรัน database/add_agent_health.sql ก่อน)
+        </p>
+      )}
+
+      {summary.issueCounts.length > 0 && (
+        <section className="glass-panel rounded-2xl p-5">
+          <h2 className="text-sm font-semibold">ปัญหาที่พบ (จำนวนเครื่อง)</h2>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Link href={linkWith({ issue: "" })} className={`rounded-full border px-3 py-1 text-xs font-medium ${!issue ? "border-[var(--primary)] bg-[var(--primary-soft)]" : "border-black/10 bg-white/70"}`}>
+              ทั้งหมด
+            </Link>
+            {summary.issueCounts.map((item) => (
+              <Link
+                key={item.code}
+                href={linkWith({ issue: item.code, severity: "all" })}
+                className={`rounded-full border px-3 py-1 text-xs font-medium ${issue === item.code ? "border-[var(--primary)] bg-[var(--primary-soft)]" : "border-black/10 bg-white/70"}`}
+              >
+                {item.label} <span className={item.critical ? "text-red-600" : item.warning ? "text-amber-700" : "text-[var(--muted)]"}>{item.total.toLocaleString("th-TH")}</span>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
+
+      <form method="GET" className="glass-panel flex flex-wrap items-end gap-3 rounded-2xl p-4">
+        {!facilityScopeId && (
+          <label className="text-sm">
+            <span className="block text-xs text-[var(--muted)]">หน่วยงาน</span>
+            <select name="facility" defaultValue={String(facilityId ?? "")} className="mt-1 rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm">
+              <option value="">ทุกหน่วยงาน</option>
+              {facilities.map((facility) => (
+                <option key={facility.id} value={facility.id}>{facility.facility_name}</option>
+              ))}
+            </select>
+          </label>
+        )}
+        <label className="text-sm">
+          <span className="block text-xs text-[var(--muted)]">ระดับ</span>
+          <select name="severity" defaultValue={severity} className="mt-1 rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm">
+            {SEVERITY_FILTERS.map((item) => <option key={item.key} value={item.key}>{item.label}</option>)}
+          </select>
+        </label>
+        <label className="min-w-[200px] flex-1 text-sm">
+          <span className="block text-xs text-[var(--muted)]">ค้นหา</span>
+          <input name="q" defaultValue={query} placeholder="ชื่อเครื่อง ผู้ใช้ เลขทะเบียน รุ่น" className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm" />
+        </label>
+        {issue && <input type="hidden" name="issue" value={issue} />}
+        {sort && <input type="hidden" name="sort" value={sort.key} />}
+        {sort && <input type="hidden" name="dir" value={sort.dir} />}
+        <button type="submit" className="rounded-xl bg-[var(--primary)] px-4 py-2 text-sm font-semibold text-white hover:opacity-90">กรอง</button>
+        <Link href="/agent-monitor" className="px-2 py-2 text-sm text-[var(--muted)] hover:underline">ล้าง</Link>
+      </form>
+
+      <section className="glass-panel overflow-hidden rounded-2xl">
+        <div className="border-b border-black/6 px-5 py-3 text-sm text-[var(--muted)]">
+          แสดง {visibleRows.length.toLocaleString("th-TH")} จาก {summary.total.toLocaleString("th-TH")} เครื่อง
+          {issue ? ` · ปัญหา: ${HEALTH_ISSUE_LABELS[issue] ?? issue}` : ""}
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[980px] text-sm">
+            <thead className="bg-black/[0.03] text-left text-xs text-[var(--muted)]">
+              <tr>
+                <th className="w-12 px-4 py-3 text-center">ลำดับ</th>
+                {th("device", "เครื่อง")}
+                {th("disk", "ไดรฟ์ระบบ", "desc")}
+                {th("issues", "ปัญหาที่พบ", "desc")}
+                {th("lastSeen", "ส่งข้อมูลล่าสุด", "desc")}
+              </tr>
+            </thead>
+            <tbody>
+              {visibleRows.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-4 py-10 text-center text-[var(--muted)]">
+                    {summary.total === 0 ? "ยังไม่มีเครื่องที่ติดตั้ง Agent" : "ไม่พบเครื่องที่มีปัญหาตามเงื่อนไข"}
+                  </td>
+                </tr>
+              ) : (
+                paged.rows.map((row, index) => (
+                  <tr key={row.device.id} className="border-t border-black/5 align-top">
+                    <td className="px-4 py-3 text-center tabular-nums text-[var(--muted)]">{(paged.start + index).toLocaleString("th-TH")}</td>
+                    <td className="px-4 py-3">
+                      <p className="font-semibold">{row.device.hostname ?? `Device #${row.device.id}`}</p>
+                      <p className="text-xs text-[var(--muted)]">
+                        {[row.device.manufacturerModel, row.device.operatingSystem].filter(Boolean).join(" · ") || "-"}
+                      </p>
+                      <p className="text-xs text-[var(--muted)]">
+                        {row.device.facilityName}
+                        {row.device.currentUser ? ` · ผู้ใช้ ${row.device.currentUser}` : ""}
+                        {row.device.ramMb ? ` · RAM ${(row.device.ramMb / 1024).toFixed(0)} GB` : ""}
+                      </p>
+                      {row.device.linkedAssetId && (
+                        <Link href={`/assets/${row.device.linkedAssetId}`} className="text-xs font-semibold text-[var(--primary)] hover:underline">
+                          {row.device.linkedAssetRegistrationNo ?? "ดูทะเบียน"}
+                        </Link>
+                      )}
+                    </td>
+                    <td className="px-4 py-3"><DiskBar volume={row.volume} /></td>
+                    <td className="px-4 py-3">
+                      {row.issues.length === 0 ? (
+                        <StatusBadge tone="success">ปกติ</StatusBadge>
+                      ) : (
+                        <ul className="space-y-1.5">
+                          {row.issues.map((item, itemIndex) => (
+                            <li key={`${item.code}-${itemIndex}`} className="flex flex-wrap items-start gap-2">
+                              <StatusBadge tone={TONE[item.severity]} className="shrink-0 text-[10px]">{SEVERITY_LABELS[item.severity]}</StatusBadge>
+                              <span>
+                                <span className="font-medium">{item.title}</span>
+                                <span className="block text-xs text-[var(--muted)]">{item.detail}</span>
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 text-xs text-[var(--muted)]">
+                      {row.device.lastSeenAt ? formatThaiDateTime(row.device.lastSeenAt) : "-"}
+                      <span className="block">Agent {row.device.agentVersion ?? "-"}</span>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+        <TablePagination {...paged} hrefFor={(page) => pageHref("/agent-monitor", params, page)} label="แบ่งหน้ารายการเครื่อง" className="border-t border-black/6" />
+      </section>
+    </div>
+  );
+}

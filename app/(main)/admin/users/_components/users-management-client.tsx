@@ -2,9 +2,11 @@
 
 import { useMemo, useState, useTransition } from "react";
 
+import { SortableTh, TablePagination } from "@/app/_components/ui/data-table";
 import { StatusBadge, activeTone } from "@/app/_components/ui/status-badge";
 import { approveUsersAction } from "@/app/(main)/admin/users/actions";
 import { UserRowActions } from "@/app/(main)/admin/users/_components/user-row-actions";
+import { useTableState } from "@/app/_components/ui/use-table-state";
 import { formatThaiDateTime } from "@/lib/date-format";
 
 export type ManagedUser = {
@@ -45,6 +47,13 @@ function roleLabel(role: ManagedUser["role"]) {
   if (role === "admin") return "ผู้ดูแลระบบ";
   if (role === "viewer") return "ผู้ดูข้อมูล";
   return "เจ้าหน้าที่";
+}
+
+const roleRank: Record<ManagedUser["role"], number> = { admin: 0, officer: 1, viewer: 2 };
+
+function isoOrNull(value: Date | string | null) {
+  if (!value) return null;
+  return value instanceof Date ? value.toISOString() : String(value);
 }
 
 function UserActions({ user, facilities, currentUserId, thaidLinkColumnAvailable }: { user: ManagedUser; facilities: FacilityOption[]; currentUserId: number; thaidLinkColumnAvailable: boolean }) {
@@ -96,6 +105,25 @@ export function UsersManagementClient({ users, facilities, currentUserId, thaidL
         .some((value) => String(value).toLocaleLowerCase("th").includes(normalizedQuery));
     });
   }, [query, status, systemUsers]);
+
+  function facilityLabel(user: ManagedUser) {
+    return user.facility_id ? facilityNameById.get(user.facility_id) ?? `หน่วยงาน #${user.facility_id}` : null;
+  }
+
+  const pendingTable = useTableState(pendingRegistrations, {
+    name: (user) => user.full_name,
+    contact: (user) => user.email ?? user.username,
+    facility: facilityLabel,
+  });
+
+  const usersTable = useTableState(filteredUsers, {
+    name: (user) => user.full_name,
+    account: (user) => user.email ?? user.username,
+    facility: (user) => (user.role === "officer" ? facilityLabel(user) : null),
+    role: (user) => roleRank[user.role],
+    status: (user) => (user.is_active ? 0 : 1),
+    lastLogin: (user) => isoOrNull(user.last_login_at),
+  });
 
   const allPendingSelected =
     pendingRegistrations.length > 0 && pendingRegistrations.every((user) => selectedIds.includes(user.id));
@@ -164,16 +192,16 @@ export function UsersManagementClient({ users, facilities, currentUserId, thaidL
                         className="h-4 w-4 accent-[var(--accent-strong)]"
                       />
                     </th>
-                    <th className="px-4 py-3 text-left font-semibold">ผู้ลงทะเบียน</th>
-                    <th className="px-4 py-3 text-left font-semibold">ข้อมูลติดต่อ</th>
-                    <th className="px-4 py-3 text-left font-semibold">หน่วยงาน</th>
+                    <SortableTh label="ผู้ลงทะเบียน" sortKey="name" sort={pendingTable.sort} onSort={pendingTable.onSort} className="px-4 py-3 font-semibold" />
+                    <SortableTh label="ข้อมูลติดต่อ" sortKey="contact" sort={pendingTable.sort} onSort={pendingTable.onSort} className="px-4 py-3 font-semibold" />
+                    <SortableTh label="หน่วยงาน" sortKey="facility" sort={pendingTable.sort} onSort={pendingTable.onSort} className="px-4 py-3 font-semibold" />
                     <th className="px-4 py-3 text-right font-semibold">ดำเนินการ</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-stone-100">
-                  {pendingRegistrations.map((user, rowIndex) => (
+                  {pendingTable.rows.map((user, rowIndex) => (
                     <tr key={user.id} className="hover:bg-amber-50/40">
-                      <td className="px-4 py-4 text-right tabular-nums text-[var(--muted)]">{(rowIndex + 1).toLocaleString("th-TH")}</td>
+                      <td className="px-4 py-4 text-right tabular-nums text-[var(--muted)]">{(pendingTable.start + rowIndex).toLocaleString("th-TH")}</td>
                       <td className="px-4 py-4">
                         <input
                           type="checkbox"
@@ -192,7 +220,7 @@ export function UsersManagementClient({ users, facilities, currentUserId, thaidL
                         <p className="mt-0.5 font-mono text-xs">{user.username ? `@${user.username}` : "ยืนยันตัวตนภายนอก"}</p>
                       </td>
                       <td className="px-4 py-4 text-[var(--muted)]">
-                        {user.facility_id ? facilityNameById.get(user.facility_id) ?? `หน่วยงาน #${user.facility_id}` : "ยังไม่ระบุ"}
+                        {facilityLabel(user) ?? "ยังไม่ระบุ"}
                       </td>
                       <td className="px-4 py-4 text-right">
                         <button
@@ -211,7 +239,7 @@ export function UsersManagementClient({ users, facilities, currentUserId, thaidL
             </div>
 
             <div className="divide-y divide-stone-100 lg:hidden">
-              {pendingRegistrations.map((user) => (
+              {pendingTable.rows.map((user) => (
                 <article key={user.id} className="space-y-3 p-4">
                   <div className="flex items-start gap-3">
                     <input
@@ -228,7 +256,7 @@ export function UsersManagementClient({ users, facilities, currentUserId, thaidL
                   </div>
                   <dl className="grid gap-2 text-sm">
                     <div><dt className="text-xs text-[var(--muted)]">อีเมล</dt><dd className="break-all">{user.email ?? "ไม่มีอีเมล"}</dd></div>
-                    <div><dt className="text-xs text-[var(--muted)]">หน่วยงาน</dt><dd>{user.facility_id ? facilityNameById.get(user.facility_id) ?? `หน่วยงาน #${user.facility_id}` : "ยังไม่ระบุ"}</dd></div>
+                    <div><dt className="text-xs text-[var(--muted)]">หน่วยงาน</dt><dd>{facilityLabel(user) ?? "ยังไม่ระบุ"}</dd></div>
                   </dl>
                   <button
                     type="button"
@@ -241,6 +269,8 @@ export function UsersManagementClient({ users, facilities, currentUserId, thaidL
                 </article>
               ))}
             </div>
+
+            <TablePagination {...pendingTable} onPage={pendingTable.onPage} label="แบ่งหน้าผู้ลงทะเบียนรออนุมัติ" className="border-t border-black/6" />
           </div>
         )}
       </section>
@@ -256,7 +286,7 @@ export function UsersManagementClient({ users, facilities, currentUserId, thaidL
             <input
               id="user-search"
               value={query}
-              onChange={(event) => setQuery(event.target.value)}
+              onChange={(event) => { setQuery(event.target.value); usersTable.resetPage(); }}
               placeholder="ค้นหาชื่อ อีเมล Username หรือ ThaiD"
               className="filter-control is-narrow"
             />
@@ -264,7 +294,7 @@ export function UsersManagementClient({ users, facilities, currentUserId, thaidL
             <select
               id="user-status"
               value={status}
-              onChange={(event) => setStatus(event.target.value as typeof status)}
+              onChange={(event) => { setStatus(event.target.value as typeof status); usersTable.resetPage(); }}
               className="filter-control is-auto"
             >
               <option value="all">ทุกสถานะ</option>
@@ -280,19 +310,19 @@ export function UsersManagementClient({ users, facilities, currentUserId, thaidL
               <thead className="bg-stone-50 text-xs text-stone-700">
                 <tr>
                   <th className="px-4 py-3 w-14 text-right font-medium">ลำดับ</th>
-                  <th className="px-4 py-3 text-left font-semibold">ผู้ใช้งาน</th>
-                  <th className="px-4 py-3 text-left font-semibold">บัญชี</th>
-                  <th className="px-4 py-3 text-left font-semibold">หน่วยงาน</th>
-                  <th className="px-4 py-3 text-left font-semibold">สิทธิ์</th>
-                  <th className="px-4 py-3 text-left font-semibold">สถานะ</th>
-                  <th className="px-4 py-3 text-left font-semibold">เข้าใช้งานล่าสุด</th>
+                  <SortableTh label="ผู้ใช้งาน" sortKey="name" sort={usersTable.sort} onSort={usersTable.onSort} className="px-4 py-3 font-semibold" />
+                  <SortableTh label="บัญชี" sortKey="account" sort={usersTable.sort} onSort={usersTable.onSort} className="px-4 py-3 font-semibold" />
+                  <SortableTh label="หน่วยงาน" sortKey="facility" sort={usersTable.sort} onSort={usersTable.onSort} className="px-4 py-3 font-semibold" />
+                  <SortableTh label="สิทธิ์" sortKey="role" sort={usersTable.sort} onSort={usersTable.onSort} className="px-4 py-3 font-semibold" />
+                  <SortableTh label="สถานะ" sortKey="status" sort={usersTable.sort} onSort={usersTable.onSort} className="px-4 py-3 font-semibold" />
+                  <SortableTh label="เข้าใช้งานล่าสุด" sortKey="lastLogin" sort={usersTable.sort} onSort={usersTable.onSort} className="px-4 py-3 font-semibold" />
                   <th className="px-4 py-3 text-right font-semibold">จัดการ</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
-                {filteredUsers.map((user, rowIndex) => (
+                {usersTable.rows.map((user, rowIndex) => (
                   <tr key={user.id} className="hover:bg-stone-50/70">
-                    <td className="px-4 py-4 text-right tabular-nums text-[var(--muted)]">{(rowIndex + 1).toLocaleString("th-TH")}</td>
+                    <td className="px-4 py-4 text-right tabular-nums text-[var(--muted)]">{(usersTable.start + rowIndex).toLocaleString("th-TH")}</td>
                     <td className="px-4 py-4">
                       <p className="font-semibold">{user.full_name}</p>
                       <p className="mt-0.5 text-xs text-[var(--muted)]">{user.officer_position ?? "–"}</p>
@@ -302,7 +332,7 @@ export function UsersManagementClient({ users, facilities, currentUserId, thaidL
                       <p className="mt-0.5 font-mono text-xs">{user.username ? `@${user.username}` : "ThaiD / Google"}</p>
                     </td>
                     <td className="px-4 py-4 text-[var(--muted)]">
-                      {user.role === "officer" && user.facility_id ? facilityNameById.get(user.facility_id) ?? `หน่วยงาน #${user.facility_id}` : "–"}
+                      {(user.role === "officer" && facilityLabel(user)) || "–"}
                     </td>
 	                    <td className="px-4 py-4"><StatusBadge tone="info">{roleLabel(user.role)}</StatusBadge></td>
 	                    <td className="px-4 py-4">
@@ -319,7 +349,7 @@ export function UsersManagementClient({ users, facilities, currentUserId, thaidL
           </div>
 
           <div className="divide-y divide-stone-100 xl:hidden">
-            {filteredUsers.map((user) => (
+            {usersTable.rows.map((user) => (
               <article key={user.id} className="space-y-3 p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
@@ -345,11 +375,13 @@ export function UsersManagementClient({ users, facilities, currentUserId, thaidL
           {filteredUsers.length === 0 && (
             <div className="px-6 py-12 text-center">
               <p className="font-semibold">ไม่พบผู้ใช้งานตามเงื่อนไข</p>
-              <button type="button" onClick={() => { setQuery(""); setStatus("all"); }} className="mt-3 min-h-11 rounded-xl border border-stone-300 px-4 py-2 text-sm font-semibold">
+              <button type="button" onClick={() => { setQuery(""); setStatus("all"); usersTable.resetPage(); }} className="mt-3 min-h-11 rounded-xl border border-stone-300 px-4 py-2 text-sm font-semibold">
                 ล้างตัวกรอง
               </button>
             </div>
           )}
+
+          <TablePagination {...usersTable} onPage={usersTable.onPage} label="แบ่งหน้าผู้ใช้งานระบบ" className="border-t border-black/6" />
         </div>
       </section>
     </div>

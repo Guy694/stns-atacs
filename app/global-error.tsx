@@ -9,7 +9,7 @@ import { withBasePath } from "@/lib/base-path";
  */
 export default function GlobalError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   useEffect(() => {
-    void fetch(withBasePath("/api/client-error"), {
+    void fetch(withBasePath("/api/client-error/"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

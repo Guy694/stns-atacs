@@ -5,6 +5,7 @@ import { updateInspectionItemAction } from "@/app/(main)/inspection/actions";
 import { assetStatusLabel } from "@/lib/asset-status";
 import { formatThaiDateTime } from "@/lib/date-format";
 import type { OpenInspectionForAsset } from "@/lib/inspection";
+import { SubmitButton } from "@/app/_components/ui/submit-button";
 
 const OPTIONS = [
   { value: "Active", label: "พบ · ใช้งานได้", className: "bg-emerald-600 text-white hover:bg-emerald-700" },
@@ -77,9 +78,9 @@ export function InspectionCheckIn({ assetId, rounds, justChecked, placement }: {
             </label>
             <div className="grid gap-2 sm:grid-cols-3">
               {OPTIONS.map((option) => (
-                <button key={option.value} name="assetStatus" value={option.value} className={`min-h-12 rounded-xl px-3 text-sm font-semibold transition ${option.className}`}>
+                <SubmitButton key={option.value} name="assetStatus" value={option.value} pendingText="กำลังบันทึก…" className={`min-h-12 rounded-xl px-3 text-sm font-semibold transition ${option.className}`}>
                   {option.label}
-                </button>
+                </SubmitButton>
               ))}
             </div>
           </form>

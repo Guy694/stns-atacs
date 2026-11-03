@@ -1,10 +1,10 @@
-import { fiscalYearRange, valueAsset, depreciationForFiscalYear, type ValuationInput } from "@/lib/asset-valuation";
+import { fiscalYearRange, isDisposedBy, valueAsset, depreciationForFiscalYear, type ValuationInput } from "@/lib/asset-valuation";
 
 /**
  * งบแสดงการเปลี่ยนแปลงค่าเสื่อมราคาต่อปีงบประมาณ (สำหรับส่งงานการเงิน)
  *
  * ยอดยกมา (ค่าเสื่อมสะสม ณ 30 ก.ย. ปีก่อน) + ค่าเสื่อมปีนี้ = ยอดยกไป (ณ 30 ก.ย. ปีนี้)
- * แยกตามหน่วยงาน และรวมทั้งหมด โดยไม่นับครุภัณฑ์ที่จำหน่าย/สูญหายแล้ว
+ * แยกตามหน่วยงาน และรวมทั้งหมด โดยไม่นับครุภัณฑ์ที่จำหน่าย/สูญหายภายในสิ้นปีงบนั้น (จำหน่ายภายหลังยังนับในปีก่อน)
  */
 export type RollupAsset = ValuationInput & {
   facilityId?: number | null;
@@ -59,7 +59,7 @@ export function buildDepreciationRollup(assets: RollupAsset[], fiscalYearBE: num
   let excludedTerminal = 0;
 
   for (const asset of assets) {
-    if (asset.currentStatus === "Disposed" || asset.currentStatus === "Lost") {
+    if (isDisposedBy(asset, end)) {
       excludedTerminal += 1;
       continue;
     }

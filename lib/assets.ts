@@ -10,6 +10,8 @@ import { formatAssetNumber } from "@/lib/asset-number";
 import { isItAsset, parseAssetClass, supportsAgentAsset } from "@/lib/asset-policy";
 import { executeStatement, selectRows, withTransaction } from "@/lib/mysql";
 import type { WindowsLicenseStatus } from "@/lib/windows-license";
+import { dbDate } from "@/lib/local-date";
+import { isMissingSchemaError } from "@/lib/schema-errors";
 
 // ── DB Row types ───────────────────────────────────────────────────────────
 
@@ -75,7 +77,7 @@ type SurveyRow = RowDataPacket & {
 
 function toDateOnly(v: Date | string | null | undefined) {
   if (!v) return "";
-  return (v instanceof Date ? v.toISOString() : String(v)).slice(0, 10);
+  return dbDate(v);
 }
 
 function normalizeStatus(v: string | null): AssetRecord["currentStatus"] {
@@ -209,6 +211,8 @@ export type AssetListFilter = {
   deviceType?: string;
   maExpiringDays?: number;
   sort?: "updated_desc" | "updated_asc" | "name_asc" | "name_desc" | "ma_soon";
+  /** Column-header sort; takes precedence over `sort`. Unknown keys are ignored. */
+  orderBy?: { key: string; dir: "asc" | "desc" };
   limit?: number;
   offset?: number;
 };
@@ -378,6 +382,27 @@ function filterFallbackAssets(filter?: AssetListFilter) {
   return sortFallbackAssets(assets, filter?.sort);
 }
 
+/** Sortable asset-table columns → SQL. `text` columns also treat '' as blank so blanks stay last. */
+const ASSET_SORT_COLUMNS: Record<string, { sql: string; text?: boolean }> = {
+  reg: { sql: "a.asset_registration_no", text: true },
+  name: { sql: "a.asset_name", text: true },
+  facility: { sql: "hf.name", text: true },
+  type: { sql: "a.asset_class", text: true },
+  status: { sql: "a.current_status", text: true },
+  ip: { sql: "a.private_ip", text: true },
+  ma: { sql: "a.maintenance_end_date" },
+  updated: { sql: "a.last_updated_at" },
+};
+export const ASSET_SORT_KEYS = Object.keys(ASSET_SORT_COLUMNS);
+
+function assetOrderBySql(orderBy: AssetListFilter["orderBy"]) {
+  const column = orderBy ? ASSET_SORT_COLUMNS[orderBy.key] : undefined;
+  if (!orderBy || !column) return null;
+  const dir = orderBy.dir === "desc" ? "DESC" : "ASC";
+  const blank = column.text ? `(${column.sql} IS NULL OR ${column.sql} = '')` : `(${column.sql} IS NULL)`;
+  return `${blank}, ${column.sql} ${dir}, a.id ${dir}`;
+}
+
 /** รายการทรัพย์สินทั้งหมด (admin) หรือเฉพาะหน่วยงาน (officer ไม่จำกัดในตอนนี้) */
 export async function listAssets(filter?: AssetListFilter): Promise<AssetWithFacility[]> {
   const { where, values } = buildAssetFilter(filter);
@@ -388,7 +413,7 @@ export async function listAssets(filter?: AssetListFilter): Promise<AssetWithFac
     name_desc: "a.asset_name DESC, a.id DESC",
     ma_soon: "a.maintenance_end_date ASC, a.id ASC",
   };
-  const orderBy = filter?.sort ? orderByMap[filter.sort] : "hf.district_name, hf.name, a.row_no, a.id";
+  const orderBy = assetOrderBySql(filter?.orderBy) ?? (filter?.sort ? orderByMap[filter.sort] : "hf.district_name, hf.name, a.row_no, a.id");
   const limit = filter?.limit && Number.isFinite(filter.limit) ? Math.max(1, Math.floor(filter.limit)) : null;
   const offset = filter?.offset && Number.isFinite(filter.offset) ? Math.max(0, Math.floor(filter.offset)) : 0;
   const pageSql = limit ? " LIMIT ? OFFSET ?" : "";
@@ -399,7 +424,8 @@ export async function listAssets(filter?: AssetListFilter): Promise<AssetWithFac
   try {
     rows = await selectRows<AssetRow>(sql, queryValues);
   } catch (error) {
-    if (filter?.search) throw error; // A missing extension schema must not look like sample search results.
+    // Only a not-yet-migrated schema may fall back; an outage must surface instead of showing an empty register.
+    if (filter?.search || !isMissingSchemaError(error)) throw error;
     const fallback = filterFallbackAssets(filter);
     return limit ? fallback.slice(offset, offset + limit) : fallback;
   }
@@ -417,7 +443,7 @@ export async function countAssets(filter?: AssetListFilter): Promise<number> {
     );
     return Number(rows[0]?.total ?? 0);
   } catch (error) {
-    if (filter?.search) throw error;
+    if (filter?.search || !isMissingSchemaError(error)) throw error;
     return filterFallbackAssets(filter).length;
   }
 }

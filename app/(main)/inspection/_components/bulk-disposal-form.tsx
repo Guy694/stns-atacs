@@ -5,6 +5,7 @@ import { useActionState, useState } from "react";
 
 import { bulkDisposalFromInspectionAction, type BulkDisposalResult } from "@/app/(main)/disposal/actions";
 import { DISPOSAL_METHODS } from "@/lib/disposal-options";
+import { todayBangkok } from "@/lib/local-date";
 
 type Row = { assetId: number; number: string; name: string; outcome: "broken" | "unused" | "missing"; outcomeLabel: string; pendingRequestId: number | null };
 
@@ -69,7 +70,7 @@ export function BulkDisposalForm({ inspectionId, roundName, rows }: { inspection
           </select>
         </label>
         <label className="block text-sm font-medium">วันที่เสนอ
-          <input type="date" name="eventDate" defaultValue={new Date().toISOString().slice(0, 10)} max={new Date().toISOString().slice(0, 10)} className={field} />
+          <input type="date" name="eventDate" defaultValue={todayBangkok()} max={todayBangkok()} className={field} />
         </label>
       </div>
       <label className="block text-sm font-medium">เหตุผล <span className="text-rose-500">*</span>

@@ -18,6 +18,7 @@ import {
 import { formatThaiDateTime } from "@/lib/date-format";
 import { getFacilityById } from "@/lib/assets";
 import { isComputerDeviceType } from "@/lib/windows-license";
+import { todayBangkok } from "@/lib/local-date";
 
 type HomeProps = { searchParams: Promise<Record<string, string | undefined>> };
 
@@ -153,7 +154,7 @@ export default async function ItDashboard({ searchParams }: HomeProps) {
       .filter((asset) => isItAsset(asset))
       .map((asset) => ({ ...asset, facilityName: survey.facilityName, districtName: survey.districtName }))
   );
-  const computerSummary = summarizeComputerDashboard(allAssets, referenceDate.toISOString().slice(0, 10));
+  const computerSummary = summarizeComputerDashboard(allAssets, todayBangkok(referenceDate));
 
   const computerLicenseSummary = summarizeComputerLicenses(allAssets);
   const computerDistrictRows = uniqueSorted(facilitySurveys.map((survey) => survey.districtName)).map((districtName) => {

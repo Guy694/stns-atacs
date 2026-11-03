@@ -54,6 +54,11 @@ const nextConfig: NextConfig = {
   output: "standalone",
   // This is inlined into client bundles by Next.js and therefore must be set at build time.
   basePath: BASE_PATH,
+  // Excel import is parsed in a worker thread (lib/spreadsheet-parse.ts) that loads "xlsx" at runtime,
+  // so the standalone bundle cannot trace it: include the worker script and the library explicitly.
+  outputFileTracingIncludes: {
+    "/api/import/assets": ["./scripts/parse-spreadsheet-worker.mjs", "./node_modules/xlsx/**/*"],
+  },
   // The host Nginx canonicalizes mounted apps to a trailing slash (/stns-atacs/).
   trailingSlash: true,
   // Tiny QR stickers encode the URL in upper case (smaller QR); the short path is matched case-sensitively.

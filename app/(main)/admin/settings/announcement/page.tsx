@@ -15,6 +15,7 @@ import { withBasePath } from "@/lib/base-path";
 import { APP_VERSION } from "@/lib/app-version";
 import { getCurrentUser } from "@/lib/auth";
 import { formatThaiDateTime } from "@/lib/date-format";
+import { SubmitButton } from "@/app/_components/ui/submit-button";
 
 type Props = { searchParams: Promise<Record<string, string | string[] | undefined>> };
 
@@ -105,9 +106,9 @@ export default async function AnnouncementSettingsPage({ searchParams }: Props) 
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          <button type="submit" className="rounded-xl bg-[var(--primary)] px-5 py-2.5 text-sm font-semibold text-white transition hover:opacity-90">
+          <SubmitButton pendingText="กำลังบันทึก…" className="rounded-xl bg-[var(--primary)] px-5 py-2.5 text-sm font-semibold text-white transition hover:opacity-90">
             บันทึก
-          </button>
+          </SubmitButton>
           <Link href="/admin/settings/announcement?preview=1" className="text-sm font-semibold text-[var(--primary)] hover:underline">
             ดูตัวอย่างประกาศที่บันทึกไว้
           </Link>

@@ -65,7 +65,7 @@ export default function ImportExcelModal({
     formData.append("facilityId", facilityId);
 
     try {
-      const response = await fetch(withBasePath("/api/import/assets"), { method: "POST", body: formData });
+      const response = await fetch(withBasePath("/api/import/assets/"), { method: "POST", body: formData });
       const data = await response.json();
       if (!response.ok) {
         setError(data.error ?? "เกิดข้อผิดพลาดในการนำเข้า");
@@ -97,7 +97,7 @@ export default function ImportExcelModal({
         className="inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-semibold"
         style={{ borderColor: "var(--accent)", color: "var(--accent)" }}
       >
-        <AppIcon name="download" className="h-4 w-4" /> นำเข้า CSV
+        <AppIcon name="upload" className="h-4 w-4" /> นำเข้า CSV
       </button>
 
       {open && createPortal(

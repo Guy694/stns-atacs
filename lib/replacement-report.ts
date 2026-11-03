@@ -8,6 +8,7 @@ import {
   type ReplacementRules,
 } from "@/lib/replacement-plan";
 import { writeWorkbook, type Cell, type CellStyle } from "@/lib/xlsx-writer";
+import { todayBangkok } from "@/lib/local-date";
 
 export type ReplacementReportAsset = ReplacementAsset & {
   assetNumber: string;
@@ -34,7 +35,7 @@ export function buildReplacementWorkbook<A extends ReplacementReportAsset>(items
   full(`แผนการจัดหาครุภัณฑ์ทดแทน ประจำปีงบประมาณ ${meta.fiscalYear}`, style.title, 24);
   full(meta.scopeLabel, style.subtitle, 20);
   full(
-    `ข้อมูล ณ ${thaiDate(new Date().toISOString().slice(0, 10))} · ${items.length.toLocaleString("th-TH")} รายการ · เกณฑ์: ชำรุด, ตัดค่าเสื่อมครบ/เกินอายุการใช้งาน, ซ่อม ${meta.rules.repairCountMin} ครั้งขึ้นไปใน ${meta.rules.repairWindowYears} ปี, ค่าซ่อมสะสม ≥ ${Math.round(meta.rules.repairCostRatio * 100)}% ของราคาทุน`,
+    `ข้อมูล ณ ${thaiDate(todayBangkok())} · ${items.length.toLocaleString("th-TH")} รายการ · เกณฑ์: ชำรุด, ตัดค่าเสื่อมครบ/เกินอายุการใช้งาน, ซ่อม ${meta.rules.repairCountMin} ครั้งขึ้นไปใน ${meta.rules.repairWindowYears} ปี, ค่าซ่อมสะสม ≥ ${Math.round(meta.rules.repairCostRatio * 100)}% ของราคาทุน`,
     style.note,
   );
   sheet.push([]);

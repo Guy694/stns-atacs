@@ -1,10 +1,12 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useState, useId } from "react";
 import Link from "next/link";
 
 import { transferAssetAction } from "@/app/(main)/transfer/actions";
 import type { AssetWithFacility } from "@/lib/assets";
+import { todayBangkok } from "@/lib/local-date";
+import { submitWithoutReset } from "@/app/_components/ui/submit-without-reset";
 
 type SurveyOption = {
   id: number;
@@ -24,11 +26,12 @@ type Props = {
 const inputClass = "w-full rounded-xl border border-[var(--line)] bg-white/80 px-3 py-2.5 text-sm outline-none focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/15";
 
 export function TransferForm({ asset, surveys, workGroups }: Props) {
+  const fieldId = useId();
   const [error, formAction, pending] = useActionState(transferAssetAction, null);
   const [surveyId, setSurveyId] = useState("");
   const destinationFacilityId = surveys.find((s) => String(s.id) === surveyId)?.facility_id;
   const destinationGroups = workGroups.filter((group) => group.facilityId === destinationFacilityId);
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayBangkok();
 
   // Group surveys by district for the dropdown
   const grouped = surveys.reduce<Record<string, SurveyOption[]>>((acc, s) => {
@@ -38,7 +41,7 @@ export function TransferForm({ asset, surveys, workGroups }: Props) {
   }, {});
 
   return (
-    <form action={formAction} className="space-y-5">
+    <form onSubmit={submitWithoutReset(formAction)} className="space-y-5">
       <input type="hidden" name="assetId" value={asset.id} />
 
       {error && (
@@ -74,10 +77,10 @@ export function TransferForm({ asset, surveys, workGroups }: Props) {
 
       {/* New facility */}
       <div>
-        <label className="block text-sm font-medium mb-1">
+        <label htmlFor={`${fieldId}-newSurveyId`} className="block text-sm font-medium mb-1">
           หน่วยงานปลายทาง <span className="text-rose-500">*</span>
         </label>
-        <select
+        <select id={`${fieldId}-newSurveyId`}
           name="newSurveyId"
           required
           value={surveyId}
@@ -100,11 +103,11 @@ export function TransferForm({ asset, surveys, workGroups }: Props) {
       {/* Work group of the destination facility */}
       {destinationFacilityId !== undefined && (
         <div>
-          <label className="block text-sm font-medium mb-1">
+          <label htmlFor={`${fieldId}-newWorkGroupId`} className="block text-sm font-medium mb-1">
             กลุ่มงานปลายทาง {destinationGroups.length > 0 && <span className="text-rose-500">*</span>}
           </label>
           {destinationGroups.length > 0 ? (
-            <select
+            <select id={`${fieldId}-newWorkGroupId`}
               key={destinationFacilityId}
               name="newWorkGroupId"
               required
@@ -127,19 +130,19 @@ export function TransferForm({ asset, surveys, workGroups }: Props) {
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
-          <label className="block text-sm font-medium mb-1">วันที่โอนย้าย <span className="text-rose-500">*</span></label>
-          <input type="date" name="transferDate" required defaultValue={today} max={today} className={inputClass} />
+          <label htmlFor={`${fieldId}-transferDate`} className="block text-sm font-medium mb-1">วันที่โอนย้าย <span className="text-rose-500">*</span></label>
+          <input id={`${fieldId}-transferDate`} type="date" name="transferDate" required defaultValue={today} max={today} className={inputClass} />
         </div>
         <div>
-          <label className="block text-sm font-medium mb-1">เลขที่หนังสือ / ใบโอน</label>
-          <input name="documentNo" type="text" placeholder="เช่น สต 0033.001/123" className={inputClass} />
+          <label htmlFor={`${fieldId}-documentNo`} className="block text-sm font-medium mb-1">เลขที่หนังสือ / ใบโอน</label>
+          <input id={`${fieldId}-documentNo`} name="documentNo" type="text" placeholder="เช่น สต 0033.001/123" className={inputClass} />
         </div>
       </div>
 
       {/* New owner */}
       <div>
-        <label className="block text-sm font-medium mb-1">ผู้ครอบครองใหม่</label>
-        <input
+        <label htmlFor={`${fieldId}-newOwnerName`} className="block text-sm font-medium mb-1">ผู้ครอบครองใหม่</label>
+        <input id={`${fieldId}-newOwnerName`}
           name="newOwnerName"
           type="text"
           placeholder="ชื่อ-นามสกุล ผู้ครอบครองใหม่"
@@ -150,8 +153,8 @@ export function TransferForm({ asset, surveys, workGroups }: Props) {
 
       {/* New location */}
       <div>
-        <label className="block text-sm font-medium mb-1">ตำแหน่งติดตั้งใหม่</label>
-        <input
+        <label htmlFor={`${fieldId}-newLocationDetail`} className="block text-sm font-medium mb-1">ตำแหน่งติดตั้งใหม่</label>
+        <input id={`${fieldId}-newLocationDetail`}
           name="newLocationDetail"
           type="text"
           placeholder="อาคาร / ชั้น / ห้อง"
@@ -162,8 +165,8 @@ export function TransferForm({ asset, surveys, workGroups }: Props) {
 
       {/* Reason */}
       <div>
-        <label className="block text-sm font-medium mb-1">เหตุผลในการโอนย้าย</label>
-        <textarea
+        <label htmlFor={`${fieldId}-reason`} className="block text-sm font-medium mb-1">เหตุผลในการโอนย้าย</label>
+        <textarea id={`${fieldId}-reason`}
           name="reason"
           rows={3}
           placeholder="ระบุเหตุผลในการโอนย้าย เช่น ปรับโครงสร้างหน่วยงาน, เพิ่มอุปกรณ์ประจำสาขา…"

@@ -6,13 +6,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { evaluateBackupHealth, type BackupFileInfo, type BackupStatusFile } from "@/lib/backup-status";
 import { readRequestIp, recordSecurityEvent } from "@/lib/security";
 import { notifyTelegramSafe } from "@/lib/telegram";
+import { isAuthorizedCronHeader } from "@/lib/cron-auth";
 
 export const dynamic = "force-dynamic";
 
 function isAuthorized(req: NextRequest) {
-  const secret = process.env.CRON_SECRET?.trim();
-  if (!secret) return false;
-  return req.headers.get("authorization") === `Bearer ${secret}`;
+  return isAuthorizedCronHeader(req.headers.get("authorization"));
 }
 
 function bangkokToday() {

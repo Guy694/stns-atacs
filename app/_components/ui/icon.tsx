@@ -30,6 +30,7 @@ export type IconName =
   | "repeat"
   | "pencil"
   | "trash"
+  | "upload"
   | "printer";
 
 type AppIconProps = SVGProps<SVGSVGElement> & {
@@ -54,6 +55,7 @@ const PATHS: Record<IconName, ReactNode> = {
   close: <><path d="M18 6 6 18" /><path d="m6 6 12 12" /></>,
   database: <><ellipse cx="12" cy="5" rx="7" ry="3" /><path d="M5 5v14c0 1.7 3.1 3 7 3s7-1.3 7-3V5" /><path d="M5 12c0 1.7 3.1 3 7 3s7-1.3 7-3" /></>,
   download: <><path d="M12 3v12" /><path d="m7 10 5 5 5-5" /><path d="M5 21h14" /></>,
+  upload: <><path d="M12 15V3" /><path d="m7 8 5-5 5 5" /><path d="M5 21h14" /></>,
   "file-text": <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /><path d="M8 13h8" /><path d="M8 17h6" /></>,
   globe: <><circle cx="12" cy="12" r="9" /><path d="M3 12h18" /><path d="M12 3c2.5 2.7 3.8 5.7 3.8 9S14.5 18.3 12 21" /><path d="M12 3C9.5 5.7 8.2 8.7 8.2 12S9.5 18.3 12 21" /></>,
   home: <><path d="m3 11 9-8 9 8" /><path d="M5 10v11h14V10" /><path d="M9 21v-6h6v6" /></>,

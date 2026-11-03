@@ -9,6 +9,7 @@ import { getPendingDisposalAssetIds, getRepairStats } from "@/lib/replacement-pl
 import { buildReplacementWorkbook } from "@/lib/replacement-report";
 import { hasPermission } from "@/lib/role-permissions";
 import { readRequestIp, recordSecurityEvent } from "@/lib/security";
+import { todayBangkok } from "@/lib/local-date";
 
 /** แผนการจัดหาครุภัณฑ์ทดแทน (Excel), scoped like the reports page. */
 export async function GET(req: NextRequest) {
@@ -22,7 +23,7 @@ export async function GET(req: NextRequest) {
   const facilityId = resolveFacilityFilter(user, requested ? Number(requested) : undefined);
   if (facilityId === null) return NextResponse.json({ error: "No facility scope" }, { status: 403 });
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayBangkok();
   const since = repairWindowStart(today, DEFAULT_REPLACEMENT_RULES.repairWindowYears);
   const scope = facilityId ? [facilityId] : undefined;
   const [assets, repairStats, pending, facility] = await Promise.all([

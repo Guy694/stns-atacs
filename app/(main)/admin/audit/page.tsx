@@ -2,9 +2,12 @@ import { redirect } from "next/navigation";
 
 import { StatusBadge } from "@/app/_components/ui/status-badge";
 import { getCurrentUser } from "@/lib/auth";
-import { paginateAuditLogs } from "@/lib/audit";
+import { AUDIT_SORT_KEYS, paginateAuditLogs } from "@/lib/audit";
+import { SortableTh, TablePagination } from "@/app/_components/ui/data-table";
+import { pageHref as tablePageHref, readSort, sortHref } from "@/lib/table-sort";
 import { formatThaiDateTime } from "@/lib/date-format";
 import Link from "next/link";
+import { withBasePath } from "@/lib/base-path";
 
 type AuditPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -46,7 +49,10 @@ export default async function AuditLogPage({ searchParams }: AuditPageProps) {
   const dateFrom = readParam(params, "dateFrom");
   const dateTo = readParam(params, "dateTo");
 
+  const sort = readSort(params, AUDIT_SORT_KEYS, { key: "time", dir: "desc" });
+  const hasFilters = Boolean(actionFilter || entityFilter || actorFilter || search || dateFrom || dateTo);
   const { logs, total, totalPages, page, pageSize } = await paginateAuditLogs({
+    orderBy: sort ?? undefined,
     action: ACTION_LABEL[actionFilter] ? actionFilter : undefined,
     entity: entityFilter || undefined,
     actor: actorFilter || undefined,
@@ -55,18 +61,6 @@ export default async function AuditLogPage({ searchParams }: AuditPageProps) {
     dateTo: dateTo || undefined,
   }, Number(readParam(params, "page")));
 
-  function pageHref(targetPage: number) {
-    const query = new URLSearchParams();
-    for (const key of ["search", "actor", "entity", "action", "dateFrom", "dateTo"]) {
-      const value = readParam(params, key);
-      if (value) query.set(key, value);
-    }
-    query.set("page", String(targetPage));
-    return `/admin/audit?${query.toString()}`;
-  }
-  const visiblePages = [...new Set([1, page - 1, page, page + 1, totalPages])]
-    .filter((value) => value >= 1 && value <= totalPages)
-    .sort((a, b) => a - b);
 
   const countsByAction = logs.reduce<Record<string, number>>((acc, log) => {
     acc[log.action] = (acc[log.action] ?? 0) + 1;
@@ -147,7 +141,7 @@ export default async function AuditLogPage({ searchParams }: AuditPageProps) {
           ค้นหา
         </button>
         <a
-          href={`/api/export/audit?search=${encodeURIComponent(search)}&actor=${encodeURIComponent(actorFilter)}&entity=${encodeURIComponent(entityFilter)}&action=${encodeURIComponent(actionFilter)}&dateFrom=${encodeURIComponent(dateFrom)}&dateTo=${encodeURIComponent(dateTo)}`}
+          href={withBasePath(`/api/export/audit?search=${encodeURIComponent(search)}&actor=${encodeURIComponent(actorFilter)}&entity=${encodeURIComponent(entityFilter)}&action=${encodeURIComponent(actionFilter)}&dateFrom=${encodeURIComponent(dateFrom)}&dateTo=${encodeURIComponent(dateTo)}`)}
           className="secondary-action"
         >
           Export CSV
@@ -162,16 +156,24 @@ export default async function AuditLogPage({ searchParams }: AuditPageProps) {
       <div className="glass-panel rounded-2xl overflow-hidden">
         {logs.length === 0 ? (
           <div className="text-center py-16" style={{ color: "var(--muted)" }}>
-            <p>ยังไม่มีประวัติการใช้งาน</p>
+            {hasFilters ? (
+              <>
+                <p>ไม่พบประวัติที่ตรงกับเงื่อนไขที่เลือก</p>
+                <Link href="/admin/audit" className="mt-2 inline-block text-sm text-[var(--primary-text)] underline">ล้างตัวกรอง</Link>
+              </>
+            ) : (
+              <p>ยังไม่มีประวัติการใช้งาน</p>
+            )}
           </div>
         ) : (
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+          <table className="w-full min-w-[760px] text-sm">
             <thead>
               <tr style={{ background: "var(--neutral-bg)", borderBottom: "1px solid var(--line)" }}>
-                {["ลำดับ", "วันที่/เวลา", "ผู้ใช้", "การดำเนินการ", "ข้อมูล", "รายละเอียด"].map((h) => (
-                  <th key={h} className="px-4 py-3 text-left font-semibold" style={{ color: "var(--muted)" }}>
-                    {h}
-                  </th>
+                <th className="px-4 py-3 text-left font-semibold" style={{ color: "var(--muted)" }}>ลำดับ</th>
+                {([["time", "วันที่/เวลา"], ["user", "ผู้ใช้"], ["action", "การดำเนินการ"], ["entity", "ข้อมูล"], ["summary", "รายละเอียด"]] as const).map(([key, label]) => (
+                  <SortableTh key={key} label={label} sortKey={key} sort={sort} href={sortHref("/admin/audit", params, key, sort)}
+                    className="px-4 py-3 font-semibold text-[var(--muted)]" />
                 ))}
               </tr>
             </thead>
@@ -200,34 +202,19 @@ export default async function AuditLogPage({ searchParams }: AuditPageProps) {
               ))}
             </tbody>
           </table>
+          </div>
         )}
+        <TablePagination
+          page={page}
+          totalPages={totalPages}
+          total={total}
+          start={total === 0 ? 0 : (page - 1) * pageSize + 1}
+          end={Math.min(page * pageSize, total)}
+          hrefFor={(target) => tablePageHref("/admin/audit", params, target)}
+          label="แบ่งหน้าประวัติการใช้งาน"
+          className="border-t border-black/6"
+        />
       </div>
-      <nav aria-label="แบ่งหน้าประวัติการใช้งาน" className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-[var(--muted)]" aria-live="polite">
-          แสดง {total === 0 ? 0 : (page - 1) * pageSize + 1}–{Math.min(page * pageSize, total)} จาก {total.toLocaleString("th-TH")} รายการ · หน้า {page} จาก {totalPages}
-        </p>
-        <div className="flex flex-wrap items-center gap-2">
-          {page > 1 ? (
-            <Link href={pageHref(page - 1)} className="rounded-xl border border-black/10 px-3 py-2 text-sm hover:bg-white">ก่อนหน้า</Link>
-          ) : (
-            <span aria-disabled="true" className="rounded-xl border border-black/10 px-3 py-2 text-sm text-[var(--muted)]">ก่อนหน้า</span>
-          )}
-          {visiblePages.map((value, index) => (
-            <span key={value} className="flex items-center gap-2">
-              {index > 0 && value - visiblePages[index - 1] > 1 && <span aria-hidden="true">…</span>}
-              <Link href={pageHref(value)} aria-label={`หน้า ${value}`} aria-current={value === page ? "page" : undefined}
-                className={`rounded-xl border px-3 py-2 text-sm ${value === page ? "border-transparent bg-[var(--accent-strong)] text-white" : "border-black/10 hover:bg-white"}`}>
-                {value}
-              </Link>
-            </span>
-          ))}
-          {page < totalPages ? (
-            <Link href={pageHref(page + 1)} className="rounded-xl border border-black/10 px-3 py-2 text-sm hover:bg-white">ถัดไป</Link>
-          ) : (
-            <span aria-disabled="true" className="rounded-xl border border-black/10 px-3 py-2 text-sm text-[var(--muted)]">ถัดไป</span>
-          )}
-        </div>
-      </nav>
     </div>
   );
 }

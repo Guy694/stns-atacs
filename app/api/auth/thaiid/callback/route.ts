@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import {
-  clearPendingRegistrationClaim,
   createSession,
   findOrLinkUserByVerifiedThaiD,
   getUserDisplayName,
+  linkPendingGoogleIdentity,
   normalizeDisplayName,
   normalizeThaiCid,
   setPendingThaiDRegistrationClaim,
@@ -210,11 +210,12 @@ export async function GET(req: NextRequest) {
         return response;
       }
 
-      await clearPendingRegistrationClaim();
+      await linkPendingGoogleIdentity(user);
       await createSession(user.id);
       await notifyTelegramSafe({
         category: "security",
         title: "เข้าสู่ระบบสำเร็จ",
+        throttle: false,
         details: { ผู้ใช้: getUserDisplayName(user), วิธี: "ThaiD", ...requestDetails(req) },
       });
 

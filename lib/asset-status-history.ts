@@ -3,6 +3,7 @@ import "server-only";
 import type { RowDataPacket } from "mysql2/promise";
 
 import { executeStatement, selectRows } from "@/lib/mysql";
+import { dbDateTime } from "@/lib/local-date";
 
 let historyTableReady = false;
 
@@ -54,7 +55,7 @@ export type AssetStatusHistory = {
 
 function toDateTime(value: Date | string | null | undefined) {
   if (!value) return "";
-  return (value instanceof Date ? value.toISOString() : String(value)).slice(0, 19).replace("T", " ");
+  return dbDateTime(value);
 }
 
 type StatusHistoryInput = {

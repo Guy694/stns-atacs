@@ -85,3 +85,27 @@ test("Agent reports keep Active/Inactive sync but never revert an approved Dispo
     assert.equal(Object.hasOwn(ctx.assetWrites[0][2], "currentStatus"), false);
   }
 });
+
+test("Agent reports never clear a Broken status set by staff, an inspection or a repair", async () => {
+  const ctx = setup({ linkedAssetId: 7, candidateStatus: "Broken" });
+  await ctx.report();
+  assert.equal(Object.hasOwn(ctx.assetWrites[0][2], "currentStatus"), false);
+});
+
+test("re-enrolling an existing fingerprint reports the previous machine so the takeover can be checked", async () => {
+  const agent = loadTs("lib/agent.ts", {
+    "@/lib/facility-work-groups": {},
+    "@/lib/assets": {},
+    "@/lib/mysql": {
+      executeStatement: async () => ({ insertId: 1, affectedRows: 1 }),
+      selectRows: async (sql) => {
+        if (sql.includes("FROM agent_enrollments ae")) return [{ id: 3, facility_id: 10, facility_name: "รพ.สต.A", work_group_id: null, work_group_name: null }];
+        if (sql.includes("ad.device_fingerprint = ?")) return [{ id: 5, agent_uuid: "agent-5", hostname: "PC-OLD", status: "online", is_active: 1, last_seen_at: new Date(2026, 10, 2, 9, 30, 0), agent_version: "2.0" }];
+        return [];
+      },
+    },
+  });
+  const result = await agent.enrollAgentDevice({ enrollmentToken: "tok", fingerprint: "fingerprint-1", hostname: "PC-NEW" });
+  assert.equal(result.wasExisting, true);
+  assert.deepEqual({ ...result.previous }, { hostname: "PC-OLD", status: "online", wasActive: true, lastSeenAt: "2026-11-02 09:30:00", agentVersion: "2.0" });
+});

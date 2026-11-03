@@ -13,7 +13,12 @@ import { listFacilityWorkGroups } from "@/lib/facility-work-groups";
 import { getFacilityScopeId } from "@/lib/facility-scope";
 import { canManageAsset, canMutateAssets } from "@/lib/permissions";
 import { hasPermission } from "@/lib/role-permissions";
+import { SortableTh, TablePagination } from "@/app/_components/ui/data-table";
+import { pageHref, paginate, readPage, readSort, sortHref, sortRows } from "@/lib/table-sort";
 import { TransferForm } from "./_components/transfer-form";
+
+// listTransfers clamps its limit to 1,000 rows, so that is the effective cap.
+const LIST_CAP = 1000;
 
 type Props = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -108,8 +113,20 @@ export default async function TransferPage({ searchParams }: Props) {
   // ── View: search ───────────────────────────────────────────────────────
   const [results, recent] = await Promise.all([
     q ? listAssets({ search: q, facilityId: facilityScopeId }) : Promise.resolve([]),
-    listTransfers({ facilityIds: facilityScopeId ? [facilityScopeId] : undefined, limit: 20 }),
+    listTransfers({ facilityIds: facilityScopeId ? [facilityScopeId] : undefined, limit: LIST_CAP }),
   ]);
+  const sort = readSort(params, ["date", "asset", "from", "to", "by"]);
+  const sorted = sortRows(recent.rows, sort, {
+    date: (row) => row.transferDate,
+    asset: (row) => row.assetName,
+    from: (row) => row.fromFacilityName,
+    to: (row) => row.toFacilityName,
+    by: (row) => row.transferredBy,
+  });
+  const paged = paginate(sorted, readPage(params));
+  const th = (key: string, label: string, align: "left" | "right" | "center" = "left") => (
+    <SortableTh key={key} label={label} sortKey={key} sort={sort} align={align} href={sortHref("/transfer", params, key, sort)} />
+  );
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6">
@@ -197,17 +214,17 @@ export default async function TransferPage({ searchParams }: Props) {
               <thead className="bg-slate-50/60 text-xs text-[var(--muted)]">
                 <tr>
                   <th className="px-4 py-2.5 w-14 text-right font-medium">ลำดับ</th>
-                  <th className="px-4 py-2.5 text-left font-medium">วันที่</th>
-                  <th className="px-4 py-2.5 text-left font-medium">ทรัพย์สิน</th>
-                  <th className="px-4 py-2.5 text-left font-medium">จาก</th>
-                  <th className="px-4 py-2.5 text-left font-medium">ไป</th>
-                  <th className="px-4 py-2.5 text-left font-medium">ผู้บันทึก</th>
+                  {th("date", "วันที่")}
+                  {th("asset", "ทรัพย์สิน")}
+                  {th("from", "จาก")}
+                  {th("to", "ไป")}
+                  {th("by", "ผู้บันทึก")}
                 </tr>
               </thead>
               <tbody className="divide-y divide-black/4">
-                {recent.rows.map((row, rowIndex) => (
+                {paged.rows.map((row, rowIndex) => (
                   <tr key={row.id}>
-                    <td className="px-4 py-2.5 text-xs text-right tabular-nums text-[var(--muted)]">{(rowIndex + 1).toLocaleString("th-TH")}</td>
+                    <td className="px-4 py-2.5 text-xs text-right tabular-nums text-[var(--muted)]">{(paged.start + rowIndex).toLocaleString("th-TH")}</td>
                     <td className="whitespace-nowrap px-4 py-2.5 text-xs text-[var(--muted)]">{formatThaiDate(row.transferDate)}</td>
                     <td className="px-4 py-2.5">
                       <Link href={`/assets/${row.assetId}`} className="font-medium hover:underline">{row.assetName}</Link>
@@ -221,6 +238,12 @@ export default async function TransferPage({ searchParams }: Props) {
               </tbody>
             </table>
           </div>
+        )}
+        {recent.schemaReady && (
+          <TablePagination {...paged} hrefFor={(page) => pageHref("/transfer", params, page)} label="แบ่งหน้าประวัติการโอนย้าย" className="border-t border-black/6" />
+        )}
+        {recent.rows.length >= LIST_CAP && (
+          <p className="border-t border-black/6 px-4 py-2 text-xs text-amber-700">แสดง {LIST_CAP.toLocaleString("th-TH")} รายการล่าสุด ดูรายการที่เก่ากว่านี้ได้ในรายงานการโอนย้าย</p>
         )}
       </section>
     </div>

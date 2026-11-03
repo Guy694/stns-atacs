@@ -64,6 +64,7 @@ function setup(initialRows, beforeUpdate, options = {}) {
       if (id === "next/headers") return {};
       if (id === "@/lib/mysql") return db;
       if (id === "@/lib/cookie-security") return { secureCookiesEnabled: () => false };
+      if (id === "@/lib/google-link") return { googleLinkForLogin: () => null };
       if (id === "@/lib/schema-errors") {
         return { isMissingSchemaError: (error) => error?.code === "ER_NO_SUCH_TABLE" || error?.code === "ER_BAD_FIELD_ERROR" };
       }
@@ -166,8 +167,8 @@ test("SEC-04: an admin account never links by name, with or without the migratio
   }
 });
 
-test("SEC-04: before the migration, non-admin linking keeps working", async () => {
+test("SEC-04: before the migration, nobody is linked by name alone (fail closed)", async () => {
   const ctx = setup([account({ thaid_link_enabled: undefined })], undefined, { legacySchema: true });
-  assert.equal((await ctx.auth.findOrLinkUserByVerifiedThaiD(identity)).id, 1);
-  assert.equal(ctx.writes.length, 1);
+  await assert.rejects(ctx.auth.findOrLinkUserByVerifiedThaiD(identity), /add_thaid_link_approval\.sql/);
+  assert.equal(ctx.writes.length, 0);
 });

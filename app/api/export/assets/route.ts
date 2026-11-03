@@ -12,6 +12,7 @@ import { canSeeSensitiveAssetNetwork } from "@/lib/permissions";
 import { resolveFacilityFilter } from "@/lib/facility-scope";
 import { hasPermission } from "@/lib/role-permissions";
 import { readRequestIp, recordSecurityEvent } from "@/lib/security";
+import { todayBangkok } from "@/lib/local-date";
 
 
 
@@ -187,6 +188,6 @@ export async function GET(req: NextRequest) {
     asset.workGroupName ?? "",
   ]);
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayBangkok();
   return csvResponse([IMPORT_HEADERS, ...rows], `atacs-assets-${today}.csv`);
 }

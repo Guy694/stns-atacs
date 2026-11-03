@@ -14,13 +14,13 @@ function renderForm(assetClass) {
       useActionState: () => [null, "/test-save", false],
     },
     "react-dom": { createPortal: children => children },
+    sweetalert2: { fire: async () => ({ isConfirmed: false }) },
     "@/app/(main)/assets/actions": { createAssetAction: async () => null, updateAssetAction: async () => null },
   }, { document: { body: {} } });
   return renderToStaticMarkup(React.createElement(AssetFormModal, {
     facilities: [], fixedFacilityId: 10, mode: "edit", updaterName: "Tester",
     asset: { id: 1, assetClass, assetGroup: "Hardware", deviceType: "Desktop", assetName: "Example", manufacturerBrand: "Brand", manufacturerModel: "Model", manufacturerSpecification: "Stored details", purchaseDate: "2025-01-01", windowsLicenseStatus: "Genuine" },
-    children: "Edit",
-  }));
+  }, "Edit"));
 }
 
 test("IT form retains category, device, license, OS and purchase inputs", () => {

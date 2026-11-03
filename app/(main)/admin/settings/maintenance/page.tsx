@@ -6,6 +6,7 @@ import { StatusBadge } from "@/app/_components/ui/status-badge";
 import { getCurrentUser } from "@/lib/auth";
 import { formatThaiDateTime } from "@/lib/date-format";
 import { DEFAULT_MAINTENANCE_MESSAGE, MAINTENANCE_MESSAGE_MAX, getMaintenanceState } from "@/lib/maintenance";
+import { SubmitButton } from "@/app/_components/ui/submit-button";
 
 type Props = { searchParams: Promise<Record<string, string | string[] | undefined>> };
 
@@ -88,14 +89,13 @@ export default async function MaintenanceSettingsPage({ searchParams }: Props) {
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          <button
-            type="submit"
+          <SubmitButton pendingText="กำลังบันทึก…"
             className={`rounded-xl px-5 py-2.5 text-sm font-semibold text-white transition hover:opacity-90 ${
               state.enabled ? "bg-emerald-600" : "bg-amber-600"
             }`}
           >
             {state.enabled ? "เปิดระบบให้ใช้งานตามปกติ" : "เปิดโหมดปิดปรับปรุงระบบ"}
-          </button>
+          </SubmitButton>
           <Link href="/maintenance" className="text-sm font-semibold text-[var(--primary)] hover:underline">
             ดูหน้าที่ผู้ใช้จะเห็น
           </Link>

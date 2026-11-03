@@ -17,29 +17,52 @@ import { hasPermission } from "@/lib/role-permissions";
 import { withBasePath } from "@/lib/base-path";
 import { DisposalForm } from "./_components/disposal-form";
 import { CancelDisposalForm, DisposalDecisionForm, DisposalExecutionForm } from "./_components/disposal-decision-form";
+import { todayBangkok } from "@/lib/local-date";
+import { SortableTh, TablePagination } from "@/app/_components/ui/data-table";
+import { pageHref, paginate, readPage, readSort, sortHref, sortRows, type SearchParamsLike } from "@/lib/table-sort";
+
+// listDisposalRequests / listAwaitingExecution clamp their limit to 1,000 rows, so that is the effective cap.
+const LIST_CAP = 1000;
+const SORT_KEYS = ["id", "asset", "type", "value", "by", "status"] as const;
+const STATUS_RANK: Record<string, number> = { Pending: 0, Approved: 1, Rejected: 2, Cancelled: 3 };
 
 const baht = (value: number | null) => (value === null ? "-" : value.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
 
-function RequestTable({ rows, empty }: { rows: DisposalRequest[]; empty: string }) {
-  if (rows.length === 0) return <p className="px-5 py-6 text-center text-sm text-[var(--muted)]">{empty}</p>;
+function RequestTable({ rows: allRows, empty, params, prefix = "", label, capped = false }: { rows: DisposalRequest[]; empty: string; params: SearchParamsLike; prefix?: string; label: string; capped?: boolean }) {
+  if (allRows.length === 0) return <p className="px-5 py-6 text-center text-sm text-[var(--muted)]">{empty}</p>;
+  const sort = readSort(params, SORT_KEYS, null, prefix);
+  const sorted = sortRows(allRows, sort, {
+    id: (row) => row.requestedAt,
+    asset: (row) => row.assetName,
+    type: (row) => DISPOSAL_REQUEST_TYPE_LABELS[row.requestType],
+    value: (row) => row.bookValue,
+    by: (row) => row.requestedBy,
+    status: (row) => STATUS_RANK[row.status] ?? 9,
+  });
+  const paged = paginate(sorted, readPage(params, prefix));
+  const rows = paged.rows;
+  const th = (key: (typeof SORT_KEYS)[number], text: string, align: "left" | "right" | "center" = "left") => (
+    <SortableTh key={key} label={text} sortKey={key} sort={sort} align={align} href={sortHref("/disposal", params, key, sort, prefix)} />
+  );
   return (
+    <>
     <div className="overflow-x-auto">
       <table className="w-full min-w-[760px] text-sm">
         <thead className="bg-slate-50/60 text-xs text-[var(--muted)]">
           <tr>
             <th className="px-4 py-2.5 w-14 text-right font-medium">ลำดับ</th>
-            <th className="px-4 py-2.5 text-left font-medium">คำขอ</th>
-            <th className="px-4 py-2.5 text-left font-medium">ทรัพย์สิน</th>
-            <th className="px-4 py-2.5 text-left font-medium">ประเภท</th>
-            <th className="px-4 py-2.5 text-right font-medium">มูลค่าสุทธิ</th>
-            <th className="px-4 py-2.5 text-left font-medium">ผู้เสนอ</th>
-            <th className="px-4 py-2.5 text-center font-medium">สถานะ</th>
+            {th("id", "คำขอ")}
+            {th("asset", "ทรัพย์สิน")}
+            {th("type", "ประเภท")}
+            {th("value", "มูลค่าสุทธิ", "right")}
+            {th("by", "ผู้เสนอ")}
+            {th("status", "สถานะ", "center")}
           </tr>
         </thead>
         <tbody className="divide-y divide-black/4">
           {rows.map((row, rowIndex) => (
             <tr key={row.id} className="hover:bg-white/50">
-              <td className="px-4 py-2.5 text-right tabular-nums text-[var(--muted)]">{(rowIndex + 1).toLocaleString("th-TH")}</td>
+              <td className="px-4 py-2.5 text-right tabular-nums text-[var(--muted)]">{(paged.start + rowIndex).toLocaleString("th-TH")}</td>
               <td className="px-4 py-2.5"><Link href={`/disposal?requestId=${row.id}`} className="font-mono text-xs font-semibold text-[var(--primary)] hover:underline">#{row.id}</Link><p className="text-xs text-[var(--muted)]">{formatThaiDate(row.requestedAt)}</p></td>
               <td className="px-4 py-2.5"><Link href={`/assets/${row.assetId}`} className="font-medium hover:underline">{row.assetName}</Link><p className="font-mono text-xs text-[var(--muted)]">{row.assetRegistrationNo} · {row.facilityName}</p></td>
               <td className="px-4 py-2.5 text-xs">{DISPOSAL_REQUEST_TYPE_LABELS[row.requestType]}{row.disposalMethod ? <p className="text-[var(--muted)]">{disposalMethodLabel(row.disposalMethod)}</p> : null}</td>
@@ -51,6 +74,11 @@ function RequestTable({ rows, empty }: { rows: DisposalRequest[]; empty: string 
         </tbody>
       </table>
     </div>
+    <TablePagination {...paged} hrefFor={(page) => pageHref("/disposal", params, page, prefix)} label={label} className="border-t border-black/6" />
+    {capped && (
+      <p className="border-t border-black/6 px-4 py-2 text-xs text-amber-700">แสดงสูงสุด {LIST_CAP.toLocaleString("th-TH")} รายการ ดูรายการทั้งหมดได้ในรายงาน</p>
+    )}
+    </>
   );
 }
 
@@ -220,11 +248,11 @@ export default async function DisposalPage({ searchParams }: Props) {
   // ── View: search ───────────────────────────────────────────────────────
   const [results, pendingList, decidedList, awaiting] = await Promise.all([
     q ? listAssets({ search: q, facilityId: facilityScopeId }) : Promise.resolve([]),
-    listDisposalRequests({ facilityIds: scopeIds, status: "Pending", limit: 200 }),
-    listDisposalRequests({ facilityIds: scopeIds, limit: 30 }),
-    listAwaitingExecution(scopeIds),
+    listDisposalRequests({ facilityIds: scopeIds, status: "Pending", limit: LIST_CAP }),
+    listDisposalRequests({ facilityIds: scopeIds, limit: LIST_CAP }),
+    listAwaitingExecution(scopeIds, LIST_CAP),
   ]);
-  const currentFy = fiscalYearOf(new Date().toISOString().slice(0, 10));
+  const currentFy = fiscalYearOf(todayBangkok());
   const decided = decidedList.rows.filter((row) => row.status !== "Pending");
 
   return (
@@ -307,7 +335,7 @@ export default async function DisposalPage({ searchParams }: Props) {
               <h2 className="font-semibold">คำขอรออนุมัติ <span className="ml-1 text-sm font-normal text-[var(--muted)]">{pendingList.rows.length} รายการ</span></h2>
               {canApprove && <p className="mt-0.5 text-xs text-[var(--muted)]">เลือกหมายเลขคำขอเพื่อพิจารณาอนุมัติหรือไม่อนุมัติ</p>}
             </div>
-            <RequestTable rows={pendingList.rows} empty="ไม่มีคำขอรออนุมัติ" />
+            <RequestTable rows={pendingList.rows} empty="ไม่มีคำขอรออนุมัติ" params={params} label="แบ่งหน้าคำขอรออนุมัติ" capped={pendingList.rows.length >= LIST_CAP} />
           </section>
           {awaiting.length > 0 && (
             <section id="awaiting-execution" className="glass-panel overflow-hidden rounded-2xl">
@@ -315,7 +343,7 @@ export default async function DisposalPage({ searchParams }: Props) {
                 <h2 className="font-semibold">อนุมัติแล้ว รอบันทึกผลการจำหน่าย <span className="ml-1 text-sm font-normal text-[var(--muted)]">{awaiting.length} รายการ</span></h2>
                 <p className="mt-0.5 text-xs text-[var(--muted)]">เลือกหมายเลขคำขอเพื่อบันทึกวันที่ขาย/โอน/ทำลาย เลขที่หลักฐาน และเงินที่ได้รับ</p>
               </div>
-              <RequestTable rows={awaiting} empty="" />
+              <RequestTable rows={awaiting} empty="" params={params} prefix="a" label="แบ่งหน้าคำขอรอบันทึกผล" capped={awaiting.length >= LIST_CAP} />
             </section>
           )}
           <section className="glass-panel rounded-2xl p-5">
@@ -343,7 +371,7 @@ export default async function DisposalPage({ searchParams }: Props) {
               <h2 className="font-semibold">ผลการพิจารณาล่าสุด</h2>
               <Link href="/reports?view=disposal" className="text-xs font-medium text-[var(--primary)] hover:underline">ดูรายงาน</Link>
             </div>
-            <RequestTable rows={decided} empty="ยังไม่มีผลการพิจารณา" />
+            <RequestTable rows={decided} empty="ยังไม่มีผลการพิจารณา" params={params} prefix="h" label="แบ่งหน้าผลการพิจารณา" capped={decidedList.rows.length >= LIST_CAP} />
           </section>
         </>
       )}

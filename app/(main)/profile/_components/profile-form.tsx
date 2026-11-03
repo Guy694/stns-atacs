@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useId } from "react";
 import { updateProfileAction } from "@/app/(main)/profile/actions";
 
 type Props = {
@@ -9,6 +9,7 @@ type Props = {
 };
 
 export function ProfileForm({ currentFullName, currentEmail }: Props) {
+  const fieldId = useId();
   const [result, formAction, pending] = useActionState(updateProfileAction, null);
 
   return (
@@ -21,8 +22,8 @@ export function ProfileForm({ currentFullName, currentEmail }: Props) {
 
       <form action={formAction} className="mt-4 space-y-4">
         <div>
-          <label className="block text-sm font-medium">ชื่อ-นามสกุล <span className="text-rose-500">*</span></label>
-          <input
+          <label htmlFor={`${fieldId}-fullName`} className="block text-sm font-medium">ชื่อ-นามสกุล <span className="text-rose-500">*</span></label>
+          <input id={`${fieldId}-fullName`}
             name="fullName"
             defaultValue={currentFullName}
             required
@@ -30,8 +31,8 @@ export function ProfileForm({ currentFullName, currentEmail }: Props) {
           />
         </div>
         <div>
-          <label className="block text-sm font-medium">Email</label>
-          <input
+          <label htmlFor={`${fieldId}-email`} className="block text-sm font-medium">Email</label>
+          <input id={`${fieldId}-email`}
             name="email"
             type="email"
             defaultValue={currentEmail}

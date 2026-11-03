@@ -202,5 +202,14 @@
       "security_events"
     ],
     "columns": {}
+  },
+  {
+    "file": "add_agent_health.sql (สุขภาพเครื่องจาก ATACS Agent 2.x)",
+    "tables": [],
+    "columns": {
+      "agent_devices": [
+        "health_json"
+      ]
+    }
   }
 ]

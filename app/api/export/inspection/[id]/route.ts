@@ -14,6 +14,7 @@ import {
 import { buildInspectionReportWorkbook } from "@/lib/inspection-report";
 import { hasPermission } from "@/lib/role-permissions";
 import { readRequestIp, recordSecurityEvent } from "@/lib/security";
+import { todayBangkok } from "@/lib/local-date";
 
 type Context = { params: Promise<{ id: string }> };
 
@@ -87,7 +88,7 @@ export async function GET(req: NextRequest, { params }: Context) {
       committee: committee.members,
     }
   );
-  const filename = `inspection-${inspectionId}-${new Date().toISOString().slice(0, 10)}.xlsx`;
+  const filename = `inspection-${inspectionId}-${todayBangkok()}.xlsx`;
   const thaiName = `ใบตรวจนับ-${inspection.roundName}`.replace(/[\\/:*?"<>|]+/g, "-").slice(0, 80);
   return new NextResponse(new Uint8Array(buffer), {
     status: 200,

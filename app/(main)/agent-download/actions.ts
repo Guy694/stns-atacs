@@ -9,6 +9,7 @@ import { getActiveFacilityWorkGroupForFacility, getFacilityAgentContext } from "
 import { hasPermission } from "@/lib/role-permissions";
 import { executeStatement, selectRows } from "@/lib/mysql";
 import type { RowDataPacket } from "mysql2/promise";
+import { dbDateTime } from "@/lib/local-date";
 
 async function requireOfficerWithFacility() {
   const user = await getCurrentUser();
@@ -89,7 +90,7 @@ export async function createOfficerDownloadTokenAction(
       facilityId: facility.id,
       workGroupId,
       enrollmentName,
-      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 19),
+      expiresAt: dbDateTime(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)),
       createdByUserId: Number(user.id),
     });
     revalidatePath("/agent-download");

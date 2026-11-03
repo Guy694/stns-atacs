@@ -13,6 +13,7 @@ import { getInspectionCommittee, getInspectionItems } from "@/lib/inspection";
 import { listFacilityWorkGroups } from "@/lib/facility-work-groups";
 import { canAccessAssetFacility } from "@/lib/permissions";
 import { hasPermission } from "@/lib/role-permissions";
+import { todayBangkok } from "@/lib/local-date";
 
 type Props = { searchParams: Promise<Record<string, string | string[] | undefined>> };
 
@@ -47,7 +48,7 @@ export default async function AnnualCheckPrintPage({ searchParams }: Props) {
 
   const workGroupId = Number(one(params.workGroup)) || 0;
   const assetClass = one(params.assetClass);
-  const yearBE = Number(one(params.year)) || fiscalYearOf(new Date().toISOString().slice(0, 10));
+  const yearBE = Number(one(params.year)) || fiscalYearOf(todayBangkok());
   const inspectionId = Number(one(params.inspection)) || 0;
 
   const [facility, workGroups] = await Promise.all([

@@ -1,12 +1,14 @@
 import "server-only";
 
 import { isTerminalAssetStatus, OPERATIONAL_ASSET_STATUSES } from "@/lib/asset-status";
-import { recordAssetStatusHistory } from "@/lib/asset-status-history";
+import { ensureAssetStatusHistoryTable, recordAssetStatusHistory } from "@/lib/asset-status-history";
 import { updateAsset } from "@/lib/assets";
 import { writeAuditLog } from "@/lib/audit";
 import { listFacilityWorkGroups } from "@/lib/facility-work-groups";
 import { getInspectionById, getInspectionItemContext, updateInspectionItem } from "@/lib/inspection";
 import { canManageFacility } from "@/lib/permissions";
+import { todayBangkok } from "@/lib/local-date";
+import { withTransaction } from "@/lib/mysql";
 
 /**
  * Records one inspection result. Shared by the item form (server action) and the offline batch sync
@@ -38,7 +40,7 @@ export type InspectionResultInput = {
   auditNote?: string;
 };
 
-export type InspectionResultErrorCode = "invalid" | "not-found" | "closed" | "terminal" | "forbidden" | "bad-group";
+export type InspectionResultErrorCode = "invalid" | "not-found" | "closed" | "terminal" | "forbidden" | "bad-group" | "moved";
 
 export class InspectionResultError extends Error {
   constructor(public code: InspectionResultErrorCode, message: string, public inspectionId?: number) {
@@ -58,72 +60,82 @@ export async function recordInspectionResult(user: InspectionResultActor, input:
     throw new InspectionResultError("invalid", "ข้อมูลผลตรวจไม่ถูกต้อง");
   }
 
-  const item = await getInspectionItemContext(itemId);
-  if (!item || (input.inspectionId !== undefined && item.inspectionId !== input.inspectionId)) {
-    throw new InspectionResultError("not-found", "ไม่พบรายการในรอบตรวจนับนี้");
-  }
-  const round = await getInspectionById(item.inspectionId);
-  if (round?.roundStatus === "Closed") throw new InspectionResultError("closed", "รอบตรวจนับปิดแล้ว", item.inspectionId);
-  if (isTerminalAssetStatus(item.currentStatus)) throw new InspectionResultError("terminal", "ครุภัณฑ์จำหน่าย/สูญหายแล้ว", item.inspectionId);
-  if (!canManageFacility(user, item.facilityId)) throw new InspectionResultError("forbidden", "ไม่มีสิทธิ์ตรวจนับของหน่วยงานนี้", item.inspectionId);
+  // Every write below happens on locked rows in one transaction: a failure can no longer leave the
+  // item marked Found while the asset status was never updated, and a disposal approved meanwhile
+  // is seen by the terminal-status check.
+  await ensureAssetStatusHistoryTable();
+  const { item, moved, statusChanged, foundText } = await withTransaction(async () => {
+    const item = await getInspectionItemContext(itemId, { forUpdate: true });
+    if (!item || (input.inspectionId !== undefined && item.inspectionId !== input.inspectionId)) {
+      throw new InspectionResultError("not-found", "ไม่พบรายการในรอบตรวจนับนี้");
+    }
+    const round = await getInspectionById(item.inspectionId);
+    if (round?.roundStatus === "Closed") throw new InspectionResultError("closed", "รอบตรวจนับปิดแล้ว", item.inspectionId);
+    if (isTerminalAssetStatus(item.currentStatus)) throw new InspectionResultError("terminal", "ครุภัณฑ์จำหน่าย/สูญหายแล้ว", item.inspectionId);
+    if (!canManageFacility(user, item.facilityId)) throw new InspectionResultError("forbidden", "ไม่มีสิทธิ์ตรวจนับของหน่วยงานนี้", item.inspectionId);
+    if (item.assetFacilityId !== null && Number(item.assetFacilityId) !== Number(item.facilityId)) {
+      throw new InspectionResultError("moved", "ครุภัณฑ์นี้ถูกโอนย้ายไปหน่วยงานอื่นแล้ว บันทึกผลในรอบนี้ไม่ได้", item.inspectionId);
+    }
 
-  let foundWorkGroupId = input.foundWorkGroupId;
-  let foundWorkGroupName = "";
-  const foundLocation = String(input.foundLocation ?? "").trim().slice(0, 255);
-  if (foundWorkGroupId !== undefined && foundWorkGroupId !== null) {
-    foundWorkGroupId = Number(foundWorkGroupId);
-    const groups = await listFacilityWorkGroups(item.facilityId);
-    const group = groups.find((entry) => entry.id === foundWorkGroupId);
-    // The registered group is accepted even if it was deactivated since.
-    if (!group && foundWorkGroupId !== item.workGroupId) throw new InspectionResultError("bad-group", "กลุ่มงานไม่ใช่ของหน่วยงานนี้", item.inspectionId);
-    foundWorkGroupName = group?.workGroupName ?? "";
-  }
+    let foundWorkGroupId = input.foundWorkGroupId;
+    let foundWorkGroupName = "";
+    const foundLocation = String(input.foundLocation ?? "").trim().slice(0, 255);
+    if (foundWorkGroupId !== undefined && foundWorkGroupId !== null) {
+      foundWorkGroupId = Number(foundWorkGroupId);
+      const groups = await listFacilityWorkGroups(item.facilityId);
+      const group = groups.find((entry) => entry.id === foundWorkGroupId);
+      // The registered group is accepted even if it was deactivated since.
+      if (!group && foundWorkGroupId !== item.workGroupId) throw new InspectionResultError("bad-group", "กลุ่มงานไม่ใช่ของหน่วยงานนี้", item.inspectionId);
+      foundWorkGroupName = group?.workGroupName ?? "";
+    }
 
-  await updateInspectionItem({
-    itemId,
-    inspectionStatus,
-    assetStatus,
-    conditionNote,
-    checkedBy: user.fullName,
-    foundWorkGroupId,
-    foundLocation,
-    registeredWorkGroupId: item.workGroupId,
+    await updateInspectionItem({
+      itemId,
+      inspectionStatus,
+      assetStatus,
+      conditionNote,
+      checkedBy: user.fullName,
+      foundWorkGroupId,
+      foundLocation,
+      registeredWorkGroupId: item.workGroupId,
+    });
+
+    const today = todayBangkok();
+    // Optionally move the register to where it was found (otherwise the difference is only reported).
+    const moved = inspectionStatus === "Found" && foundWorkGroupId !== undefined &&
+      ((foundWorkGroupId !== null && foundWorkGroupId !== item.workGroupId) || (foundLocation !== "" && foundLocation !== item.locationDetail));
+    const foundText = [foundWorkGroupName, foundLocation].filter(Boolean).join(" ");
+    if (moved && input.updateRegistry) {
+      await updateAsset(item.assetId, {
+        ...(foundWorkGroupId !== null && foundWorkGroupId !== item.workGroupId ? { workGroupId: foundWorkGroupId } : {}),
+        ...(foundLocation ? { locationDetail: foundLocation } : {}),
+        updatedBy: user.fullName,
+        lastUpdatedAt: today,
+      });
+      await recordAssetStatusHistory({
+        assetId: item.assetId,
+        fromStatus: item.currentStatus,
+        toStatus: item.currentStatus ?? "Active",
+        note: `[ปรับที่ตั้งตามผลตรวจนับ #${item.inspectionId}] พบที่ ${foundText || "-"}`,
+        changedByUserId: user.id,
+        changedBy: user.fullName,
+      });
+    }
+
+    const statusChanged = (item.currentStatus ?? "") !== assetStatus;
+    if (statusChanged) {
+      await updateAsset(item.assetId, { currentStatus: assetStatus, updatedBy: user.fullName, lastUpdatedAt: today });
+      await recordAssetStatusHistory({
+        assetId: item.assetId,
+        fromStatus: item.currentStatus,
+        toStatus: assetStatus,
+        note: conditionNote || `อัปเดตจากรอบตรวจนับ #${item.inspectionId}`,
+        changedByUserId: user.id,
+        changedBy: user.fullName,
+      });
+    }
+    return { item, moved, statusChanged, foundText };
   });
-
-  const today = new Date().toISOString().slice(0, 10);
-  // Optionally move the register to where it was found (otherwise the difference is only reported).
-  const moved = inspectionStatus === "Found" && foundWorkGroupId !== undefined &&
-    ((foundWorkGroupId !== null && foundWorkGroupId !== item.workGroupId) || (foundLocation !== "" && foundLocation !== item.locationDetail));
-  const foundText = [foundWorkGroupName, foundLocation].filter(Boolean).join(" ");
-  if (moved && input.updateRegistry) {
-    await updateAsset(item.assetId, {
-      ...(foundWorkGroupId !== null && foundWorkGroupId !== item.workGroupId ? { workGroupId: foundWorkGroupId } : {}),
-      ...(foundLocation ? { locationDetail: foundLocation } : {}),
-      updatedBy: user.fullName,
-      lastUpdatedAt: today,
-    });
-    await recordAssetStatusHistory({
-      assetId: item.assetId,
-      fromStatus: item.currentStatus,
-      toStatus: item.currentStatus ?? "Active",
-      note: `[ปรับที่ตั้งตามผลตรวจนับ #${item.inspectionId}] พบที่ ${foundText || "-"}`,
-      changedByUserId: user.id,
-      changedBy: user.fullName,
-    });
-  }
-
-  const statusChanged = (item.currentStatus ?? "") !== assetStatus;
-  if (statusChanged) {
-    await updateAsset(item.assetId, { currentStatus: assetStatus, updatedBy: user.fullName, lastUpdatedAt: today });
-    await recordAssetStatusHistory({
-      assetId: item.assetId,
-      fromStatus: item.currentStatus,
-      toStatus: assetStatus,
-      note: conditionNote || `อัปเดตจากรอบตรวจนับ #${item.inspectionId}`,
-      changedByUserId: user.id,
-      changedBy: user.fullName,
-    });
-  }
 
   await writeAuditLog({
     userId: user.id,

@@ -5,6 +5,7 @@ import type { RowDataPacket } from "mysql2/promise";
 import { formatAssetNumber } from "@/lib/asset-number";
 import { executeStatement, selectRows, withTransaction } from "@/lib/mysql";
 import { isMissingSchemaError } from "@/lib/schema-errors";
+import { dbDate, dbDateTime } from "@/lib/local-date";
 
 /** Runs the query that needs the newest columns, falling back to the legacy shape before migration. */
 async function withSchemaFallback<T>(current: () => Promise<T>, legacy: () => Promise<T>) {
@@ -96,6 +97,8 @@ export type InspectionItemContext = {
   id: number;
   inspectionId: number;
   facilityId: number;
+  /** Facility that owns the asset now (differs from facilityId after a transfer). */
+  assetFacilityId: number | null;
   assetId: number;
   currentStatus: string | null;
   workGroupId: number | null;
@@ -176,6 +179,7 @@ type InspectionItemContextRow = RowDataPacket & {
   id: number;
   inspection_id: number;
   facility_id: number;
+  asset_facility_id: number | null;
   asset_id: number;
   current_status: string | null;
   work_group_id: number | null;
@@ -186,12 +190,12 @@ type InspectionItemContextRow = RowDataPacket & {
 
 function toDateStr(v: Date | string | null | undefined) {
   if (!v) return "";
-  return (v instanceof Date ? v.toISOString() : String(v)).slice(0, 10);
+  return dbDate(v);
 }
 
 function toDateTimeStr(v: Date | string | null | undefined) {
   if (!v) return "";
-  return (v instanceof Date ? v.toISOString() : String(v)).slice(0, 19).replace("T", " ");
+  return dbDateTime(v);
 }
 
 function normalizeInspectionStatus(value: string | null | undefined): InspectionItem["inspectionStatus"] {
@@ -440,14 +444,16 @@ export async function getInspectionCommittee(inspectionId: number): Promise<{ me
   }
 }
 
-export async function getInspectionItemContext(itemId: number): Promise<InspectionItemContext | null> {
+/** `forUpdate` locks the item and asset rows; use it inside withTransaction before writing a result. */
+export async function getInspectionItemContext(itemId: number, options: { forUpdate?: boolean } = {}): Promise<InspectionItemContext | null> {
   const rows = await selectRows<InspectionItemContextRow>(
-    `SELECT aii.id, aii.inspection_id, ai.facility_id, aii.asset_id, ia.current_status, ia.work_group_id, ia.location_detail
+    `SELECT aii.id, aii.inspection_id, ai.facility_id, s.facility_id AS asset_facility_id, aii.asset_id, ia.current_status, ia.work_group_id, ia.location_detail
      FROM asset_inspection_items aii
      JOIN asset_inspections ai ON ai.id = aii.inspection_id
      JOIN information_assets ia ON ia.id = aii.asset_id
+     LEFT JOIN information_asset_surveys s ON s.id = ia.survey_id
      WHERE aii.id = ?
-     LIMIT 1`,
+     LIMIT 1${options.forUpdate ? " FOR UPDATE" : ""}`,
     [itemId]
   );
   if (!rows[0]) return null;
@@ -455,6 +461,7 @@ export async function getInspectionItemContext(itemId: number): Promise<Inspecti
     id: rows[0].id,
     inspectionId: rows[0].inspection_id,
     facilityId: rows[0].facility_id,
+    assetFacilityId: rows[0].asset_facility_id === null || rows[0].asset_facility_id === undefined ? null : Number(rows[0].asset_facility_id),
     assetId: rows[0].asset_id,
     currentStatus: rows[0].current_status,
     workGroupId: rows[0].work_group_id ?? null,

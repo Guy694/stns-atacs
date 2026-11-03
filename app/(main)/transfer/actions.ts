@@ -10,6 +10,7 @@ import { writeAuditLog } from "@/lib/audit";
 import { canManageAsset, canMutateAssets } from "@/lib/permissions";
 import { hasPermission } from "@/lib/role-permissions";
 import { friendlyLifecycleError } from "@/lib/schema-errors";
+import { todayBangkok } from "@/lib/local-date";
 
 function text(fd: FormData, key: string) {
   return (fd.get(key) as string | null)?.trim() ?? "";
@@ -48,7 +49,7 @@ export async function transferAssetAction(_prev: string | null, fd: FormData): P
       toLocationDetail: fd.has("newLocationDetail") ? text(fd, "newLocationDetail") : undefined,
       reason: text(fd, "reason"),
       documentNo: text(fd, "documentNo"),
-      transferDate: text(fd, "transferDate") || new Date().toISOString().slice(0, 10),
+      transferDate: text(fd, "transferDate") || todayBangkok(),
       userId: user.id,
       userName: user.fullName,
     });

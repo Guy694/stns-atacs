@@ -14,6 +14,7 @@ import { formatThaiDateTime } from "@/lib/date-format";
 import { getFacilityScopeId } from "@/lib/facility-scope";
 import { listFacilityWorkGroups } from "@/lib/facility-work-groups";
 import { hasPermission } from "@/lib/role-permissions";
+import { SubmitButton } from "@/app/_components/ui/submit-button";
 
 function formatDate(value: string | null) {
   if (!value) return "-";
@@ -137,9 +138,13 @@ export default async function AgentSettingsPage() {
                           {enrollment.isActive ? (
                             <form action={revokeAgentEnrollmentAction}>
                               <input type="hidden" name="enrollmentId" value={enrollment.id} />
-                              <button className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-medium text-rose-700 transition hover:bg-rose-100">
+                              <SubmitButton
+                                pendingText="กำลังปิด…"
+                                confirm={{ title: `ปิด token "${enrollment.enrollmentName}" ?`, text: "เครื่องที่ยังไม่ได้ลงทะเบียนจะใช้ token นี้ไม่ได้อีก", confirmText: "ปิด token", danger: true }}
+                                className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-medium text-rose-700 transition hover:bg-rose-100"
+                              >
                                 ปิด token
-                              </button>
+                              </SubmitButton>
                             </form>
                           ) : (
                             <span className="text-xs text-[var(--muted)]">—</span>

@@ -6,7 +6,6 @@ import {
   findUserByEmail,
   findUserByGoogleSub,
   getUserDisplayName,
-  linkGoogleIdentity,
   normalizeDisplayName,
   setPendingGoogleRegistrationClaim,
 } from "@/lib/auth";
@@ -136,14 +135,18 @@ export async function GET(req: NextRequest) {
       throw new Error("บัญชี Google ต้องมีอีเมลที่ยืนยันแล้ว");
     }
 
-    let user = await findUserByGoogleSub(googleSub);
+    const user = await findUserByGoogleSub(googleSub);
     if (!user) {
-      user = await findUserByEmail(email);
-      if (user) {
-        if (user.google_sub && user.google_sub !== googleSub) {
+      const sameEmail = await findUserByEmail(email);
+      if (sameEmail) {
+        if (sameEmail.google_sub && sameEmail.google_sub !== googleSub) {
           throw new Error("อีเมลนี้ผูกกับบัญชี Google อื่นแล้ว");
         }
-        await linkGoogleIdentity(user.id, googleSub);
+        // The stored e-mail was never verified, so never take the account over by e-mail alone:
+        // the owner signs in once with their own method and the Google identity is linked then.
+        await setPendingGoogleRegistrationClaim(googleSub, email, displayName);
+        await recordGoogleSecurityEvent(req, "google_link_pending", "Google", email);
+        return redirectWithDeletedState(loginUrl(req, "อีเมลนี้มีบัญชีในระบบแล้วแต่ยังไม่ได้ผูก Gmail กรุณาเข้าสู่ระบบด้วยชื่อผู้ใช้/รหัสผ่าน หรือ ThaiD หนึ่งครั้ง ระบบจะผูก Gmail ให้อัตโนมัติ", nextPath));
       }
     }
 
@@ -162,6 +165,7 @@ export async function GET(req: NextRequest) {
       await notifyTelegramSafe({
         category: "security",
         title: "เข้าสู่ระบบสำเร็จ",
+        throttle: false,
         details: { ผู้ใช้: getUserDisplayName(user), อีเมล: email, วิธี: "Google", ...requestDetails(req) },
       });
       return redirectWithDeletedState(getPublicRequestUrl(req, withBasePath(nextPath)));

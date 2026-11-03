@@ -2,8 +2,10 @@
 
 import { useActionState, useId, useRef, useState, useTransition } from "react";
 
+import { SortableTh, TablePagination } from "@/app/_components/ui/data-table";
 import { StatusBadge, activeTone } from "@/app/_components/ui/status-badge";
 import { ActionIconButton } from "@/app/_components/ui/action-icon-button";
+import { useTableState } from "@/app/_components/ui/use-table-state";
 import { createDeviceTypeAction, toggleDeviceTypeActiveAction, updateDeviceTypeAction } from "../actions";
 import type { DeviceTypeRow } from "@/lib/device-types";
 
@@ -16,6 +18,7 @@ function DeviceTypeModal({
   item?: DeviceTypeRow;
   onClose: () => void;
 }) {
+  const fieldId = useId();
   const formRef = useRef<HTMLFormElement>(null);
   const titleId = useId();
   const action = mode === "create" ? createDeviceTypeAction : updateDeviceTypeAction;
@@ -57,14 +60,14 @@ function DeviceTypeModal({
           {mode === "edit" && <input type="hidden" name="id" value={item?.id} />}
 
           <div>
-            <label className="block text-sm font-medium">ชื่อประเภท <span className="text-rose-500">*</span></label>
-            <input name="name" defaultValue={item?.name ?? ""} required autoFocus
+            <label htmlFor={`${fieldId}-name`} className="block text-sm font-medium">ชื่อประเภท <span className="text-rose-500">*</span></label>
+            <input id={`${fieldId}-name`} name="name" defaultValue={item?.name ?? ""} required autoFocus
               className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]" />
           </div>
 
           <div>
-            <label className="block text-sm font-medium">หมวดหมู่ <span className="text-rose-500">*</span></label>
-            <select name="category" defaultValue={item?.category ?? "Hardware"} required
+            <label htmlFor={`${fieldId}-category`} className="block text-sm font-medium">หมวดหมู่ <span className="text-rose-500">*</span></label>
+            <select id={`${fieldId}-category`} name="category" defaultValue={item?.category ?? "Hardware"} required
               className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]">
               <option value="Hardware">Hardware (ฮาร์ดแวร์)</option>
               <option value="Software">Software (ซอฟต์แวร์)</option>
@@ -125,6 +128,44 @@ function DeviceTypeItem({ item, seq }: { item: DeviceTypeRow; seq: number }) {
   );
 }
 
+const deviceTypeAccessors: Record<string, (item: DeviceTypeRow) => unknown> = {
+  name: (item) => item.name,
+  category: (item) => item.category,
+  status: (item) => (item.is_active ? 0 : 1),
+};
+
+function DeviceTypeTable({ label, data }: { label: string; data: DeviceTypeRow[] }) {
+  const t = useTableState(data, deviceTypeAccessors);
+
+  return (
+    <div className="glass-panel overflow-hidden rounded-2xl">
+      <div className="border-b border-black/6 bg-stone-50/60 px-4 py-2.5">
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">{label}</h2>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-black/6 text-xs text-[var(--muted)]">
+              <th className="w-14 px-4 py-2.5 text-right font-medium">ลำดับ</th>
+              <SortableTh label="ชื่อประเภท" sortKey="name" sort={t.sort} onSort={t.onSort} />
+              <SortableTh label="หมวด" sortKey="category" sort={t.sort} onSort={t.onSort} />
+              <SortableTh label="สถานะ" sortKey="status" sort={t.sort} onSort={t.onSort} />
+              <th className="px-4 py-2.5 text-right font-medium">จัดการ</th>
+            </tr>
+          </thead>
+          <tbody>
+            {t.rows.map((item, rowIndex) => <DeviceTypeItem key={item.id} item={item} seq={t.start + rowIndex} />)}
+            {data.length === 0 && (
+              <tr><td colSpan={5} className="py-6 text-center text-sm text-[var(--muted)]">ยังไม่มีข้อมูล</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+      <TablePagination {...t} onPage={t.onPage} label={`แบ่งหน้า${label}`} className="border-t border-black/6" />
+    </div>
+  );
+}
+
 export function DeviceTypesClient({ items }: { items: DeviceTypeRow[] }) {
   const [createOpen, setCreateOpen] = useState(false);
   const hw = items.filter((i) => i.category === "Hardware");
@@ -140,30 +181,7 @@ export function DeviceTypesClient({ items }: { items: DeviceTypeRow[] }) {
       </div>
 
       {[{ label: "Hardware (ฮาร์ดแวร์)", data: hw }, { label: "Software (ซอฟต์แวร์)", data: sw }].map(({ label, data }) => (
-        <div key={label} className="glass-panel overflow-hidden rounded-2xl">
-          <div className="border-b border-black/6 bg-stone-50/60 px-4 py-2.5">
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">{label}</h2>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-black/6 text-xs text-[var(--muted)]">
-                  <th className="w-14 px-4 py-2.5 text-right font-medium">ลำดับ</th>
-                  <th className="px-4 py-2.5 text-left font-medium">ชื่อประเภท</th>
-                  <th className="px-4 py-2.5 text-left font-medium">หมวด</th>
-                  <th className="px-4 py-2.5 text-left font-medium">สถานะ</th>
-                  <th className="px-4 py-2.5 text-right font-medium">จัดการ</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.map((item, rowIndex) => <DeviceTypeItem key={item.id} item={item} seq={rowIndex + 1} />)}
-                {data.length === 0 && (
-                  <tr><td colSpan={5} className="py-6 text-center text-sm text-[var(--muted)]">ยังไม่มีข้อมูล</td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <DeviceTypeTable key={label} label={label} data={data} />
       ))}
 
       {createOpen && <DeviceTypeModal mode="create" onClose={() => setCreateOpen(false)} />}

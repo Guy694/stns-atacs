@@ -8,7 +8,9 @@ import { StatusBadge } from "@/app/_components/ui/status-badge";
 import { ActionIconButton } from "@/app/_components/ui/action-icon-button";
 import { assetClassLabel } from "@/lib/asset-classes";
 import { getCurrentUser } from "@/lib/auth";
-import { countAssets, listAssets, listAllFacilitiesForSelect, listFacilities, type AssetListFilter } from "@/lib/assets";
+import { ASSET_SORT_KEYS, countAssets, listAssets, listAllFacilitiesForSelect, listFacilities, type AssetListFilter } from "@/lib/assets";
+import { SortableTh } from "@/app/_components/ui/data-table";
+import { readSort, sortHref } from "@/lib/table-sort";
 import { formatThaiDate } from "@/lib/date-format";
 import { listActiveDeviceTypes } from "@/lib/device-types";
 import { listFacilityWorkGroups } from "@/lib/facility-work-groups";
@@ -111,6 +113,7 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
   const sort = readParam(params, "sort") as "updated_desc" | "updated_asc" | "name_asc" | "name_desc" | "ma_soon";
   const requestedFacilityFilter = Number(readParam(params, "facility")) || undefined;
   const facilityFilter = requestedFacilityFilter;
+  const columnSort = readSort(params, ASSET_SORT_KEYS);
   const requestedPage = readPositiveIntParam(params, "page", 1);
   const perPage = normalizePerPage(readPositiveIntParam(params, "perPage", 25));
   const assetFilter: AssetListFilter = {
@@ -125,6 +128,7 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
     deviceType: deviceTypeFilter || undefined,
     maExpiringDays,
     sort: ["updated_desc", "updated_asc", "name_asc", "name_desc", "ma_soon"].includes(sort) ? sort : undefined,
+    orderBy: columnSort ?? undefined,
   };
 
   const [totalAssets, facilitiesForSelect, facilities, deviceTypes, workGroups, subtypes, assetLocations] = await Promise.all([
@@ -154,6 +158,7 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
     maDays: maExpiringDays,
     facility: requestedFacilityFilter,
     sort: sort || undefined,
+    dir: columnSort?.dir,
     perPage: perPage === 25 ? undefined : perPage,
   };
   const pageNumbers = buildPageNumbers(currentPage, totalPages);
@@ -171,10 +176,16 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
   const canUpdateAssetByPolicy = await hasPermission(user.role, "assets.update");
 
   // Group by district
-  const byDistrict = assets.reduce<Record<string, typeof assets>>((acc, a) => {
-    (acc[a.districtName] ??= []).push(a);
-    return acc;
-  }, {});
+  // (a column sort shows one flat table so the chosen order is not split by district)
+  const byDistrict = columnSort
+    ? { "": assets }
+    : assets.reduce<Record<string, typeof assets>>((acc, a) => {
+        (acc[a.districtName] ??= []).push(a);
+        return acc;
+      }, {});
+  const th = (key: string, label: string) => (
+    <SortableTh key={key} label={label} sortKey={key} sort={columnSort} href={sortHref("/assets", params, key, columnSort)} />
+  );
   // ลำดับที่ต่อเนื่องทั้งรายการตามลำดับที่แสดงบนจอ (ต่อจากหน้าก่อน ไม่เริ่มใหม่ในแต่ละอำเภอ)
   const rowNumber = new Map(Object.values(byDistrict).flat().map((asset, index) => [asset.id, offset + index + 1]));
 
@@ -220,7 +231,7 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
         <div key={district} className="glass-panel overflow-hidden rounded-2xl">
           <div className="flex items-center justify-between border-b border-black/6 px-5 py-3">
             <div>
-              <span className="font-semibold">อ.{district}</span>
+              <span className="font-semibold">{district ? `อ.${district}` : "ทุกอำเภอ"}</span>
               <span className="ml-2 text-sm text-[var(--muted)]">{items.length} รายการ</span>
             </div>
           </div>
@@ -230,13 +241,13 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
               <thead>
                 <tr className="border-b border-black/6 bg-stone-50/60 text-xs text-[var(--muted)]">
                   <th className="w-14 px-4 py-2.5 text-right font-medium">ลำดับ</th>
-                  <th className="px-4 py-2.5 text-left font-medium">เลขทะเบียน</th>
-                  <th className="px-4 py-2.5 text-left font-medium">ชื่อทรัพย์สิน</th>
-                  <th className="px-4 py-2.5 text-left font-medium">หน่วยงาน</th>
-                  <th className="px-4 py-2.5 text-left font-medium">ประเภท</th>
-                  <th className="px-4 py-2.5 text-left font-medium">สถานะ</th>
-                  {canViewNetworkByPolicy && <th className="px-4 py-2.5 text-left font-medium">IP</th>}
-                  <th className="px-4 py-2.5 text-left font-medium">MA หมด</th>
+                  {th("reg", "เลขทะเบียน")}
+                  {th("name", "ชื่อทรัพย์สิน")}
+                  {th("facility", "หน่วยงาน")}
+                  {th("type", "ประเภท")}
+                  {th("status", "สถานะ")}
+                  {canViewNetworkByPolicy && th("ip", "IP")}
+                  {th("ma", "MA หมด")}
                   {canUpdateAssetByPolicy && <th className="px-4 py-2.5 text-right font-medium">จัดการ</th>}
                 </tr>
               </thead>

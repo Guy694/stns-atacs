@@ -18,6 +18,7 @@ import { itemOutcome } from "@/lib/inspection-report";
 import { canManageFacility } from "@/lib/permissions";
 import { notifyTelegramSafe } from "@/lib/telegram";
 import { DISPOSAL_REQUEST_TYPE_LABELS, disposalMethodLabel, isDisposalMethod } from "@/lib/disposal-options";
+import { todayBangkok } from "@/lib/local-date";
 
 export type DisposalType = "Broken" | "Inactive" | "Disposed" | "Lost";
 
@@ -45,12 +46,12 @@ export async function disposalAssetAction(_prev: string | null, fd: FormData): P
   const assetId = Number(fd.get("assetId"));
   const disposalType = text(fd, "disposalType") as DisposalType;
   const reason = text(fd, "reason");
-  const noteDate = text(fd, "noteDate") || new Date().toISOString().slice(0, 10);
+  const noteDate = text(fd, "noteDate") || todayBangkok();
 
   if (!Number.isSafeInteger(assetId) || assetId <= 0) return "ไม่พบ ID ทรัพย์สิน";
   if (!["Broken", "Inactive", "Disposed", "Lost"].includes(disposalType)) return "กรุณาเลือกประเภทการดำเนินการ";
   if (!reason) return "กรุณาระบุเหตุผล";
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(noteDate) || noteDate > new Date().toISOString().slice(0, 10)) return "วันที่ไม่ถูกต้องหรือเกินวันที่ปัจจุบัน";
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(noteDate) || noteDate > todayBangkok()) return "วันที่ไม่ถูกต้องหรือเกินวันที่ปัจจุบัน";
 
   let redirectTo = `/assets/${assetId}`;
   try {
@@ -67,7 +68,7 @@ export async function disposalAssetAction(_prev: string | null, fd: FormData): P
         disposalMethod: text(fd, "disposalMethod") || null,
         reason,
         eventDate: noteDate,
-        bookValue: valuation.status === "ok" || valuation.status === "below-threshold" ? valuation.bookValue : null,
+        bookValue: valuation.status === "ok" ? valuation.bookValue : null,
         factFindingNote: disposalType === "Lost" ? text(fd, "factFindingNote") : null,
         userId: user.id,
         userName: user.fullName,
@@ -90,7 +91,7 @@ export async function disposalAssetAction(_prev: string | null, fd: FormData): P
       const label = disposalType === "Broken" ? "บันทึกชำรุด" : "ระงับการใช้งาน";
       const note = `[${label}] ${noteDate} — ${reason}`;
       // usage_description keeps the user's own description; the event is kept in status history.
-      await updateAsset(assetId, { currentStatus: disposalType, updatedBy: user.fullName, lastUpdatedAt: new Date().toISOString().slice(0, 10) });
+      await updateAsset(assetId, { currentStatus: disposalType, updatedBy: user.fullName, lastUpdatedAt: todayBangkok() });
       await recordAssetStatusHistory({ assetId, fromStatus: asset.currentStatus, toStatus: disposalType, note, changedByUserId: user.id, changedBy: user.fullName });
       await writeAuditLog({ userId: user.id, userName: user.fullName, action: "dispose", entity: "information_assets", entityId: assetId, summary: note });
     }
@@ -222,9 +223,9 @@ export async function bulkDisposalFromInspectionAction(_prev: BulkDisposalResult
   if (!selected.size) return { ok: false, message: "กรุณาเลือกรายการอย่างน้อย 1 รายการ", created: [], skipped: [] };
   const method = text(fd, "disposalMethod");
   const reason = text(fd, "reason");
-  const eventDate = text(fd, "eventDate") || new Date().toISOString().slice(0, 10);
+  const eventDate = text(fd, "eventDate") || todayBangkok();
   if (!reason) return { ok: false, message: "กรุณาระบุเหตุผล", created: [], skipped: [] };
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(eventDate) || eventDate > new Date().toISOString().slice(0, 10)) return { ok: false, message: "วันที่ไม่ถูกต้องหรือเกินวันที่ปัจจุบัน", created: [], skipped: [] };
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(eventDate) || eventDate > todayBangkok()) return { ok: false, message: "วันที่ไม่ถูกต้องหรือเกินวันที่ปัจจุบัน", created: [], skipped: [] };
 
   const items = (await getInspectionItems(inspectionId)).filter((item) => selected.has(item.assetId));
   const needsMethod = items.some((item) => ["broken", "unused"].includes(itemOutcome({ ...item, inspectionAssetStatus: item.assetStatus })));
@@ -248,7 +249,7 @@ export async function bulkDisposalFromInspectionAction(_prev: BulkDisposalResult
         disposalMethod: requestType === "Disposed" ? method : null,
         reason: `${reason} (จากรอบตรวจนับ ${inspection.roundName}: ${outcome === "missing" ? "ไม่พบ" : outcome === "broken" ? "ชำรุด" : "เสื่อมสภาพ/ไม่ใช้งาน"})`,
         eventDate,
-        bookValue: valuation.status === "ok" || valuation.status === "below-threshold" ? valuation.bookValue : null,
+        bookValue: valuation.status === "ok" ? valuation.bookValue : null,
         userId: user.id,
         userName: user.fullName,
       });

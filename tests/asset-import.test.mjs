@@ -3,7 +3,6 @@ import fs from "node:fs";
 import test from "node:test";
 import vm from "node:vm";
 import ts from "typescript";
-import * as XLSX from "xlsx";
 import { loadTs } from "./helpers/load-ts.mjs";
 
 function load(file, dependencies) {
@@ -26,7 +25,8 @@ function setup({ user = officer, create = true, update = true, existingFacility 
   const audits = [];
   const noop = async () => {};
   const route = load("../app/api/import/assets/route.ts", {
-    xlsx: XLSX,
+    "@/lib/spreadsheet-parse": loadTs("lib/spreadsheet-parse.ts"),
+    "@/lib/local-date": loadTs("lib/local-date.ts"),
     "@/lib/asset-details": loadTs("lib/asset-details.ts"),
     "@/lib/asset-import-columns": loadTs("lib/asset-import-columns.ts"),
     "next/server": { NextResponse: Response },

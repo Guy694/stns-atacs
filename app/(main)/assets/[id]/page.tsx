@@ -37,6 +37,7 @@ import { listAuditLogs, type AuditLog } from "@/lib/audit";
 import { InspectionCheckIn } from "./_components/inspection-check-in";
 import { listOpenInspectionsForAsset } from "@/lib/inspection";
 import { withBasePath } from "@/lib/base-path";
+import { todayBangkok } from "@/lib/local-date";
 
 type Props = {
   params: Promise<{ id: string }>;
@@ -205,7 +206,7 @@ export default async function AssetDetailPage({ params, searchParams }: Props) {
   const activeLoan = canViewLoans ? (await listLoans({ assetId: asset.id, status: "OnLoan", limit: 1 })).rows[0] : undefined;
   const pendingDisposal = disposals.rows.find((row) => row.status === "Pending");
   const openRepair = repairs.rows.find((row) => row.status === "Reported" || row.status === "InProgress" || row.status === "SentToVendor");
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayBangkok();
   const valuationInput = { ...asset, subtypeName: asset.extensions[asset.assetClass]?.subtypeName };
   const valuation = valueAsset(valuationInput, today);
   const schedule = depreciationSchedule(valuationInput);

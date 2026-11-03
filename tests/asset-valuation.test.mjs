@@ -12,14 +12,14 @@ test("fiscal year follows the Thai government October–September year in B.E.",
   assert.deepEqual(plain(v.fiscalYearRange(2570)), { start: "2026-10-01", end: "2027-09-30" });
 });
 
-test("straight-line depreciation charges full years evenly, prorates by day and stops at 1 baht", () => {
+test("depreciation follows the register: cost × table rate per full year, prorated by day, rest in the last year, stops at 1 baht", () => {
   const schedule = v.depreciationSchedule(computer);
   assert.deepEqual(plain(schedule.map(row => row.fiscalYear)), [2567, 2568, 2569]);
-  assert.deepEqual(plain(schedule.map(row => row.depreciation)), [10000, 10000, 10000]);
+  assert.deepEqual(plain(schedule.map(row => row.depreciation)), [9900.33, 9900.33, 10199.34]);
   const midYear = v.depreciationSchedule({ ...computer, purchaseDate: "2024-01-15" });
   assert.deepEqual(plain(midYear.map(row => row.fiscalYear)), [2567, 2568, 2569, 2570]);
-  assert.equal(midYear[0].depreciation, Math.round(10000 * 260 / 366 * 100) / 100, "first year prorated by days held");
-  assert.equal(midYear[1].depreciation, 10000);
+  assert.equal(midYear[0].depreciation, Math.round(9900.33 * 260 / 366 * 100) / 100, "first year prorated by days held");
+  assert.equal(midYear[1].depreciation, 9900.33);
   assert.equal(midYear.at(-1).bookValue, 1);
   assert.equal(v.valueAsset({ ...computer, purchaseDate: "2024-01-15" }, "2030-01-01").fullyDepreciatedOn, "2027-01-14");
   assert.equal(schedule.at(-1).accumulated, 30000);
@@ -52,7 +52,10 @@ test("useful life uses the per-asset override, then the recorded subtype, then t
 });
 
 test("incomplete or low-value records are reported, not silently valued", () => {
-  assert.equal(v.valueAsset({ assetClass: "Office", purchasePrice: 4500, purchaseDate: "2024-01-01" }, "2025-01-01").status, "below-threshold");
+  // Items under 10,000 baht are depreciated like every other item (same as the printed register).
+  const cheap = v.valueAsset({ assetClass: "Office", purchasePrice: 4500, purchaseDate: "2024-01-01" }, "2025-01-01");
+  assert.equal(cheap.status, "ok");
+  assert.ok(cheap.accumulated > 0 && cheap.bookValue < 4500);
   assert.equal(v.valueAsset({ assetClass: "Office", purchaseDate: "2024-01-01" }, "2025-01-01").status, "missing-price");
   assert.equal(v.valueAsset({ assetClass: "Office", purchasePrice: 45000 }, "2025-01-01").status, "missing-date");
   const installed = v.valueAsset({ assetClass: "Office", purchasePrice: 45000, installedAt: "2024-01-01" }, "2025-01-01");
@@ -72,13 +75,11 @@ test("register valuation groups by schedule category and excludes disposed, lost
   const report = v.summarizeValuation(assets, 2568, "2026-01-01");
   assert.equal(report.asOf, "2025-09-30");
   assert.equal(report.terminalCount, 1);
-  assert.equal(report.totals.count, 3);
-  assert.deepEqual(plain(report.rows.map(row => [row.categoryId, row.count])), [[4, 1], [12, 2]]);
-  assert.equal(report.excluded["below-threshold"], 1);
+  assert.equal(report.totals.count, 4, "the 3,000-baht item is depreciated too");
+  assert.deepEqual(plain(report.rows.map(row => [row.categoryId, row.count])), [[3, 1], [4, 1], [12, 2]]);
   assert.equal(report.excluded["missing-date"], 1);
-  assert.equal(report.belowThresholdCost, 3000);
   const vehicle = report.rows.find(row => row.categoryId === 4);
-  assert.equal(vehicle.depreciationThisYear, 180000);
-  assert.equal(vehicle.bookValue, 720001);
-  assert.equal(report.totals.cost, 30001 * 2 + 900001);
+  assert.equal(vehicle.depreciationThisYear, 180000.2, "900,001 × 20%");
+  assert.equal(vehicle.bookValue, 720000.8);
+  assert.equal(report.totals.cost, 30001 * 2 + 900001 + 3000);
 });

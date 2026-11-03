@@ -57,7 +57,7 @@ test("intangible filter includes legacy IT software; computer filter excludes it
     { id: 3, assetClass: "IT", assetGroup: "Hardware", assetName: "Computer" },
   ];
   const repository = loadTs("lib/assets.ts", {
-    "@/lib/mysql": { selectRows: async () => { throw new Error("Use fixture"); } },
+    "@/lib/mysql": { selectRows: async () => { throw Object.assign(new Error("Use fixture"), { code: "ER_NO_SUCH_TABLE" }); } },
     "@/app/atacs-data": { facilitySurveys: [{ facilityId: 1, facilityName: "Test", districtName: "Test", assets }] },
   });
   assert.deepEqual(JSON.parse(JSON.stringify((await repository.listAssets({ assetClass: "Intangible" })).map(asset => asset.id))), [1, 2]);

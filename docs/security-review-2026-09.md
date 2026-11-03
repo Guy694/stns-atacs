@@ -122,6 +122,7 @@
 
 ### SEC-11 ☑ ไลบรารี `xlsx` 0.18.5 มีช่องโหว่ และหน้านำเข้าไม่จำกัดขนาด
 - **แก้แล้ว:** 28 กันยายน 2569 — จำกัดไฟล์นำเข้า 5 MB และ 5,000 แถว (ปรับได้ด้วย IMPORT_MAX_MB/IMPORT_MAX_ROWS) และจำกัดจำนวนแถวที่ถอดรหัสจริงด้วย sheetRows — **ยังไม่ได้เปลี่ยนไลบรารี xlsx 0.18.5 ยังคงมี CVE อยู่**
+- **ลดความเสี่ยงเพิ่ม 13 ต.ค. 2569:** CSV อ่านด้วยตัวอ่านของระบบเอง (`lib/csv-parse.ts`) ไม่ผ่าน xlsx; Excel อ่านใน worker thread แยกที่จำกัดเวลา 20 วินาที / หน่วยความจำ 256 MB (`lib/spreadsheet-parse.ts`) — ยังต้องอัปเดต xlsx เป็น 0.20.3 จาก cdn.sheetjs.com
 - **ไฟล์:** `package.json`; `app/api/import/assets/route.ts` ~186
 - **ปัญหา:** CVE-2023-30533 (prototype pollution, แก้ใน 0.19.3), CVE-2024-22363 (ReDoS, แก้ใน 0.20.2); SheetJS ไม่ออกเวอร์ชันใหม่บน npm แล้ว (`npm audit` จะไม่เตือน); ไม่จำกัดขนาดไฟล์/จำนวนแถว (มีแค่ 20MB ของ Caddy) — ไฟล์ zip bomb หรือ CSV หลายล้านแถวทำให้หน่วยความจำหมด; นามสกุลไฟล์ไม่มีผลจริงเพราะ `XLSX.read` ดูจากเนื้อหา
 - **แนวทางแก้:** ติดตั้ง SheetJS ≥ 0.20.3 จาก `https://cdn.sheetjs.com/` หรือเปลี่ยนเป็น `exceljs`; ตรวจ `file.size` (≤ 5MB); `XLSX.read(..., { sheetRows: 5001 })` และปฏิเสธถ้าเกิน; รับเฉพาะ CSV (parser CSV) กับ XLSX (ตรวจ magic bytes `PK`)
@@ -145,7 +146,8 @@
 - **ปัญหา:** enroll ซ้ำด้วย (หน่วยงาน, fingerprint) เดิมจะแทนที่ `agent_key_hash` ทำให้เครื่องจริงถูกตัดออกและผู้โจมตีส่งข้อมูลทับ; fingerprint คำนวณได้บนเครื่องและปรากฏในข้อความ Telegram เมื่อ enroll ล้มเหลว (`enroll/route.ts` ~59); ไม่มีโค้ดใดตั้ง `agent_devices.is_active=0` จึงเพิกถอน key ที่หลุดไม่ได้
 - **แนวทางแก้:** ไม่หมุน key เมื่อ enroll ซ้ำโดยไม่ได้รับอนุมัติจากแอดมิน; เพิ่มปุ่มปิด/เพิกถอนเครื่องในหน้าตั้งค่า Agent; ไม่ส่ง fingerprint เต็มใน Telegram
 
-### SEC-15 ☐ Agent: ข้อมูลรายงานไม่ตรวจชนิด/ขนาด และ key ที่หลุดยึดครุภัณฑ์อื่นได้
+### SEC-15 ◐ Agent: ข้อมูลรายงานไม่ตรวจชนิด/ขนาด และ key ที่หลุดยึดครุภัณฑ์อื่นได้
+- **แก้บางส่วน 13 ต.ค. 2569:** ตรวจชนิด/ช่วง/ความยาวทุกช่อง (`lib/agent-payload.ts`), จำกัด body 256 KB, ไม่เก็บ `raw` ดิบแล้ว, `status` รับเฉพาะ online/offline, ใช้เวลาเซิร์ฟเวอร์แทน `collectedAt` — **ยังไม่ได้แก้:** การผูกอัตโนมัติด้วย serial/hostname ที่ key หลุดใช้ยึดครุภัณฑ์อื่นได้
 - **ไฟล์:** `lib/agent.ts` ~655–658 (`ramMb`, `disk*` ไม่แปลงเป็นตัวเลข), ~670 `findAssetCandidate`
 - **ปัญหา:** รายงานที่ serial/hostname ตรงกับครุภัณฑ์ IT ที่ยังไม่ผูก จะผูกและเขียนทับชื่อ ผู้ใช้ IP serial สถานะ; ฟิลด์ `raw` เก็บ longtext ได้ถึง ~20MB ต่อครั้ง; `status`, `collectedAt` ไม่ตรวจ
 - **แนวทางแก้:** ตรวจ schema ของ payload (ชนิด, ความยาว, ช่วงค่า, ขนาด `raw` ≤ ~256KB); ผูกครุภัณฑ์อัตโนมัติเฉพาะเมื่อแอดมินยืนยัน
@@ -160,8 +162,9 @@
 - **ปัญหา:** ไฟล์สร้างด้วย umask ปกติ (0644) ใน `./backups` ภายในมี hash รหัสผ่าน, hash เซสชัน, CID ที่เข้ารหัส, hash ของ agent key
 - **แนวทางแก้:** `umask 077` ต้นสคริปต์ และ `chmod 700` โฟลเดอร์; พิจารณาเข้ารหัสด้วย `age`/`gpg` ก่อนคัดลอกออกนอกเครื่อง
 
-### SEC-18 ☐ Windows Agent: `agent-config.json` น่าจะอ่านได้โดยผู้ใช้ทั่วไป
+### SEC-18 ◐ Windows Agent: `agent-config.json` น่าจะอ่านได้โดยผู้ใช้ทั่วไป
 - **ไฟล์:** `public/agent/windows/install-atacs-agent.ps1` ~47–48
+- **แก้ใน Agent 2.0.0 (13 ต.ค. 2569):** เมื่อรันด้วยสิทธิ์ผู้ดูแล ตั้ง ACL โฟลเดอร์ให้เฉพาะ SYSTEM + Administrators (ใช้ SID) — มีผลกับเครื่องที่ติดตั้ง 2.0 แล้วเท่านั้น และยังไม่ได้ทดสอบบน Windows จริง
 - **ปัญหา:** `C:\ProgramData\ATACSAgent` สืบทอดสิทธิ์ `BUILTIN\Users: Read` (ยังไม่ได้ทดสอบบนเครื่องจริง) ไฟล์มี agent key; ฝั่ง Linux ตั้ง `chmod 700` แล้ว
 - **แนวทางแก้:** `icacls "$dir" /inheritance:r /grant:r "SYSTEM:(OI)(CI)F" "Administrators:(OI)(CI)F"`
 
@@ -198,14 +201,14 @@
 | รหัส | สถานะ | เรื่อง | ไฟล์ | แนวทางแก้ |
 |---|---|---|---|---|
 | SEC-24 | ☐ | เทียบลายเซ็นตอนลงทะเบียนด้วย `!==` | `lib/auth.ts` ~181 | ใช้ `crypto.timingSafeEqual` |
-| SEC-25 | ☐ | เทียบ `CRON_SECRET` ด้วย `===` | `app/api/cron/*/route.ts` ~10 | hash แล้ว `timingSafeEqual` |
+| SEC-25 | ☑ 13 ต.ค. 2569 (`lib/cron-auth.ts`) | เทียบ `CRON_SECRET` ด้วย `===` | `app/api/cron/*/route.ts` ~10 | hash แล้ว `timingSafeEqual` |
 | SEC-26 | ☐ | ถ้าไม่ตั้ง `THAID_CID_HASH_KEY` ใช้ key เดียวกับการเข้ารหัส CID | `lib/auth.ts` ~116–120 | บังคับให้ตั้ง key แยก |
 | SEC-27 | ☐ | บอกได้ว่า username มีอยู่ (ข้อความสมัคร และล็อกอินที่ตอบเร็วกว่าเมื่อไม่มีผู้ใช้) | `app/auth/actions.ts` ~227–228, ~295 | ข้อความกลาง ๆ และรัน hash หลอกเมื่อไม่พบผู้ใช้ |
 | SEC-28 | ☐ | เกณฑ์รหัสผ่านตอนเปลี่ยน/รีเซ็ต (8 ตัว) อ่อนกว่าตอนสมัคร (10 ตัว + ตัวอักษรและตัวเลข) และมีการ trim | `app/(main)/profile/actions.ts` ~58–62 | ใช้ฟังก์ชันตรวจรหัสผ่านเดียวกันทุกจุด |
 | SEC-29 | ☐ | เซสชันต่ออายุไปเรื่อย ๆ ไม่มีอายุสูงสุด | `lib/auth.ts` ~748–755 | จำกัดจาก `created_at` (เช่น 7 วันตาม `AUTH_SESSION_DAYS`) |
 | SEC-30 | ☐ | `/login?error=` แสดงข้อความใดก็ได้ (ใช้หลอก phishing ได้; ไม่ใช่ XSS) | `app/login/page.tsx` | รับเป็นรหัสข้อผิดพลาดแล้วแปลเป็นข้อความที่กำหนด |
 | SEC-31 | ☐ | ตรวจรูปที่อัปโหลดจาก MIME ที่ไคลเอนต์ส่ง | `app/(main)/assets/actions.ts` ~58–75 | ตรวจ magic bytes หรือแปลงรูปใหม่ด้วย `sharp` (ลบ EXIF/GPS ด้วย) |
-| SEC-32 | ☐ | ฟิลด์ตัวเลขใน payload Agent ไม่แปลงชนิดก่อน query | `lib/agent.ts` ~655–658 | `Number()` + ตรวจช่วง (รวมใน SEC-15) |
+| SEC-32 | ☑ 13 ต.ค. 2569 (`lib/agent-payload.ts`) | ฟิลด์ตัวเลขใน payload Agent ไม่แปลงชนิดก่อน query | `lib/agent.ts` ~655–658 | `Number()` + ตรวจช่วง (รวมใน SEC-15) |
 | SEC-33 | ☐ | การสร้าง/เพิกถอน/ผูก enrollment ของ Agent ไม่บันทึก audit log | `app/(main)/admin/settings/agent/actions.ts`, `app/(main)/agent-download/actions.ts` | เรียก `writeAuditLog` |
 | SEC-34 | ☐ | ใน container ผู้ใช้ `nextjs` เป็นเจ้าของโค้ดแอป (ถูกเจาะแล้วแก้โค้ดค้างไว้ได้) | `Dockerfile` | ให้ root เป็นเจ้าของโค้ด เขียนได้เฉพาะ `/app/storage` |
 | SEC-35 | ☐ | Caddy ค่าเริ่มต้น `SITE_ADDRESS=:80` (HTTP) | `docker-compose.yml`, `docker/env.example` | ใช้โดเมน + HTTPS เป็นค่าหลัก ระบุชัดว่า `:80` สำหรับทดสอบภายในเท่านั้น |

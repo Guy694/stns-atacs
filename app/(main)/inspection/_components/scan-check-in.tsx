@@ -15,6 +15,7 @@ import {
   type QueuedResult,
   type SyncOutcome,
 } from "@/lib/offline-inspection";
+import { confirmAction } from "@/app/_components/ui/confirm";
 
 type Item = { itemId: number; assetId: number; number: string; name: string; status: "Pending" | "Found" | "Missing"; currentStatus: string };
 type WorkGroup = { id: number; workGroupName: string };
@@ -85,7 +86,7 @@ export function ScanCheckIn({ inspectionId, items, workGroups }: { inspectionId:
     try {
       for (let start = 0; start < pending.length; start += OFFLINE_BATCH_LIMIT) {
         const batch = pending.slice(start, start + OFFLINE_BATCH_LIMIT);
-        const response = await fetch(withBasePath(`/api/inspection/${inspectionId}/results`), {
+        const response = await fetch(withBasePath(`/api/inspection/${inspectionId}/results/`), {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ results: batch }),
@@ -169,6 +170,13 @@ export function ScanCheckIn({ inspectionId, items, workGroups }: { inspectionId:
     if (navigator.onLine) void sync();
   }, [condition, foundGroup, inspectionId, sync]);
 
+  // The camera loop reads the latest values through a ref: depending on them directly restarted the
+  // camera (getUserMedia again, flicker, possibly a new permission prompt) after every synced scan.
+  const latest = useRef({ items, quick, record, router });
+  useEffect(() => {
+    latest.current = { items, quick, record, router };
+  }, [items, quick, record, router]);
+
   useEffect(() => {
     if (!scanning) return;
     let stream: MediaStream | null = null;
@@ -190,14 +198,15 @@ export function ScanCheckIn({ inspectionId, items, workGroups }: { inspectionId:
           // The same sticker stays in view for a while: ignore repeats for 3 seconds.
           if (id && !(lastScan.current.id === id && now - lastScan.current.at < 3000)) {
             lastScan.current = { id, at: now };
-            const item = items.find((entry) => entry.assetId === id);
+            const current = latest.current;
+            const item = current.items.find((entry) => entry.assetId === id);
             if (!item) {
               setMessage("ครุภัณฑ์นี้ไม่อยู่ในรอบตรวจนับนี้");
-            } else if (quick) {
-              record(item);
+            } else if (current.quick) {
+              current.record(item);
             } else {
               setScanning(false);
-              router.push(`/assets/${id}#check-in-heading`);
+              current.router.push(`/assets/${id}#check-in-heading`);
               return;
             }
           }
@@ -205,7 +214,7 @@ export function ScanCheckIn({ inspectionId, items, workGroups }: { inspectionId:
         };
         tick();
       } catch {
-        setMessage(quick ? "เปิดกล้องไม่ได้ ค้นหาจากเลขครุภัณฑ์แล้วกด “พบ” แทนได้" : "เปิดกล้องไม่ได้ ใช้แอปกล้องของโทรศัพท์สแกน QR แทนได้");
+        setMessage(latest.current.quick ? "เปิดกล้องไม่ได้ ค้นหาจากเลขครุภัณฑ์แล้วกด “พบ” แทนได้" : "เปิดกล้องไม่ได้ ใช้แอปกล้องของโทรศัพท์สแกน QR แทนได้");
         setScanning(false);
       }
     })();
@@ -214,7 +223,7 @@ export function ScanCheckIn({ inspectionId, items, workGroups }: { inspectionId:
       if (timer) window.clearTimeout(timer);
       stream?.getTracks().forEach((track) => track.stop());
     };
-  }, [items, quick, record, router, scanning]);
+  }, [scanning]);
 
   const queuedIds = new Set(queue.map((entry) => entry.itemId));
   const q = query.trim().toLowerCase();
@@ -252,7 +261,16 @@ export function ScanCheckIn({ inspectionId, items, workGroups }: { inspectionId:
             </button>
           )}
           {blocked && queue.length > 0 && (
-            <button type="button" onClick={() => { writeQueue(inspectionId, []); setQueue([]); setBlocked(false); setMessage("ล้างรายการที่รอส่งแล้ว"); }}
+            <button type="button" onClick={async () => {
+              const confirmed = await confirmAction({
+                title: `ล้างรายการที่รอส่ง ${queue.length.toLocaleString("th-TH")} รายการ?`,
+                text: "ผลสแกนที่ยังไม่ได้ส่งเข้าระบบจะหายไป ต้องสแกนใหม่",
+                confirmText: "ล้างรายการ",
+                danger: true,
+              });
+              if (!confirmed) return;
+              writeQueue(inspectionId, []); setQueue([]); setBlocked(false); setMessage("ล้างรายการที่รอส่งแล้ว");
+            }}
               className="min-h-9 rounded-lg border border-red-200 bg-white px-3 font-semibold text-red-700">
               ล้างรายการที่รอส่ง
             </button>

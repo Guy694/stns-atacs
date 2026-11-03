@@ -10,6 +10,7 @@ import { updateAsset } from "@/lib/assets";
 import { RETURN_CONDITION_LABELS, validateLoanInput, validateReturn, type LoanInput, type LoanStatus, type ReturnCondition } from "@/lib/loan-options";
 import { executeStatement, selectRows, withTransaction } from "@/lib/mysql";
 import { isMissingSchemaError } from "@/lib/schema-errors";
+import { todayBangkok, dbDate } from "@/lib/local-date";
 
 export type AssetLoan = {
   id: number;
@@ -39,7 +40,7 @@ type LoanRow = RowDataPacket & {
   return_condition: ReturnCondition | null; return_note: string | null; created_by: string | null; returned_by: string | null;
 };
 
-const day = (value: Date | string | null) => (value ? (value instanceof Date ? value.toISOString() : String(value)).slice(0, 10) : "");
+const day = (value: Date | string | null) => (value ? dbDate(value) : "");
 
 function toLoan(row: LoanRow): AssetLoan {
   return {
@@ -124,7 +125,7 @@ export async function returnLoan(input: ReturnLoanInput) {
     const note = `[รับคืน] #${loan.id} จาก ${loan.borrower_name} วันที่ ${input.returnedOn} สภาพ${RETURN_CONDITION_LABELS[condition]}${input.note?.trim() ? ` — ${input.note.trim()}` : ""}`;
     const toStatus = condition === "Damaged" && !isTerminalAssetStatus(asset?.current_status) ? "Broken" : asset?.current_status ?? "Active";
     if (toStatus !== asset?.current_status) {
-      await updateAsset(loan.asset_id, { currentStatus: toStatus, updatedBy: input.userName, lastUpdatedAt: new Date().toISOString().slice(0, 10) });
+      await updateAsset(loan.asset_id, { currentStatus: toStatus, updatedBy: input.userName, lastUpdatedAt: todayBangkok() });
     }
     await insertAssetStatusHistory({ assetId: loan.asset_id, fromStatus: asset?.current_status ?? null, toStatus, note, changedByUserId: input.userId, changedBy: input.userName });
     return { assetId: loan.asset_id, facilityId: Number(loan.facility_id), note, markedBroken: toStatus === "Broken" && asset?.current_status !== "Broken" };

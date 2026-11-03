@@ -2,6 +2,7 @@ import type { AssetRecord, FacilitySurvey } from "@/app/atacs-data";
 import { dashboardCategoryId, DEPRECIATION_CATEGORIES } from "@/lib/asset-depreciation";
 import { fiscalYearOf } from "@/lib/asset-valuation";
 import { overviewStatus, type OverviewStatus } from "@/lib/dashboard-overview";
+import { todayBangkok } from "@/lib/local-date";
 
 /** Status order and colours: the fixed status palette, always shown with a text label. */
 export const DASHBOARD_STATUSES: Array<{ value: OverviewStatus; label: string; color: string }> = [
@@ -41,7 +42,7 @@ export type FacilityBreakdown = { id: number; name: string; total: number; cost:
 export type DistrictRow = { district: string; facilities: number; total: number; cost: number; statuses: StatusCounts; facilityRows: FacilityBreakdown[] };
 
 /** Input surveys must already be limited to what the user may see. */
-export function buildDashboardSummary(scopedSurveys: FacilitySurvey[], filters: DashboardFilters, today = new Date().toISOString().slice(0, 10)) {
+export function buildDashboardSummary(scopedSurveys: FacilitySurvey[], filters: DashboardFilters, today = todayBangkok()) {
   const districtOptions = [...new Set(scopedSurveys.map(survey => survey.districtName).filter(Boolean))].sort((a, b) => a.localeCompare(b, "th"));
   const district = districtOptions.includes(filters.district) ? filters.district : "";
   const facilityOptions = scopedSurveys

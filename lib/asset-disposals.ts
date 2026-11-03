@@ -18,6 +18,7 @@ import type { LifecycleList } from "@/lib/asset-transfers";
 import { formatAssetNumber } from "@/lib/asset-number";
 import { fiscalYearRange } from "@/lib/asset-valuation";
 import type { DisposalReportRow } from "@/lib/disposal-report";
+import { todayBangkok, dbDate, dbDateTime } from "@/lib/local-date";
 
 export type DisposalRequest = {
   id: number;
@@ -65,8 +66,8 @@ type RequestRow = RowDataPacket & {
   executed_by?: string | null;
 };
 
-const dateOnly = (value: Date | string | null) => (value ? (value instanceof Date ? value.toISOString() : String(value)).slice(0, 10) : "");
-const dateTime = (value: Date | string | null) => (value ? (value instanceof Date ? value.toISOString() : String(value)).slice(0, 19).replace("T", " ") : "");
+const dateOnly = (value: Date | string | null) => (value ? dbDate(value) : "");
+const dateTime = (value: Date | string | null) => (value ? dbDateTime(value) : "");
 const money = (value: string | number | null) => (value === null || value === undefined ? null : Number(value));
 
 function toRequest(row: RequestRow): DisposalRequest {
@@ -123,7 +124,7 @@ export type CreateDisposalInput = {
 export async function createDisposalRequest(input: CreateDisposalInput) {
   if (!["Disposed", "Lost"].includes(input.requestType)) throw new Error("ประเภทคำขอไม่ถูกต้อง");
   if (!input.reason.trim()) throw new Error("กรุณาระบุเหตุผล");
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.eventDate) || input.eventDate > new Date().toISOString().slice(0, 10)) throw new Error("วันที่ไม่ถูกต้องหรือเกินวันที่ปัจจุบัน");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.eventDate) || input.eventDate > todayBangkok()) throw new Error("วันที่ไม่ถูกต้องหรือเกินวันที่ปัจจุบัน");
   let method = input.disposalMethod || null;
   if (input.requestType === "Disposed") {
     if (!method || !isDisposalMethod(method)) throw new Error("กรุณาเลือกวิธีการจำหน่าย");
@@ -220,14 +221,21 @@ export async function decideDisposalRequest(input: DecideDisposalInput) {
 
     const typeLabel = DISPOSAL_REQUEST_TYPE_LABELS[request.request_type];
     if (input.decision === "Approved") {
-      await updateAsset(request.asset_id, { currentStatus: request.request_type, updatedBy: input.userName, lastUpdatedAt: new Date().toISOString().slice(0, 10) });
+      await updateAsset(request.asset_id, { currentStatus: request.request_type, updatedBy: input.userName, lastUpdatedAt: todayBangkok() });
       // A disposed/lost asset cannot stay in an open repair queue.
       await executeStatement(
         `INSERT INTO asset_repair_logs (repair_id, from_status, to_status, note, changed_by_user_id, changed_by)
          SELECT id, status, 'Cancelled', ?, ?, ? FROM asset_repairs WHERE asset_id = ? AND status IN ('Reported','InProgress','SentToVendor')`,
         [`ยกเลิกอัตโนมัติ: อนุมัติ${typeLabel} คำขอ #${request.id}`, input.userId, input.userName, request.asset_id]
       );
-      await executeStatement("UPDATE asset_repairs SET status = 'Cancelled', updated_by = ? WHERE asset_id = ? AND status IN ('Reported','InProgress','SentToVendor')", [input.userName, request.asset_id]);
+      await executeStatement("UPDATE asset_repairs SET status = 'Cancelled', completed_at = NOW(), updated_by = ? WHERE asset_id = ? AND status IN ('Reported','InProgress','SentToVendor')", [input.userName, request.asset_id]);
+      // …and an item that left the register cannot stay "on loan" (it would show as overdue forever).
+      await executeStatement(
+        "UPDATE asset_loans SET status = 'Cancelled', returned_by_user_id = ?, returned_by = ?, returned_recorded_at = NOW(), return_note = ? WHERE asset_id = ? AND status = 'OnLoan'",
+        [input.userId, input.userName, `ปิดอัตโนมัติ: อนุมัติ${typeLabel} คำขอ #${request.id}`, request.asset_id]
+      ).catch((error) => {
+        if (!isMissingSchemaError(error)) throw error; // loans table not migrated yet
+      });
     }
     const note = `[${input.decision === "Approved" ? "อนุมัติ" : "ไม่อนุมัติ"}${typeLabel}] คำขอ #${request.id}${input.approvalDocumentNo ? ` หนังสือ ${input.approvalDocumentNo}` : ""}${input.note ? ` — ${input.note.trim()}` : ""}`;
     await insertAssetStatusHistory({
@@ -257,7 +265,7 @@ export type RecordExecutionInput = {
  * date, receipt/evidence number and money received. Can be corrected later; the history keeps each change.
  */
 export async function recordDisposalExecution(input: RecordExecutionInput) {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayBangkok();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(input.executedOn) || input.executedOn > today) throw new Error("วันที่ดำเนินการไม่ถูกต้องหรือเกินวันที่ปัจจุบัน");
   if (input.proceedsAmount != null && (!Number.isFinite(input.proceedsAmount) || input.proceedsAmount < 0)) throw new Error("จำนวนเงินที่ได้รับต้องไม่ติดลบ");
   await ensureAssetStatusHistoryTable();

@@ -1,9 +1,10 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useId } from "react";
 import { changePasswordAction } from "@/app/(main)/profile/actions";
 
 export function ChangePasswordForm() {
+  const fieldId = useId();
   const [error, formAction, pending] = useActionState(changePasswordAction, null);
 
   return (
@@ -16,8 +17,8 @@ export function ChangePasswordForm() {
 
       <form action={formAction} className="mt-4 space-y-4">
         <div>
-          <label className="block text-sm font-medium">รหัสผ่านปัจจุบัน</label>
-          <input
+          <label htmlFor={`${fieldId}-currentPassword`} className="block text-sm font-medium">รหัสผ่านปัจจุบัน</label>
+          <input id={`${fieldId}-currentPassword`}
             name="currentPassword"
             type="password"
             required
@@ -25,8 +26,8 @@ export function ChangePasswordForm() {
           />
         </div>
         <div>
-          <label className="block text-sm font-medium">รหัสผ่านใหม่ (≥ 8 ตัวอักษร)</label>
-          <input
+          <label htmlFor={`${fieldId}-newPassword`} className="block text-sm font-medium">รหัสผ่านใหม่ (≥ 8 ตัวอักษร)</label>
+          <input id={`${fieldId}-newPassword`}
             name="newPassword"
             type="password"
             required
@@ -35,8 +36,8 @@ export function ChangePasswordForm() {
           />
         </div>
         <div>
-          <label className="block text-sm font-medium">ยืนยันรหัสผ่านใหม่</label>
-          <input
+          <label htmlFor={`${fieldId}-confirmPassword`} className="block text-sm font-medium">ยืนยันรหัสผ่านใหม่</label>
+          <input id={`${fieldId}-confirmPassword`}
             name="confirmPassword"
             type="password"
             required

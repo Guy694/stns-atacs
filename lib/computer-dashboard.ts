@@ -1,5 +1,6 @@
 import { isItAsset } from "@/lib/asset-policy";
 import { isComputerDeviceType } from "@/lib/windows-license";
+import { todayBangkok } from "@/lib/local-date";
 
 /**
  * สรุปข้อมูลหน้า "ภาพรวมครุภัณฑ์คอมพิวเตอร์" (/dashboard/it)
@@ -69,7 +70,7 @@ export function ageBucket(start: string | null | undefined, today: string) {
   return AGE_BUCKETS[3];
 }
 
-export function summarizeComputerDashboard(assets: ComputerDashboardAsset[], today = new Date().toISOString().slice(0, 10)) {
+export function summarizeComputerDashboard(assets: ComputerDashboardAsset[], today = todayBangkok()) {
   const it = assets.filter((asset) => isItAsset(asset));
   const hardware = it.filter((asset) => asset.assetGroup === "Hardware");
   const software = it.filter((asset) => asset.assetGroup === "Software");

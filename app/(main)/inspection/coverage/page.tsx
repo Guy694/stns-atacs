@@ -11,6 +11,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { getInspectionProgress, listUncoveredAssets } from "@/lib/dashboard-work";
 import { getAssetFacilityScopeIds } from "@/lib/facility-scope";
 import { hasPermission } from "@/lib/role-permissions";
+import { todayBangkok } from "@/lib/local-date";
 
 type Props = { searchParams: Promise<Record<string, string | string[] | undefined>> };
 
@@ -28,7 +29,7 @@ export default async function InspectionCoveragePage({ searchParams }: Props) {
   if (scopeIds === null) redirect("/profile");
 
   const params = await searchParams;
-  const currentYear = fiscalYearOf(new Date().toISOString().slice(0, 10));
+  const currentYear = fiscalYearOf(todayBangkok());
   const yearOptions = Array.from({ length: 5 }, (_, index) => currentYear - index);
   const fyParam = Number(read(params, "fy"));
   const fiscalYear = yearOptions.includes(fyParam) ? fyParam : currentYear;

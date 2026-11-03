@@ -19,6 +19,7 @@ import { assetImageDir, assetImageUrl } from "@/lib/upload-storage";
 import { selectRows } from "@/lib/mysql";
 import { canManageAssetRecord, canMutateAssets } from "@/lib/permissions";
 import { hasPermission, type AppRole } from "@/lib/role-permissions";
+import { todayBangkok } from "@/lib/local-date";
 
 async function requireAuth() {
   const user = await getCurrentUser();
@@ -107,7 +108,7 @@ async function validateAssetBusinessRules(input: AssetFormInput, assetId?: numbe
     }
   }
 
-  const today = parseDateOnly(new Date().toISOString().slice(0, 10));
+  const today = parseDateOnly(todayBangkok());
   const purchaseDate = parseDateOnly(input.purchaseDate);
   if (purchaseDate && today && purchaseDate.getTime() > today.getTime()) {
     throw new Error("วันที่ซื้อห้ามเกินวันที่ปัจจุบัน");
@@ -209,7 +210,7 @@ async function buildInput(
     }
   }
   const surveyId = currentAsset?.facilityId === facilityId ? currentAsset.surveyId : await findOrCreateSurvey(facilityId);
-  return { ...parsed, surveyId, workGroupId, facilityId, updatedBy: updaterName, lastUpdatedAt: new Date().toISOString().slice(0, 10) };
+  return { ...parsed, surveyId, workGroupId, facilityId, updatedBy: updaterName, lastUpdatedAt: todayBangkok() };
 }
 
 export async function createAssetAction(_prev: string | null, fd: FormData): Promise<string | null> {

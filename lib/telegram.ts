@@ -2,6 +2,7 @@ import "server-only";
 
 import { formatThaiDateTime } from "@/lib/date-format";
 import { executeStatement } from "@/lib/mysql";
+import { consumeRateLimit } from "@/lib/rate-limit";
 
 export type TelegramAlertCategory = "security" | "registration" | "data" | "agent" | "lifecycle" | "error";
 
@@ -10,6 +11,8 @@ type TelegramAlertInput = {
   title: string;
   details?: Record<string, string | number | boolean | null | undefined>;
   eventKey?: string;
+  /** false only for alerts an anonymous caller cannot trigger (e.g. a successful login). */
+  throttle?: boolean;
 };
 
 const CATEGORY_META: Record<TelegramAlertCategory, { icon: string; label: string; level: string }> = {
@@ -73,8 +76,23 @@ async function releaseEvent(eventKey: string) {
   await executeStatement("DELETE FROM telegram_alert_events WHERE event_key = ?", [eventKey]);
 }
 
+// Alerts without an eventKey (failed agent keys, OAuth failures, …) can be triggered by anyone on the
+// internet. Cap them per title + source IP, and per title overall, so a flood cannot spam the chat.
+const UNKEYED_WINDOW_MS = 10 * 60 * 1000;
+const UNKEYED_PER_SOURCE = 5;
+const UNKEYED_PER_TITLE = 30;
+
+function unkeyedAlertAllowed(input: TelegramAlertInput) {
+  if (input.eventKey || input.throttle === false) return true;
+  const source = String(input.details?.IP ?? input.details?.ip ?? "");
+  const perSource = consumeRateLimit(`telegram:${input.category}:${input.title}:${source}`, UNKEYED_PER_SOURCE, UNKEYED_WINDOW_MS);
+  if (!perSource.allowed) return false;
+  return consumeRateLimit(`telegram:${input.category}:${input.title}`, UNKEYED_PER_TITLE, UNKEYED_WINDOW_MS).allowed;
+}
+
 export async function sendTelegramAlert(input: TelegramAlertInput) {
   if (!isCategoryEnabled(input.category)) return { sent: false, reason: "disabled" };
+  if (!unkeyedAlertAllowed(input)) return { sent: false, reason: "throttled" };
 
   const botToken = process.env.TELEGRAM_BOT_TOKEN?.trim();
   const chatId = process.env.TELEGRAM_CHAT_ID?.trim();

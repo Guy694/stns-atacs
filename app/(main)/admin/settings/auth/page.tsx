@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { updateThaiDLoginToggleAction } from "@/app/(main)/admin/settings/auth/actions";
 import { getCurrentUser } from "@/lib/auth";
 import { getThaiIdStatus } from "@/lib/thaiid";
+import { SubmitButton } from "@/app/_components/ui/submit-button";
 
 type AuthSettingsPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -54,14 +55,13 @@ export default async function AuthSettingsPage({ searchParams }: AuthSettingsPag
 
           <form action={updateThaiDLoginToggleAction} className="flex items-center gap-2">
             <input type="hidden" name="enabled" value={thaiIdStatus.enabled ? "false" : "true"} />
-            <button
-              type="submit"
+            <SubmitButton pendingText="กำลังบันทึก…"
               className={`rounded-xl px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90 ${
                 thaiIdStatus.enabled ? "bg-rose-600" : "bg-emerald-600"
               }`}
             >
               {thaiIdStatus.enabled ? "ปิด ThaiD Login" : "เปิด ThaiD Login"}
-            </button>
+            </SubmitButton>
           </form>
         </div>
       </section>

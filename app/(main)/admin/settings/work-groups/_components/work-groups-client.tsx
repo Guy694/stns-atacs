@@ -3,11 +3,13 @@
 import { useActionState, useId, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
+import { SortableTh, TablePagination } from "@/app/_components/ui/data-table";
 import { StatusBadge, activeTone } from "@/app/_components/ui/status-badge";
 import {
   createFacilityWorkGroupAction,
   toggleFacilityWorkGroupActiveAction,
 } from "@/app/(main)/admin/settings/work-groups/actions";
+import { useTableState } from "@/app/_components/ui/use-table-state";
 import type {
   FacilityWorkGroupManageRow,
   WorkGroupFacilityOption,
@@ -189,6 +191,11 @@ function WorkGroupRow({ workGroup, seq }: { workGroup: FacilityWorkGroupManageRo
 export function WorkGroupsClient({ facilities, workGroups }: WorkGroupsClientProps) {
   const [createOpen, setCreateOpen] = useState(false);
   const activeCount = workGroups.filter((group) => group.isActive).length;
+  const t = useTableState(workGroups, {
+    name: (group) => group.workGroupName,
+    facility: (group) => group.facilityName,
+    status: (group) => (group.isActive ? 0 : 1),
+  });
 
   return (
     <>
@@ -230,15 +237,15 @@ export function WorkGroupsClient({ facilities, workGroups }: WorkGroupsClientPro
             <thead>
               <tr className="border-b border-black/6 bg-stone-50/60 text-xs text-[var(--muted)]">
                 <th className="w-14 px-4 py-3 text-right font-medium">ลำดับ</th>
-                <th className="px-4 py-3 text-left font-medium">กลุ่มงาน</th>
-                <th className="px-4 py-3 text-left font-medium">หน่วยงาน</th>
-                <th className="px-4 py-3 text-left font-medium">สถานะ</th>
+                <SortableTh label="กลุ่มงาน" sortKey="name" sort={t.sort} onSort={t.onSort} className="px-4 py-3 font-medium" />
+                <SortableTh label="หน่วยงาน" sortKey="facility" sort={t.sort} onSort={t.onSort} className="px-4 py-3 font-medium" />
+                <SortableTh label="สถานะ" sortKey="status" sort={t.sort} onSort={t.onSort} className="px-4 py-3 font-medium" />
                 <th className="px-4 py-3 text-right font-medium">จัดการ</th>
               </tr>
             </thead>
             <tbody>
-              {workGroups.map((workGroup, rowIndex) => (
-                <WorkGroupRow key={workGroup.id} workGroup={workGroup} seq={rowIndex + 1} />
+              {t.rows.map((workGroup, rowIndex) => (
+                <WorkGroupRow key={workGroup.id} workGroup={workGroup} seq={t.start + rowIndex} />
               ))}
               {workGroups.length === 0 ? (
                 <tr>
@@ -250,6 +257,7 @@ export function WorkGroupsClient({ facilities, workGroups }: WorkGroupsClientPro
             </tbody>
           </table>
         </div>
+        <TablePagination {...t} onPage={t.onPage} label="แบ่งหน้ากลุ่มงาน" className="border-t border-black/6" />
       </section>
 
       {createOpen ? <WorkGroupModal facilities={facilities} onClose={() => setCreateOpen(false)} /> : null}

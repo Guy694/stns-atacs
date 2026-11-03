@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { reportAgentInventory, type AgentReportPayload } from "@/lib/agent";
 import { announcedApiBaseUrl } from "@/lib/agent-api-base";
+import { AGENT_REPORT_MAX_BYTES } from "@/lib/agent-payload";
 import { notifyTelegramSafe } from "@/lib/telegram";
 import { readRequestIp, recordSecurityEvent } from "@/lib/security";
 
@@ -24,14 +25,23 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Missing x-agent-id or x-agent-key" }, { status: 401 });
   }
 
+  // SEC-15: จำกัดขนาด body ก่อนแปลง JSON (รายงานปกติไม่เกินไม่กี่สิบ KB)
+  const declaredLength = Number(req.headers.get("content-length") ?? 0);
+  if (declaredLength > AGENT_REPORT_MAX_BYTES) {
+    return NextResponse.json({ error: "Payload too large" }, { status: 413 });
+  }
   let payload: AgentReportPayload;
   try {
-    payload = (await req.json()) as AgentReportPayload;
+    const text = await req.text();
+    if (Buffer.byteLength(text, "utf8") > AGENT_REPORT_MAX_BYTES) {
+      return NextResponse.json({ error: "Payload too large" }, { status: 413 });
+    }
+    payload = JSON.parse(text) as AgentReportPayload;
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  if (!payload.fingerprint?.trim()) {
+  if (typeof payload !== "object" || payload === null || typeof payload.fingerprint !== "string" || !payload.fingerprint.trim()) {
     return NextResponse.json({ error: "fingerprint is required" }, { status: 400 });
   }
 

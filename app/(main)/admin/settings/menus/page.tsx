@@ -2,15 +2,20 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { updateMenuVisibilityAction } from "@/app/(main)/admin/settings/menus/actions";
+import { SortableTh } from "@/app/_components/ui/data-table";
 import { AppIcon } from "@/app/_components/ui/icon";
 import { StatusBadge } from "@/app/_components/ui/status-badge";
 import { getMenuVisibility } from "@/lib/app-settings";
 import { getCurrentUser } from "@/lib/auth";
 import { APP_MENU_GROUPS, APP_MENU_ITEMS } from "@/lib/menu";
+import { readSort, sortHref, sortRows } from "@/lib/table-sort";
 
 type MenuSettingsPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
+
+const MENU_PATH = "/admin/settings/menus";
+const MENU_SORT_KEYS = ["menu", "group", "permission", "status"] as const;
 
 function readQueryValue(value: string | string[] | undefined) {
   if (!value) return "";
@@ -24,6 +29,20 @@ export default async function MenuSettingsPage({ searchParams }: MenuSettingsPag
 
   const [params, menuVisibility] = await Promise.all([searchParams, getMenuVisibility()]);
   const notice = readQueryValue(params.notice);
+
+  // Short fixed list (APP_MENU_ITEMS) → sorting only, no pagination. Sort links drop the one-off notice.
+  const sort = readSort(params, MENU_SORT_KEYS);
+  const linkParams = { ...params, notice: undefined };
+  const groupRank = (key: string) => APP_MENU_GROUPS.findIndex((entry) => entry.key === key);
+  const menuItems = sortRows(APP_MENU_ITEMS, sort, {
+    menu: (item) => item.label,
+    group: (item) => groupRank(item.group),
+    permission: (item) => item.permissionKey ?? null,
+    status: (item) => (menuVisibility[item.key] ? 0 : 1),
+  });
+  const th = (key: (typeof MENU_SORT_KEYS)[number], label: string) => (
+    <SortableTh label={label} sortKey={key} sort={sort} href={sortHref(MENU_PATH, linkParams, key, sort)} className="px-5 py-3 font-medium" />
+  );
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6">
@@ -61,15 +80,15 @@ export default async function MenuSettingsPage({ searchParams }: MenuSettingsPag
           <table className="min-w-[820px] w-full text-left text-sm">
             <thead className="border-b border-black/8 bg-[var(--neutral-bg)] text-xs text-[var(--muted)]">
               <tr>
-                <th className="px-5 py-3 font-medium">เมนู</th>
-                <th className="px-5 py-3 font-medium">กลุ่ม</th>
-                <th className="px-5 py-3 font-medium">สิทธิ์ที่เกี่ยวข้อง</th>
-                <th className="px-5 py-3 font-medium">สถานะ</th>
+                {th("menu", "เมนู")}
+                {th("group", "กลุ่ม")}
+                {th("permission", "สิทธิ์ที่เกี่ยวข้อง")}
+                {th("status", "สถานะ")}
                 <th className="px-5 py-3 text-right font-medium">เปิดใช้งาน</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-black/6 bg-white/70">
-              {APP_MENU_ITEMS.map((item) => {
+              {menuItems.map((item) => {
                 const group = APP_MENU_GROUPS.find((entry) => entry.key === item.group);
                 const enabled = menuVisibility[item.key];
 

@@ -4,6 +4,7 @@ import type { RowDataPacket } from "mysql2/promise";
 
 import { executeStatement, selectRows } from "@/lib/mysql";
 import { notifyTelegramSafe } from "@/lib/telegram";
+import { dbDateTime } from "@/lib/local-date";
 
 export type AuditAction = "create" | "update" | "delete" | "transfer" | "dispose" | "inspect";
 
@@ -18,7 +19,25 @@ export type AuditLogFilter = {
   entityId?: number;
   actor?: string;
   search?: string;
+  /** Column-header sort; unknown keys keep the default newest-first order. */
+  orderBy?: { key: string; dir: "asc" | "desc" };
 };
+
+const AUDIT_SORT_COLUMNS: Record<string, string> = {
+  time: "created_at",
+  user: "user_name",
+  action: "action",
+  entity: "entity",
+  summary: "summary",
+};
+export const AUDIT_SORT_KEYS = Object.keys(AUDIT_SORT_COLUMNS);
+
+function auditOrderBy(orderBy: AuditLogFilter["orderBy"]) {
+  const column = orderBy ? AUDIT_SORT_COLUMNS[orderBy.key] : undefined;
+  if (!orderBy || !column) return "created_at DESC, id DESC";
+  const dir = orderBy.dir === "asc" ? "ASC" : "DESC";
+  return `${column} ${dir}, id ${dir}`;
+}
 
 export type AuditLog = {
   id: number;
@@ -175,7 +194,7 @@ export async function listAuditLogs(limitOrFilter: number | AuditLogFilter = 100
     `SELECT id, user_id, user_name, action, entity, entity_id, summary, created_at
      FROM audit_logs
      ${where}
-     ORDER BY created_at DESC, id DESC
+     ORDER BY ${auditOrderBy(filter.orderBy)}
      LIMIT ? OFFSET ?`,
     [...values, limit, offset]
   );
@@ -187,9 +206,6 @@ export async function listAuditLogs(limitOrFilter: number | AuditLogFilter = 100
     entity: r.entity,
     entityId: r.entity_id,
     summary: r.summary ?? "",
-    createdAt: (r.created_at instanceof Date
-      ? r.created_at.toISOString()
-      : String(r.created_at)
-    ).slice(0, 19).replace("T", " "),
+    createdAt: dbDateTime(r.created_at),
   }));
 }

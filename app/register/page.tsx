@@ -4,6 +4,7 @@ import { TopNavigation } from "@/app/_components/top-navigation";
 import { registerFirstTimeAction } from "@/app/auth/actions";
 import { listAllFacilitiesForSelect } from "@/lib/assets";
 import { getCurrentUser, getPendingRegistrationClaim } from "@/lib/auth";
+import { SubmitButton } from "@/app/_components/ui/submit-button";
 
 type RegisterPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -182,12 +183,11 @@ export default async function RegisterPage({ searchParams }: RegisterPageProps) 
             <p className="text-xs text-[var(--muted)]">ผู้ดูแลระบบจะอนุมัติการเข้าใช้งานหลังจากสมัครสมาชิก</p>
           </div>
 
-          <button
-            type="submit"
+          <SubmitButton pendingText="กำลังส่งข้อมูล…"
             className="w-full rounded-2xl bg-[var(--accent-strong)] px-4 py-3 text-sm font-semibold text-white transition hover:opacity-90"
           >
             สมัครสมาชิก — รอการอนุมัติ
-          </button>
+          </SubmitButton>
         </form>
       </section>
     </main>

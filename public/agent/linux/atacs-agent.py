@@ -8,6 +8,8 @@ payload to the ATACS backend using the same API contract as the Windows agent.
 from __future__ import annotations
 
 import argparse
+import re
+import time
 import getpass
 import hashlib
 import json
@@ -23,7 +25,7 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
-AGENT_VERSION = "1.1.0"
+AGENT_VERSION = "2.0.0"
 DEFAULT_CONFIG_PATH = "/var/lib/atacs-agent/agent-config.json"
 
 
@@ -108,8 +110,25 @@ def get_bios_uuid() -> str | None:
     return read_text_file("/sys/class/dmi/id/product_uuid")
 
 
+JUNK_SERIAL = re.compile(
+    r"^(to be filled.*|default string|system serial number|chassis serial number|base ?board serial number|serial ?number|"
+    r"not specified|not applicable|not available|none|null|n/?a|unknown|invalid|o\.?e\.?m\.?|oem|123456789|1234567890|"
+    r"0123456789|[0x.\- _]+|f{8,}|[*#?]+)$",
+    re.IGNORECASE,
+)
+
+
+def clean_serial(value: str | None) -> str | None:
+    text = normalize(value)
+    if not text or len(text) < 3 or JUNK_SERIAL.match(text):
+        return None
+    return text
+
+
 def get_bios_serial() -> str | None:
-    return read_text_file("/sys/class/dmi/id/product_serial") or read_text_file("/sys/class/dmi/id/board_serial")
+    return clean_serial(read_text_file("/sys/class/dmi/id/product_serial")) or clean_serial(
+        read_text_file("/sys/class/dmi/id/board_serial")
+    )
 
 
 def get_primary_mac() -> str | None:
@@ -198,12 +217,19 @@ def get_device_type() -> str:
 
 
 def get_current_user() -> str | None:
+    # Agent รันเป็น root ผ่าน systemd: ผู้ใช้ที่ต้องการคือคนที่ล็อกอินอยู่ที่เครื่อง ไม่ใช่ root
+    output = run_command("who") or ""
+    for line in output.splitlines():
+        name = line.split()[0] if line.split() else ""
+        if name and name != "root":
+            return name
     for env_name in ("SUDO_USER", "LOGNAME", "USER", "USERNAME"):
         value = os.environ.get(env_name)
-        if value:
+        if value and value != "root":
             return value
     try:
-        return getpass.getuser()
+        name = getpass.getuser()
+        return None if name == "root" else name
     except Exception:
         return None
 
@@ -213,14 +239,131 @@ def get_hostname() -> str:
 
 
 def get_fingerprint() -> str:
-    components = [
-        get_machine_id(),
-        get_bios_uuid(),
-        get_bios_serial(),
-        get_primary_mac(),
-        get_hostname(),
-    ]
-    return sha256_hex("|".join(component or "" for component in components))
+    # ไม่ใช้ชื่อเครื่องและ MAC (เปลี่ยนได้ง่าย ทำให้เกิดเครื่องซ้ำในทะเบียน)
+    components = [get_machine_id(), get_bios_uuid(), get_bios_serial()]
+    if not any(components):
+        return sha256_hex(f"mac|{get_primary_mac() or ''}|{get_hostname()}")
+    return sha256_hex("v2|" + "|".join(component or "" for component in components))
+
+
+REAL_FILESYSTEMS = {"ext2", "ext3", "ext4", "xfs", "btrfs", "zfs", "f2fs", "jfs", "reiserfs", "ntfs", "ntfs3", "vfat", "exfat"}
+
+
+def get_volumes() -> list[dict[str, Any]]:
+    volumes: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for line in (read_text_file("/proc/mounts") or "").splitlines():
+        parts = line.split()
+        if len(parts) < 3 or parts[2] not in REAL_FILESYSTEMS or parts[0] in seen:
+            continue
+        mount = parts[1].replace("\\040", " ")
+        if mount.startswith(("/snap/", "/var/lib/docker", "/run/")):
+            continue
+        try:
+            stat = os.statvfs(mount)
+        except OSError:
+            continue
+        total = stat.f_blocks * stat.f_frsize
+        if total <= 0:
+            continue
+        seen.add(parts[0])
+        volumes.append({
+            "mount": mount,
+            "label": None,
+            "fileSystem": parts[2],
+            "totalGb": round(total / 1024**3, 2),
+            "freeGb": round(stat.f_bavail * stat.f_frsize / 1024**3, 2),
+            "isSystem": mount == "/",
+        })
+    return volumes[:26]
+
+
+def get_meminfo_mb(key: str) -> int | None:
+    for line in (read_text_file("/proc/meminfo") or "").splitlines():
+        if line.startswith(f"{key}:"):
+            try:
+                return round(int(line.split()[1]) / 1024)
+            except (IndexError, ValueError):
+                return None
+    return None
+
+
+def get_cpu_load_percent() -> int | None:
+    try:
+        load1 = os.getloadavg()[0]
+        return min(100, round(load1 / max(os.cpu_count() or 1, 1) * 100))
+    except OSError:
+        return None
+
+
+def get_last_boot_at() -> str | None:
+    uptime = read_text_file("/proc/uptime")
+    if not uptime:
+        return None
+    from datetime import datetime, timezone
+    boot = time.time() - float(uptime.split()[0])
+    return datetime.fromtimestamp(boot, timezone.utc).replace(microsecond=0).isoformat()
+
+
+def get_physical_disks() -> list[dict[str, Any]]:
+    output = run_command("lsblk", "-J", "-d", "-b", "-o", "NAME,MODEL,ROTA,SIZE,TYPE")
+    if not output:
+        return []
+    try:
+        devices = json.loads(output).get("blockdevices", [])
+    except json.JSONDecodeError:
+        return []
+    disks = []
+    has_smartctl = shutil.which("smartctl") is not None
+    for device in devices:
+        if device.get("type") != "disk":
+            continue
+        name = device.get("name")
+        health = None
+        if has_smartctl and name:
+            smart = run_command("smartctl", "-H", f"/dev/{name}") or ""
+            if "PASSED" in smart or ": OK" in smart:
+                health = "Healthy"
+            elif "FAILED" in smart:
+                health = "Unhealthy"
+        rota = str(device.get("rota")).lower()
+        disks.append({
+            "model": normalize(device.get("model")) or name,
+            "mediaType": "HDD" if rota in {"1", "true"} else "SSD",
+            "sizeGb": round(int(device.get("size") or 0) / 1024**3),
+            "healthStatus": health,
+            "predictFailure": True if health == "Unhealthy" else None,
+        })
+    return disks[:16]
+
+
+def get_battery_health_percent() -> int | None:
+    for battery in sorted(Path("/sys/class/power_supply").glob("BAT*")):
+        for full_name, design_name in (("energy_full", "energy_full_design"), ("charge_full", "charge_full_design")):
+            full = read_text_file(str(battery / full_name))
+            design = read_text_file(str(battery / design_name))
+            try:
+                if full and design and int(design) > 0:
+                    return round(int(full) / int(design) * 100)
+            except ValueError:
+                continue
+    return None
+
+
+def get_health() -> dict[str, Any]:
+    return {
+        "volumes": get_volumes(),
+        "memoryTotalMb": get_meminfo_mb("MemTotal"),
+        "memoryAvailableMb": get_meminfo_mb("MemAvailable"),
+        "cpuLoadPercent": get_cpu_load_percent(),
+        "lastBootAt": get_last_boot_at(),
+        "physicalDisks": get_physical_disks(),
+        "windowsActivation": None,
+        "antivirus": [],
+        "lastUpdateInstalledAt": None,
+        "pendingReboot": Path("/var/run/reboot-required").exists(),
+        "batteryHealthPercent": get_battery_health_percent(),
+    }
 
 
 def get_inventory_payload() -> dict[str, Any]:
@@ -240,8 +383,8 @@ def get_inventory_payload() -> dict[str, Any]:
         "serialNumber": serial_number,
         "biosSerial": bios_serial,
         "deviceType": get_device_type(),
-        "manufacturerBrand": None,
-        "manufacturerModel": None,
+        "manufacturerBrand": read_text_file("/sys/class/dmi/id/sys_vendor"),
+        "manufacturerModel": read_text_file("/sys/class/dmi/id/product_name"),
         "operatingSystem": os_name,
         "operatingSystemVersion": platform.release(),
         "privateIp": private_ip,
@@ -256,6 +399,7 @@ def get_inventory_payload() -> dict[str, Any]:
         "agentVersion": AGENT_VERSION,
         "status": "online",
         "collectedAt": time_iso(),
+        "health": get_health(),
     }
 
 

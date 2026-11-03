@@ -2,6 +2,7 @@ import { thaiDate } from "@/lib/inspection-sheet";
 import { sheetStyle as style } from "@/lib/inspection-sheet";
 import { DISPOSAL_REQUEST_TYPE_LABELS, disposalMethodLabel } from "@/lib/disposal-options";
 import { writeWorkbook, type Cell, type CellStyle } from "@/lib/xlsx-writer";
+import { todayBangkok } from "@/lib/local-date";
 
 /**
  * Printable disposal documents (Excel):
@@ -61,7 +62,7 @@ export function buildDisposalWorkbook(rows: DisposalReportRow[], meta: DisposalR
   const pending = meta.kind === "pending";
   full(pending ? "รายการพัสดุที่ขออนุมัติจำหน่าย" : `รายงานการจำหน่ายพัสดุ ประจำปีงบประมาณ ${meta.fiscalYear ?? ""}`.trim(), style.title, 24);
   full(meta.facilityName, style.subtitle, 20);
-  full(`ข้อมูล ณ ${thaiDate(new Date().toISOString().slice(0, 10))} · ${rows.length.toLocaleString("th-TH")} รายการ`, style.note);
+  full(`ข้อมูล ณ ${thaiDate(todayBangkok())} · ${rows.length.toLocaleString("th-TH")} รายการ`, style.note);
   sheet.push([]);
 
   const headers = pending

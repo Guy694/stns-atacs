@@ -57,7 +57,7 @@ export function FacilityAssetQrActions({ assets, facilityId, facilityName }: Fac
 
     setIsDownloading(true);
     try {
-      const response = await fetch(withBasePath("/api/qr/assets"), {
+      const response = await fetch(withBasePath("/api/qr/assets/"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

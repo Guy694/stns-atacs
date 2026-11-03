@@ -8,7 +8,9 @@ import { supportsAgentAsset } from "@/lib/asset-policy";
 import { isTerminalAssetStatus } from "@/lib/asset-status";
 import { createAsset, findOrCreateSurvey, updateAsset } from "@/lib/assets";
 import { findActiveFacilityWorkGroup, getActiveFacilityWorkGroupForFacility, getFacilityAgentContext, normalizeWorkGroupName } from "@/lib/facility-work-groups";
+import { cleanAgentReport, cleanFingerprint, cleanText, type CleanAgentReport } from "@/lib/agent-payload";
 import { executeStatement, selectRows } from "@/lib/mysql";
+import { dbDateTime, todayBangkok } from "@/lib/local-date";
 
 type EnrollmentRow = RowDataPacket & {
   id: number;
@@ -58,6 +60,8 @@ type DeviceRow = RowDataPacket & {
   last_seen_at: Date | string | null;
   last_reported_at: Date | string | null;
   raw_payload_json: string | null;
+  /** มีเมื่อรัน database/add_agent_health.sql แล้ว */
+  health_json?: string | null;
   linked_asset_registration_no: string | null;
   linked_asset_name: string | null;
 };
@@ -113,6 +117,8 @@ export type AgentDevice = {
   firstSeenAt: string;
   lastSeenAt: string | null;
   lastReportedAt: string | null;
+  /** ข้อมูลสุขภาพเครื่องจาก Agent 2.x (JSON ที่ผ่าน cleanAgentHealth แล้ว) */
+  healthJson: string | null;
 };
 
 export type OfflineAgentDevice = Pick<AgentDevice, "id" | "facilityName" | "agentUuid" | "hostname" | "lastSeenAt">;
@@ -140,7 +146,13 @@ export type AgentReportPayload = {
   status?: string | null;
   collectedAt?: string | null;
   raw?: unknown;
+  /** Agent 2.x: ข้อมูลสุขภาพเครื่อง (ดู lib/agent-payload.ts) */
+  health?: unknown;
 };
+
+function isDbError(error: unknown, code: string) {
+  return typeof error === "object" && error !== null && (error as { code?: string }).code === code;
+}
 
 function toDateTime(value: Date | string | null | undefined) {
   if (!value) return null;
@@ -208,11 +220,8 @@ function toDevice(row: DeviceRow): AgentDevice {
     firstSeenAt: toDateTime(row.first_seen_at) ?? "-",
     lastSeenAt: toDateTime(row.last_seen_at),
     lastReportedAt: toDateTime(row.last_reported_at),
+    healthJson: row.health_json ?? null,
   };
-}
-
-function normalizeFingerprint(value: string) {
-  return value.trim().toLowerCase();
 }
 
 function autoRegistrationNo(facilityId: number, deviceId: number) {
@@ -451,10 +460,12 @@ async function enrollAgentDeviceForEnrollment(input: {
   hostname?: string | null;
   agentVersion?: string | null;
 }) {
-  const fingerprint = normalizeFingerprint(input.fingerprint);
+  const fingerprint = cleanFingerprint(input.fingerprint);
   if (!fingerprint) {
     throw new Error("INVALID_FINGERPRINT");
   }
+  const hostname = cleanText(input.hostname, 255);
+  const agentVersion = cleanText(input.agentVersion, 50);
 
   const deviceSecret = randomToken("atacs_device");
   const deviceSecretHash = hashSecret(deviceSecret);
@@ -478,7 +489,7 @@ async function enrollAgentDeviceForEnrollment(input: {
       `UPDATE agent_devices
        SET enrollment_id = ?, agent_uuid = ?, agent_key_hash = ?, hostname = ?, agent_version = ?, is_active = 1, status = 'online', last_seen_at = NOW()
        WHERE id = ?`,
-      [input.enrollment.id, agentUuid, deviceSecretHash, input.hostname?.trim() || null, input.agentVersion?.trim() || null, existing[0].id]
+      [input.enrollment.id, agentUuid, deviceSecretHash, hostname, agentVersion, existing[0].id]
     );
     deviceId = existing[0].id;
   } else {
@@ -492,8 +503,8 @@ async function enrollAgentDeviceForEnrollment(input: {
         agentUuid,
         deviceSecretHash,
         fingerprint,
-        input.hostname?.trim() || null,
-        input.agentVersion?.trim() || null,
+        hostname,
+        agentVersion,
       ]
     );
     deviceId = result.insertId;
@@ -510,6 +521,17 @@ async function enrollAgentDeviceForEnrollment(input: {
     workGroupName: input.enrollment.work_group_name,
     deviceId,
     wasExisting: Boolean(existing[0]),
+    // Re-enrolment issues a new key and the old agent stops working. Report what was there before
+    // so an unexpected takeover can be spotted (security alert in /api/agent/enroll).
+    previous: existing[0]
+      ? {
+          hostname: existing[0].hostname ?? null,
+          status: existing[0].status ?? null,
+          wasActive: Number(existing[0].is_active ?? 0) === 1,
+          lastSeenAt: existing[0].last_seen_at ? dbDateTime(existing[0].last_seen_at) : null,
+          agentVersion: existing[0].agent_version ?? null,
+        }
+      : null,
   };
 }
 
@@ -591,28 +613,31 @@ export async function authenticateAgent(agentId: string, agentKey: string) {
 export async function reportAgentInventory(input: {
   agentId: string;
   agentKey: string;
-  payload: AgentReportPayload;
+  payload: AgentReportPayload | unknown;
 }) {
   const deviceRow = await getAgentDeviceByCredentials(input.agentId, input.agentKey);
   if (!deviceRow) {
     throw new Error("INVALID_AGENT_CREDENTIALS");
   }
 
-  const payload = input.payload;
-  const fingerprint = normalizeFingerprint(payload.fingerprint);
-  const reportedStatus = payload.status?.trim() || "online";
-  if (!fingerprint) {
+  // SEC-15/SEC-32: ไม่เชื่อค่าจากเครื่องลูกข่าย ทุกช่องผ่านการตรวจชนิด ช่วง และความยาวก่อนบันทึก
+  const payload: CleanAgentReport | null = cleanAgentReport(input.payload);
+  if (!payload) {
     throw new Error("INVALID_FINGERPRINT");
   }
+  const fingerprint = payload.fingerprint;
+  const reportedStatus = payload.status;
 
   let linkedAsset = deviceRow.linked_asset_id ? await requireAgentAsset(deviceRow.linked_asset_id, deviceRow.facility_id) : null;
-  const reportedDeviceType = payload.deviceType?.trim() || "Computer";
+  const reportedDeviceType = payload.deviceType || "Computer";
   if (!supportsAgentAsset({ assetClass: "IT", assetCategory: "Hardware", deviceType: reportedDeviceType })) {
     throw new Error("ประเภทอุปกรณ์ไม่รองรับ ATACS Agent");
   }
 
-  const lastReportedAt = payload.collectedAt?.trim() || new Date().toISOString().slice(0, 19).replace("T", " ");
-  await executeStatement(
+  // ใช้เวลาของเซิร์ฟเวอร์เสมอ นาฬิกาเครื่องลูกข่ายอาจเพี้ยนหรือคนละ time zone
+  const lastReportedAt = new Date().toISOString().slice(0, 19).replace("T", " ");
+  const { health, ...inventory } = payload;
+  const updateDevice = (deviceFingerprint: string) => executeStatement(
     `UPDATE agent_devices
      SET device_fingerprint = ?,
          hostname = ?,
@@ -639,31 +664,47 @@ export async function reportAgentInventory(input: {
          raw_payload_json = ?
      WHERE id = ?`,
     [
-      fingerprint,
-      payload.hostname?.trim() || null,
-      payload.serialNumber?.trim() || null,
-      payload.biosSerial?.trim() || null,
-      payload.deviceType?.trim() || null,
-      payload.manufacturerBrand?.trim() || null,
-      payload.manufacturerModel?.trim() || null,
-      payload.operatingSystem?.trim() || null,
-      payload.operatingSystemVersion?.trim() || null,
-      payload.privateIp?.trim() || null,
-      payload.macAddress?.trim() || null,
-      payload.currentUser?.trim() || null,
-      payload.cpuModel?.trim() || null,
-      payload.ramMb ?? null,
-      payload.diskTotalGb ?? null,
-      payload.diskFreeGb ?? null,
-      payload.diskUsedGb ?? null,
-      payload.locationDetail?.trim() || null,
-      payload.agentVersion?.trim() || null,
+      deviceFingerprint,
+      payload.hostname,
+      payload.serialNumber,
+      payload.biosSerial,
+      payload.deviceType,
+      payload.manufacturerBrand,
+      payload.manufacturerModel,
+      payload.operatingSystem,
+      payload.operatingSystemVersion,
+      payload.privateIp,
+      payload.macAddress,
+      payload.currentUser,
+      payload.cpuModel,
+      payload.ramMb,
+      payload.diskTotalGb,
+      payload.diskFreeGb,
+      payload.diskUsedGb,
+      payload.locationDetail,
+      payload.agentVersion,
       reportedStatus,
       lastReportedAt,
-      JSON.stringify(payload.raw ?? payload),
+      // เก็บเฉพาะข้อมูลที่ตรวจแล้ว ไม่เก็บ body ดิบ (เดิมรับได้หลาย MB)
+      JSON.stringify(inventory),
       deviceRow.id,
     ]
   );
+  try {
+    await updateDevice(fingerprint);
+  } catch (error) {
+    // fingerprint ใหม่ชนกับแถวอื่นในหน่วยงานเดียวกัน (เช่น ติดตั้งซ้ำ) — คง fingerprint เดิมไว้
+    if (!isDbError(error, "ER_DUP_ENTRY")) throw error;
+    await updateDevice(deviceRow.device_fingerprint);
+  }
+  if (health) {
+    try {
+      await executeStatement("UPDATE agent_devices SET health_json = ? WHERE id = ?", [JSON.stringify(health), deviceRow.id]);
+    } catch (error) {
+      // ยังไม่ได้รัน database/add_agent_health.sql: ข้อมูลอื่นบันทึกแล้ว ข้ามเฉพาะส่วนสุขภาพเครื่อง
+      if (!isDbError(error, "ER_BAD_FIELD_ERROR")) throw error;
+    }
+  }
 
   let linkedAssetId = deviceRow.linked_asset_id;
   if (!linkedAssetId) {
@@ -698,17 +739,19 @@ export async function reportAgentInventory(input: {
       .filter(Boolean)
       .join(" | "),
     serialNumber: payload.serialNumber?.trim() || payload.biosSerial?.trim() || undefined,
-    lastUpdatedAt: new Date().toISOString().slice(0, 10),
+    lastUpdatedAt: todayBangkok(),
   };
 
   if (linkedAssetId) {
-    // Disposed/Lost come from an approved request; an Agent report must not revert them.
+    // Disposed/Lost come from an approved request and Broken from staff/inspection/repairs;
+    // an Agent report ("the machine is on") must not revert any of them.
     const [statusRow] = await selectRows<RowDataPacket & { current_status: string | null }>(
       "SELECT current_status FROM information_assets WHERE id = ? LIMIT 1",
       [linkedAssetId]
     );
     const { currentStatus, ...fieldsWithoutStatus } = commonAssetFields;
-    await updateAsset(linkedAssetId, isTerminalAssetStatus(statusRow?.current_status) ? fieldsWithoutStatus : { ...fieldsWithoutStatus, currentStatus });
+    const keepStatus = isTerminalAssetStatus(statusRow?.current_status) || statusRow?.current_status === "Broken";
+    await updateAsset(linkedAssetId, keepStatus ? fieldsWithoutStatus : { ...fieldsWithoutStatus, currentStatus });
   } else {
     const result = await createAsset({
       ...commonAssetFields,
@@ -767,7 +810,7 @@ export async function heartbeatAgent(input: { agentId: string; agentKey: string;
     throw new Error("INVALID_AGENT_CREDENTIALS");
   }
 
-  const reportedStatus = input.status?.trim() || "online";
+  const reportedStatus = input.status?.trim() === "offline" ? "offline" : "online";
   await executeStatement(
     `UPDATE agent_devices SET status = ?, last_seen_at = NOW() WHERE id = ?`,
     [reportedStatus, device.id]

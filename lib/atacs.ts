@@ -11,6 +11,7 @@ import {
 import { normalizeAssetClass } from "@/lib/asset-classes";
 import { isItAsset } from "@/lib/asset-policy";
 import { selectRows } from "@/lib/mysql";
+import { dbDate, dbDateTime } from "@/lib/local-date";
 
 type SurveyRow = RowDataPacket & {
   survey_id: number;
@@ -73,7 +74,7 @@ function toDateOnly(value: Date | string | null | undefined) {
   }
 
   if (value instanceof Date) {
-    return value.toISOString().slice(0, 10);
+    return dbDate(value);
   }
 
   return String(value).slice(0, 10);
@@ -85,7 +86,7 @@ function toDateTime(value: Date | string | null | undefined) {
   }
 
   if (value instanceof Date) {
-    return value.toISOString().slice(0, 16).replace("T", " ");
+    return dbDateTime(value).slice(0, 16);
   }
 
   return String(value).replace("T", " ").slice(0, 16);

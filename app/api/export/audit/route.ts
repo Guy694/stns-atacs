@@ -5,6 +5,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { selectRows } from "@/lib/mysql";
 import type { RowDataPacket } from "mysql2/promise";
 import { readRequestIp, recordSecurityEvent } from "@/lib/security";
+import { dbDateTime, todayBangkok } from "@/lib/local-date";
 
 type AuditExportRow = RowDataPacket & {
   id: number;
@@ -90,9 +91,7 @@ export async function GET(req: NextRequest) {
 
   const csvRows = rows.map((row) => [
     row.id,
-    row.created_at instanceof Date
-      ? row.created_at.toISOString().slice(0, 19).replace("T", " ")
-      : String(row.created_at).slice(0, 19).replace("T", " "),
+    dbDateTime(row.created_at),
     row.user_name ?? "",
     row.action,
     row.entity,
@@ -103,7 +102,7 @@ export async function GET(req: NextRequest) {
   // SEC-12: toCsv เติม ' นำหน้าค่าที่ Excel จะตีความเป็นสูตร
   const csv = toCsv([["id", "created_at", "user_name", "action", "entity", "entity_id", "summary"], ...csvRows], { bom: false });
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayBangkok();
   return new NextResponse("\ufeff" + csv, {
     status: 200,
     headers: {

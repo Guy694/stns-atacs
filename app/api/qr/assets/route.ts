@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { createAssetQrSvg } from "@/lib/asset-qr";
 import { getCurrentUser } from "@/lib/auth";
-import { getAssetById } from "@/lib/assets";
+import { listAssetsByIds } from "@/lib/assets";
+
+const MAX_QR_ASSETS = 2000;
 import { canAccessAssetFacility } from "@/lib/permissions";
 
 type DownloadQrRequest = {
@@ -137,7 +139,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "No assets selected" }, { status: 400 });
   }
 
-  const assets = (await Promise.all(ids.map((id) => getAssetById(id)))).filter((asset) => asset !== null);
+  // One request builds one zip in memory: cap it so a single call cannot exhaust the DB pool or the zip format.
+  if (ids.length > MAX_QR_ASSETS) {
+    return NextResponse.json({ error: `เลือกได้ครั้งละไม่เกิน ${MAX_QR_ASSETS} รายการ` }, { status: 400 });
+  }
+
+  const assets = await listAssetsByIds(ids);
   if (assets.length === 0) {
     return NextResponse.json({ error: "Assets not found" }, { status: 404 });
   }
