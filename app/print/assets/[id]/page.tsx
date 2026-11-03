@@ -10,7 +10,7 @@ import { listDisposalRequests } from "@/lib/asset-disposals";
 import { listRepairs } from "@/lib/asset-repairs";
 import { assetStatusLabel } from "@/lib/asset-status";
 import { listAssetTransfers } from "@/lib/asset-transfers";
-import { depreciationSchedule, valueAsset } from "@/lib/asset-valuation";
+import { depreciationSchedule, valueAsset, capitalizationThresholdFor } from "@/lib/asset-valuation";
 import { getCurrentUser } from "@/lib/auth";
 import { formatThaiDate } from "@/lib/date-format";
 import { DISPOSAL_REQUEST_TYPE_LABELS, DISPOSAL_STATUS_LABELS, disposalMethodLabel } from "@/lib/disposal-options";
@@ -101,7 +101,7 @@ export default async function AssetCardPage({ params }: Props) {
         <h2 className="mt-4 text-sm font-bold">รายการได้มาและค่าเสื่อมราคา</h2>
         <p className="text-[10px]">
           อายุการใช้งาน {valuation.life.years ?? "-"} ปี · อัตราค่าเสื่อม {valuation.life.rateLabel || "-"} · วิธีเส้นตรง คงมูลค่าซาก 1 บาท
-          {valuation.status === "below-threshold" ? " · ราคาต่ำกว่าเกณฑ์ 10,000 บาท ไม่คิดค่าเสื่อม" : ""}
+          {valuation.status === "below-threshold" ? ` · ราคาต่ำกว่าเกณฑ์ ${capitalizationThresholdFor(valuation.startDate).toLocaleString("th-TH")} บาท ไม่คิดค่าเสื่อม` : ""}
         </p>
         <table className="mt-1 w-full border-collapse">
           <thead>

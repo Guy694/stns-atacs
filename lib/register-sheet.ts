@@ -1,6 +1,6 @@
 import { assetClassLabel } from "@/lib/asset-classes";
 import { acquisitionMethodLabel, fundingSourceLabel } from "@/lib/acquisition-options";
-import { CAPITALIZATION_THRESHOLD } from "@/lib/asset-valuation";
+import { capitalizationThresholdFor } from "@/lib/asset-valuation";
 import { bahtText, buildRegisterSchedule, periodMonthsLabel, shortSlashDate, shortThaiDate, type RegisterSchedule } from "@/lib/asset-register";
 
 /**
@@ -102,7 +102,8 @@ export function buildRegisterSheet(asset: RegisterAsset, lifeYears: number | nul
   const acquiredOn = asset.purchaseDate || asset.installedAt || "";
   const cost = asset.purchasePrice ?? null;
   // Same rule as the valuation report: items under the threshold are registered but not depreciated.
-  const belowThreshold = cost !== null && cost < CAPITALIZATION_THRESHOLD;
+  const threshold = capitalizationThresholdFor(acquiredOn);
+  const belowThreshold = cost !== null && cost < threshold;
   const schedule: RegisterSchedule | null = cost && acquiredOn && lifeYears && !belowThreshold
     ? buildRegisterSchedule({ cost, acquiredOn, lifeYears, annualRatePercent })
     : null;
@@ -166,7 +167,7 @@ export function buildRegisterSheet(asset: RegisterAsset, lifeYears: number | nul
     fundingOptions: boxes(FUNDING_BOXES, asset.fundingSource ?? "", (code) => fundingSourceLabel(code)),
     methodOptions: boxes(METHOD_BOXES, asset.acquisitionMethod ?? "", (code) => acquisitionMethodLabel(code)),
     startNote: belowThreshold
-      ? `ราคาต่ำกว่าเกณฑ์ ${CAPITALIZATION_THRESHOLD.toLocaleString("th-TH")} บาท ไม่คิดค่าเสื่อมราคา`
+      ? `ราคาต่ำกว่าเกณฑ์ ${threshold.toLocaleString("th-TH")} บาท ไม่คิดค่าเสื่อมราคา`
       : schedule
         ? `เริ่มคิดค่าเสื่อมราคา ${shortSlashDate(schedule.startOn)} ถึง ${shortSlashDate(schedule.endOn)} · คิดรายวัน · คงเหลือ 1 บาท`
         : "",

@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 
 import { PrintToolbar } from "@/app/print/_components/print-toolbar";
 import { ASSET_CLASS_OPTIONS, assetClassLabel } from "@/lib/asset-classes";
-import { CAPITALIZATION_THRESHOLD, fiscalYearOf, fiscalYearRange, VALUATION_STATUS_LABELS } from "@/lib/asset-valuation";
+import { CAPITALIZATION_THRESHOLD_TEXT, fiscalYearOf, fiscalYearRange, VALUATION_STATUS_LABELS } from "@/lib/asset-valuation";
 import { getCurrentUser } from "@/lib/auth";
 import { listAssets } from "@/lib/assets";
 import { formatThaiDate } from "@/lib/date-format";
@@ -178,7 +178,7 @@ export default async function ValuationPrintPage({ searchParams }: Props) {
 
           <p className="val-note">
             หมายเหตุ: คิดค่าเสื่อมราคาแบบเส้นตรงตามอัตราในตาราง (วิธีเดียวกับทะเบียนคุม) ราคาซาก 1 บาท คำนวณเป็นรายวันตามวันที่ได้มา · ไม่รวมรายการจำหน่าย/สูญหาย {report.terminalCount.toLocaleString("th-TH")} รายการ ·
-            ครุภัณฑ์ราคาต่ำกว่า {CAPITALIZATION_THRESHOLD.toLocaleString("th-TH")} บาท ไม่คิดค่าเสื่อม
+            ครุภัณฑ์ราคาต่ำกว่าเกณฑ์ {CAPITALIZATION_THRESHOLD_TEXT} ไม่คิดค่าเสื่อม
             {report.belowThresholdCost > 0 ? ` (มูลค่ารวม ${baht(report.belowThresholdCost)} บาท)` : ""}
             {excludedEntries.length > 0 && (
               <> · รายการที่ไม่นำมาคำนวณ: {excludedEntries.map((key) => `${VALUATION_STATUS_LABELS[key]} ${report.excluded[key].toLocaleString("th-TH")} รายการ`).join(", ")}</>

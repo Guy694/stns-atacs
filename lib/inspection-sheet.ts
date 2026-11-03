@@ -1,6 +1,6 @@
 import { dashboardCategoryId, DEPRECIATION_CATEGORIES } from "@/lib/asset-depreciation";
 import { assetStatusLabel } from "@/lib/asset-status";
-import { CAPITALIZATION_THRESHOLD } from "@/lib/asset-valuation";
+import { capitalizationThresholdFor } from "@/lib/asset-valuation";
 import { safeSheetName, writeWorkbook, type Cell, type CellStyle, type SheetSpec } from "@/lib/xlsx-writer";
 
 /** Item fields this module needs (a subset of InspectionItem, kept structural for tests). */
@@ -150,7 +150,7 @@ export function sheetRows(items: SheetItem[]) {
       acquired: thaiDate(item.purchaseDate || item.installedAt),
       assetCode: item.assetNumber || item.assetRegistrationNo,
       // Items below the capitalisation threshold carry no accounting asset code.
-      accountingCode: item.assetAccountingCode || (item.purchasePrice !== null && item.purchasePrice < CAPITALIZATION_THRESHOLD ? BELOW_THRESHOLD_LABEL : ""),
+      accountingCode: item.assetAccountingCode || (item.purchasePrice !== null && item.purchasePrice < capitalizationThresholdFor(item.purchaseDate || item.installedAt) ? BELOW_THRESHOLD_LABEL : ""),
       name: item.assetName,
       quantity: 1,
       unitValue: item.purchasePrice,

@@ -23,7 +23,9 @@ export const QUALITY_CHECKS: QualityCheck[] = [
   { key: "date", label: "วันที่ได้มา", hint: "ใช้กำหนดปีงบประมาณและค่าเสื่อม", missing: "a.purchase_date IS NULL AND a.installed_at IS NULL" },
   { key: "workGroup", label: "กลุ่มงานที่ใช้ประจำ", hint: "ใช้แบ่งรอบตรวจนับตามกลุ่มงาน", missing: "a.work_group_id IS NULL" },
   { key: "location", label: "ที่ตั้ง", hint: "ช่วยให้คณะกรรมการหาเจอเวลาตรวจนับ", missing: blank("a.location_detail") },
-  { key: "accountingCode", label: "รหัสสินทรัพย์ (ราคา 10,000 บาทขึ้นไป)", hint: "ใช้กระทบยอดกับบัญชีสินทรัพย์", missing: blank("a.asset_accounting_code"), applies: "a.purchase_price >= 10000", requires: "codes" },
+  { key: "accountingCode", label: "รหัสสินทรัพย์ (ราคาถึงเกณฑ์)", hint: "ราคา 10,000 บาทขึ้นไป (ได้มาก่อนปีงบ 2563: 5,000 บาทขึ้นไป) ใช้กระทบยอดกับบัญชีสินทรัพย์", missing: blank("a.asset_accounting_code"),
+    // Same dated threshold as lib/asset-valuation.ts capitalizationThresholdFor (FY2563 starts 2019-10-01).
+    applies: "a.purchase_price >= CASE WHEN COALESCE(a.purchase_date, a.installed_at) < '2019-10-01' THEN 5000 ELSE 10000 END", requires: "codes" },
   { key: "funding", label: "แหล่งเงิน", hint: "เงินงบประมาณ เงินบำรุง เงินบริจาค ฯลฯ", missing: blank("a.funding_source"), requires: "acquisition" },
   { key: "method", label: "วิธีการได้มา", hint: "e-bidding, เฉพาะเจาะจง, รับบริจาค ฯลฯ", missing: blank("a.acquisition_method"), requires: "acquisition" },
 ];

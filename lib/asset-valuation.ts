@@ -15,8 +15,23 @@ import { buildRegisterSchedule, type RegisterSchedule } from "@/lib/asset-regist
  * Figures are an operational estimate for planning and reporting, not a general-ledger posting.
  */
 export const SALVAGE_VALUE = 1;
-/** Items cheaper than this are registered but not depreciated (ครุภัณฑ์ต่ำกว่าเกณฑ์), here and in the printed register. */
+/**
+ * ครุภัณฑ์ต่ำกว่าเกณฑ์: registered but not depreciated (here and in the printed register).
+ * The threshold depends on when the item was acquired: below 5,000 baht before FY2563,
+ * below 10,000 baht from FY2563 (1 Oct 2019). Without a date the current threshold applies.
+ */
 export const CAPITALIZATION_THRESHOLD = 10_000;
+export const LEGACY_CAPITALIZATION_THRESHOLD = 5_000;
+export const CAPITALIZATION_THRESHOLD_FROM_FY = 2563;
+
+export function capitalizationThresholdFor(acquiredOn?: string | null) {
+  const date = acquiredOn ? String(acquiredOn).slice(0, 10) : "";
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return CAPITALIZATION_THRESHOLD;
+  return fiscalYearOf(date) < CAPITALIZATION_THRESHOLD_FROM_FY ? LEGACY_CAPITALIZATION_THRESHOLD : CAPITALIZATION_THRESHOLD;
+}
+
+/** Thai text for notes, e.g. "5,000 บาท (ได้มาก่อนปีงบ 2563) / 10,000 บาท (ตั้งแต่ปีงบ 2563)". */
+export const CAPITALIZATION_THRESHOLD_TEXT = `${LEGACY_CAPITALIZATION_THRESHOLD.toLocaleString("th-TH")} บาท (ได้มาก่อนปีงบ ${CAPITALIZATION_THRESHOLD_FROM_FY}) / ${CAPITALIZATION_THRESHOLD.toLocaleString("th-TH")} บาท (ตั้งแต่ปีงบ ${CAPITALIZATION_THRESHOLD_FROM_FY})`;
 
 export type ValuationInput = AssetClassification & {
   purchasePrice?: number | null;
@@ -157,7 +172,7 @@ export function valueAsset(asset: ValuationInput, asOf: string): Valuation {
   const startDate = parseDate(asset.purchaseDate) ? asset.purchaseDate!.slice(0, 10) : parseDate(asset.installedAt) ? asset.installedAt!.slice(0, 10) : null;
   const empty = { cost, startDate, life, annualDepreciation: 0, accumulated: 0, fullyDepreciatedOn: null, isFullyDepreciated: false };
   if (cost === null || !Number.isFinite(cost)) return { ...empty, status: "missing-price", bookValue: null };
-  if (cost < CAPITALIZATION_THRESHOLD) return { ...empty, status: "below-threshold", bookValue: cost };
+  if (cost < capitalizationThresholdFor(startDate)) return { ...empty, status: "below-threshold", bookValue: cost };
   if (!startDate) return { ...empty, status: "missing-date", bookValue: cost };
   if (!life.years) return { ...empty, status: "no-life", bookValue: cost };
   if (startDate > asOf) return { ...empty, status: "future", bookValue: cost };
@@ -207,7 +222,7 @@ export function depreciationForFiscalYear(asset: ValuationInput, fiscalYearBE: n
 }
 
 export const VALUATION_STATUS_LABELS: Record<ValuationStatus, string> = {
-  "below-threshold": `ต่ำกว่าเกณฑ์ ${CAPITALIZATION_THRESHOLD.toLocaleString("th-TH")} บาท (ไม่คิดค่าเสื่อม)`,
+  "below-threshold": `ต่ำกว่าเกณฑ์ ${CAPITALIZATION_THRESHOLD_TEXT} (ไม่คิดค่าเสื่อม)`,
   ok: "คิดค่าเสื่อม",
   "missing-price": "ยังไม่ระบุราคา",
   "missing-date": "ยังไม่ระบุวันที่ได้มา",

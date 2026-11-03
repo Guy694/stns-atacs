@@ -15,7 +15,7 @@ import { hasPermission } from "@/lib/role-permissions";
 import { listDisposalRequests } from "@/lib/asset-disposals";
 import { listRepairs, summarizeRepairs } from "@/lib/asset-repairs";
 import { listTransfers } from "@/lib/asset-transfers";
-import { CAPITALIZATION_THRESHOLD, fiscalYearOf, fiscalYearRange, summarizeValuation, VALUATION_STATUS_LABELS } from "@/lib/asset-valuation";
+import { CAPITALIZATION_THRESHOLD_TEXT, fiscalYearOf, fiscalYearRange, summarizeValuation, VALUATION_STATUS_LABELS } from "@/lib/asset-valuation";
 import { buildDepreciationRollup } from "@/lib/depreciation-rollup";
 import { DISPOSAL_REQUEST_TYPE_LABELS, DISPOSAL_STATUS_LABELS, DISPOSAL_STATUS_TONES, disposalMethodLabel } from "@/lib/disposal-options";
 import { REPAIR_STATUS_LABELS, REPAIR_STATUS_TONES } from "@/lib/repair-options";
@@ -740,7 +740,7 @@ export default async function ReportsPage({ searchParams }: Props) {
                 </li>
               ))}
             </ul>
-            <p className="mt-2 text-xs text-[var(--muted)]">ครุภัณฑ์ราคาต่ำกว่า {CAPITALIZATION_THRESHOLD.toLocaleString("th-TH")} บาท มูลค่ารวม {baht(valuationReport.belowThresholdCost)} บาท แสดงในทะเบียนแต่ไม่คิดค่าเสื่อม · ตัวเลขเป็นการประมาณการเพื่อบริหารทรัพย์สิน ไม่ใช่การบันทึกบัญชีแยกประเภท</p>
+            <p className="mt-2 text-xs text-[var(--muted)]">ครุภัณฑ์ราคาต่ำกว่าเกณฑ์ {CAPITALIZATION_THRESHOLD_TEXT} มูลค่ารวม {baht(valuationReport.belowThresholdCost)} บาท แสดงในทะเบียนแต่ไม่คิดค่าเสื่อม · ตัวเลขเป็นการประมาณการเพื่อบริหารทรัพย์สิน ไม่ใช่การบันทึกบัญชีแยกประเภท</p>
           </div>
           {(() => {
             const replace = valuationReport.items.filter((item) => item.valuation.isFullyDepreciated && item.asset.currentStatus === "Active").slice(0, 100);
