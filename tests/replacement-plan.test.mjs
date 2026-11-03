@@ -30,9 +30,9 @@ test("reasons, score and priority", () => {
   assert.equal(brokenOld.repairCostRatio, 0.533);
   assert.equal(brokenOld.pendingDisposal, true);
 
-  // Items under 10,000 baht are depreciated too, so an old cheap item is fully depreciated.
+  // Below the capitalisation threshold there is no depreciation, but age still counts.
   const cheap = plan.assessReplacement(asset(4, { purchasePrice: 3000, purchaseDate: "2018-01-01" }), undefined, false, TODAY);
-  assert.deepEqual([...cheap.reasons], ["fully-depreciated"]);
+  assert.deepEqual([...cheap.reasons], ["over-age"]);
 
   assert.equal(plan.assessReplacement(asset(5, { currentStatus: "Disposed", purchaseDate: "2010-01-01" }), undefined, false, TODAY), null);
   assert.equal(plan.priorityOf(3), "Medium");

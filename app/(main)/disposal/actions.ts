@@ -68,7 +68,7 @@ export async function disposalAssetAction(_prev: string | null, fd: FormData): P
         disposalMethod: text(fd, "disposalMethod") || null,
         reason,
         eventDate: noteDate,
-        bookValue: valuation.status === "ok" ? valuation.bookValue : null,
+        bookValue: valuation.status === "ok" || valuation.status === "below-threshold" ? valuation.bookValue : null,
         factFindingNote: disposalType === "Lost" ? text(fd, "factFindingNote") : null,
         userId: user.id,
         userName: user.fullName,
@@ -249,7 +249,7 @@ export async function bulkDisposalFromInspectionAction(_prev: BulkDisposalResult
         disposalMethod: requestType === "Disposed" ? method : null,
         reason: `${reason} (จากรอบตรวจนับ ${inspection.roundName}: ${outcome === "missing" ? "ไม่พบ" : outcome === "broken" ? "ชำรุด" : "เสื่อมสภาพ/ไม่ใช้งาน"})`,
         eventDate,
-        bookValue: valuation.status === "ok" ? valuation.bookValue : null,
+        bookValue: valuation.status === "ok" || valuation.status === "below-threshold" ? valuation.bookValue : null,
         userId: user.id,
         userName: user.fullName,
       });

@@ -52,10 +52,10 @@ test("useful life uses the per-asset override, then the recorded subtype, then t
 });
 
 test("incomplete or low-value records are reported, not silently valued", () => {
-  // Items under 10,000 baht are depreciated like every other item (same as the printed register).
+  // Items under 10,000 baht are not depreciated (also in the printed register).
   const cheap = v.valueAsset({ assetClass: "Office", purchasePrice: 4500, purchaseDate: "2024-01-01" }, "2025-01-01");
-  assert.equal(cheap.status, "ok");
-  assert.ok(cheap.accumulated > 0 && cheap.bookValue < 4500);
+  assert.equal(cheap.status, "below-threshold");
+  assert.equal(cheap.bookValue, 4500);
   assert.equal(v.valueAsset({ assetClass: "Office", purchaseDate: "2024-01-01" }, "2025-01-01").status, "missing-price");
   assert.equal(v.valueAsset({ assetClass: "Office", purchasePrice: 45000 }, "2025-01-01").status, "missing-date");
   const installed = v.valueAsset({ assetClass: "Office", purchasePrice: 45000, installedAt: "2024-01-01" }, "2025-01-01");
@@ -75,11 +75,13 @@ test("register valuation groups by schedule category and excludes disposed, lost
   const report = v.summarizeValuation(assets, 2568, "2026-01-01");
   assert.equal(report.asOf, "2025-09-30");
   assert.equal(report.terminalCount, 1);
-  assert.equal(report.totals.count, 4, "the 3,000-baht item is depreciated too");
-  assert.deepEqual(plain(report.rows.map(row => [row.categoryId, row.count])), [[3, 1], [4, 1], [12, 2]]);
+  assert.equal(report.totals.count, 3);
+  assert.equal(report.excluded["below-threshold"], 1);
+  assert.equal(report.belowThresholdCost, 3000);
+  assert.deepEqual(plain(report.rows.map(row => [row.categoryId, row.count])), [[4, 1], [12, 2]]);
   assert.equal(report.excluded["missing-date"], 1);
   const vehicle = report.rows.find(row => row.categoryId === 4);
   assert.equal(vehicle.depreciationThisYear, 180000.2, "900,001 × 20%");
   assert.equal(vehicle.bookValue, 720000.8);
-  assert.equal(report.totals.cost, 30001 * 2 + 900001 + 3000);
+  assert.equal(report.totals.cost, 30001 * 2 + 900001);
 });

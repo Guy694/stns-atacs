@@ -1,5 +1,6 @@
 import { assetClassLabel } from "@/lib/asset-classes";
 import { acquisitionMethodLabel, fundingSourceLabel } from "@/lib/acquisition-options";
+import { CAPITALIZATION_THRESHOLD } from "@/lib/asset-valuation";
 import { bahtText, buildRegisterSchedule, periodMonthsLabel, shortSlashDate, shortThaiDate, type RegisterSchedule } from "@/lib/asset-register";
 
 /**
@@ -100,7 +101,9 @@ const blankRow = (): RegisterSheetRow => ({ date: "", documentNo: "", detail: ""
 export function buildRegisterSheet(asset: RegisterAsset, lifeYears: number | null, annualRatePercent: number | null): RegisterSheet {
   const acquiredOn = asset.purchaseDate || asset.installedAt || "";
   const cost = asset.purchasePrice ?? null;
-  const schedule: RegisterSchedule | null = cost && acquiredOn && lifeYears
+  // Same rule as the valuation report: items under the threshold are registered but not depreciated.
+  const belowThreshold = cost !== null && cost < CAPITALIZATION_THRESHOLD;
+  const schedule: RegisterSchedule | null = cost && acquiredOn && lifeYears && !belowThreshold
     ? buildRegisterSchedule({ cost, acquiredOn, lifeYears, annualRatePercent })
     : null;
 
@@ -162,9 +165,11 @@ export function buildRegisterSheet(asset: RegisterAsset, lifeYears: number | nul
     vendorName: asset.vendorName ?? "",
     fundingOptions: boxes(FUNDING_BOXES, asset.fundingSource ?? "", (code) => fundingSourceLabel(code)),
     methodOptions: boxes(METHOD_BOXES, asset.acquisitionMethod ?? "", (code) => acquisitionMethodLabel(code)),
-    startNote: schedule
-      ? `เริ่มคิดค่าเสื่อมราคา ${shortSlashDate(schedule.startOn)} ถึง ${shortSlashDate(schedule.endOn)} · คิดรายวัน · คงเหลือ 1 บาท`
-      : "",
+    startNote: belowThreshold
+      ? `ราคาต่ำกว่าเกณฑ์ ${CAPITALIZATION_THRESHOLD.toLocaleString("th-TH")} บาท ไม่คิดค่าเสื่อมราคา`
+      : schedule
+        ? `เริ่มคิดค่าเสื่อมราคา ${shortSlashDate(schedule.startOn)} ถึง ${shortSlashDate(schedule.endOn)} · คิดรายวัน · คงเหลือ 1 บาท`
+        : "",
     rows,
     missing,
   };

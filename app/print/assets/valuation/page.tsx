@@ -178,7 +178,8 @@ export default async function ValuationPrintPage({ searchParams }: Props) {
 
           <p className="val-note">
             หมายเหตุ: คิดค่าเสื่อมราคาแบบเส้นตรงตามอัตราในตาราง (วิธีเดียวกับทะเบียนคุม) ราคาซาก 1 บาท คำนวณเป็นรายวันตามวันที่ได้มา · ไม่รวมรายการจำหน่าย/สูญหาย {report.terminalCount.toLocaleString("th-TH")} รายการ ·
-            คิดค่าเสื่อมทุกรายการ รวมครุภัณฑ์ราคาต่ำกว่า {CAPITALIZATION_THRESHOLD.toLocaleString("th-TH")} บาท
+            ครุภัณฑ์ราคาต่ำกว่า {CAPITALIZATION_THRESHOLD.toLocaleString("th-TH")} บาท ไม่คิดค่าเสื่อม
+            {report.belowThresholdCost > 0 ? ` (มูลค่ารวม ${baht(report.belowThresholdCost)} บาท)` : ""}
             {excludedEntries.length > 0 && (
               <> · รายการที่ไม่นำมาคำนวณ: {excludedEntries.map((key) => `${VALUATION_STATUS_LABELS[key]} ${report.excluded[key].toLocaleString("th-TH")} รายการ`).join(", ")}</>
             )}

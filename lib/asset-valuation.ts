@@ -15,7 +15,7 @@ import { buildRegisterSchedule, type RegisterSchedule } from "@/lib/asset-regist
  * Figures are an operational estimate for planning and reporting, not a general-ledger posting.
  */
 export const SALVAGE_VALUE = 1;
-/** Accounting threshold (บัญชีครุภัณฑ์ต่ำกว่าเกณฑ์). Not a depreciation cut-off: every item is depreciated. */
+/** Items cheaper than this are registered but not depreciated (ครุภัณฑ์ต่ำกว่าเกณฑ์), here and in the printed register. */
 export const CAPITALIZATION_THRESHOLD = 10_000;
 
 export type ValuationInput = AssetClassification & {
@@ -50,7 +50,7 @@ export type UsefulLife = {
   source: "override" | "schedule" | "none";
 };
 
-export type ValuationStatus = "ok" | "missing-price" | "missing-date" | "no-life" | "future";
+export type ValuationStatus = "ok" | "below-threshold" | "missing-price" | "missing-date" | "no-life" | "future";
 
 export type Valuation = {
   status: ValuationStatus;
@@ -157,6 +157,7 @@ export function valueAsset(asset: ValuationInput, asOf: string): Valuation {
   const startDate = parseDate(asset.purchaseDate) ? asset.purchaseDate!.slice(0, 10) : parseDate(asset.installedAt) ? asset.installedAt!.slice(0, 10) : null;
   const empty = { cost, startDate, life, annualDepreciation: 0, accumulated: 0, fullyDepreciatedOn: null, isFullyDepreciated: false };
   if (cost === null || !Number.isFinite(cost)) return { ...empty, status: "missing-price", bookValue: null };
+  if (cost < CAPITALIZATION_THRESHOLD) return { ...empty, status: "below-threshold", bookValue: cost };
   if (!startDate) return { ...empty, status: "missing-date", bookValue: cost };
   if (!life.years) return { ...empty, status: "no-life", bookValue: cost };
   if (startDate > asOf) return { ...empty, status: "future", bookValue: cost };
@@ -206,6 +207,7 @@ export function depreciationForFiscalYear(asset: ValuationInput, fiscalYearBE: n
 }
 
 export const VALUATION_STATUS_LABELS: Record<ValuationStatus, string> = {
+  "below-threshold": `ต่ำกว่าเกณฑ์ ${CAPITALIZATION_THRESHOLD.toLocaleString("th-TH")} บาท (ไม่คิดค่าเสื่อม)`,
   ok: "คิดค่าเสื่อม",
   "missing-price": "ยังไม่ระบุราคา",
   "missing-date": "ยังไม่ระบุวันที่ได้มา",
@@ -230,6 +232,7 @@ export type ValuationReport<T> = {
   rows: ValuationSummaryRow[];
   totals: Omit<ValuationSummaryRow, "categoryId" | "categoryLabel">;
   excluded: Record<Exclude<ValuationStatus, "ok">, number>;
+  belowThresholdCost: number;
   terminalCount: number;
   items: Array<{ asset: T; valuation: Valuation; depreciationThisYear: number }>;
 };
@@ -240,7 +243,8 @@ export function summarizeValuation<T extends ValuationInput>(assets: T[], fiscal
   const asOf = end < today ? end : today;
   const byCategory = new Map<string, ValuationSummaryRow>();
   const totals = { count: 0, cost: 0, depreciationThisYear: 0, accumulated: 0, bookValue: 0, fullyDepreciated: 0 };
-  const excluded = { "missing-price": 0, "missing-date": 0, "no-life": 0, future: 0 };
+  const excluded = { "below-threshold": 0, "missing-price": 0, "missing-date": 0, "no-life": 0, future: 0 };
+  let belowThresholdCost = 0;
   let terminalCount = 0;
   const items: ValuationReport<T>["items"] = [];
   for (const asset of assets) {
@@ -248,6 +252,7 @@ export function summarizeValuation<T extends ValuationInput>(assets: T[], fiscal
     const valuation = valueAsset(asset, asOf);
     if (valuation.status !== "ok") {
       excluded[valuation.status] += 1;
+      if (valuation.status === "below-threshold") belowThresholdCost += valuation.cost ?? 0;
       items.push({ asset, valuation, depreciationThisYear: 0 });
       continue;
     }
@@ -267,5 +272,5 @@ export function summarizeValuation<T extends ValuationInput>(assets: T[], fiscal
   }
   const roundRow = <R extends typeof totals>(row: R) => ({ ...row, cost: round2(row.cost), depreciationThisYear: round2(row.depreciationThisYear), accumulated: round2(row.accumulated), bookValue: round2(row.bookValue) });
   const rows = [...byCategory.values()].map(roundRow).sort((a, b) => (a.categoryId ?? 99) - (b.categoryId ?? 99));
-  return { fiscalYear: fiscalYearBE, asOf, rows, totals: roundRow(totals), excluded, terminalCount, items };
+  return { fiscalYear: fiscalYearBE, asOf, rows, totals: roundRow(totals), excluded, belowThresholdCost: round2(belowThresholdCost), terminalCount, items };
 }

@@ -740,7 +740,7 @@ export default async function ReportsPage({ searchParams }: Props) {
                 </li>
               ))}
             </ul>
-            <p className="mt-2 text-xs text-[var(--muted)]">คิดค่าเสื่อมทุกรายการ (รวมครุภัณฑ์ราคาต่ำกว่า {CAPITALIZATION_THRESHOLD.toLocaleString("th-TH")} บาท) ด้วยวิธีเดียวกับทะเบียนคุม · ตัวเลขเป็นการประมาณการเพื่อบริหารทรัพย์สิน ไม่ใช่การบันทึกบัญชีแยกประเภท</p>
+            <p className="mt-2 text-xs text-[var(--muted)]">ครุภัณฑ์ราคาต่ำกว่า {CAPITALIZATION_THRESHOLD.toLocaleString("th-TH")} บาท มูลค่ารวม {baht(valuationReport.belowThresholdCost)} บาท แสดงในทะเบียนแต่ไม่คิดค่าเสื่อม · ตัวเลขเป็นการประมาณการเพื่อบริหารทรัพย์สิน ไม่ใช่การบันทึกบัญชีแยกประเภท</p>
           </div>
           {(() => {
             const replace = valuationReport.items.filter((item) => item.valuation.isFullyDepreciated && item.asset.currentStatus === "Active").slice(0, 100);
