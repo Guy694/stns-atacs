@@ -69,7 +69,7 @@ export default async function ProfilePage() {
               <div className="mt-1 flex items-center gap-2">
                 <span className="rounded-full border border-white/20 bg-white/10 px-2.5 py-0.5 text-xs">{user.role}</span>
                 {hasThaiD && <span className="rounded-full border border-white/20 bg-white/10 px-2.5 py-0.5 text-xs">ThaiD</span>}
-                {hasPassword && <span className="rounded-full border border-white/20 bg-white/10 px-2.5 py-0.5 text-xs">Username</span>}
+                {hasPassword && <span className="rounded-full border border-white/20 bg-white/10 px-2.5 py-0.5 text-xs">ชื่อผู้ใช้</span>}
               </div>
             </div>
           </div>

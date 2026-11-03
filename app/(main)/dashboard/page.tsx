@@ -13,6 +13,8 @@ import { InspectionProgressPanel, WorkQueuePanel } from "@/app/_components/work-
 import { fiscalYearOf } from "@/lib/asset-valuation";
 import { getInspectionProgress, getWorkQueue } from "@/lib/dashboard-work";
 import { todayBangkok } from "@/lib/local-date";
+import { APP_NAME } from "@/lib/app-brand";
+import { hasPermission } from "@/lib/role-permissions";
 
 type Props = { searchParams: Promise<Record<string, string | string[] | undefined>> };
 
@@ -46,10 +48,17 @@ export default async function DashboardPage({ searchParams }: Props) {
   const progressFacilities = summary.facilityOptions.filter((f) => !filters.facility || String(f.id) === filters.facility);
   const facilityIds = user.role === "admin" && !filters.district && !filters.facility ? null : progressFacilities.map((f) => f.id);
   const inspectionYear = filters.fy ? Number(filters.fy) : fiscalYearOf(todayBangkok());
-  const [progress, queue] = await Promise.all([
+  const currentFiscalYear = fiscalYearOf(todayBangkok());
+  // Same rule as the inspection page's "start new round" button.
+  const canCreateRound = async () =>
+    user.role !== "viewer" && (await hasPermission(user.role, "inspection.view")) && (await hasPermission(user.role, "inspection.create"));
+  const [progress, queue, mayCreateRound] = await Promise.all([
     getInspectionProgress(inspectionYear, progressFacilities, facilityIds),
     getWorkQueue(facilityIds),
+    canCreateRound(),
   ]);
+  // A new round always falls in the current fiscal year, so only offer it there.
+  const newRoundHref = mayCreateRound && inspectionYear === currentFiscalYear ? "/inspection?view=new" : undefined;
   const coverageHref = (facilityId?: number) => {
     const query = new URLSearchParams({ fy: String(inspectionYear) });
     if (facilityId || filters.facility) query.set("facility", String(facilityId ?? filters.facility));
@@ -59,26 +68,28 @@ export default async function DashboardPage({ searchParams }: Props) {
 
   const describe = [filters.fy && `ได้มาในปีงบประมาณ ${filters.fy}`, categoryLabel].filter(Boolean).join(" · ");
 
+  // Mobile (< sm): title, KPI numbers, filter toggle, then shortcuts — via flex `order`. From sm up the
+  // DOM order applies (title + shortcuts, filters, KPIs), i.e. the original desktop layout.
   return (
-    <div className="mx-auto flex w-full max-w-[1400px] flex-1 flex-col gap-5">
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div className="min-w-0">
-          <p className="text-xs font-semibold tracking-[0.12em] text-[var(--accent-strong)]">ATACS · ทะเบียนทรัพย์สินและครุภัณฑ์</p>
-          <h1 className="section-title mt-1 text-2xl font-semibold sm:text-3xl">ภาพรวมครุภัณฑ์</h1>
+    <div className="mx-auto flex w-full max-w-[1400px] flex-1 flex-col gap-3 sm:gap-5">
+      <div className="contents sm:flex sm:flex-row sm:items-end sm:justify-between sm:gap-3">
+        <header className="min-w-0">
+          <p className="hidden text-xs font-semibold text-[var(--accent-strong)] sm:block">{APP_NAME}</p>
+          <h1 className="section-title text-2xl font-semibold sm:mt-1 sm:text-3xl">ภาพรวมครุภัณฑ์</h1>
           <p className="mt-1 text-sm text-[var(--muted)]">{scopeLabel}{describe ? ` · ${describe}` : ""} · ข้อมูล ณ {formatThaiDateTime(new Date())}</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Link href={`/data-quality${filters.facility ? `?facility=${filters.facility}` : filters.district ? `?district=${encodeURIComponent(filters.district)}` : ""}`} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[var(--line)] bg-white px-4 text-sm font-medium text-[var(--foreground)] transition hover:bg-[var(--primary-soft)]">
+        </header>
+        <nav aria-label="ทางลัดภาพรวม" className="order-3 flex flex-wrap gap-2 sm:order-none">
+          <Link href={`/data-quality${filters.facility ? `?facility=${filters.facility}` : filters.district ? `?district=${encodeURIComponent(filters.district)}` : ""}`} className="secondary-action gap-2">
             <AppIcon name="check" className="h-4 w-4" /> ความครบถ้วนข้อมูล
           </Link>
-          <Link href="/dashboard/it" className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[var(--line)] bg-white px-4 text-sm font-medium text-[var(--foreground)] transition hover:bg-[var(--primary-soft)]">
+          <Link href="/dashboard/it" className="secondary-action gap-2">
             <AppIcon name="monitor" className="h-4 w-4" /> ภาพรวมครุภัณฑ์คอมพิวเตอร์
           </Link>
-          <Link href={`/reports?view=valuation${filters.fy ? `&fy=${filters.fy}` : ""}`} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[var(--primary)] px-4 text-sm font-semibold text-white transition hover:bg-[var(--primary-hover)]">
+          <Link href={`/reports?view=valuation${filters.fy ? `&fy=${filters.fy}` : ""}`} className="primary-action">
             <AppIcon name="file-text" className="h-4 w-4" /> รายงานมูลค่า
           </Link>
-        </div>
-      </header>
+        </nav>
+      </div>
 
       {dataSource === "fallback" && (
         <p role="alert" className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">{connectionMessage}</p>
@@ -87,16 +98,18 @@ export default async function DashboardPage({ searchParams }: Props) {
         <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">บัญชีของคุณยังไม่ได้ระบุหน่วยงาน <Link href="/profile" className="font-semibold underline">ตั้งค่าหน่วยงาน</Link></p>
       )}
 
-      <DashboardFilters
-        values={filters}
-        fiscalYears={summary.fiscalYearOptions}
-        districts={summary.districtOptions}
-        facilities={summary.facilityOptions}
-        categories={summary.categoryOptions}
-        lockedFacility={Boolean(scope.lockedFacilityId)}
-      />
+      <div className="order-2 sm:order-none">
+        <DashboardFilters
+          values={filters}
+          fiscalYears={summary.fiscalYearOptions}
+          districts={summary.districtOptions}
+          facilities={summary.facilityOptions}
+          categories={summary.categoryOptions}
+          lockedFacility={Boolean(scope.lockedFacilityId)}
+        />
+      </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="order-1 grid gap-3 sm:order-none sm:gap-4 md:grid-cols-3">
         <StatTile
           label="ครุภัณฑ์ทั้งหมด"
           value={numberFormat.format(summary.total)}
@@ -119,25 +132,25 @@ export default async function DashboardPage({ searchParams }: Props) {
         />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+      <div className="order-4 grid gap-3 sm:order-none sm:gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
         <Panel id="inspection-progress" title={`ความคืบหน้าการตรวจนับประจำปีงบประมาณ ${inspectionYear}`}
           subtitle={`ครุภัณฑ์ที่ยังอยู่ในทะเบียน เทียบกับรอบตรวจนับที่เริ่มระหว่าง ${formatThaiDate(progress.range.start)} – ${formatThaiDate(progress.range.end)}`}
           action={<Link href="/inspection" className="text-xs font-medium text-[var(--primary-text)] underline">ไปที่ตรวจนับ</Link>}>
-          <InspectionProgressPanel progress={progress} coverageHref={coverageHref} />
+          <InspectionProgressPanel progress={progress} coverageHref={coverageHref} variant="summary" newRoundHref={newRoundHref} />
         </Panel>
         <Panel id="work-queue" title="งานรอดำเนินการ" subtitle="เรื่องที่ต้องติดตามในขอบเขตที่เลือก">
           <WorkQueuePanel queue={queue} />
         </Panel>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+      <div className="order-4 grid gap-3 sm:order-none sm:gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
         <Panel id="category-share" title="สัดส่วนประเภทครุภัณฑ์" subtitle="จำนวนรายการตามประเภทในตารางอายุการใช้งาน · เลือกแถวเพื่อกรอง"
           action={filters.category ? <Link href={hrefFor("/dashboard", filters, { category: "" })} className="text-xs font-medium text-[var(--primary-text)] underline">ทุกประเภท</Link> : undefined}>
           <CategoryBars summary={summary} basePath="/dashboard" />
         </Panel>
         <Panel id="status-mix" title="สถานะการใช้งานครุภัณฑ์" subtitle="สัดส่วนตามสถานะปัจจุบัน">
           <StatusDonut summary={summary} />
-          <div className="mt-5 grid gap-2 border-t border-[var(--line)] pt-4 text-sm sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+          <div className="mt-4 grid gap-2 border-t border-[var(--line)] pt-3 text-sm sm:mt-5 sm:pt-4 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
             {[
               { href: assetsHref("Broken"), label: "รายการชำรุด / รอซ่อม", icon: "clipboard-check" as const },
               { href: "/repairs", label: "งานซ่อมที่ค้างอยู่", icon: "wrench" as const },
@@ -152,14 +165,18 @@ export default async function DashboardPage({ searchParams }: Props) {
         </Panel>
       </div>
 
+      <div className="order-4 sm:order-none">
       <Panel id="district-count" title="จำนวนครุภัณฑ์ตามอำเภอ" subtitle={filters.district ? `ทุกอำเภอตามปีงบประมาณและประเภทที่เลือก · ไฮไลต์ อ.${filters.district}` : "เลือกแท่งเพื่อดูเฉพาะอำเภอนั้น"}
         action={filters.district ? <Link href={hrefFor("/dashboard", filters, { district: "", facility: "" })} className="text-xs font-medium text-[var(--primary-text)] underline">ทุกอำเภอ</Link> : undefined}>
         <DistrictColumns summary={summary} basePath="/dashboard" />
       </Panel>
+      </div>
 
+      <div className="order-4 sm:order-none">
       <Panel id="district-compare" title="เปรียบเทียบรายอำเภอ" subtitle="จำนวน สถานะการใช้งาน อัตราพร้อมใช้งาน และมูลค่ารวม (ทุกอำเภอตามปีงบประมาณและประเภทที่เลือก)">
         <DistrictComparison summary={summary} basePath="/dashboard" />
       </Panel>
+      </div>
     </div>
   );
 }

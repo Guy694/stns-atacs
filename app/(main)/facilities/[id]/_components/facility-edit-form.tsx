@@ -22,7 +22,7 @@ export function FacilityEditForm({ facility, canManageScope = false }: Props) {
     <div className="glass-panel rounded-2xl p-5">
       <div className="mb-4 flex items-start justify-between gap-3">
         <div>
-          <p className="text-xs font-medium uppercase tracking-[0.2em] text-[var(--muted)]">ข้อมูลหน่วยงาน</p>
+          <p className="text-xs font-medium text-[var(--muted)]">ข้อมูลหน่วยงาน</p>
           <h2 className="section-title mt-1 text-xl font-semibold">แก้ไขข้อมูลหน่วยงานนี้</h2>
         </div>
         <span className="rounded-full bg-sky-100 px-2.5 py-0.5 text-xs font-medium text-sky-700">Officer / Admin</span>

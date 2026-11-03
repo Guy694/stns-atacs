@@ -53,14 +53,14 @@ export default async function RegisterPage({ searchParams }: RegisterPageProps) 
     <main className="mx-auto flex w-full max-w-xl flex-1 flex-col justify-center px-6 py-10 sm:px-8">
       <TopNavigation current="register" user={null} />
       <section className="glass-panel rounded-[2rem] border border-black/10 p-6 sm:p-8">
-        <p className="text-sm uppercase tracking-[0.24em] text-[var(--muted)]">First-time Registration</p>
+        <p className="text-sm text-[var(--muted)]">ลงทะเบียนครั้งแรก</p>
         <h1 className="section-title mt-3 text-4xl font-semibold">สมัครสมาชิก ATACS</h1>
         <p className="mt-4 text-sm leading-7 text-[var(--muted)]">
           ยืนยันตัวตนผ่าน {claim.provider === "google" ? "Google" : "ThaiD"} แล้ว กรุณากรอกข้อมูลให้ครบเพื่อลงทะเบียนใช้งานครั้งแรก
         </p>
 
         {notice ? (
-          <div className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+          <div className="mt-5 rounded-2xl border border-[var(--state-info-border)] bg-[var(--state-info-bg)] px-4 py-3 text-sm text-[var(--state-info-fg)]">
             {notice}
           </div>
         ) : null}

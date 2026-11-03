@@ -87,7 +87,7 @@ export function ExpiringMaintenanceTable({
     <div className="glass-panel rounded-2xl p-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <p className="text-xs font-medium uppercase tracking-[0.2em] text-[var(--muted)]">Maintenance Alert</p>
+          <p className="text-xs font-medium text-[var(--muted)]">แจ้งเตือน MA</p>
           <h2 className="section-title mt-1 text-xl font-semibold">สัญญาบำรุงรักษาใกล้หมดอายุ</h2>
           <p className="mt-1 text-xs text-[var(--muted)]">แสดงรายการที่หมดอายุภายใน 45 วันนับจากวันนี้</p>
         </div>

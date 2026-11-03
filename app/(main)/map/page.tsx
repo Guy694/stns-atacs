@@ -33,7 +33,7 @@ export default async function MapPage() {
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6">
       <div>
-        <p className="text-xs font-semibold tracking-[0.12em] text-[var(--accent-strong)]">ATACS · แผนที่ทรัพย์สิน</p>
+        <p className="text-xs font-semibold text-[var(--accent-strong)]">แผนที่ทรัพย์สิน</p>
         <h1 className="section-title mt-1 text-3xl font-semibold">แผนที่หน่วยบริการ จ.สตูล</h1>
       </div>
 
@@ -68,7 +68,7 @@ export default async function MapPage() {
 
         {/* สรุปรายอำเภอ */}
         <div className="glass-panel rounded-2xl p-5">
-          <p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">หน่วยบริการรายอำเภอ</p>
+          <p className="mb-3 text-xs font-semibold text-[var(--muted)]">หน่วยบริการรายอำเภอ</p>
           <ul className="space-y-2">
             {Object.entries(byDistrict).sort().map(([district, count]) => (
               <li key={district} className="flex items-center justify-between text-sm">

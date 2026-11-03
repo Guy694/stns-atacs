@@ -62,7 +62,7 @@ export default async function LoansPage({ searchParams }: Props) {
     <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-xs font-semibold tracking-[0.12em] text-[var(--accent-strong)]">ATACS · ยืม-คืน</p>
+          <p className="text-xs font-semibold text-[var(--accent-strong)]">ยืม-คืน</p>
           <h1 className="section-title mt-1 flex items-center gap-2 text-3xl font-semibold"><AppIcon name="repeat" className="h-7 w-7 text-[var(--primary)]" /> ยืม-คืนครุภัณฑ์</h1>
           <p className="mt-1 text-sm text-[var(--muted)]">ครุภัณฑ์ที่ให้หน่วยงานหรือบุคคลอื่นยืมใช้ชั่วคราว กำหนดคืน และสภาพเมื่อรับคืน</p>
         </div>

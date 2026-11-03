@@ -7,10 +7,10 @@ import Swal from "sweetalert2";
 const baseOptions = {
   reverseButtons: true,
   cancelButtonColor: "#6b7280",
-  background: "#f8fffb",
-  color: "#113127",
+  background: "#ffffff",
+  color: "#18324a",
   customClass: {
-    popup: "rounded-3xl border border-emerald-200 shadow-xl",
+    popup: "rounded-3xl border border-sky-200 shadow-xl",
     title: "text-xl font-bold",
     confirmButton: "rounded-xl px-4 py-2 font-semibold",
     cancelButton: "rounded-xl px-4 py-2 font-semibold",
@@ -28,14 +28,14 @@ export async function confirmAction(options: { title: string; text?: string; con
     confirmButtonText: options.confirmText ?? "ยืนยัน",
     cancelButtonText: "ยกเลิก",
     focusCancel: true,
-    confirmButtonColor: options.danger ? "#b91c1c" : "#15803d",
+    confirmButtonColor: options.danger ? "#b91c1c" : "#176c9e",
   });
   return result.isConfirmed;
 }
 
 /** Show a server-side error the user must notice (failed delete, failed toggle, …). */
 export async function showError(message: string, title = "ทำรายการไม่สำเร็จ") {
-  await Swal.fire({ ...baseOptions, title, text: message, icon: "error", confirmButtonText: "ตกลง", confirmButtonColor: "#15803d" });
+  await Swal.fire({ ...baseOptions, title, text: message, icon: "error", confirmButtonText: "ตกลง", confirmButtonColor: "#176c9e" });
 }
 
 /**

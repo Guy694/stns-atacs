@@ -16,6 +16,7 @@ import {
 } from "@/lib/dashboard-access";
 import { formatThaiDateTime } from "@/lib/date-format";
 import { getFacilityById } from "@/lib/assets";
+import { APP_NAME } from "@/lib/app-brand";
 
 type HomeProps = { searchParams: Promise<Record<string, string | undefined>> };
 
@@ -262,8 +263,8 @@ export default async function Home({ searchParams }: HomeProps) {
         {/* ── Page heading ─────────────────────────────────────────────────── */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-xs font-medium uppercase tracking-[0.22em] text-[var(--muted)]">
-              ATACS · Asset Tracking and Control System
+            <p className="text-xs font-medium text-[var(--muted)]">
+              {APP_NAME}
             </p>
             <h1 className="section-title mt-1 text-2xl font-semibold sm:text-3xl">
               {scopeFacilityName
@@ -386,7 +387,7 @@ export default async function Home({ searchParams }: HomeProps) {
         <div className="glass-panel rounded-2xl p-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="text-xs font-medium uppercase tracking-[0.2em] text-[var(--muted)]">Quick Actions</p>
+              <p className="text-xs font-medium text-[var(--muted)]">ทางลัด</p>
               <p className="mt-1 text-sm text-[var(--muted)]">
                 เปิดหน้าทำงานต่อทันทีจาก dashboard โดยใช้ตัวกรองที่เกี่ยวข้อง
               </p>
@@ -446,7 +447,7 @@ export default async function Home({ searchParams }: HomeProps) {
         {/* ── KPI Strip ────────────────────────────────────────────────────── */}
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <div className="rounded-2xl bg-gradient-to-br from-emerald-500 to-green-600 p-5 text-white shadow-lg shadow-emerald-900/20">
-            <p className="text-xs font-medium uppercase tracking-[0.2em] text-white/70">{scopeFacilityName ? "หน่วยงาน" : "หน่วยงาน"}</p>
+            <p className="text-xs font-medium text-white/70">{scopeFacilityName ? "หน่วยงาน" : "หน่วยงาน"}</p>
             <p className="mt-3 text-4xl font-semibold tracking-tight">{facilitySurveys.length}</p>
             <div className="mt-2 flex items-center gap-1.5 text-xs text-white/70">
               <span className="h-1.5 w-1.5 rounded-full bg-white" />
@@ -455,7 +456,7 @@ export default async function Home({ searchParams }: HomeProps) {
           </div>
 
           <div className="rounded-2xl bg-gradient-to-br from-green-500 to-emerald-600 p-5 text-white shadow-lg shadow-green-900/20">
-            <p className="text-xs font-medium uppercase tracking-[0.2em] text-white/70">ทรัพย์สินรวม</p>
+            <p className="text-xs font-medium text-white/70">ทรัพย์สินรวม</p>
             <p className="mt-3 text-4xl font-semibold tracking-tight">{totalAssets}</p>
             <div className="mt-2 flex items-center gap-2 text-xs text-white/70">
               <span>{hardwareCount}  ฮาร์ดแวร์</span>
@@ -465,7 +466,7 @@ export default async function Home({ searchParams }: HomeProps) {
           </div>
 
           <div className="rounded-2xl bg-gradient-to-br from-teal-500 to-emerald-700 p-5 text-white shadow-lg shadow-teal-900/20">
-            <p className="text-xs font-medium uppercase tracking-[0.2em] text-white/60">พร้อมใช้งาน</p>
+            <p className="text-xs font-medium text-white/60">พร้อมใช้งาน</p>
             <p className="mt-3 text-4xl font-semibold tracking-tight">{activeAssets}</p>
             <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/20">
               <div className="h-full rounded-full bg-white/80" style={{ width: `${activeRate}%` }} />
@@ -474,7 +475,7 @@ export default async function Home({ searchParams }: HomeProps) {
           </div>
 
           <div className={`glass-panel rounded-2xl p-5 ${expiringSoon.length > 0 ? "border-amber-300/50" : ""}`}>
-            <p className="text-xs font-medium uppercase tracking-[0.2em] text-[var(--muted)]">MA ใกล้หมดอายุ</p>
+            <p className="text-xs font-medium text-[var(--muted)]">MA ใกล้หมดอายุ</p>
             <p
               className={`mt-3 text-4xl font-semibold tracking-tight ${expiringSoon.length > 0 ? "text-[var(--danger)]" : ""}`}
             >
@@ -492,7 +493,7 @@ export default async function Home({ searchParams }: HomeProps) {
         <div className="grid gap-6">
           {/* Operational Readiness */}
           <div className="glass-panel rounded-2xl p-6">
-            <p className="text-xs font-medium uppercase tracking-[0.2em] text-[var(--muted)]">Operational Readiness</p>
+            <p className="text-xs font-medium text-[var(--muted)]">ความพร้อมใช้งาน</p>
             <h2 className="section-title mt-1 text-xl font-semibold">สถานะการใช้งาน</h2>
 
             <div className="mt-5 space-y-4">
@@ -528,7 +529,7 @@ export default async function Home({ searchParams }: HomeProps) {
         <div className="glass-panel rounded-2xl p-6 lg:p-7">
           <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <p className="text-xs font-medium uppercase tracking-[0.2em] text-[var(--muted)]">Provincial Overview</p>
+              <p className="text-xs font-medium text-[var(--muted)]">ภาพรวมจังหวัด</p>
               <h2 className="section-title mt-1 text-xl font-semibold">ความครบถ้วนการสำรวจรายอำเภอ</h2>
             </div>
             <p className="text-xs text-[var(--muted)]">
@@ -571,7 +572,7 @@ export default async function Home({ searchParams }: HomeProps) {
             <div className="rounded-xl border border-black/8 bg-white/80 p-5">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <p className="text-xs font-medium uppercase tracking-[0.18em] text-[var(--muted)]">สัดส่วนรายอำเภอ</p>
+                  <p className="text-xs font-medium text-[var(--muted)]">สัดส่วนรายอำเภอ</p>
                   <h3 className="mt-1 text-base font-semibold">กราฟวงกลมความครบถ้วน</h3>
                 </div>
                 <span className="rounded-full bg-[var(--accent)]/10 px-3 py-1 text-xs font-semibold text-[var(--accent-strong)]">

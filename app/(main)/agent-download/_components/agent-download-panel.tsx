@@ -60,7 +60,7 @@ export function AgentDownloadPanel({ facilityId, facilityName, requiresWorkGroup
       <div className="glass-panel rounded-2xl px-5 py-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <p className="text-xs font-medium uppercase tracking-[0.18em] text-[var(--muted)]">หน่วยงาน</p>
+            <p className="text-xs font-medium text-[var(--muted)]">หน่วยงาน</p>
             <p className="mt-1 text-lg font-semibold">{facilityName}</p>
             <p className="mt-1 text-xs text-[var(--muted)]">
               {requiresWorkGroup ? "ต้องระบุชื่อกลุ่มงานก่อนสร้าง token" : "หน่วยงานนี้ไม่ต้องระบุกลุ่มงานตอนติดตั้ง agent"}

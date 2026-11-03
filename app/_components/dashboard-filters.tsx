@@ -1,7 +1,9 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { useTransition } from "react";
+import { useId, useState, useTransition } from "react";
+
+import { AppIcon } from "@/app/_components/ui/icon";
 
 type Option = { value: string; label: string };
 type Props = {
@@ -15,11 +17,16 @@ type Props = {
 
 const control = "filter-control";
 
-/** Filters sit in one row above every chart; each change re-renders the server summary. */
+/**
+ * Filters sit in one row above every chart; each change re-renders the server summary.
+ * Below `sm` the panel is collapsed behind one toggle so the numbers stay on the first screen.
+ */
 export function DashboardFilters({ values, fiscalYears, districts, facilities, categories, lockedFacility = false }: Props) {
   const router = useRouter();
   const pathname = usePathname();
   const [pending, startTransition] = useTransition();
+  const [open, setOpen] = useState(false);
+  const panelId = useId();
 
   function apply(patch: Partial<Props["values"]>) {
     const next = { ...values, ...patch };
@@ -35,8 +42,20 @@ export function DashboardFilters({ values, fiscalYears, districts, facilities, c
   const activeCount = Object.values(values).filter(Boolean).length;
 
   return (
-    <section aria-label="ตัวกรองแดชบอร์ด" aria-busy={pending} className="rounded-2xl border border-[var(--line)] bg-white p-3 sm:p-4">
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[repeat(4,minmax(0,1fr))_auto] xl:items-end">
+    <section aria-label="ตัวกรองแดชบอร์ด" aria-busy={pending} className="rounded-2xl border border-[var(--line)] bg-white p-2 sm:p-4">
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-controls={panelId}
+        onClick={() => setOpen((value) => !value)}
+        className="flex min-h-11 w-full items-center gap-2 rounded-xl px-2 text-sm font-semibold text-[var(--primary-text)] sm:hidden"
+      >
+        <AppIcon name="layers" className="h-4 w-4" />
+        ตัวกรอง{activeCount ? ` (${activeCount} ที่เลือก)` : ""}
+        {pending && <span className="text-xs font-normal text-[var(--muted)]">กำลังอัปเดต…</span>}
+        <AppIcon name="arrow-down" className={`ml-auto h-4 w-4 transition ${open ? "rotate-180" : ""}`} />
+      </button>
+      <div id={panelId} className={`${open ? "grid" : "hidden"} gap-3 p-1 pt-2 sm:grid sm:grid-cols-2 sm:p-0 xl:grid-cols-[repeat(4,minmax(0,1fr))_auto] xl:items-end`}>
         <label className="filter-label">ปีงบประมาณ (ที่ได้มา)
           <select className={control} value={values.fy} onChange={(event) => apply({ fy: event.target.value })}>
             <option value="">ทุกปีงบประมาณ</option>

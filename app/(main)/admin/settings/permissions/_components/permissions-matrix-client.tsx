@@ -4,6 +4,8 @@ import { useTransition } from "react";
 
 import { updateRolePermissionAction } from "@/app/(main)/admin/settings/permissions/actions";
 import { showError } from "@/app/_components/ui/confirm";
+import { toast } from "@/app/_components/ui/toast";
+import { roleLabel } from "@/lib/app-brand";
 import { APP_ROLES, type AppRole, type PermissionKey } from "@/lib/permission-definitions";
 
 type PermissionDefinition = {
@@ -18,9 +20,9 @@ type Props = {
 };
 
 const ROLE_LABEL: Record<AppRole, string> = {
-  admin: "Admin",
-  officer: "Officer",
-  viewer: "Viewer",
+  admin: roleLabel("admin"),
+  officer: roleLabel("officer"),
+  viewer: roleLabel("viewer"),
 };
 
 export function PermissionsMatrixClient({ definitions, matrix }: Props) {
@@ -29,7 +31,7 @@ export function PermissionsMatrixClient({ definitions, matrix }: Props) {
   return (
     <div className="glass-panel overflow-hidden rounded-2xl">
       <div className="border-b border-black/6 px-5 py-4">
-        <h2 className="text-lg font-semibold">Permission Matrix</h2>
+        <h2 className="text-lg font-semibold">ตารางสิทธิ์ตามบทบาท</h2>
         <p className="mt-1 text-sm text-[var(--muted)]">
           กำหนดสิทธิ์รายบทบาทและราย action ได้โดยตรง การเปลี่ยนแปลงมีผลทันที
         </p>
@@ -49,7 +51,7 @@ export function PermissionsMatrixClient({ definitions, matrix }: Props) {
             {definitions.map((definition) => (
               <tr key={definition.key} className="transition hover:bg-white/50">
                 <td className="px-4 py-3 align-top">
-                  <p className="text-[11px] font-medium uppercase tracking-[0.15em] text-[var(--muted)]">{definition.area}</p>
+                  <p className="text-[11px] font-medium text-[var(--muted)]">{definition.area}</p>
                   <p className="mt-1 font-medium text-[var(--foreground)]">{definition.label}</p>
                   <p className="mt-0.5 font-mono text-[11px] text-[var(--muted)]">{definition.key}</p>
                 </td>
@@ -68,6 +70,7 @@ export function PermissionsMatrixClient({ definitions, matrix }: Props) {
                             form.set("isAllowed", checked ? "0" : "1");
                             const error = await updateRolePermissionAction(null, form);
                             if (error) await showError(error, "บันทึกสิทธิ์ไม่สำเร็จ");
+                            else toast.success("บันทึกสิทธิ์แล้ว");
                           });
                         }}
                         aria-pressed={checked}

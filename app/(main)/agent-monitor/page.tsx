@@ -113,7 +113,7 @@ export default async function AgentMonitorPage({ searchParams }: Props) {
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6">
       <div>
-        <p className="text-xs font-semibold tracking-[0.12em] text-[var(--accent-strong)]">IT · DEVICE HEALTH</p>
+        <p className="text-xs font-semibold text-[var(--accent-strong)]">สุขภาพเครื่องคอมพิวเตอร์</p>
         <h1 className="section-title mt-1 text-3xl font-semibold">สุขภาพเครื่องคอมพิวเตอร์</h1>
         <p className="mt-1 text-sm text-[var(--muted)]">
           ข้อมูลจาก ATACS Agent ที่ติดตั้งในเครื่อง (ส่งทุก 4 ชั่วโมงและตอนเปิดเครื่อง) เรียงจากปัญหาหนักที่สุด

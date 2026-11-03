@@ -170,7 +170,7 @@ export default async function InspectionDetailPage({ params, searchParams }: Ins
   const visibleItems = filterInspectionItems(items, itemFilters);
   const activeFilterCount = Object.values(itemFilters).filter(Boolean).length;
   const exportQuery = new URLSearchParams(Object.entries(itemFilters).filter(([, value]) => value));
-  const exportHref = `/api/export/inspection/${inspection.id}${exportQuery.size ? `?${exportQuery}` : ""}`;
+  const exportHref = `/api/export/inspection/${inspection.id}/${exportQuery.size ? `?${exportQuery}` : ""}`;
   const report = summarizeInspection(items.map((item) => ({ ...item, inspectionAssetStatus: item.assetStatus })));
   const canProposeDisposal = canMutate && (await hasPermission(user.role, "disposal.manage"));
   const pendingRequests = canProposeDisposal && report.proposed.length
@@ -291,7 +291,7 @@ export default async function InspectionDetailPage({ params, searchParams }: Ins
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <a href={withBasePath(`/api/export/inspection/${inspection.id}?type=report`)} className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl border border-[var(--primary-soft-strong)] bg-[var(--primary-soft)] px-4 text-sm font-semibold text-[var(--primary-text)] hover:bg-[var(--primary-soft-strong)]">
+            <a href={withBasePath(`/api/export/inspection/${inspection.id}/?type=report`)} className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl border border-[var(--primary-soft-strong)] bg-[var(--primary-soft)] px-4 text-sm font-semibold text-[var(--primary-text)] hover:bg-[var(--primary-soft-strong)]">
               <AppIcon name="download" className="h-4 w-4" /> รายงานผล Excel{closed ? "" : " (ร่าง)"}
             </a>
             {/* ใบตรวจสอบพัสดุประจำปี (A4 แนวนอน) พร้อมช่องลงนามจากคณะกรรมการของรอบนี้ */}

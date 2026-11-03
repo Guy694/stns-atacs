@@ -50,7 +50,7 @@ export function TransferForm({ asset, surveys, workGroups }: Props) {
 
       {/* Current asset info */}
       <div className="rounded-xl border border-[var(--primary-soft-strong)] bg-[var(--primary-soft)] p-4">
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--primary-text)] mb-2">ทรัพย์สินที่จะโอนย้าย</p>
+        <p className="text-xs font-semibold text-[var(--primary-text)] mb-2">ทรัพย์สินที่จะโอนย้าย</p>
         <div className="grid gap-2 sm:grid-cols-2 text-sm">
           <div>
             <span className="text-[var(--muted)]">ชื่อทรัพย์สิน: </span>

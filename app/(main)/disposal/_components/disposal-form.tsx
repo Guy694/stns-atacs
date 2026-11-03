@@ -60,7 +60,7 @@ export function DisposalForm({ asset, defaultType = "", hasPendingRequest = fals
 
       {/* Asset info */}
       <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
-        <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">ทรัพย์สินที่ดำเนินการ</p>
+        <p className="mb-2 text-xs font-semibold text-slate-500">ทรัพย์สินที่ดำเนินการ</p>
         <div className="grid gap-2 text-sm sm:grid-cols-2">
           <div>
             <span className="text-[var(--muted)]">ชื่อทรัพย์สิน: </span>

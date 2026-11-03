@@ -4,6 +4,7 @@ import { useTransition } from "react";
 
 import { ActionIconButton } from "@/app/_components/ui/action-icon-button";
 import { confirmAction, showError } from "@/app/_components/ui/confirm";
+import { toast } from "@/app/_components/ui/toast";
 import { deleteAssetAction } from "@/app/(main)/assets/actions";
 
 type Props = {
@@ -25,6 +26,7 @@ export function DeleteAssetButton({ assetId, assetName }: Props) {
     startTransition(async () => {
       const error = await deleteAssetAction(assetId);
       if (error) await showError(error, "ลบทรัพย์สินไม่สำเร็จ");
+      else toast.success("ลบทรัพย์สินแล้ว");
     });
   }
 

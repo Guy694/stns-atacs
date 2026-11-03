@@ -27,7 +27,7 @@ export default async function AuthSettingsPage({ searchParams }: AuthSettingsPag
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-6">
       <div>
-        <p className="text-xs font-semibold tracking-[0.12em] text-[var(--accent-strong)]">ADMIN · AUTHENTICATION</p>
+        <p className="text-xs font-semibold text-[var(--accent-strong)]">ตั้งค่าระบบ · การเข้าสู่ระบบ</p>
         <h1 className="section-title mt-1 text-3xl font-semibold">ตั้งค่าการเข้าสู่ระบบ</h1>
         <p className="mt-1 text-sm text-[var(--muted)]">จัดการช่องทางเข้าสู่ระบบสำหรับผู้ใช้งานทั้งหมด</p>
       </div>

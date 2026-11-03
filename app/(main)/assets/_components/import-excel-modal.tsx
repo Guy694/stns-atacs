@@ -93,9 +93,9 @@ export default function ImportExcelModal({
   return (
     <>
       <button
+        type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-semibold"
-        style={{ borderColor: "var(--accent)", color: "var(--accent)" }}
+        className="secondary-action gap-2 whitespace-nowrap"
       >
         <AppIcon name="upload" className="h-4 w-4" /> นำเข้า CSV
       </button>
@@ -215,14 +215,14 @@ export default function ImportExcelModal({
                 </div>
 
                 <div className="flex flex-wrap gap-x-4 gap-y-2 text-xs font-semibold">
-                  <a href={withBasePath("/api/export/assets?template=xlsx")} className="inline-flex items-center gap-1.5" style={{ color: "var(--accent)" }}>
+                  <a href={withBasePath("/api/export/assets/?template=xlsx")} className="inline-flex items-center gap-1.5" style={{ color: "var(--accent)" }}>
                     <AppIcon name="download" className="h-3.5 w-3.5" /> ไฟล์ Excel ต้นแบบ (มีคำอธิบายคอลัมน์)
                   </a>
-                  <a href={withBasePath("/api/export/assets?template=csv")} className="inline-flex items-center gap-1.5" style={{ color: "var(--accent)" }}>
+                  <a href={withBasePath("/api/export/assets/?template=csv")} className="inline-flex items-center gap-1.5" style={{ color: "var(--accent)" }}>
                     <AppIcon name="download" className="h-3.5 w-3.5" /> ไฟล์ CSV ตัวอย่าง
                   </a>
                   {selectedFacility && (
-                    <a href={withBasePath(`/api/export/assets?facilityId=${selectedFacility.id}`)} className="inline-flex items-center gap-1.5" style={{ color: "var(--accent)" }}>
+                    <a href={withBasePath(`/api/export/assets/?facilityId=${selectedFacility.id}`)} className="inline-flex items-center gap-1.5" style={{ color: "var(--accent)" }}>
                       <AppIcon name="download" className="h-3.5 w-3.5" /> ส่งออกข้อมูลเดิมของหน่วยงานนี้ (ใช้แก้ไขแล้วนำเข้ากลับ)
                     </a>
                   )}

@@ -139,7 +139,7 @@ export default async function FacilityDetailPage({ params, searchParams }: Props
   const paged = paginate(sortedAssets, readPage(query));
   const basePath = `/facilities/${facilityId}`;
   const th = (key: string, label: string) => (
-    <SortableTh key={key} label={label} sortKey={key} sort={tableSort} href={sortHref(basePath, query, key, tableSort)} />
+    <SortableTh key={key} label={label} sortKey={key} sort={tableSort} href={sortHref(basePath, query, key, tableSort)} className="whitespace-nowrap px-3 py-2 font-medium" />
   );
 
   const totalAssets = allAssets.length;
@@ -174,7 +174,7 @@ export default async function FacilityDetailPage({ params, searchParams }: Props
       {/* Hero */}
       <div className="glass-panel overflow-hidden rounded-2xl">
         <div className="bg-[linear-gradient(135deg,#0a4f47,#0d6f63)] px-6 py-8 text-white sm:px-8">
-          <p className="text-xs font-medium tracking-[0.22em] text-white/60">FACILITY DETAIL · อ.{districtName}</p>
+          <p className="text-xs font-medium text-white/60">หน่วยบริการ · อ.{districtName}</p>
           <h1 className="section-title mt-2 text-3xl font-semibold sm:text-4xl">{facilityName}</h1>
         </div>
         <div className="grid grid-cols-2 divide-x divide-black/6 sm:grid-cols-4">
@@ -229,13 +229,13 @@ export default async function FacilityDetailPage({ params, searchParams }: Props
             )}
             <a
               href={`/print/assets/register?facility=${facilityId}`}
-              className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-black/10 bg-white/85 px-4 py-2 text-xs font-semibold text-[var(--foreground)] transition hover:bg-white"
+              className="secondary-action gap-2"
             >
               <AppIcon name="printer" className="h-4 w-4" /> พิมพ์ทะเบียนคุมทรัพย์สิน (A4 แนวนอน)
             </a>
             <a
               href={`/print/assets/audit?facility=${facilityId}`}
-              className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-black/10 bg-white/85 px-4 py-2 text-xs font-semibold text-[var(--foreground)] transition hover:bg-white"
+              className="secondary-action gap-2"
             >
               <AppIcon name="printer" className="h-4 w-4" /> พิมพ์ใบตรวจสอบพัสดุประจำปี (A4 แนวนอน)
             </a>
@@ -258,7 +258,7 @@ export default async function FacilityDetailPage({ params, searchParams }: Props
                 updaterName={user.fullName}
                 mode="create"
               >
-                <button className="inline-flex min-h-11 items-center gap-1.5 rounded-xl bg-[var(--accent-strong)] px-4 py-2 text-xs font-semibold text-white hover:opacity-90">
+                <button type="button" className="primary-action whitespace-nowrap">
                   + เพิ่มทรัพย์สิน
                 </button>
               </AssetFormModal>
@@ -273,83 +273,146 @@ export default async function FacilityDetailPage({ params, searchParams }: Props
         {assets.length === 0 ? (
           <div className="p-10 text-center text-sm text-[var(--muted)]">ไม่พบรายการทรัพย์สินที่ตรงกับเงื่อนไข</div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-[900px] w-full text-sm">
-              <thead>
-                <tr className="border-b border-black/6 bg-stone-50/60 text-xs text-[var(--muted)]">
-                  <th className="px-4 py-2.5 w-14 text-right font-medium">ลำดับ</th>
-                  {th("number", "เลขทะเบียน")}
-                  {th("name", "ชื่อทรัพย์สิน")}
-                  {th("class", "ประเภท")}
-                  {th("status", "สถานะ")}
-                  {canManageAssets && th("ip", "IP / Location")}
-                  {canManageAssets && th("serial", "Serial")}
-                  {th("ma", "MA หมด")}
-                  {canManageAssets && <th className="px-4 py-2.5 text-right font-medium">จัดการ</th>}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-black/4">
-                {paged.rows.map((asset, rowIndex) => (
-                  <tr key={asset.id} className="transition hover:bg-white/50">
-                    <td className="px-4 py-3 text-right tabular-nums text-[var(--muted)]">{(paged.start + rowIndex).toLocaleString("th-TH")}</td>
-                    <td className="px-4 py-3">
-                      <Link
-                        href={`/assets/${asset.id}`}
-                        className="font-mono text-xs font-semibold text-[var(--accent-strong)] underline-offset-4 hover:underline"
-                      >
-                        {asset.assetNumber || `#${asset.id}`}
+          <>
+            {/* D2: มือถือแสดงเป็นการ์ด ตารางแสดงตั้งแต่ md ขึ้นไป (เรียงลำดับบนมือถือใช้ตัวเลือกในตัวกรองเพิ่มเติม) */}
+            <ul className="divide-y divide-black/6 border-t border-black/6 md:hidden">
+              {paged.rows.map((asset) => (
+                <li key={asset.id} className="px-4 py-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <Link href={`/assets/${asset.id}`} className="font-semibold leading-snug text-[var(--accent-strong)] underline-offset-4 hover:underline">
+                        {asset.assetName}
                       </Link>
-                    </td>
-                    <td className="px-4 py-3">
-                      <p className="font-medium">{asset.assetName}</p>
-                      {asset.usageDescription && (
-                        <p className="mt-0.5 text-xs text-[var(--muted)] line-clamp-1">{asset.usageDescription}</p>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      <StatusBadge tone="primary">{assetClassLabel(asset.assetClass)}</StatusBadge>
-                      {isItAsset(asset) && <><p className="mt-1 text-xs">{asset.deviceType || "–"}</p>
-                      <p className="text-xs text-[var(--muted)]">{asset.assetGroup}</p></>}
-                    </td>
-                    <td className="px-4 py-3">
-                      <StatusBadge tone={STATUS_TONE[asset.currentStatus as keyof typeof STATUS_TONE] ?? "neutral"}>
-                        {STATUS_LABELS[asset.currentStatus] ?? asset.currentStatus}
-                      </StatusBadge>
-                    </td>
-                    {canManageAssets && (
-                      <td className="px-4 py-3 font-mono text-xs">
-                        <p>{isItAsset(asset) ? asset.privateIp || "–" : "–"}</p>
-                        <p className="text-[var(--muted)]">{asset.locationDetail || ""}</p>
-                      </td>
+                      <p className="mt-0.5 break-all font-mono text-xs text-[var(--muted)]">{asset.assetNumber || `#${asset.id}`}</p>
+                    </div>
+                    <StatusBadge className="shrink-0 whitespace-nowrap" tone={STATUS_TONE[asset.currentStatus as keyof typeof STATUS_TONE] ?? "neutral"}>
+                      {STATUS_LABELS[asset.currentStatus] ?? asset.currentStatus}
+                    </StatusBadge>
+                  </div>
+                  {asset.usageDescription && <p className="mt-1 line-clamp-2 text-xs text-[var(--muted)]">{asset.usageDescription}</p>}
+                  <dl className="mt-2 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-xs">
+                    <dt className="text-[var(--muted)]">ประเภท</dt>
+                    <dd className="min-w-0">
+                      {assetClassLabel(asset.assetClass)}
+                      {isItAsset(asset) && <span className="text-[var(--muted)]"> · {asset.deviceType || asset.assetGroup}</span>}
+                    </dd>
+                    {canManageAssets && ((isItAsset(asset) && asset.privateIp) || asset.locationDetail) && (
+                      <>
+                        <dt className="text-[var(--muted)]">IP / ที่ตั้ง</dt>
+                        <dd className="min-w-0 break-words">
+                          {isItAsset(asset) && asset.privateIp && <span className="font-mono">{asset.privateIp}</span>}
+                          {isItAsset(asset) && asset.privateIp && asset.locationDetail && " · "}
+                          {asset.locationDetail}
+                        </dd>
+                      </>
                     )}
-                    {canManageAssets && (
-                      <td className="px-4 py-3 font-mono text-xs text-[var(--muted)]">{asset.serialNumber || "–"}</td>
+                    {canManageAssets && asset.serialNumber && (
+                      <>
+                        <dt className="text-[var(--muted)]">Serial</dt>
+                        <dd className="min-w-0 break-all font-mono">{asset.serialNumber}</dd>
+                      </>
                     )}
-                    <td className="px-4 py-3 text-xs text-[var(--muted)]">{formatThaiDate(asset.maintenanceEndDate)}</td>
-                    {canManageAssets && (
-                      <td className="px-4 py-3 text-right">
-                        <div className="inline-flex gap-2">
-                          <AssetFormModal
-                            facilities={facilitiesForSelect}
-                            deviceTypes={deviceTypes}
-                            workGroups={workGroups}
-                            locations={assetLocations}
-                            fixedFacilityId={facilityId}
-                            updaterName={user.fullName}
-                            mode="edit"
-                            asset={asset}
-                          >
-                            <ActionIconButton icon="pencil" label={`แก้ไข ${asset.assetName}`} />
-                          </AssetFormModal>
-                          <DeleteAssetButton assetId={asset.id} assetName={asset.assetName} />
-                        </div>
-                      </td>
-                    )}
+                    <dt className="text-[var(--muted)]">MA หมด</dt>
+                    <dd>{formatThaiDate(asset.maintenanceEndDate)}</dd>
+                  </dl>
+                  {canManageAssets && (
+                    <div className="mt-2 flex justify-end gap-2">
+                      <AssetFormModal
+                        facilities={facilitiesForSelect}
+                        deviceTypes={deviceTypes}
+                        workGroups={workGroups}
+                        locations={assetLocations}
+                        fixedFacilityId={facilityId}
+                        updaterName={user.fullName}
+                        mode="edit"
+                        asset={asset}
+                      >
+                        <ActionIconButton icon="pencil" label={`แก้ไข ${asset.assetName}`} />
+                      </AssetFormModal>
+                      <DeleteAssetButton assetId={asset.id} assetName={asset.assetName} />
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ul>
+
+            <div className="hidden overflow-x-auto md:block">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-black/6 bg-stone-50/60 text-xs text-[var(--muted)]">
+                    <th className="w-12 whitespace-nowrap px-3 py-2 text-right font-medium">ลำดับ</th>
+                    {th("number", "เลขทะเบียน")}
+                    {th("name", "ชื่อทรัพย์สิน")}
+                    {th("class", "ประเภท")}
+                    {th("status", "สถานะ")}
+                    {canManageAssets && th("ip", "IP / ที่ตั้ง")}
+                    {canManageAssets && th("serial", "Serial")}
+                    {th("ma", "MA หมด")}
+                    {canManageAssets && <th className="whitespace-nowrap px-3 py-2 text-right font-medium">จัดการ</th>}
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-black/4">
+                  {paged.rows.map((asset, rowIndex) => (
+                    <tr key={asset.id} className="transition hover:bg-white/50">
+                      <td className="px-3 py-2 text-right tabular-nums text-[var(--muted)]">{(paged.start + rowIndex).toLocaleString("th-TH")}</td>
+                      <td className="whitespace-nowrap px-3 py-2">
+                        <Link
+                          href={`/assets/${asset.id}`}
+                          className="font-mono text-xs font-semibold text-[var(--accent-strong)] underline-offset-4 hover:underline"
+                        >
+                          {asset.assetNumber || `#${asset.id}`}
+                        </Link>
+                      </td>
+                      <td className="min-w-48 px-3 py-2">
+                        <p className="font-medium">{asset.assetName}</p>
+                        {asset.usageDescription && (
+                          <p className="mt-0.5 text-xs text-[var(--muted)] line-clamp-1">{asset.usageDescription}</p>
+                        )}
+                      </td>
+                      <td className="px-3 py-2">
+                        <StatusBadge tone="primary" className="whitespace-nowrap">{assetClassLabel(asset.assetClass)}</StatusBadge>
+                        {isItAsset(asset) && <p className="mt-0.5 whitespace-nowrap text-xs">{asset.deviceType || "–"} <span className="text-[var(--muted)]">· {asset.assetGroup}</span></p>}
+                      </td>
+                      <td className="px-3 py-2">
+                        <StatusBadge className="whitespace-nowrap" tone={STATUS_TONE[asset.currentStatus as keyof typeof STATUS_TONE] ?? "neutral"}>
+                          {STATUS_LABELS[asset.currentStatus] ?? asset.currentStatus}
+                        </StatusBadge>
+                      </td>
+                      {canManageAssets && (
+                        <td className="min-w-32 px-3 py-2 text-xs">
+                          <p className="whitespace-nowrap font-mono">{isItAsset(asset) ? asset.privateIp || "–" : "–"}</p>
+                          {asset.locationDetail && <p className="text-[var(--muted)]">{asset.locationDetail}</p>}
+                        </td>
+                      )}
+                      {canManageAssets && (
+                        <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-[var(--muted)]">{asset.serialNumber || "–"}</td>
+                      )}
+                      <td className="whitespace-nowrap px-3 py-2 text-xs text-[var(--muted)]">{formatThaiDate(asset.maintenanceEndDate)}</td>
+                      {canManageAssets && (
+                        <td className="px-3 py-1.5 text-right">
+                          <div className="inline-flex gap-1.5">
+                            <AssetFormModal
+                              facilities={facilitiesForSelect}
+                              deviceTypes={deviceTypes}
+                              workGroups={workGroups}
+                              locations={assetLocations}
+                              fixedFacilityId={facilityId}
+                              updaterName={user.fullName}
+                              mode="edit"
+                              asset={asset}
+                            >
+                              <ActionIconButton icon="pencil" label={`แก้ไข ${asset.assetName}`} />
+                            </AssetFormModal>
+                            <DeleteAssetButton assetId={asset.id} assetName={asset.assetName} />
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
         <TablePagination {...paged} hrefFor={(page) => pageHref(basePath, query, page)} label="แบ่งหน้ารายการทรัพย์สิน" className="border-t border-black/6" />
       </div>

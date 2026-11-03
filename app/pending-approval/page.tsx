@@ -8,7 +8,7 @@ export default function PendingApprovalPage() {
       <TopNavigation current="login" user={null} />
       <section className="glass-panel rounded-[2rem] border border-black/10 p-6 sm:p-8 text-center">
         <div className="text-5xl mb-4">⏳</div>
-        <p className="text-sm uppercase tracking-[0.24em] text-[var(--muted)]">Pending Approval</p>
+        <p className="text-sm text-[var(--muted)]">รอการอนุมัติ</p>
         <h1 className="section-title mt-3 text-3xl font-semibold">รอการอนุมัติ</h1>
         <p className="mt-4 text-sm leading-7 text-[var(--muted)]">
           ระบบได้รับข้อมูลการสมัครสมาชิกของคุณแล้ว กรุณารอให้ผู้ดูแลระบบอนุมัติการเข้าใช้งานก่อน

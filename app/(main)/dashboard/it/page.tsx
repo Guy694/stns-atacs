@@ -331,7 +331,7 @@ export default async function ItDashboard({ searchParams }: HomeProps) {
         {/* ── Page heading ─────────────────────────────────────────────────── */}
         <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div className="min-w-0">
-            <p className="text-xs font-semibold tracking-[0.12em] text-[var(--accent-strong)]">ATACS · ครุภัณฑ์คอมพิวเตอร์</p>
+            <p className="text-xs font-semibold text-[var(--accent-strong)]">ครุภัณฑ์คอมพิวเตอร์</p>
             <h1 id="dashboard-heading" className="section-title mt-1 text-2xl font-semibold sm:text-3xl">ภาพรวมครุภัณฑ์คอมพิวเตอร์</h1>
             <p className="mt-1 text-sm text-[var(--muted)]">
               {quickScopeLabel} · ข้อมูล ณ {renderedAt}
@@ -724,7 +724,7 @@ export default async function ItDashboard({ searchParams }: HomeProps) {
         <div className="glass-panel rounded-2xl p-6 lg:p-7">
           <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <p className="text-xs font-medium uppercase tracking-[0.2em] text-[var(--muted)]">Provincial Overview</p>
+              <p className="text-xs font-medium text-[var(--muted)]">ภาพรวมจังหวัด</p>
               <h2 className="section-title mt-1 text-xl font-semibold">ความครบถ้วนการสำรวจรายอำเภอ</h2>
             </div>
             <p className="text-xs text-[var(--muted)]">
@@ -767,7 +767,7 @@ export default async function ItDashboard({ searchParams }: HomeProps) {
             <div className="rounded-xl border border-black/8 bg-white/80 p-5">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <p className="text-xs font-medium uppercase tracking-[0.18em] text-[var(--muted)]">สัดส่วนรายอำเภอ</p>
+                  <p className="text-xs font-medium text-[var(--muted)]">สัดส่วนรายอำเภอ</p>
                   <h3 className="mt-1 text-base font-semibold">กราฟวงกลมความครบถ้วน</h3>
                 </div>
                 <span className="rounded-full bg-[var(--accent)]/10 px-3 py-1 text-xs font-semibold text-[var(--accent-strong)]">

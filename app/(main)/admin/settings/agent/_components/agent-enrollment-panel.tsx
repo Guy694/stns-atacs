@@ -94,7 +94,7 @@ export function AgentEnrollmentPanel({ facilities, workGroups, staticInstallKey 
     <div className="glass-panel rounded-2xl p-5">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-xs font-medium uppercase tracking-[0.2em] text-[var(--muted)]">Enrollment</p>
+          <p className="text-xs font-medium text-[var(--muted)]">การลงทะเบียน Agent</p>
           <h2 className="section-title mt-1 text-xl font-semibold">สร้าง token สำหรับติดตั้ง Agent</h2>
           <p className="mt-1 text-sm text-[var(--muted)]">หนึ่ง token ผูกกับหนึ่งหน่วยงานเสมอ เพื่อระบุว่าเครื่องที่ติดตั้งอยู่ในหน่วยงานใด</p>
         </div>

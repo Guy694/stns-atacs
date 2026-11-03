@@ -71,7 +71,7 @@ export default async function AuditLogPage({ searchParams }: AuditPageProps) {
   return (
     <div className="mx-auto w-full max-w-7xl space-y-6">
       <div>
-        <p className="text-xs font-semibold tracking-[0.12em] text-[var(--accent-strong)]">ADMIN · SECURITY &amp; TRACKING</p>
+        <p className="text-xs font-semibold text-[var(--accent-strong)]">ระบบและความปลอดภัย · ประวัติการใช้งาน</p>
         <h1 className="section-title mt-1 text-3xl font-semibold">ประวัติการใช้งาน (Audit Log)</h1>
         <p className="mt-1 text-sm" style={{ color: "var(--muted)" }}>
           บันทึกการดำเนินการล่าสุด พร้อมค้นหาและกรองเชิงลึก
@@ -141,10 +141,10 @@ export default async function AuditLogPage({ searchParams }: AuditPageProps) {
           ค้นหา
         </button>
         <a
-          href={withBasePath(`/api/export/audit?search=${encodeURIComponent(search)}&actor=${encodeURIComponent(actorFilter)}&entity=${encodeURIComponent(entityFilter)}&action=${encodeURIComponent(actionFilter)}&dateFrom=${encodeURIComponent(dateFrom)}&dateTo=${encodeURIComponent(dateTo)}`)}
+          href={withBasePath(`/api/export/audit/?search=${encodeURIComponent(search)}&actor=${encodeURIComponent(actorFilter)}&entity=${encodeURIComponent(entityFilter)}&action=${encodeURIComponent(actionFilter)}&dateFrom=${encodeURIComponent(dateFrom)}&dateTo=${encodeURIComponent(dateTo)}`)}
           className="secondary-action"
         >
-          Export CSV
+          ส่งออก CSV
         </a>
         {(search || actorFilter || entityFilter || actionFilter || dateFrom || dateTo) && (
           <Link href="/admin/audit" className="rounded-xl border border-black/10 bg-white/80 px-4 py-2 text-xs text-[var(--muted)] hover:bg-white">

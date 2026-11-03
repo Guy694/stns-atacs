@@ -46,14 +46,14 @@ export default async function AdminPermissionsPage() {
       </div>
 
       <div>
-        <p className="text-xs font-semibold tracking-[0.12em] text-[var(--accent-strong)]">ADMIN · SECURITY</p>
+        <p className="text-xs font-semibold text-[var(--accent-strong)]">ตั้งค่าระบบ · สิทธิ์การใช้งาน</p>
         <h1 className="section-title mt-1 text-3xl font-semibold">จัดการ Permission Matrix</h1>
         <p className="mt-1 text-sm text-[var(--muted)]">
           ปรับสิทธิ์รายบทบาทแบบละเอียด โดยไม่ต้องยึดค่าตายตัวตาม role เดิม
         </p>
         <div className="mt-3">
           <a
-            href={withBasePath("/api/export/permissions")}
+            href={withBasePath("/api/export/permissions/")}
             className="secondary-action"
           >
             Export Policy JSON

@@ -15,8 +15,8 @@ const TRACK = "#eef3f8";
 
 export function Panel({ id, title, subtitle, children, action }: { id: string; title: string; subtitle?: string; children: React.ReactNode; action?: React.ReactNode }) {
   return (
-    <section aria-labelledby={id} className="min-w-0 rounded-2xl border border-[var(--line)] bg-white p-5">
-      <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
+    <section aria-labelledby={id} className="min-w-0 rounded-2xl border border-[var(--line)] bg-white p-4 sm:p-5">
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-2 sm:mb-4">
         <div>
           <h2 id={id} className="text-base font-semibold text-[var(--foreground)]">{title}</h2>
           {subtitle && <p className="mt-0.5 text-xs text-[var(--muted)]">{subtitle}</p>}
@@ -32,14 +32,14 @@ export function StatTile({ label, value, unit, detail, href }: { label: string; 
   const body = (
     <>
       <p className="text-sm font-medium text-[var(--muted)]">{label}</p>
-      <p className="mt-2 flex flex-wrap items-baseline gap-x-2">
-        <span className="text-4xl font-bold leading-none text-[var(--foreground)]">{value}</span>
+      <p className="mt-1.5 flex flex-wrap items-baseline gap-x-2 sm:mt-2">
+        <span className="text-3xl font-bold leading-none text-[var(--foreground)] sm:text-4xl">{value}</span>
         <span className="text-sm text-[var(--muted)]">{unit}</span>
       </p>
-      <p className="mt-3 text-xs leading-5 text-[var(--muted)]">{detail}</p>
+      <p className="mt-2 text-xs leading-5 text-[var(--muted)] sm:mt-3">{detail}</p>
     </>
   );
-  const className = "block min-w-0 rounded-2xl border border-[var(--line)] bg-white p-5";
+  const className = "block min-w-0 rounded-2xl border border-[var(--line)] bg-white p-4 sm:p-5";
   return href
     ? <Link href={href} className={`${className} transition hover:border-[var(--primary-soft-strong)] hover:bg-[var(--primary-soft)]/40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]`}>{body}</Link>
     : <div className={className}>{body}</div>;

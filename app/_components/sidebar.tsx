@@ -3,18 +3,14 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef } from "react";
 
-import { AppIcon, type IconName } from "@/app/_components/ui/icon";
-import { APP_MENU_GROUPS, APP_MENU_ITEMS, type AppMenuGroupKey } from "@/lib/menu";
+import { setMobileMenuOpen, useMobileMenuOpen } from "@/app/_components/mobile-menu-store";
+import { activeHrefFor, buildNavItems, type NavItem, type NavUser } from "@/app/_components/nav-items";
+import { AppIcon } from "@/app/_components/ui/icon";
+import { APP_MENU_GROUPS } from "@/lib/menu";
 import { withBasePath } from "@/lib/base-path";
-
-type NavUser = {
-  fullName: string;
-  role: "admin" | "officer" | "viewer";
-  facilityId?: number | null;
-  managedAssetFacilityIds?: number[];
-};
+import { APP_NAME, roleLabel } from "@/lib/app-brand";
 
 type SidebarProps = {
   user: NavUser;
@@ -23,27 +19,21 @@ type SidebarProps = {
   menuVisibility: Record<string, boolean>;
 };
 
-type NavItem = {
-  key: string;
-  href: string;
-  label: string;
-  icon: IconName;
-  group: AppMenuGroupKey;
-  adminOnly?: boolean;
-  officerOnly?: boolean;
-  hideForViewer?: boolean;
-  permissionKey?: string;
-  exact?: boolean;
-};
-
-function matchesPath(item: NavItem, pathname: string) {
-  if (item.exact) return pathname === item.href;
-  return pathname === item.href || pathname.startsWith(item.href.endsWith("/") ? item.href : `${item.href}/`);
-}
-
-/** Only the most specific matching item is active (/admin/settings/work-groups must not also light up /admin/settings). */
-function activeHrefFor(items: NavItem[], pathname: string) {
-  return items.filter((item) => matchesPath(item, pathname)).sort((a, b) => b.href.length - a.href.length)[0]?.href ?? null;
+/** Opens the mobile drawer; rendered inside the sticky mobile navbar so nothing floats over page content. */
+export function MobileMenuButton() {
+  const mobileOpen = useMobileMenuOpen();
+  return (
+    <button
+      type="button"
+      onClick={() => setMobileMenuOpen(true)}
+      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[var(--accent-strong)] text-white shadow-sm lg:hidden"
+      aria-label="เปิดเมนู"
+      aria-expanded={mobileOpen}
+      aria-controls="mobile-navigation"
+    >
+      <AppIcon name="menu" />
+    </button>
+  );
 }
 
 function NavLink({
@@ -84,17 +74,19 @@ function NavLink({
 
 export function Sidebar({ user, grantedPermissions, pendingRegistrationCount, menuVisibility }: SidebarProps) {
   const pathname = usePathname();
-  const [mobileOpen, setMobileOpen] = useState(false);
+  const mobileOpen = useMobileMenuOpen();
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (!mobileOpen) return;
 
+    closeButtonRef.current?.focus();
     const originalOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
 
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
-        setMobileOpen(false);
+        setMobileMenuOpen(false);
       }
     }
 
@@ -106,35 +98,7 @@ export function Sidebar({ user, grantedPermissions, pendingRegistrationCount, me
     };
   }, [mobileOpen]);
 
-  const baseItems = APP_MENU_ITEMS.filter((item) => {
-    if (!menuVisibility[item.key]) return false;
-    if (user.role === "officer" && item.key === "assets") return false;
-    if (item.adminOnly && user.role !== "admin") return false;
-    if (item.officerOnly && user.role !== "officer") return false;
-    if (item.hideForViewer && user.role === "viewer") return false;
-    if (item.permissionKey && !grantedPermissions.includes(item.permissionKey)) return false;
-    return true;
-  });
-  const items: NavItem[] =
-    user.role === "officer"
-      ? baseItems.flatMap((item) => {
-          if (item.key !== "dashboard") return [item];
-          return [
-            item,
-            {
-              key: "officer-assets",
-              href: (user.managedAssetFacilityIds?.length ?? 0) > 1
-                ? "/facilities"
-                : user.facilityId
-                  ? `/facilities/${user.facilityId}`
-                  : "/profile",
-              label: (user.managedAssetFacilityIds?.length ?? 0) > 1 ? "หน่วยงานในความดูแล" : "รายการทรัพย์สิน",
-              icon: "package",
-              group: "overview",
-            },
-          ];
-        })
-      : baseItems;
+  const items = buildNavItems({ user, grantedPermissions, menuVisibility });
 
   const activeHref = activeHrefFor(items, pathname);
 
@@ -152,7 +116,7 @@ export function Sidebar({ user, grantedPermissions, pendingRegistrationCount, me
         />
         <div className="min-w-0">
           <p className="text-base font-bold tracking-[0.08em] text-[var(--accent-strong)]">ATACS</p>
-          <p className="truncate text-xs font-medium text-slate-600">ระบบทะเบียนครุภัณฑ์</p>
+          <p className="truncate text-xs font-medium text-slate-600">{APP_NAME}</p>
           <p className="truncate text-[11px] text-slate-500">สสจ. จังหวัดสตูล</p>
         </div>
       </div>
@@ -172,7 +136,7 @@ export function Sidebar({ user, grantedPermissions, pendingRegistrationCount, me
                     item={item}
                     activeHref={activeHref}
                     pendingRegistrationCount={pendingRegistrationCount}
-                    onClick={() => setMobileOpen(false)}
+                    onClick={() => setMobileMenuOpen(false)}
                   />
                 ))}
               </div>
@@ -186,7 +150,7 @@ export function Sidebar({ user, grantedPermissions, pendingRegistrationCount, me
 
             <Link
               href="/"
-              onClick={() => setMobileOpen(false)}
+              onClick={() => setMobileMenuOpen(false)}
               className="flex min-h-11 items-center gap-3 rounded-[10px] px-3 py-2.5 text-sm font-medium text-slate-500 transition hover:bg-slate-50 hover:text-slate-800"
             >
               <AppIcon name="globe" className="w-4 shrink-0" />
@@ -200,22 +164,11 @@ export function Sidebar({ user, grantedPermissions, pendingRegistrationCount, me
 
   return (
     <>
-      {/* Mobile toggle button */}
-      <button
-        onClick={() => setMobileOpen(true)}
-        className="fixed left-3 top-3 z-40 flex h-11 w-11 items-center justify-center rounded-xl bg-[var(--accent-strong)] text-white shadow-md lg:hidden"
-        aria-label="เปิดเมนู"
-        aria-expanded={mobileOpen}
-        aria-controls="mobile-navigation"
-      >
-        <AppIcon name="menu" />
-      </button>
-
       {/* Mobile overlay */}
       {mobileOpen && (
         <div
           className="fixed inset-0 z-40 bg-slate-950/45 lg:hidden"
-          onClick={() => setMobileOpen(false)}
+          onClick={() => setMobileMenuOpen(false)}
         />
       )}
 
@@ -232,13 +185,22 @@ export function Sidebar({ user, grantedPermissions, pendingRegistrationCount, me
         }`}
       >
         <button
-          onClick={() => setMobileOpen(false)}
+          ref={closeButtonRef}
+          type="button"
+          onClick={() => setMobileMenuOpen(false)}
           aria-label="ปิดเมนู"
           className="absolute right-3 top-3 flex h-10 w-10 items-center justify-center rounded-xl text-slate-500 hover:bg-slate-100 hover:text-slate-900"
         >
           <AppIcon name="close" />
         </button>
-        {sidebarContent}
+        <div className="flex h-full flex-col">
+          <div className="min-h-0 flex-1">{sidebarContent}</div>
+          {/* ชื่อผู้ใช้ซ่อนจากแถบบนในจอเล็ก จึงแสดงไว้ท้ายเมนูแทน */}
+          <div className="border-t border-[var(--line)] px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] text-xs text-[var(--muted)]">
+            <p className="truncate font-semibold text-[var(--accent-strong)]">{user.fullName}</p>
+            <p className="mt-0.5">{roleLabel(user.role)}</p>
+          </div>
+        </div>
       </div>
 
       {/* Desktop sidebar (static) */}

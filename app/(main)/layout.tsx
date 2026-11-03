@@ -1,6 +1,9 @@
 import { redirect } from "next/navigation";
 
 import { MainNavbar } from "@/app/_components/main-navbar";
+import { MobileBottomNav } from "@/app/_components/mobile-bottom-nav";
+import { RouteGate } from "@/app/_components/route-gate";
+import { Toaster } from "@/app/_components/ui/toast";
 import { Sidebar } from "@/app/_components/sidebar";
 import { IdleLogoutGuard } from "@/app/_components/idle-logout-guard";
 import { AnnouncementPopup } from "@/app/_components/announcement-popup";
@@ -72,12 +75,15 @@ export default async function MainLayout({ children }: { children: React.ReactNo
         pendingRegistrationCount={pendingRegistrationCount}
         menuVisibility={menuVisibility}
       />
-      <div className="min-w-0 flex min-h-screen flex-1 flex-col overflow-x-hidden">
+      {/* Bottom padding on phones keeps content and footer clear of the fixed bottom navigation bar. */}
+      <div className="min-w-0 flex min-h-screen flex-1 flex-col overflow-x-hidden pb-[calc(4.5rem+env(safe-area-inset-bottom))] lg:pb-0">
         <MainNavbar user={user} />
-        {/* Mobile top padding to not overlap hamburger */}
         <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
           <MaintenanceBanner canManage={user.role === "admin"} />
-          <SchemaWarningBanner canManageSystem={user.role === "admin"} />
+          {/* Migration warning only where admins act on it, not on every page. */}
+          <RouteGate paths={["/dashboard", "/admin/settings"]}>
+            <SchemaWarningBanner canManageSystem={user.role === "admin"} />
+          </RouteGate>
           {children}
         </main>
         <footer className="px-4 pb-6 sm:px-6 lg:px-8">
@@ -88,6 +94,8 @@ export default async function MainLayout({ children }: { children: React.ReactNo
           </div>
         </footer>
       </div>
+      <MobileBottomNav user={user} grantedPermissions={grantedPermissions} menuVisibility={menuVisibility} />
+      <Toaster />
     </div>
   );
 }

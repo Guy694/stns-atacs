@@ -31,6 +31,9 @@ import { getPendingDisposalAssetIds, getRepairStats } from "@/lib/replacement-pl
 import { todayBangkok } from "@/lib/local-date";
 import { attachDisposalDates } from "@/lib/asset-disposal-dates";
 
+import { ReportNav } from "./_components/report-nav";
+import { REPORT_VIEW_GROUPS, type ReportView } from "./_components/report-views";
+
 type Props = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
@@ -40,24 +43,12 @@ function readParam(p: Record<string, string | string[] | undefined>, key: string
   return Array.isArray(v) ? v[0] : (v ?? "");
 }
 
-const VIEWS = [
-  { key: "summary", label: "ภาพรวม" },
-  { key: "facility", label: "แยกตามหน่วยงาน" },
-  { key: "type", label: "แยกตามประเภท" },
-  { key: "expiring", label: "ใกล้หมดอายุ MA" },
-  { key: "broken", label: "ชำรุด / ไม่ใช้งาน" },
-  { key: "replacement", label: "แผนทดแทน" },
-  { key: "valuation", label: "มูลค่าและค่าเสื่อมราคา" },
-  { key: "depreciation", label: "สรุปค่าเสื่อมรายปีงบ" },
-  { key: "repairs", label: "งานซ่อม" },
-  { key: "transfers", label: "โอนย้าย" },
-  { key: "disposal", label: "จำหน่าย / สูญหาย" },
-] as const;
+const VIEW_KEYS: readonly string[] = REPORT_VIEW_GROUPS.flatMap((group) => group.views.map((v) => v.key));
 
 const baht = (value: number | null | undefined) => (value === null || value === undefined ? "-" : value.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
 const MIGRATION_NOTE = "ยังไม่ได้เปิดใช้ข้อมูลส่วนนี้ (ต้องรัน database/add_asset_lifecycle.sql)";
 
-type View = (typeof VIEWS)[number]["key"];
+type View = ReportView;
 
 const TODAY = new Date();
 
@@ -70,7 +61,8 @@ export default async function ReportsPage({ searchParams }: Props) {
   const canMutate = user.role !== "viewer";
 
   const params = await searchParams;
-  const view = (readParam(params, "view") || "summary") as View;
+  const requestedView = readParam(params, "view");
+  const view = (VIEW_KEYS.includes(requestedView) ? requestedView : "summary") as View;
   const todayIso = todayBangkok(TODAY);
   const currentFiscalYear = fiscalYearOf(todayIso);
   const fiscalYear = Number(readParam(params, "fy")) || currentFiscalYear;
@@ -83,7 +75,7 @@ export default async function ReportsPage({ searchParams }: Props) {
     scopedFacilityId ? getFacilityById(scopedFacilityId) : Promise.resolve(null),
   ]);
   const reportScopeLabel = scopedFacility?.name ?? (scopedFacilityId ? "หน่วยงานของคุณ" : "ทุกหน่วยงาน");
-  const exportHref = withBasePath(scopedFacilityId ? `/api/export/assets?facilityId=${scopedFacilityId}` : "/api/export/assets");
+  const exportHref = withBasePath(scopedFacilityId ? `/api/export/assets/?facilityId=${scopedFacilityId}` : "/api/export/assets/");
   const total = assets.length;
   const active = assets.filter((a) => a.currentStatus === "Active").length;
   const broken = assets.filter((a) => a.currentStatus === "Broken").length;
@@ -173,63 +165,39 @@ export default async function ReportsPage({ searchParams }: Props) {
   // ── broken / inactive ───────────────────────────────────────────────
   const brokenList = assets.filter((a) => a.currentStatus === "Broken" || a.currentStatus === "Inactive");
 
-  function navClass(key: View) {
-    return `rounded-xl px-4 py-2 text-sm font-medium transition ${
-      view === key
-        ? "bg-[var(--primary)] text-white shadow-sm"
-        : "bg-white/70 text-[var(--muted)] hover:bg-white hover:text-[var(--foreground)]"
-    }`;
-  }
-
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6">
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-xs font-semibold tracking-[0.12em] text-[var(--accent-strong)]">ATACS · รายงาน</p>
-          <h1 className="section-title mt-1 text-3xl font-semibold">รายงาน</h1>
+          <h1 className="section-title text-3xl font-semibold">รายงาน</h1>
           <p className="mt-1 text-sm text-[var(--muted)]">แสดงข้อมูล: {reportScopeLabel}</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <span className="text-xs text-[var(--muted)]">ข้อมูล ณ วันที่ {formatThaiDate(TODAY)}</span>
-          <a
-            href={exportHref}
-            className="inline-flex items-center gap-2 rounded-xl border border-[var(--primary-soft-strong)] bg-[var(--primary-soft)] px-4 py-2 text-sm font-medium text-[var(--primary-text)] transition hover:bg-[var(--primary-soft-strong)]"
-          >
-            <AppIcon name="download" className="h-4 w-4" /> Export CSV
+          <a href={exportHref} className="secondary-action gap-2">
+            <AppIcon name="download" className="h-4 w-4" /> ส่งออกทะเบียนทรัพย์สิน CSV
           </a>
         </div>
       </div>
 
-      {/* KPI strip */}
-      <div className="grid gap-3 sm:grid-cols-5 lg:grid-cols-10">
+      {/* KPI strip: only the decision-relevant counts; colour only where it carries meaning */}
+      <dl className="grid grid-cols-2 gap-3 sm:grid-cols-5">
         {[
-          { label: "ทรัพย์สินรวม", value: total, color: "text-[var(--accent-strong)]" },
-          { label: "ใช้งานอยู่", value: active, color: "text-emerald-600" },
-          { label: "ชำรุด", value: broken, color: "text-rose-600" },
-          { label: "ไม่ใช้งาน", value: inactive, color: "text-amber-600" },
-          { label: "จำหน่าย/สูญหาย", value: terminalCount, color: "text-slate-500" },
-          { label: "IT Hardware", value: hw, color: "text-sky-700" },
-          { label: "IT Software", value: sw, color: "text-indigo-600" },
-          { label: "ทรัพย์สินกลุ่มอื่น", value: total - hw - sw, color: "text-slate-700" },
-          { label: "หน่วยงาน", value: facilities, color: "text-[var(--accent-strong)]" },
-          { label: "อำเภอ", value: districts, color: "text-[var(--accent-strong)]" },
+          { label: "ทรัพย์สินทั้งหมด", value: total, color: "text-[var(--foreground)]", wide: true },
+          { label: assetStatusLabel("Active"), value: active, color: "text-[var(--foreground)]" },
+          { label: assetStatusLabel("Broken"), value: broken, color: broken > 0 ? "text-[var(--state-danger-fg)]" : "text-[var(--foreground)]" },
+          { label: "จำหน่าย / สูญหาย", value: terminalCount, color: "text-[var(--muted)]" },
+          { label: "หน่วยงาน", value: facilities, color: "text-[var(--foreground)]" },
         ].map((k) => (
-          <div key={k.label} className="glass-panel rounded-2xl p-4 text-center">
-            <p className={`text-2xl font-bold ${k.color}`}>{k.value}</p>
-            <p className="mt-0.5 text-xs text-[var(--muted)]">{k.label}</p>
+          <div key={k.label} className={`glass-panel flex flex-col-reverse rounded-2xl p-4 text-center ${k.wide ? "col-span-2 sm:col-span-1" : ""}`}>
+            <dt className="mt-0.5 text-xs text-[var(--muted)]">{k.label}</dt>
+            <dd className={`text-2xl font-bold tabular-nums ${k.color}`}>{k.value.toLocaleString("th-TH")}</dd>
           </div>
         ))}
-      </div>
+      </dl>
 
-      {/* Tab nav */}
-      <div className="flex flex-wrap gap-2">
-        {VIEWS.map((v) => (
-          <Link key={v.key} href={`/reports?view=${v.key}${fiscalYear !== currentFiscalYear ? `&fy=${fiscalYear}` : ""}`} className={navClass(v.key)}>
-            {v.label}
-          </Link>
-        ))}
-      </div>
+      <ReportNav view={view} fiscalYear={fiscalYear} currentFiscalYear={currentFiscalYear} />
 
       {/* ── View: summary ─────────────────────────────────────────────── */}
       {view === "summary" && (
@@ -259,7 +227,7 @@ export default async function ReportsPage({ searchParams }: Props) {
       {view === "facility" && (
         <div className="glass-panel overflow-hidden rounded-2xl">
           <div className="border-b border-black/6 px-5 py-3 font-semibold">
-            รายงานแยกตามหน่วยงาน <span className="ml-2 text-sm font-normal text-[var(--muted)]">{byFacility.length} หน่วยงาน</span>
+            รายงานแยกตามหน่วยงาน <span className="ml-2 text-sm font-normal text-[var(--muted)]">{byFacility.length} หน่วยงาน · {districts} อำเภอ</span>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -310,6 +278,7 @@ export default async function ReportsPage({ searchParams }: Props) {
         <div className="glass-panel overflow-hidden rounded-2xl">
           <div className="border-b border-black/6 px-5 py-3 font-semibold">
             รายงานแยกตามประเภท <span className="ml-2 text-sm font-normal text-[var(--muted)]">{byType.length} ประเภท</span>
+            <p className="mt-0.5 text-xs font-normal text-[var(--muted)]">IT Hardware {hw.toLocaleString("th-TH")} · IT Software {sw.toLocaleString("th-TH")} · ทรัพย์สินกลุ่มอื่น {(total - hw - sw).toLocaleString("th-TH")}</p>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -470,9 +439,9 @@ export default async function ReportsPage({ searchParams }: Props) {
                 — คะแนนรวมกำหนดความเร่งด่วน งบประมาณประมาณการจากราคาทุนเดิม
               </p>
             </div>
-            <a href={withBasePath(`/api/export/replacement${scopedFacilityId ? `?facilityId=${scopedFacilityId}` : ""}`)}
-              className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl border border-[var(--primary-soft-strong)] bg-[var(--primary-soft)] px-4 text-sm font-semibold text-[var(--primary-text)] hover:bg-[var(--primary-soft-strong)]">
-              <AppIcon name="download" className="h-4 w-4" /> แผนทดแทน Excel
+            <a href={withBasePath(`/api/export/replacement/${scopedFacilityId ? `?facilityId=${scopedFacilityId}` : ""}`)}
+              className="secondary-action shrink-0 gap-2">
+              <AppIcon name="download" className="h-4 w-4" /> ส่งออกแผนทดแทน Excel
             </a>
           </div>
           <div className="grid gap-3 border-b border-black/6 p-5 sm:grid-cols-3">
@@ -600,10 +569,10 @@ export default async function ReportsPage({ searchParams }: Props) {
 
           <div className="flex flex-wrap items-center gap-2">
             <a
-              href={withBasePath(`/api/export/depreciation?fy=${fiscalYear}${scopedFacilityId ? `&facilityId=${scopedFacilityId}` : ""}`)}
-              className="filter-button border border-[var(--line)] text-[var(--primary-text)]"
+              href={withBasePath(`/api/export/depreciation/?fy=${fiscalYear}${scopedFacilityId ? `&facilityId=${scopedFacilityId}` : ""}`)}
+              className="secondary-action gap-2"
             >
-              ดาวน์โหลด CSV
+              <AppIcon name="download" className="h-4 w-4" /> ส่งออกงบค่าเสื่อม CSV
             </a>
             {depreciationRollup.totals.incomplete > 0 && (
               <span className="text-xs text-[var(--muted)]">
@@ -679,11 +648,11 @@ export default async function ReportsPage({ searchParams }: Props) {
                 <p className="font-semibold">สรุปมูลค่าตามประเภททรัพย์สิน</p>
                 <p className="text-xs text-[var(--muted)]">ณ วันที่ {formatThaiDate(valuationReport.asOf)} · เส้นตรง ราคาซาก 1 บาท · ไม่รวมรายการจำหน่าย/สูญหาย {valuationReport.terminalCount} รายการ</p>
               </div>
-              <a href={withBasePath(`/print/assets/valuation?${valuationQuery}`)} target="_blank" rel="noopener" className="inline-flex items-center gap-2 rounded-xl border border-[var(--primary-soft-strong)] bg-white px-4 py-2 text-sm font-medium text-[var(--primary-text)] hover:bg-[var(--primary-soft)]">
+              <a href={withBasePath(`/print/assets/valuation?${valuationQuery}`)} target="_blank" rel="noopener" className="secondary-action gap-2">
                 <AppIcon name="printer" className="h-4 w-4" /> พิมพ์ / PDF (A4)
               </a>
-              <a href={withBasePath(`/api/export/valuation?fy=${fiscalYear}${scopedFacilityId ? `&facilityId=${scopedFacilityId}` : valuationFacility ? `&facilityId=${valuationFacility}` : ""}${valuationClass ? `&assetClass=${valuationClass}` : ""}`)} className="inline-flex items-center gap-2 rounded-xl border border-[var(--primary-soft-strong)] bg-[var(--primary-soft)] px-4 py-2 text-sm font-medium text-[var(--primary-text)] hover:bg-[var(--primary-soft-strong)]">
-                <AppIcon name="download" className="h-4 w-4" /> ทะเบียนค่าเสื่อม CSV
+              <a href={withBasePath(`/api/export/valuation/?fy=${fiscalYear}${scopedFacilityId ? `&facilityId=${scopedFacilityId}` : valuationFacility ? `&facilityId=${valuationFacility}` : ""}${valuationClass ? `&assetClass=${valuationClass}` : ""}`)} className="secondary-action gap-2">
+                <AppIcon name="download" className="h-4 w-4" /> ส่งออกทะเบียนค่าเสื่อม CSV
               </a>
             </div>
             <div className="overflow-x-auto">

@@ -73,7 +73,7 @@ export default async function AgentSettingsPage() {
     <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <p className="text-xs font-semibold tracking-[0.12em] text-[var(--accent-strong)]">ADMIN · AGENT ENROLLMENT</p>
+          <p className="text-xs font-semibold text-[var(--accent-strong)]">ตั้งค่าระบบ · Agent</p>
           <h1 className="section-title mt-1 text-3xl font-semibold">ATACS Agent</h1>
           <p className="mt-1 text-sm text-[var(--muted)]">สร้าง token ให้หน่วยงานติดตั้ง agent และติดตามเครื่องที่รายงาน inventory เข้ามาอัตโนมัติ</p>
         </div>

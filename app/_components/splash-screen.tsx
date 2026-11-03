@@ -5,6 +5,7 @@ import { useLayoutEffect, useState } from "react";
 
 import { ROUTE_LOADING_ID, SPLASH_SEEN_KEY } from "@/lib/splash";
 import { withBasePath } from "@/lib/base-path";
+import { APP_NAME } from "@/lib/app-brand";
 
 const MIN_VISIBLE_MS = 1200;
 const MAX_VISIBLE_MS = 8000;
@@ -83,7 +84,7 @@ export function SplashScreen() {
         </div>
         <p className="atacs-splash__brand">ATACS Satun</p>
         <p className="atacs-splash__sub">Asset Tracking and Control System</p>
-        <p className="atacs-splash__title">ระบบทะเบียนทรัพย์สินและครุภัณฑ์ จังหวัดสตูล</p>
+        <p className="atacs-splash__title">{APP_NAME} จังหวัดสตูล</p>
         <div className="atacs-splash__bar" aria-hidden="true"><span /></div>
         <p className="atacs-splash__hint">กำลังเตรียมข้อมูล…</p>
       </div>

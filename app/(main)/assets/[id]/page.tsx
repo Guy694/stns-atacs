@@ -23,7 +23,7 @@ import { QrDownloadButton } from "@/app/(main)/assets/_components/print-button";
 import { getAgentDeviceByLinkedAssetId, type AgentDevice } from "@/lib/agent";
 import { listAssetStatusHistory } from "@/lib/asset-status-history";
 import { canAccessAssetFacility, canManageAssetRecord, canManageFacility, canSeeSensitiveAssetNetwork } from "@/lib/permissions";
-import { formatThaiDate, formatThaiDateTime } from "@/lib/date-format";
+import { formatThaiDate } from "@/lib/date-format";
 import { hasPermission } from "@/lib/role-permissions";
 import { windowsLicenseStatusLabel } from "@/lib/windows-license";
 import { listDisposalRequests } from "@/lib/asset-disposals";
@@ -32,10 +32,12 @@ import { isTerminalAssetStatus } from "@/lib/asset-status";
 import { listAssetTransfers } from "@/lib/asset-transfers";
 import { depreciationSchedule, fiscalYearOf, valueAsset } from "@/lib/asset-valuation";
 import { DISPOSAL_REQUEST_TYPE_LABELS } from "@/lib/disposal-options";
-import { AuditHistorySection, DisposalHistorySection, RepairHistorySection, TransferHistorySection, ValuationSection } from "./_components/lifecycle-sections";
+import { AuditHistorySection, DisposalHistorySection, RepairHistorySection, StatusHistorySection, TransferHistorySection, ValuationSection } from "./_components/lifecycle-sections";
+import { AssetSummaryStrip, type LastInspection } from "./_components/asset-summary-strip";
+import { HistoryTabs, type HistoryTab } from "./_components/history-tabs";
 import { listAuditLogs, type AuditLog } from "@/lib/audit";
 import { InspectionCheckIn } from "./_components/inspection-check-in";
-import { listOpenInspectionsForAsset } from "@/lib/inspection";
+import { listInspectionHistoryForAsset, listOpenInspectionsForAsset } from "@/lib/inspection";
 import { withBasePath } from "@/lib/base-path";
 import { todayBangkok } from "@/lib/local-date";
 
@@ -47,7 +49,7 @@ type Props = {
 function Field({ label, value }: { label: string; value?: string | null }) {
   return (
     <div className="min-w-0">
-      <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-[var(--muted)]">{label}</p>
+      <p className="text-[11px] font-medium text-[var(--muted)]">{label}</p>
       <p className="mt-0.5 break-words text-sm font-medium text-[var(--foreground)]">{value || "–"}</p>
     </div>
   );
@@ -192,15 +194,18 @@ export default async function AssetDetailPage({ params, searchParams }: Props) {
     hasPermission(user.role, "transfer.manage"),
     hasPermission(user.role, "disposal.manage"),
   ]);
-  const [transfers, repairs, disposals] = await Promise.all([
+  const [transfers, repairs, disposals, inspectionHistory] = await Promise.all([
     listAssetTransfers(asset.id),
     canViewRepairs ? listRepairs({ assetId: asset.id, limit: 100 }) : Promise.resolve({ rows: [], schemaReady: true }),
     listDisposalRequests({ assetId: asset.id, limit: 50 }),
+    listInspectionHistoryForAsset(asset.id),
   ]);
   const terminal = isTerminalAssetStatus(asset.currentStatus);
   const canInspect = !terminal && canManageFacility(user, asset.facilityId) && user.role !== "viewer" && (await hasPermission(user.role, "inspection.create"));
   const openRounds = canInspect ? await listOpenInspectionsForAsset(asset.id) : [];
-  const checkedParam = Number((await searchParams)?.checked);
+  const query = (await searchParams) ?? {};
+  const checkedParam = Number(query.checked);
+  const historyParam = typeof query.history === "string" ? query.history : undefined;
   const serialTwins = asset.serialNumber ? await findSerialTwins(asset.id, asset.serialNumber) : [];
   const [canViewLoans, canManageLoans] = await Promise.all([hasPermission(user.role, "loans.view"), hasPermission(user.role, "loans.manage")]);
   const activeLoan = canViewLoans ? (await listLoans({ assetId: asset.id, status: "OnLoan", limit: 1 })).rows[0] : undefined;
@@ -223,6 +228,61 @@ export default async function AssetDetailPage({ params, searchParams }: Props) {
   const daysLeft = maStart
     ? Math.ceil((maStart.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
     : null;
+
+  // Rounds are newest first, so the first one with a result is the latest count.
+  const lastChecked = inspectionHistory.find((row) => row.inspectionStatus !== "Pending");
+  const lastInspection: LastInspection | null = lastChecked
+    ? {
+        roundName: lastChecked.roundName,
+        inspectionId: lastChecked.inspectionId,
+        found: lastChecked.inspectionStatus === "Found",
+        assetStatus: lastChecked.assetStatus,
+        checkedAt: lastChecked.checkedAt || lastChecked.startDate,
+        checkedBy: lastChecked.checkedBy,
+      }
+    : null;
+  const pendingRound = openRounds.find((round) => round.inspectionStatus === "Pending");
+
+  const countLabel = (count: number, limit?: number) => (limit !== undefined && count >= limit ? `${limit.toLocaleString("th-TH")}+` : count.toLocaleString("th-TH"));
+  const historyTabs: HistoryTab[] = [
+    {
+      key: "status",
+      label: "สถานะ",
+      count: countLabel(statusHistory.length),
+      anchors: ["status-history-heading"],
+      content: <StatusHistorySection rows={statusHistory} bare />,
+    },
+    ...(canViewRepairs
+      ? [{
+          key: "repairs",
+          label: "ซ่อม",
+          count: repairs.schemaReady ? countLabel(repairs.rows.length, 100) : undefined,
+          anchors: ["repair-history-heading"],
+          content: <RepairHistorySection rows={repairs.rows} schemaReady={repairs.schemaReady} bare />,
+        }]
+      : []),
+    {
+      key: "transfers",
+      label: "โอนย้าย",
+      count: transfers.schemaReady ? countLabel(transfers.rows.length) : undefined,
+      anchors: ["transfer-history-heading"],
+      content: <TransferHistorySection rows={transfers.rows} schemaReady={transfers.schemaReady} bare />,
+    },
+    {
+      key: "audit",
+      label: "แก้ไขข้อมูล",
+      count: assetAuditHistory.schemaReady ? countLabel(assetAuditHistory.rows.length, 30) : undefined,
+      anchors: ["audit-history-heading"],
+      content: <AuditHistorySection rows={assetAuditHistory.rows} schemaReady={assetAuditHistory.schemaReady} bare />,
+    },
+  ];
+
+  const printLinks = [
+    { href: `/print/assets/register?ids=${asset.id}`, label: "ทะเบียนคุมทรัพย์สิน (A4 แนวนอน)" },
+    { href: `/print/assets/${asset.id}`, label: "พิมพ์ประวัติครุภัณฑ์" },
+    { href: `/print/stickers?ids=${asset.id}&size=mini`, label: "พิมพ์สติ๊กเกอร์ QR (A4)" },
+  ];
+  const showWorkflowActions = !terminal && canMutateThisAsset;
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6">
@@ -258,12 +318,9 @@ export default async function AssetDetailPage({ params, searchParams }: Props) {
       )}
 
       {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+      <div className="flex flex-col gap-4">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <StatusBadge tone={assetStatusTone(asset.currentStatus)}>
-              {assetStatusLabel(asset.currentStatus)}
-            </StatusBadge>
             <StatusBadge tone="primary">
               {assetClassLabel(asset.assetClass)}
             </StatusBadge>
@@ -274,34 +331,91 @@ export default async function AssetDetailPage({ params, searchParams }: Props) {
           </div>
           <h1 className="section-title mt-2 break-words text-2xl font-semibold leading-tight sm:text-3xl">{asset.assetName}</h1>
           <p className="mt-1 break-all font-mono text-sm text-[var(--muted)]">{asset.assetNumber}</p>
-          <Link href={`/print/assets/register?ids=${asset.id}`} className="mt-2 inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-[var(--line)] bg-white px-3 text-xs font-medium text-[var(--foreground)] hover:bg-[var(--primary-soft)]">
-            <AppIcon name="printer" className="h-3.5 w-3.5" /> ทะเบียนคุมทรัพย์สิน (A4 แนวนอน)
-          </Link>{" "}
-          <Link href={`/print/assets/${asset.id}`} className="mt-2 inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-[var(--line)] bg-white px-3 text-xs font-medium text-[var(--foreground)] hover:bg-[var(--primary-soft)]">
-            <AppIcon name="printer" className="h-3.5 w-3.5" /> พิมพ์ประวัติครุภัณฑ์
-          </Link>{" "}
-          <Link href={`/print/stickers?ids=${asset.id}&size=mini`} className="mt-2 inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-[var(--line)] bg-white px-3 text-xs font-medium text-[var(--foreground)] hover:bg-[var(--primary-soft)]">
-            <AppIcon name="printer" className="h-3.5 w-3.5" /> พิมพ์สติ๊กเกอร์ QR (A4)
-          </Link>
         </div>
-        {canMutateThisAsset && (
-          <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
-            <AssetFormModal
-              facilities={user.role === "admin" ? facilitiesForSelect : facilitiesForSelect.filter((facility) => facility.id === asset.facilityId)}
-              deviceTypes={deviceTypes}
-              workGroups={user.role === "admin" ? workGroups : workGroups.filter((group) => group.facilityId === asset.facilityId)}
-              locations={assetLocations}
-              updaterName={user.fullName}
-              mode="edit"
-              asset={asset}
-            >
-              <span className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-[var(--primary-soft-strong)] bg-[var(--primary-soft)] px-4 py-2 text-sm font-medium text-[var(--primary-text)] transition hover:bg-[var(--primary-soft-strong)]">
-                แก้ไข
-              </span>
-            </AssetFormModal>
-            {canDeleteThisAsset && <DeleteAssetButton assetId={asset.id} assetName={asset.assetName} />}
+
+        <AssetSummaryStrip
+          status={asset.currentStatus}
+          facilityName={asset.facilityName}
+          workGroupName={asset.workGroupName}
+          locationDetail={asset.locationDetail}
+          valuation={valuation}
+          asOf={today}
+          maEndDate={asset.maintenanceEndDate}
+          maDaysLeft={daysLeft}
+          lastInspection={lastInspection}
+          pendingRoundName={pendingRound?.roundName}
+          updatedAt={asset.updatedAt}
+          updatedBy={asset.updatedBy}
+        />
+
+        {/* Toolbar: one primary action (แก้ไข), workflow actions as secondary/danger, print behind a disclosure on mobile */}
+        <div className="flex flex-col gap-2">
+          <div role="group" aria-label="การดำเนินการ" className="flex flex-wrap items-center gap-2">
+            {canMutateThisAsset && (
+              <AssetFormModal
+                facilities={user.role === "admin" ? facilitiesForSelect : facilitiesForSelect.filter((facility) => facility.id === asset.facilityId)}
+                deviceTypes={deviceTypes}
+                workGroups={user.role === "admin" ? workGroups : workGroups.filter((group) => group.facilityId === asset.facilityId)}
+                locations={assetLocations}
+                updaterName={user.fullName}
+                mode="edit"
+                asset={asset}
+              >
+                <button type="button" className="primary-action">
+                  <AppIcon name="pencil" className="h-4 w-4" /> แก้ไข
+                </button>
+              </AssetFormModal>
+            )}
+            {showWorkflowActions && canTransfer && (
+              <Link href={`/transfer?assetId=${asset.id}`} className="secondary-action gap-2">
+                <AppIcon name="package" className="h-4 w-4" /> โอนย้าย
+              </Link>
+            )}
+            {showWorkflowActions && canManageLoans && !activeLoan && asset.currentStatus !== "Broken" && (
+              <Link href={`/loans/new?assetId=${asset.id}`} className="secondary-action gap-2">
+                <AppIcon name="repeat" className="h-4 w-4" /> ให้ยืม
+              </Link>
+            )}
+            {showWorkflowActions && canManageRepairs && (
+              <Link href={openRepair ? `/repairs/${openRepair.id}` : `/repairs/new?assetId=${asset.id}`} className="secondary-action gap-2">
+                <AppIcon name="wrench" className="h-4 w-4" /> {openRepair ? "ดูงานซ่อมที่เปิดอยู่" : "แจ้งซ่อม"}
+              </Link>
+            )}
+            {showWorkflowActions && canDispose && (
+              <Link href={`/disposal?assetId=${asset.id}`} className="danger-action">
+                <AppIcon name="clipboard-check" className="h-4 w-4" /> ชำรุด / เสนอจำหน่าย
+              </Link>
+            )}
+            {printLinks.map((link) => (
+              <Link key={link.href} href={link.href} className="secondary-action hidden gap-2 sm:inline-flex">
+                <AppIcon name="printer" className="h-4 w-4" /> {link.label}
+              </Link>
+            ))}
+            {canMutateThisAsset && canDeleteThisAsset && <DeleteAssetButton assetId={asset.id} assetName={asset.assetName} />}
           </div>
-        )}
+          <details className="group rounded-xl border border-[var(--line)] bg-white/80 sm:hidden">
+            <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-2 px-4 text-sm font-semibold text-[var(--accent-strong)] [&::-webkit-details-marker]:hidden">
+              <span className="inline-flex items-center gap-2"><AppIcon name="printer" className="h-4 w-4" /> การดำเนินการอื่น</span>
+              <AppIcon name="arrow-down" className="h-4 w-4 transition group-open:rotate-180" />
+            </summary>
+            <div className="flex flex-col gap-2 border-t border-[var(--line)] p-3">
+              {printLinks.map((link) => (
+                <Link key={link.href} href={link.href} className="secondary-action justify-start gap-2">
+                  <AppIcon name="printer" className="h-4 w-4" /> {link.label}
+                </Link>
+              ))}
+            </div>
+          </details>
+          {terminal ? (
+            <p className="rounded-xl border border-stone-300 bg-stone-100 px-4 py-2.5 text-sm text-stone-600">
+              ทรัพย์สินนี้{asset.currentStatus === "Lost" ? "บันทึกสูญหาย" : "จำหน่าย"}แล้วตามคำขอที่อนุมัติ จึงไม่มีการดำเนินการเพิ่มเติม
+            </p>
+          ) : !canMutateThisAsset ? (
+            <p className="rounded-xl border border-stone-300 bg-stone-100 px-4 py-2.5 text-sm text-stone-600">
+              คุณสามารถดูข้อมูลได้อย่างเดียว เนื่องจากไม่มีสิทธิ์จัดการทรัพย์สินของหน่วยงานนี้
+            </p>
+          ) : null}
+        </div>
       </div>
 
       {openRounds.length > 0 && (
@@ -342,7 +456,7 @@ export default async function AssetDetailPage({ params, searchParams }: Props) {
 
           {/* ข้อมูลหน่วยงาน */}
           <div className="glass-panel rounded-2xl p-5">
-            <h2 className="mb-4 text-sm font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">ข้อมูลหน่วยงาน</h2>
+            <h2 className="mb-4 text-sm font-semibold text-[var(--muted)]">ข้อมูลหน่วยงาน</h2>
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="หน่วยงาน" value={asset.facilityName} />
               <Field label="อำเภอ" value={asset.districtName} />
@@ -354,7 +468,7 @@ export default async function AssetDetailPage({ params, searchParams }: Props) {
 
           {/* ข้อมูลทรัพย์สิน */}
           <div className="glass-panel rounded-2xl p-5">
-            <h2 className="mb-4 text-sm font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">ข้อมูลทรัพย์สิน</h2>
+            <h2 className="mb-4 text-sm font-semibold text-[var(--muted)]">ข้อมูลทรัพย์สิน</h2>
             <AssetImageGallery images={asset.assetImages} assetName={asset.assetName} />
             {supportsAgentAsset(asset) && <ComputerSpecPanel device={agentDevice} />}
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -376,12 +490,12 @@ export default async function AssetDetailPage({ params, searchParams }: Props) {
 
           {/* สัญญา MA */}
           <div className="glass-panel rounded-2xl p-5">
-            <h2 className="mb-4 text-sm font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">สัญญาบำรุงรักษา (MA)</h2>
+            <h2 id="ma-heading" className="mb-4 scroll-mt-20 text-sm font-semibold text-[var(--muted)]">สัญญาบำรุงรักษา (MA)</h2>
             <div className="grid gap-4 sm:grid-cols-3">
               <Field label="วันเริ่มต้น MA" value={formatThaiDate(asset.maintenanceStartDate)} />
               <Field label="วันสิ้นสุด MA" value={formatThaiDate(asset.maintenanceEndDate)} />
               <div>
-                <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-[var(--muted)]">สถานะ MA</p>
+                <p className="text-[11px] font-medium text-[var(--muted)]">สถานะ MA</p>
                 <div className="mt-1">
                   {daysLeft === null ? (
                     <span className="text-sm text-[var(--muted)]">ไม่มีข้อมูล</span>
@@ -397,54 +511,6 @@ export default async function AssetDetailPage({ params, searchParams }: Props) {
             </div>
           </div>
 
-          {/* ประวัติสถานะ */}
-          <div className="glass-panel overflow-hidden rounded-2xl">
-            <div className="border-b border-black/8 px-5 py-4">
-              <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">ประวัติสถานะอุปกรณ์</h2>
-              <p className="mt-1 text-xs text-[var(--muted)]">แสดงการอัปเดตข้อมูลของอุปกรณ์นี้จากการแก้ไข โอนย้าย หรือบันทึกจำหน่าย/ชำรุด</p>
-            </div>
-            {statusHistory.length === 0 ? (
-              <div className="px-5 py-8 text-center text-sm text-[var(--muted)]">
-                ยังไม่มีประวัติการอัปเดตสถานะสำหรับอุปกรณ์นี้
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="min-w-[760px] w-full text-left text-sm">
-                  <thead className="border-b border-black/8 bg-[var(--neutral-bg)] text-xs text-[var(--muted)]">
-                    <tr>
-                      <th className="px-4 py-3 w-14 text-right font-medium">ลำดับ</th>
-                      <th className="px-4 py-3 font-medium">วันที่/เวลา</th>
-                      <th className="px-4 py-3 font-medium">สถานะเดิม</th>
-                      <th className="px-4 py-3 font-medium">สถานะใหม่</th>
-                      <th className="px-4 py-3 font-medium">ผู้บันทึก</th>
-                      <th className="px-4 py-3 font-medium">รายละเอียด</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-black/6 bg-white/70">
-                    {statusHistory.map((entry, rowIndex) => (
-                      <tr key={entry.id} className="align-top hover:bg-[var(--primary-soft)]/30">
-                        <td className="px-4 py-3 text-right tabular-nums text-[var(--muted)]">{(rowIndex + 1).toLocaleString("th-TH")}</td>
-                        <td className="px-4 py-3 text-xs text-[var(--muted)]">{formatThaiDateTime(entry.changedAt)}</td>
-                        <td className="px-4 py-3">
-                          {entry.fromStatus ? (
-                            <StatusBadge tone={assetStatusTone(entry.fromStatus)}>{assetStatusLabel(entry.fromStatus)}</StatusBadge>
-                          ) : (
-                            <span className="text-xs text-[var(--muted)]">เริ่มต้น</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3">
-                          <StatusBadge tone={assetStatusTone(entry.toStatus)}>{assetStatusLabel(entry.toStatus)}</StatusBadge>
-                        </td>
-                        <td className="px-4 py-3 text-[var(--foreground)]">{entry.changedBy || "system"}</td>
-                        <td className="max-w-md px-4 py-3 text-xs leading-5 text-[var(--muted)]">{entry.note || "-"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-
           {!isIt && <section className="rounded-xl border border-black/10 p-5">
             <h2 className="mb-4 text-base font-semibold">รายละเอียด{assetClassLabel(asset.assetClass)}</h2>
             <div className="grid gap-4 sm:grid-cols-2">
@@ -454,7 +520,7 @@ export default async function AssetDetailPage({ params, searchParams }: Props) {
           </section>}
           {/* ข้อมูลการจัดซื้อ */}
           <div className="glass-panel rounded-2xl p-5">
-            <h2 className="mb-4 text-sm font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">ข้อมูลการจัดซื้อ</h2>
+            <h2 className="mb-4 text-sm font-semibold text-[var(--muted)]">ข้อมูลการจัดซื้อ</h2>
             <div className="grid gap-4 sm:grid-cols-3">
               <Field
                 label="ราคาที่ซื้อ (บาท)"
@@ -474,60 +540,9 @@ export default async function AssetDetailPage({ params, searchParams }: Props) {
             </div>
           </div>
 
-          <ValuationSection valuation={valuation} schedule={schedule} currentFiscalYear={fiscalYearOf(today)} />
-          <TransferHistorySection rows={transfers.rows} schemaReady={transfers.schemaReady} />
-          {canViewRepairs && <RepairHistorySection rows={repairs.rows} schemaReady={repairs.schemaReady} />}
+          <ValuationSection valuation={valuation} schedule={schedule} currentFiscalYear={fiscalYearOf(today)} asOf={today} />
           <DisposalHistorySection rows={disposals.rows} />
-          <AuditHistorySection rows={assetAuditHistory.rows} schemaReady={assetAuditHistory.schemaReady} />
-
-          {/* การดำเนินการด่วน */}
-          <div className="glass-panel rounded-2xl p-5">
-            <h2 className="mb-4 text-sm font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">การดำเนินการ</h2>
-            {terminal ? (
-              <div className="rounded-xl border border-stone-300 bg-stone-100 px-4 py-3 text-sm text-stone-600">
-                ทรัพย์สินนี้{asset.currentStatus === "Lost" ? "บันทึกสูญหาย" : "จำหน่าย"}แล้วตามคำขอที่อนุมัติ จึงไม่มีการดำเนินการเพิ่มเติม
-              </div>
-            ) : canMutateThisAsset ? (
-              <div className="flex flex-wrap gap-3">
-                {canTransfer && (
-                  <Link
-                    href={`/transfer?assetId=${asset.id}`}
-                    className="inline-flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-700 transition hover:bg-amber-100"
-                  >
-                    <AppIcon name="package" className="h-4 w-4" /> โอนย้ายทรัพย์สิน
-                  </Link>
-                )}
-                {canManageLoans && !activeLoan && asset.currentStatus !== "Broken" && (
-                  <Link
-                    href={`/loans/new?assetId=${asset.id}`}
-                    className="inline-flex items-center gap-2 rounded-xl border border-[var(--line)] bg-white px-4 py-2 text-sm font-medium text-[var(--foreground)] transition hover:bg-[var(--primary-soft)]"
-                  >
-                    <AppIcon name="repeat" className="h-4 w-4" /> ให้ยืม
-                  </Link>
-                )}
-                {canManageRepairs && (
-                  <Link
-                    href={openRepair ? `/repairs/${openRepair.id}` : `/repairs/new?assetId=${asset.id}`}
-                    className="inline-flex items-center gap-2 rounded-xl border border-sky-200 bg-sky-50 px-4 py-2 text-sm font-medium text-sky-700 transition hover:bg-sky-100"
-                  >
-                    <AppIcon name="wrench" className="h-4 w-4" /> {openRepair ? "ดูงานซ่อมที่เปิดอยู่" : "แจ้งซ่อม"}
-                  </Link>
-                )}
-                {canDispose && (
-                  <Link
-                    href={`/disposal?assetId=${asset.id}`}
-                    className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100"
-                  >
-                    <AppIcon name="clipboard-check" className="h-4 w-4" /> ชำรุด / เสนอจำหน่าย
-                  </Link>
-                )}
-              </div>
-            ) : (
-              <div className="rounded-xl border border-stone-300 bg-stone-100 px-4 py-3 text-sm text-stone-600">
-                คุณสามารถดูข้อมูลได้อย่างเดียว เนื่องจากไม่มีสิทธิ์จัดการทรัพย์สินของหน่วยงานนี้
-              </div>
-            )}
-          </div>
+          <HistoryTabs title="ประวัติ" tabs={historyTabs} initialKey={historyParam} />
 
         </div>
 
@@ -536,10 +551,10 @@ export default async function AssetDetailPage({ params, searchParams }: Props) {
 
           {/* QR Code */}
           <div className="glass-panel rounded-2xl p-5 text-center print:shadow-none">
-            <p className="text-xs font-medium uppercase tracking-[0.2em] text-[var(--muted)]">QR Code ทรัพย์สิน</p>
+            <p className="text-xs font-medium text-[var(--muted)]">QR Code ทรัพย์สิน</p>
             <div className="mx-auto mt-3 flex w-56 max-w-full items-center justify-center overflow-hidden rounded-xl border border-[var(--primary-soft-strong)] bg-white shadow-sm">
               <Image
-                src={withBasePath(`/api/qr/asset/${asset.id}`)}
+                src={withBasePath(`/api/qr/asset/${asset.id}/`)}
                 alt={`QR Code: ${asset.facilityName} ${asset.assetNumber || asset.assetName}`}
                 width={240}
                 height={300}
@@ -549,14 +564,14 @@ export default async function AssetDetailPage({ params, searchParams }: Props) {
             </div>
             <p className="mt-1 break-all text-[11px] leading-4 text-[var(--muted)]">{assetScanUrl}</p>
             <QrDownloadButton
-              downloadUrl={withBasePath(`/api/qr/asset/${asset.id}`)}
+              downloadUrl={withBasePath(`/api/qr/asset/${asset.id}/`)}
               filename={`${sanitizeDownloadName(`${asset.assetRegistrationNo || `asset-${asset.id}`} ${asset.assetName}`)}.svg`}
             />
           </div>
 
           {/* สถานะ + ข้อมูลย่อ */}
           <div className="glass-panel rounded-2xl p-5">
-            <p className="text-xs font-medium uppercase tracking-[0.2em] text-[var(--muted)]">ข้อมูลย่อ</p>
+            <p className="text-xs font-medium text-[var(--muted)]">ข้อมูลย่อ</p>
             <div className="mt-3 space-y-3">
               <div className="flex items-center justify-between text-sm">
                 <span className="text-[var(--muted)]">สถานะ</span>

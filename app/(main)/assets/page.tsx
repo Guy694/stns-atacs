@@ -5,6 +5,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { StatusBadge } from "@/app/_components/ui/status-badge";
+import { AppIcon } from "@/app/_components/ui/icon";
 import { ActionIconButton } from "@/app/_components/ui/action-icon-button";
 import { assetClassLabel } from "@/lib/asset-classes";
 import { getCurrentUser } from "@/lib/auth";
@@ -184,7 +185,7 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
         return acc;
       }, {});
   const th = (key: string, label: string) => (
-    <SortableTh key={key} label={label} sortKey={key} sort={columnSort} href={sortHref("/assets", params, key, columnSort)} />
+    <SortableTh key={key} label={label} sortKey={key} sort={columnSort} href={sortHref("/assets", params, key, columnSort)} className="whitespace-nowrap px-3 py-2 font-medium" />
   );
   // ลำดับที่ต่อเนื่องทั้งรายการตามลำดับที่แสดงบนจอ (ต่อจากหน้าก่อน ไม่เริ่มใหม่ในแต่ละอำเภอ)
   const rowNumber = new Map(Object.values(byDistrict).flat().map((asset, index) => [asset.id, offset + index + 1]));
@@ -195,7 +196,7 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-xs font-semibold tracking-[0.12em] text-[var(--accent-strong)]">ATACS · ทะเบียนทรัพย์สิน</p>
+          <p className="text-xs font-semibold text-[var(--accent-strong)]">ทะเบียนทรัพย์สิน</p>
           <h1 className="section-title mt-1 text-3xl font-semibold">รายการครุภัณฑ์และทรัพย์สิน</h1>
           <p className="mt-1 text-sm text-[var(--muted)]">
             {totalAssets.toLocaleString("th-TH")} รายการ
@@ -204,22 +205,28 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
             )}
           </p>
         </div>
-        {canManageSubtypes && <Link href="/assets/subtypes" className="text-sm underline">จัดการประเภทย่อย</Link>}
-        {canCreateAsset && (
-          <div className="flex gap-2">
-            {isAdmin && <ImportExcelModal facilities={facilities} workGroups={workGroups} />}
-            <AssetFormModal
-              facilities={facilitiesForForm}
-              deviceTypes={deviceTypes}
-              workGroups={workGroups}
-              locations={assetLocations}
-              updaterName={user.fullName}
-              mode="create"
-            >
-              <button className="primary-action">
-                + เพิ่มทรัพย์สิน
-              </button>
-            </AssetFormModal>
+        {(canManageSubtypes || canCreateAsset) && (
+          <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+            {canManageSubtypes && (
+              <Link href="/assets/subtypes" className="secondary-action gap-2 whitespace-nowrap">
+                <AppIcon name="tag" className="h-4 w-4" /> จัดการประเภทย่อย
+              </Link>
+            )}
+            {canCreateAsset && isAdmin && <ImportExcelModal facilities={facilities} workGroups={workGroups} />}
+            {canCreateAsset && (
+              <AssetFormModal
+                facilities={facilitiesForForm}
+                deviceTypes={deviceTypes}
+                workGroups={workGroups}
+                locations={assetLocations}
+                updaterName={user.fullName}
+                mode="create"
+              >
+                <button type="button" className="primary-action whitespace-nowrap">
+                  + เพิ่มทรัพย์สิน
+                </button>
+              </AssetFormModal>
+            )}
           </div>
         )}
       </div>
@@ -229,18 +236,76 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
       {/* Table by district */}
       {Object.entries(byDistrict).map(([district, items]) => (
         <div key={district} className="glass-panel overflow-hidden rounded-2xl">
-          <div className="flex items-center justify-between border-b border-black/6 px-5 py-3">
+          <div className="flex items-center justify-between border-b border-black/6 px-4 py-2.5 sm:px-5">
             <div>
               <span className="font-semibold">{district ? `อ.${district}` : "ทุกอำเภอ"}</span>
               <span className="ml-2 text-sm text-[var(--muted)]">{items.length} รายการ</span>
             </div>
           </div>
 
-          <div className="overflow-x-auto">
+          {/* D2: มือถือแสดงเป็นการ์ด ตารางแสดงตั้งแต่ md ขึ้นไป */}
+          <ul className="divide-y divide-black/6 md:hidden">
+            {items.map((asset) => {
+              const canEdit = canUpdateAssetByPolicy && canManageAsset(user, asset.facilityId);
+              const showIp = canViewNetworkByPolicy && canSeeSensitiveAssetNetwork(user, asset.facilityId) && isItAsset(asset) && asset.privateIp;
+              return (
+                <li key={asset.id} className="px-4 py-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <Link href={`/assets/${asset.id}`} className="font-semibold leading-snug text-[var(--accent-strong)] underline-offset-4 hover:underline">
+                        {asset.assetName}
+                      </Link>
+                      <p className="mt-0.5 break-all font-mono text-xs text-[var(--muted)]">{asset.assetNumber || `#${asset.id}`}</p>
+                    </div>
+                    <StatusBadge className="shrink-0 whitespace-nowrap" tone={STATUS_TONE[asset.currentStatus as keyof typeof STATUS_TONE] ?? "neutral"}>
+                      {STATUS_LABELS[asset.currentStatus] ?? asset.currentStatus}
+                    </StatusBadge>
+                  </div>
+                  <dl className="mt-2 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-xs">
+                    <dt className="text-[var(--muted)]">หน่วยงาน</dt>
+                    <dd className="min-w-0">
+                      <Link href={`/facilities/${asset.facilityId}`} className="hover:text-[var(--accent)] hover:underline">{asset.facilityName}</Link>
+                    </dd>
+                    <dt className="text-[var(--muted)]">ประเภท</dt>
+                    <dd className="min-w-0">
+                      {assetClassLabel(asset.assetClass)}
+                      <span className="text-[var(--muted)]"> · {isItAsset(asset) ? asset.deviceType || asset.assetGroup : "ทะเบียนทรัพย์สิน"}</span>
+                    </dd>
+                    {showIp && (
+                      <>
+                        <dt className="text-[var(--muted)]">IP</dt>
+                        <dd className="font-mono">{asset.privateIp}</dd>
+                      </>
+                    )}
+                    <dt className="text-[var(--muted)]">MA หมด</dt>
+                    <dd>{formatThaiDate(asset.maintenanceEndDate)}</dd>
+                  </dl>
+                  {canEdit && (
+                    <div className="mt-2 flex justify-end gap-2">
+                      <AssetFormModal
+                        facilities={facilitiesForForm}
+                        deviceTypes={deviceTypes}
+                        workGroups={workGroups}
+                        locations={assetLocations}
+                        updaterName={user.fullName}
+                        mode="edit"
+                        asset={asset}
+                      >
+                        <ActionIconButton icon="pencil" label={`แก้ไข ${asset.assetName}`} />
+                      </AssetFormModal>
+                      <DeleteAssetButton assetId={asset.id} assetName={asset.assetName} />
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+
+          <div className="hidden overflow-x-auto md:block">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-black/6 bg-stone-50/60 text-xs text-[var(--muted)]">
-                  <th className="w-14 px-4 py-2.5 text-right font-medium">ลำดับ</th>
+                  <th className="w-12 whitespace-nowrap px-3 py-2 text-right font-medium">ลำดับ</th>
                   {th("reg", "เลขทะเบียน")}
                   {th("name", "ชื่อทรัพย์สิน")}
                   {th("facility", "หน่วยงาน")}
@@ -248,46 +313,46 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
                   {th("status", "สถานะ")}
                   {canViewNetworkByPolicy && th("ip", "IP")}
                   {th("ma", "MA หมด")}
-                  {canUpdateAssetByPolicy && <th className="px-4 py-2.5 text-right font-medium">จัดการ</th>}
+                  {canUpdateAssetByPolicy && <th className="whitespace-nowrap px-3 py-2 text-right font-medium">จัดการ</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-black/4">
                 {items.map((asset) => (
                   <tr key={asset.id} className="hover:bg-white/50 transition">
-                    <td className="px-4 py-3 text-right tabular-nums text-[var(--muted)]">{(rowNumber.get(asset.id) ?? 0).toLocaleString("th-TH")}</td>
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-2 text-right tabular-nums text-[var(--muted)]">{(rowNumber.get(asset.id) ?? 0).toLocaleString("th-TH")}</td>
+                    <td className="whitespace-nowrap px-3 py-2">
                       <Link href={`/assets/${asset.id}`} className="font-mono text-xs text-[var(--accent)] hover:underline">
                         {asset.assetNumber || `#${asset.id}`}
                       </Link>
                     </td>
-                    <td className="px-4 py-3 font-medium">{asset.assetName}</td>
-                    <td className="px-4 py-3 text-[var(--muted)]">
+                    <td className="min-w-48 px-3 py-2 font-medium">{asset.assetName}</td>
+                    <td className="whitespace-nowrap px-3 py-2 text-[var(--muted)]">
                       <Link href={`/facilities/${asset.facilityId}`} className="hover:text-[var(--accent)] hover:underline">
                         {asset.facilityName}
                       </Link>
                     </td>
-                    <td className="px-4 py-3">
-                      <div className="flex min-w-44 flex-col gap-1">
-                        <StatusBadge tone="primary">{assetClassLabel(asset.assetClass)}</StatusBadge>
+                    <td className="px-3 py-2">
+                      <div className="flex min-w-36 flex-col items-start gap-0.5">
+                        <StatusBadge tone="primary" className="whitespace-nowrap">{assetClassLabel(asset.assetClass)}</StatusBadge>
                         <span className="text-xs text-[var(--muted)]">{isItAsset(asset) ? asset.deviceType || asset.assetGroup : "ทะเบียนทรัพย์สิน"}</span>
                       </div>
                     </td>
-                    <td className="px-4 py-3">
-                      <StatusBadge tone={STATUS_TONE[asset.currentStatus as keyof typeof STATUS_TONE] ?? "neutral"}>
+                    <td className="px-3 py-2">
+                      <StatusBadge className="whitespace-nowrap" tone={STATUS_TONE[asset.currentStatus as keyof typeof STATUS_TONE] ?? "neutral"}>
                         {STATUS_LABELS[asset.currentStatus] ?? asset.currentStatus}
                       </StatusBadge>
                     </td>
                     {canViewNetworkByPolicy && canSeeSensitiveAssetNetwork(user, asset.facilityId) && (
-                      <td className="px-4 py-3 font-mono text-xs text-[var(--muted)]">
+                      <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-[var(--muted)]">
                         {isItAsset(asset) ? asset.privateIp || "–" : "–"}
                       </td>
                     )}
-                    <td className="px-4 py-3 font-mono text-xs text-[var(--muted)]">
+                    <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-[var(--muted)]">
                       {formatThaiDate(asset.maintenanceEndDate)}
                     </td>
                     {canUpdateAssetByPolicy && canManageAsset(user, asset.facilityId) && (
-                      <td className="px-4 py-3 text-right">
-                        <div className="inline-flex gap-2">
+                      <td className="px-3 py-1.5 text-right">
+                        <div className="inline-flex gap-1.5">
                           <AssetFormModal
                             facilities={facilitiesForForm}
                             deviceTypes={deviceTypes}

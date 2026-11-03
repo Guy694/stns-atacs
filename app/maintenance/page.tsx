@@ -29,7 +29,7 @@ export default async function MaintenancePage() {
           <AppIcon name="settings" className="h-8 w-8" />
         </span>
 
-        <p className="mt-5 text-xs font-semibold tracking-[0.16em] text-[var(--accent-strong)]">
+        <p className="mt-5 text-xs font-semibold text-[var(--accent-strong)]">
           ATACS · สำนักงานสาธารณสุขจังหวัดสตูล
         </p>
         <h1 className="mt-2 text-2xl font-semibold text-[var(--foreground)]">ปิดปรับปรุงระบบชั่วคราว</h1>

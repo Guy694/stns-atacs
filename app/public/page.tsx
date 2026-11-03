@@ -62,7 +62,7 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
       <section aria-labelledby="public-heading" className="rounded-2xl bg-[linear-gradient(135deg,#0f3d5e_0%,#15548f_60%,#1687d9_100%)] px-6 py-8 text-white sm:px-10">
         <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-2xl">
-            <p className="text-xs font-semibold tracking-[0.16em] text-sky-100">ATACS · สำนักงานสาธารณสุขจังหวัดสตูล</p>
+            <p className="text-xs font-semibold text-sky-100">ATACS · สำนักงานสาธารณสุขจังหวัดสตูล</p>
             <h1 id="public-heading" className="section-title mt-3 text-3xl font-semibold leading-tight sm:text-4xl">
               {summary.categoryLabel ? summary.categoryLabel.replace(/^\d+\.\s*/, "") : "ทะเบียนทรัพย์สินและครุภัณฑ์ จ.สตูล"}
             </h1>

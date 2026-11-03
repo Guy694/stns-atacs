@@ -38,7 +38,7 @@ export default async function AnnouncementSettingsPage({ searchParams }: Props) 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6">
       <div>
-        <p className="text-xs font-semibold tracking-[0.12em] text-[var(--accent-strong)]">ADMIN · ANNOUNCEMENT</p>
+        <p className="text-xs font-semibold text-[var(--accent-strong)]">ตั้งค่าระบบ · ประกาศ</p>
         <h1 className="section-title mt-1 text-3xl font-semibold">ประกาศ / ประชาสัมพันธ์ (popup)</h1>
         <p className="mt-1 text-sm text-[var(--muted)]">
           แสดงหน้าต่างประกาศหลังผู้ใช้เข้าสู่ระบบ ใช้แจ้งข่าวหรือการอัปเดตเวอร์ชัน เปิด/ปิดได้ตลอดเวลา

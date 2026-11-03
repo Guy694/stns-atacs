@@ -74,7 +74,7 @@ export default async function RepairsPage({ searchParams }: Props) {
     <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-xs font-semibold tracking-[0.12em] text-[var(--accent-strong)]">ATACS · ซ่อมบำรุง</p>
+          <p className="text-xs font-semibold text-[var(--accent-strong)]">ซ่อมบำรุง</p>
           <h1 className="section-title mt-1 text-3xl font-semibold">งานซ่อมบำรุง</h1>
           <p className="mt-1 text-sm text-[var(--muted)]">แจ้งซ่อม ติดตามสถานะ ค่าใช้จ่าย และทรัพย์สินที่เสียบ่อย</p>
         </div>

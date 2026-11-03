@@ -551,6 +551,19 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
   );
 
   const title = mode === "create" ? "เพิ่มทรัพย์สินใหม่" : `แก้ไข: ${asset?.assetName ?? ""}`;
+  // C6: แถบลัดไปยังแต่ละส่วนของฟอร์มยาว (เลื่อนภายในหน้าต่าง)
+  const sectionId = (key: string) => `${fieldId}-section-${key}`;
+  const sections: [string, string][] = [
+    ["general", "ทั่วไป"],
+    ...(isIt ? [["it", "ข้อมูล IT"] as [string, string]] : []),
+    ["purchase", "การจัดซื้อ"],
+    ["ma", "MA"],
+    ["usage", "การใช้งาน"],
+  ];
+  function jumpTo(key: string) {
+    const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    document.getElementById(sectionId(key))?.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" });
+  }
 
   return (
     <>
@@ -585,6 +598,21 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
                 </button>
               </div>
 
+              <nav aria-label="ไปยังส่วนของฟอร์ม" className="sticky -top-4 z-20 -mx-4 mt-2 sm:-top-6 border-b border-black/6 bg-[var(--surface-strong)] px-4 py-2 sm:-mx-6 sm:px-6">
+                <div className="flex gap-1.5 overflow-x-auto">
+                  {sections.map(([key, label]) => (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => jumpTo(key)}
+                      className="min-h-9 shrink-0 whitespace-nowrap rounded-full border border-[var(--line)] bg-white px-3 text-xs font-medium text-[var(--primary-text)] transition hover:bg-[var(--primary-soft)]"
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </nav>
+
               {error && (
                 <div role="alert" className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>
               )}
@@ -592,7 +620,7 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
               <form ref={formRef} onSubmit={submitWithoutReset(formAction)} className="mt-5 space-y-4">
                 {mode === "edit" && <input type="hidden" name="assetId" value={asset?.id} />}
 
-              <h3 className="text-base font-semibold">ข้อมูลทั่วไป</h3>
+              <h3 id={sectionId("general")} className="scroll-mt-16 text-base font-semibold">ข้อมูลทั่วไป</h3>
               {/* Survey / หน่วยงาน */}
               <div>
                 <label htmlFor={fixedFacilityId ? undefined : `${fieldId}-facility`} className="block text-sm font-medium">หน่วยงาน <span className="text-rose-500">*</span></label>
@@ -792,7 +820,7 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
               {!isIt && <AssetSpecificFields assetClass={assetClass} extensions={asset?.extensions} onBusyChange={setSubtypePending} />}
               {!isIt && <p className="text-sm text-[var(--foreground)]">บันทึกข้อมูลทะเบียน การจัดซื้อ และรายละเอียดทั่วไปของทรัพย์สินได้โดยไม่ต้องระบุข้อมูลคอมพิวเตอร์</p>}
               <fieldset disabled={!isIt} className={isIt ? "grid gap-4 sm:grid-cols-2" : "hidden"}>
-                <legend className="mb-3 text-base font-semibold">ข้อมูล IT</legend>
+                <legend id={isIt ? sectionId("it") : undefined} className="mb-3 scroll-mt-16 text-base font-semibold">ข้อมูล IT</legend>
                 {/* OS */}
                 <div>
                   <label htmlFor={`${fieldId}-operatingSystem`} className="block text-sm font-medium">ระบบปฏิบัติการ</label>
@@ -804,7 +832,7 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
                 </div>
                 {/* Private IP */}
                 <div>
-                  <label htmlFor={`${fieldId}-privateIp`} className="block text-sm font-medium">Private IP</label>
+                  <label htmlFor={`${fieldId}-privateIp`} className="block text-sm font-medium">IP ภายใน</label>
                   <input id={`${fieldId}-privateIp`}
                     name="privateIp"
                     defaultValue={asset?.privateIp ?? ""}
@@ -826,7 +854,7 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
                 </div>
                 {/* Location */}
                 <div>
-                  <label htmlFor={`${fieldId}-location`} className="block text-sm font-medium">ที่ตั้ง / Location</label>
+                  <label htmlFor={`${fieldId}-location`} className="block text-sm font-medium">ที่ตั้ง</label>
                   <LocationCombobox
                     inputId={`${fieldId}-location`}
                     key={`${selectedFacilityId ?? "none"}-${selectedWorkGroupValue || "none"}`}
@@ -841,7 +869,7 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
                 </div>
               </div>
 
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-4 sm:grid-cols-3">
                 {([
                   ["manufacturerBrand", "ยี่ห้อ", asset?.manufacturerBrand],
                   ["manufacturerModel", "รุ่น", asset?.manufacturerModel],
@@ -851,13 +879,6 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
                     <input id={titleId + name} name={name} defaultValue={value ?? ""} className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]" />
                   </div>
                 ))}
-              </div>
-              <div>
-                <label htmlFor={titleId + "specification"} className="block text-sm font-medium">รายละเอียด / คุณลักษณะ</label>
-                <textarea id={titleId + "specification"} name="manufacturerSpecification" defaultValue={asset?.manufacturerSpecification ?? ""} rows={3} className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]" />
-              </div>
-              <h3 className="pt-2 text-base font-semibold">การจัดซื้อและการบำรุงรักษา</h3>
-              <div className="grid gap-4 sm:grid-cols-3">
                 {/* Serial */}
                 <div>
                   <label htmlFor={`${fieldId}-serialNumber`} className="block text-sm font-medium">Serial Number</label>
@@ -868,29 +889,13 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
                   />
                   <p className="mt-1 text-xs text-[var(--muted)]">Serial Number ต้องไม่ซ้ำในหน่วยงานเดียวกัน</p>
                 </div>
-                {/* MA Start */}
-                <div>
-                  <label htmlFor={`${fieldId}-maintenanceStartDate`} className="block text-sm font-medium">วันเริ่มสัญญา</label>
-                    <input id={`${fieldId}-maintenanceStartDate`}
-                      type="date"
-                      name="maintenanceStartDate"
-                      defaultValue={asset?.maintenanceStartDate ?? ""}
-                      className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
-                    />
-                </div>
-                {/* MA End */}
-                <div>
-                  <label htmlFor={`${fieldId}-maintenanceEndDate`} className="block text-sm font-medium">วันสิ้นสุดสัญญา</label>
-                  <input id={`${fieldId}-maintenanceEndDate`}
-                    type="date"
-                    name="maintenanceEndDate"
-                    defaultValue={asset?.maintenanceEndDate ?? ""}
-                    className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
-                  />
-                </div>
               </div>
-
+              <div>
+                <label htmlFor={titleId + "specification"} className="block text-sm font-medium">รายละเอียด / คุณลักษณะ</label>
+                <textarea id={titleId + "specification"} name="manufacturerSpecification" defaultValue={asset?.manufacturerSpecification ?? ""} rows={3} className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]" />
+              </div>
               {/* ── ข้อมูลราคาและการจัดซื้อ ── */}
+              <h3 id={sectionId("purchase")} className="scroll-mt-16 pt-2 text-base font-semibold">การจัดซื้อ</h3>
               <div className="grid gap-4 sm:grid-cols-3">
                 <div>
                   <label htmlFor={`${fieldId}-purchasePrice`} className="block text-sm font-medium">ราคาที่ซื้อ (บาท)</label>
@@ -965,7 +970,32 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
                 </div>
               </div>
 
+              <h3 id={sectionId("ma")} className="scroll-mt-16 pt-2 text-base font-semibold">สัญญาบำรุงรักษา (MA)</h3>
+              <div className="grid gap-4 sm:grid-cols-2">
+                {/* MA Start */}
+                <div>
+                  <label htmlFor={`${fieldId}-maintenanceStartDate`} className="block text-sm font-medium">วันเริ่มสัญญา</label>
+                    <input id={`${fieldId}-maintenanceStartDate`}
+                      type="date"
+                      name="maintenanceStartDate"
+                      defaultValue={asset?.maintenanceStartDate ?? ""}
+                      className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+                    />
+                </div>
+                {/* MA End */}
+                <div>
+                  <label htmlFor={`${fieldId}-maintenanceEndDate`} className="block text-sm font-medium">วันสิ้นสุดสัญญา</label>
+                  <input id={`${fieldId}-maintenanceEndDate`}
+                    type="date"
+                    name="maintenanceEndDate"
+                    defaultValue={asset?.maintenanceEndDate ?? ""}
+                    className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+                  />
+                </div>
+              </div>
+
               {/* Status */}
+              <h3 id={sectionId("usage")} className="scroll-mt-16 pt-2 text-base font-semibold">สถานะและการใช้งาน</h3>
               <div>
                 <label htmlFor={`${fieldId}-status`} className="block text-sm font-medium">สถานะ</label>
                 {asset && (asset.currentStatus === "Disposed" || asset.currentStatus === "Lost") ? (
@@ -1021,18 +1051,19 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
                   );
                 })}
               </fieldset>
-                <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-end">
+                {/* C6: ปุ่มยกเลิก/บันทึกติดขอบล่างของหน้าต่าง กดได้โดยไม่ต้องเลื่อนลงสุด */}
+                <div className="sticky -bottom-4 z-20 -mx-4 -mb-4 sm:-bottom-6 grid grid-cols-2 gap-2 border-t border-black/8 bg-[var(--surface-strong)] px-4 py-3 sm:-mx-6 sm:-mb-6 sm:flex sm:justify-end sm:px-6">
                   <button
                     type="button"
                     onClick={() => setOpen(false)}
-                    className="rounded-xl border border-black/10 bg-white/80 px-5 py-2 text-sm font-medium hover:bg-white"
+                    className="secondary-action"
                   >
                     ยกเลิก
                   </button>
                   <button
                     type="submit"
                     disabled={pending || subtypePending}
-                    className="rounded-xl bg-[var(--accent-strong)] px-6 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
+                    className="primary-action"
                   >
                     {pending ? "กำลังบันทึก…" : mode === "create" ? "เพิ่มทรัพย์สิน" : "บันทึกการแก้ไข"}
                   </button>

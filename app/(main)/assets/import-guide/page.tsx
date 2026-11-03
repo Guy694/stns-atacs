@@ -53,12 +53,12 @@ export default async function AssetImportGuidePage() {
       </nav>
 
       <header className="dashboard-hero overflow-hidden rounded-[18px] px-6 py-8 text-white sm:px-8">
-        <p className="text-xs font-semibold tracking-[0.12em] text-sky-100">ATACS · ASSET IMPORT</p>
+        <p className="text-xs font-semibold text-sky-100">ทะเบียนทรัพย์สิน · นำเข้าข้อมูล</p>
         <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">คู่มือนำเข้าครุภัณฑ์ด้วย CSV</h1>
         <p className="mt-3 max-w-3xl text-sm leading-6 text-sky-50 sm:text-base">ใช้หน้านี้เพื่อเตรียมไฟล์ CSV สำหรับเพิ่มหรือแก้ไขครุภัณฑ์ ตรวจสอบการใช้ <Code>id</Code> และค้นหา <Code>work_group_id</Code> ของแต่ละหน่วยบริการก่อนนำเข้า</p>
         <div className="mt-5 flex flex-wrap gap-3">
-          <a href={withBasePath("/api/export/assets?template=xlsx")} className="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-[#15548f] transition hover:bg-sky-50">ดาวน์โหลดไฟล์ Excel ต้นแบบ (มีคำอธิบายคอลัมน์)</a>
-          <a href={withBasePath("/api/export/assets?template=csv")} className="rounded-xl border border-white/40 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/10">ไฟล์ CSV ตัวอย่าง</a>
+          <a href={withBasePath("/api/export/assets/?template=xlsx")} className="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-[#15548f] transition hover:bg-sky-50">ดาวน์โหลดไฟล์ Excel ต้นแบบ (มีคำอธิบายคอลัมน์)</a>
+          <a href={withBasePath("/api/export/assets/?template=csv")} className="rounded-xl border border-white/40 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/10">ไฟล์ CSV ตัวอย่าง</a>
           <Link href="/assets" className="rounded-xl border border-white/40 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/10">กลับไปรายการทรัพย์สิน</Link>
         </div>
       </header>
@@ -164,7 +164,7 @@ export default async function AssetImportGuidePage() {
       <section className="rounded-2xl border border-black/10 bg-white p-5 shadow-sm sm:p-6">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">Active Work Groups</p>
+            <p className="text-xs font-semibold text-[var(--muted)]">กลุ่มงานที่ใช้งาน</p>
             <h2 className="mt-1 text-xl font-semibold text-[var(--foreground)]">ตาราง Work Group และ ID ตามหน่วยบริการ</h2>
             <p className="mt-1 text-sm leading-6 text-[var(--muted)]">รายการนี้แสดงเฉพาะกลุ่มงานที่เปิดใช้งานอยู่ หากต้องการกรอก CSV ให้ตรวจสอบอีกครั้งจากตารางใต้หน่วยบริการที่เลือกในหน้าต่างนำเข้า</p>
           </div>
@@ -191,7 +191,7 @@ export default async function AssetImportGuidePage() {
       </section>
 
       <section className="rounded-2xl border border-black/10 bg-white p-5 shadow-sm sm:p-6">
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">CSV Reference Values</p>
+        <p className="text-xs font-semibold text-[var(--muted)]">ค่าที่ใช้ในไฟล์ CSV</p>
         <h2 className="mt-1 text-xl font-semibold text-[var(--foreground)]">ค่าที่ใช้กรอกในไฟล์ CSV</h2>
         <p className="mt-1 text-sm leading-6 text-[var(--muted)]">คัดลอกคำในคอลัมน์ <strong>ค่าที่กรอก</strong> ให้ตรงกับตาราง เพื่อให้ข้อมูลแสดงผลและค้นหาได้อย่างสม่ำเสมอ</p>
 
@@ -216,7 +216,7 @@ export default async function AssetImportGuidePage() {
             <div className="space-y-4 p-4">
               {(["Hardware", "Software"] as const).map((category) => (
                 <div key={category}>
-                  <p className="text-xs font-bold uppercase tracking-[0.14em] text-sky-800">{category}</p>
+                  <p className="text-xs font-bold text-sky-800">{category}</p>
                   {deviceTypesByCategory[category].length > 0 ? <div className="mt-2 flex flex-wrap gap-2">{deviceTypesByCategory[category].map((deviceType) => <span key={deviceType.id || deviceType.name} className="rounded-lg border border-sky-100 bg-white px-2.5 py-1 text-xs font-medium text-sky-950">{deviceType.name}</span>)}</div> : <p className="mt-2 text-sm text-[var(--muted)]">ยังไม่มีประเภทที่เปิดใช้งาน</p>}
                 </div>
               ))}

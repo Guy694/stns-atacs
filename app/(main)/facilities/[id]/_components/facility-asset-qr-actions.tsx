@@ -94,7 +94,7 @@ export function FacilityAssetQrActions({ assets, facilityId, facilityName }: Fac
           type="button"
           onClick={() => downloadAssets(assets)}
           disabled={isDownloading}
-          className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[var(--primary-soft-strong)] bg-[var(--primary-soft)] px-4 py-2 text-xs font-semibold text-[var(--primary-text)] transition hover:bg-[var(--primary-soft-strong)]"
+          className="secondary-action gap-2"
         >
           <AppIcon name="download" className="h-4 w-4" /> {isDownloading ? "กำลังดาวน์โหลด" : "ดาวน์โหลด QR ทั้งหมด"}
         </button>
@@ -102,13 +102,13 @@ export function FacilityAssetQrActions({ assets, facilityId, facilityName }: Fac
           type="button"
           onClick={() => setIsPickerOpen(true)}
           disabled={isDownloading}
-          className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-black/10 bg-white/85 px-4 py-2 text-xs font-semibold text-[var(--foreground)] transition hover:bg-white"
+          className="secondary-action gap-2"
         >
           <AppIcon name="check" className="h-4 w-4" /> เลือกดาวน์โหลด QR
         </button>
         <a
           href={`/print/stickers?facility=${facilityId}`}
-          className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-black/10 bg-white/85 px-4 py-2 text-xs font-semibold text-[var(--foreground)] transition hover:bg-white"
+          className="secondary-action gap-2"
         >
           <AppIcon name="printer" className="h-4 w-4" /> พิมพ์สติ๊กเกอร์ A4 / PDF
         </a>

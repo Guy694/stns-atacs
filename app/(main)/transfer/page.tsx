@@ -82,7 +82,7 @@ export default async function TransferPage({ searchParams }: Props) {
       return (
         <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-6">
           <div>
-            <p className="text-xs font-semibold tracking-[0.12em] text-[var(--accent-strong)]">ATACS · โอนย้ายทรัพย์สิน</p>
+            <p className="text-xs font-semibold text-[var(--accent-strong)]">โอนย้ายทรัพย์สิน</p>
             <h1 className="section-title mt-1 text-3xl font-semibold">โอนย้ายทรัพย์สิน</h1>
           </div>
           <div className="glass-panel rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-800">
@@ -100,7 +100,7 @@ export default async function TransferPage({ searchParams }: Props) {
             <span>/</span>
             <span>{asset.assetNumber}</span>
           </nav>
-          <p className="text-xs font-semibold tracking-[0.12em] text-[var(--accent-strong)]">ATACS · โอนย้ายทรัพย์สิน</p>
+          <p className="text-xs font-semibold text-[var(--accent-strong)]">โอนย้ายทรัพย์สิน</p>
           <h1 className="section-title mt-1 text-3xl font-semibold">โอนย้ายทรัพย์สิน</h1>
         </div>
         <div className="glass-panel rounded-2xl p-6">
@@ -131,7 +131,7 @@ export default async function TransferPage({ searchParams }: Props) {
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6">
       <div>
-        <p className="text-xs font-semibold tracking-[0.12em] text-[var(--accent-strong)]">ATACS · โอนย้ายทรัพย์สิน</p>
+        <p className="text-xs font-semibold text-[var(--accent-strong)]">โอนย้ายทรัพย์สิน</p>
         <h1 className="section-title mt-1 text-3xl font-semibold">โอนย้ายทรัพย์สิน</h1>
         <p className="mt-1 text-sm text-[var(--muted)]">ค้นหาทรัพย์สินที่ต้องการโอนย้าย แล้วระบุหน่วยงานปลายทาง</p>
       </div>

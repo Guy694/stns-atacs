@@ -23,7 +23,7 @@ export default async function MaintenanceSettingsPage({ searchParams }: Props) {
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6">
       <div>
-        <p className="text-xs font-semibold tracking-[0.12em] text-[var(--accent-strong)]">ADMIN · MAINTENANCE</p>
+        <p className="text-xs font-semibold text-[var(--accent-strong)]">ตั้งค่าระบบ · ปิดปรับปรุง</p>
         <h1 className="section-title mt-1 text-3xl font-semibold">ปิดปรับปรุงระบบ</h1>
         <p className="mt-1 text-sm text-[var(--muted)]">
           เมื่อเปิดโหมดนี้ ผู้ใช้ทั่วไปจะเห็นหน้าแจ้งปิดปรับปรุงและเข้าสู่ระบบไม่ได้ ส่วนผู้ดูแลระบบยังใช้งานได้ตามปกติ

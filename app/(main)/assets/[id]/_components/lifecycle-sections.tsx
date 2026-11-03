@@ -5,13 +5,18 @@ import type { DisposalRequest } from "@/lib/asset-disposals";
 import type { Repair } from "@/lib/asset-repairs";
 import type { AssetTransfer } from "@/lib/asset-transfers";
 import { VALUATION_STATUS_LABELS, type ScheduleRow, type Valuation } from "@/lib/asset-valuation";
-import { formatThaiDate } from "@/lib/date-format";
+import { formatThaiDate, formatThaiDateTime } from "@/lib/date-format";
 import { DISPOSAL_REQUEST_TYPE_LABELS, DISPOSAL_STATUS_LABELS, DISPOSAL_STATUS_TONES, disposalMethodLabel } from "@/lib/disposal-options";
 import { REPAIR_STATUS_LABELS, REPAIR_STATUS_TONES } from "@/lib/repair-options";
 import type { AuditLog } from "@/lib/audit";
+import type { AssetStatusHistory } from "@/lib/asset-status-history";
+import { assetStatusLabel, assetStatusTone } from "@/lib/asset-status";
 
 const baht = (value: number | null | undefined) => (value === null || value === undefined ? "-" : value.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
-const heading = "text-sm font-semibold uppercase tracking-[0.2em] text-[var(--muted)]";
+const heading = "text-sm font-semibold text-[var(--muted)]";
+/** In the history tabs the tab already names the list: drop the panel chrome, keep the heading for screen readers and #anchors. */
+const panel = (bare: boolean | undefined, extra = "") => (bare ? "" : `glass-panel rounded-2xl ${extra}`.trim());
+const headingClass = (bare: boolean | undefined) => (bare ? "sr-only" : heading);
 const MIGRATION_NOTE = "ยังไม่ได้เปิดใช้ (ต้องรัน database/add_asset_lifecycle.sql)";
 
 function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
@@ -24,13 +29,13 @@ function Stat({ label, value, hint }: { label: string; value: string; hint?: str
   );
 }
 
-export function ValuationSection({ valuation, schedule, currentFiscalYear }: { valuation: Valuation; schedule: ScheduleRow[]; currentFiscalYear: number }) {
+export function ValuationSection({ valuation, schedule, currentFiscalYear, asOf }: { valuation: Valuation; schedule: ScheduleRow[]; currentFiscalYear: number; asOf: string }) {
   const life = valuation.life;
   return (
     <section className="glass-panel rounded-2xl p-5" aria-labelledby="valuation-heading">
       <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
-        <h2 id="valuation-heading" className={heading}>มูลค่าและค่าเสื่อมราคา</h2>
-        <span className="text-xs text-[var(--muted)]">ประมาณการแบบเส้นตรง ราคาซาก 1 บาท ณ วันนี้</span>
+        <h2 id="valuation-heading" className={`${heading} scroll-mt-20`}>มูลค่าและค่าเสื่อมราคา</h2>
+        <span className="text-xs text-[var(--muted)]">ประมาณการแบบเส้นตรง ราคาซาก 1 บาท · ข้อมูล ณ {formatThaiDate(asOf)}</span>
       </div>
       <div className="grid gap-4 sm:grid-cols-4">
         <Stat label="ราคาทุน (บาท)" value={baht(valuation.cost)} />
@@ -76,11 +81,11 @@ export function ValuationSection({ valuation, schedule, currentFiscalYear }: { v
   );
 }
 
-export function TransferHistorySection({ rows, schemaReady }: { rows: AssetTransfer[]; schemaReady: boolean }) {
+export function TransferHistorySection({ rows, schemaReady, bare }: { rows: AssetTransfer[]; schemaReady: boolean; bare?: boolean }) {
   return (
-    <section className="glass-panel overflow-hidden rounded-2xl" aria-labelledby="transfer-history-heading">
-      <div className="border-b border-black/8 px-5 py-4">
-        <h2 id="transfer-history-heading" className={heading}>ประวัติการโอนย้าย</h2>
+    <section className={`${panel(bare)} overflow-hidden`} aria-labelledby="transfer-history-heading">
+      <div className={bare ? "" : "border-b border-black/8 px-5 py-4"}>
+        <h2 id="transfer-history-heading" className={headingClass(bare)}>ประวัติการโอนย้าย</h2>
       </div>
       {!schemaReady ? <p className="px-5 py-6 text-sm text-amber-700">{MIGRATION_NOTE}</p> : rows.length === 0 ? (
         <p className="px-5 py-6 text-center text-sm text-[var(--muted)]">ยังไม่เคยโอนย้าย</p>
@@ -114,12 +119,12 @@ export function TransferHistorySection({ rows, schemaReady }: { rows: AssetTrans
   );
 }
 
-export function RepairHistorySection({ rows, schemaReady }: { rows: Repair[]; schemaReady: boolean }) {
+export function RepairHistorySection({ rows, schemaReady, bare }: { rows: Repair[]; schemaReady: boolean; bare?: boolean }) {
   const totalCost = rows.filter((row) => row.status !== "Cancelled").reduce((sum, row) => sum + (row.cost ?? 0), 0);
   return (
-    <section className="glass-panel overflow-hidden rounded-2xl" aria-labelledby="repair-history-heading">
-      <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-black/8 px-5 py-4">
-        <h2 id="repair-history-heading" className={heading}>ประวัติการซ่อม</h2>
+    <section className={`${panel(bare)} overflow-hidden`} aria-labelledby="repair-history-heading">
+      <div className={`flex flex-wrap items-baseline justify-between gap-2 px-5 ${bare ? (rows.length > 0 ? "pt-3" : "") : "border-b border-black/8 py-4"}`}>
+        <h2 id="repair-history-heading" className={headingClass(bare)}>ประวัติการซ่อม</h2>
         {rows.length > 0 && <span className="text-xs text-[var(--muted)]">{rows.length} ครั้ง · ค่าใช้จ่ายรวม {baht(totalCost)} บาท</span>}
       </div>
       {!schemaReady ? <p className="px-5 py-6 text-sm text-amber-700">{MIGRATION_NOTE}</p> : rows.length === 0 ? (
@@ -189,11 +194,11 @@ const AUDIT_ACTION_TONE: Record<string, "success" | "info" | "danger" | "warning
  * ประวัติการเปลี่ยนแปลงของครุภัณฑ์ชิ้นนี้ (จาก audit_logs)
  * ผู้ตรวจสอบมักขอดูว่าใครแก้อะไรเมื่อไร จึงแสดงไว้ในหน้ารายละเอียดโดยตรง
  */
-export function AuditHistorySection({ rows, schemaReady = true }: { rows: AuditLog[]; schemaReady?: boolean }) {
+export function AuditHistorySection({ rows, schemaReady = true, bare }: { rows: AuditLog[]; schemaReady?: boolean; bare?: boolean }) {
   return (
-    <section className="glass-panel rounded-2xl p-5" aria-labelledby="audit-history-heading">
-      <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
-        <h2 id="audit-history-heading" className={heading}>ประวัติการแก้ไขข้อมูล</h2>
+    <section className={bare ? "p-5" : "glass-panel rounded-2xl p-5"} aria-labelledby="audit-history-heading">
+      <div className={`flex flex-wrap items-baseline justify-between gap-2 ${rows.length > 0 || !bare ? "mb-4" : ""}`}>
+        <h2 id="audit-history-heading" className={headingClass(bare)}>ประวัติการแก้ไขข้อมูล</h2>
         <span className="text-xs text-[var(--muted)]">{rows.length > 0 ? `${rows.length} รายการล่าสุด` : ""}</span>
       </div>
       {!schemaReady ? (
@@ -210,12 +215,64 @@ export function AuditHistorySection({ rows, schemaReady = true }: { rows: AuditL
               <div className="min-w-0 flex-1">
                 <p className="text-sm">{row.summary || "-"}</p>
                 <p className="mt-0.5 text-xs text-[var(--muted)]">
-                  {row.userName || "ไม่ทราบผู้ใช้"} · {row.createdAt}
+                  {row.userName || "ไม่ทราบผู้ใช้"} · {formatThaiDateTime(row.createdAt, row.createdAt)}
                 </p>
               </div>
             </li>
           ))}
         </ol>
+      )}
+    </section>
+  );
+}
+
+/** ประวัติการเปลี่ยนสถานะอุปกรณ์ (ย้ายมาจาก page.tsx เพื่อใช้ในแท็บประวัติ) */
+export function StatusHistorySection({ rows, bare }: { rows: AssetStatusHistory[]; bare?: boolean }) {
+  return (
+    <section className={`${panel(bare)} overflow-hidden`} aria-labelledby="status-history-heading">
+      <div className={bare ? "px-5 pt-3" : "border-b border-black/8 px-5 py-4"}>
+        <h2 id="status-history-heading" className={headingClass(bare)}>ประวัติสถานะอุปกรณ์</h2>
+        <p className={`${bare ? "" : "mt-1 "}text-xs text-[var(--muted)]`}>แสดงการอัปเดตข้อมูลของอุปกรณ์นี้จากการแก้ไข โอนย้าย หรือบันทึกจำหน่าย/ชำรุด</p>
+      </div>
+      {rows.length === 0 ? (
+        <div className="px-5 py-8 text-center text-sm text-[var(--muted)]">
+          ยังไม่มีประวัติการอัปเดตสถานะสำหรับอุปกรณ์นี้
+        </div>
+      ) : (
+        <div className={`overflow-x-auto ${bare ? "mt-3 border-t border-black/8" : ""}`}>
+          <table className="min-w-[760px] w-full text-left text-sm">
+            <thead className="border-b border-black/8 bg-[var(--neutral-bg)] text-xs text-[var(--muted)]">
+              <tr>
+                <th className="px-4 py-3 w-14 text-right font-medium">ลำดับ</th>
+                <th className="px-4 py-3 font-medium">วันที่/เวลา</th>
+                <th className="px-4 py-3 font-medium">สถานะเดิม</th>
+                <th className="px-4 py-3 font-medium">สถานะใหม่</th>
+                <th className="px-4 py-3 font-medium">ผู้บันทึก</th>
+                <th className="px-4 py-3 font-medium">รายละเอียด</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-black/6 bg-white/70">
+              {rows.map((entry, rowIndex) => (
+                <tr key={entry.id} className="align-top hover:bg-[var(--primary-soft)]/30">
+                  <td className="px-4 py-3 text-right tabular-nums text-[var(--muted)]">{(rowIndex + 1).toLocaleString("th-TH")}</td>
+                  <td className="px-4 py-3 text-xs text-[var(--muted)]">{formatThaiDateTime(entry.changedAt)}</td>
+                  <td className="px-4 py-3">
+                    {entry.fromStatus ? (
+                      <StatusBadge tone={assetStatusTone(entry.fromStatus)}>{assetStatusLabel(entry.fromStatus)}</StatusBadge>
+                    ) : (
+                      <span className="text-xs text-[var(--muted)]">เริ่มต้น</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    <StatusBadge tone={assetStatusTone(entry.toStatus)}>{assetStatusLabel(entry.toStatus)}</StatusBadge>
+                  </td>
+                  <td className="px-4 py-3 text-[var(--foreground)]">{entry.changedBy || "system"}</td>
+                  <td className="max-w-md px-4 py-3 text-xs leading-5 text-[var(--muted)]">{entry.note || "-"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </section>
   );
