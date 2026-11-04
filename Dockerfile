@@ -2,7 +2,7 @@
 # ATACS (Next.js) production image: standalone server, non-root user.
 # Build:  docker compose build app
 
-ARG NODE_IMAGE=node:22-bookworm-slim
+ARG NODE_IMAGE=node:22-trixie-slim
 
 # ── 1) Install dependencies (cached while package-lock.json is unchanged) ──
 FROM ${NODE_IMAGE} AS deps
@@ -34,10 +34,14 @@ ENV NODE_ENV=production \
     HOSTNAME=0.0.0.0 \
     TZ=Asia/Bangkok
 
+# Runtime needs only node: drop npm/corepack (unused, ship their own CVEs) after patching OS packages.
 RUN groupadd --system --gid 1001 nodejs \
  && useradd --system --uid 1001 --gid nodejs nextjs \
- && apt-get update && apt-get install -y --no-install-recommends curl tzdata \
- && rm -rf /var/lib/apt/lists/*
+ && apt-get update && apt-get upgrade -y \
+ && apt-get install -y --no-install-recommends curl tzdata \
+ && rm -rf /var/lib/apt/lists/* \
+ && rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
+           /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack
 
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./

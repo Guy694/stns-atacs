@@ -13,7 +13,9 @@ const WORKER_MEMORY_MB = 256;
 export class SpreadsheetParseError extends Error {}
 
 export function spreadsheetWorkerPath(root = cwd()) {
-  return path.join(root, "scripts", "parse-spreadsheet-worker.mjs");
+  // turbopackIgnore: stop Turbopack (Next 16.4+) from tracing this runtime path and bundling the whole
+  // project root; the worker file is shipped via outputFileTracingIncludes in next.config.ts.
+  return path.join(/* turbopackIgnore: true */ root, "scripts", "parse-spreadsheet-worker.mjs");
 }
 
 /** อ่าน Excel ใน worker thread ที่จำกัดเวลาและหน่วยความจำ */
