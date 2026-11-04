@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ASSET_CREATE_CLASS_OPTIONS, ASSET_CLASS_OPTIONS, assetClassLabel } from "@/lib/asset-classes";
 import type { AssetSubtype } from "@/lib/asset-details";
+import type { ColumnSortOption } from "@/lib/table-sort";
 
 type Values = Record<string, string | number | undefined>;
 type Props = {
@@ -14,12 +15,14 @@ type Props = {
   districts?: string[];
   workGroups?: { id: number; workGroupName: string; facilityId: number; facilityName?: string }[];
   paginate?: boolean;
+  /** R1: the active column-header sort, offered in the sort select (plus a hidden dir) so filtering keeps it. */
+  columnSort?: ColumnSortOption | null;
 };
 const control = "filter-control w-full";
 const label = "filter-label";
 
 // C4: แถวหลักแสดงตัวกรองที่ใช้บ่อย (คำค้น สถานะ ประเภท หน่วยงาน) ที่เหลืออยู่ใน "ตัวกรองเพิ่มเติม"
-export function AssetFilters({ values, resetHref, subtypes, deviceTypes, facilities, districts, workGroups = [], paginate = false }: Props) {
+export function AssetFilters({ values, resetHref, subtypes, deviceTypes, facilities, districts, workGroups = [], paginate = false, columnSort = null }: Props) {
   const text = (key: string) => String(values[key] ?? "");
   const [assetClass, setAssetClass] = useState(text("assetClass"));
   const [subtype, setSubtype] = useState(text("subtype"));
@@ -40,6 +43,7 @@ export function AssetFilters({ values, resetHref, subtypes, deviceTypes, facilit
     : "lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1.3fr)_auto]";
 
   return <form method="GET" action={resetHref} className="min-w-0 space-y-2 rounded-xl border border-[var(--line)] bg-white p-3" aria-label="ค้นหาและกรองครุภัณฑ์">
+    {columnSort && <input type="hidden" name="dir" value={columnSort.dir} />}
     <div className={`grid grid-cols-2 gap-2 lg:items-end ${mainGrid}`}>
       <label className={`${label} col-span-2 lg:col-span-1`}>คำค้นหา<input className={control} type="search" name="search" defaultValue={text("search")} placeholder="ชื่อ เลขทะเบียน หรือ Serial Number" /></label>
       <label className={label}>สถานะ<select aria-label="สถานะ" className={control} name="status" defaultValue={text("status")}><option value="">ทุกสถานะ</option><option value="Active">พร้อมใช้งาน</option><option value="Broken">ชำรุด</option><option value="Inactive">ไม่ใช้งาน</option><option value="Disposed">จำหน่ายแล้ว</option><option value="Lost">สูญหาย</option></select></label>
@@ -66,7 +70,7 @@ export function AssetFilters({ values, resetHref, subtypes, deviceTypes, facilit
         {workGroups.length > 0 && <label className={label}>กลุ่มงาน<select aria-label="กลุ่มงาน" className={control} name="workGroup" value={workGroup} onChange={event => setWorkGroup(event.target.value)}><option value="">ทุกกลุ่มงาน</option>{availableWorkGroups.map(item => <option key={item.id} value={item.id}>{item.workGroupName}{!facility && facilities && item.facilityName ? ` · ${item.facilityName}` : ""}</option>)}</select></label>}
         {!assetClass && <label className={label}>ลักษณะ IT<select aria-label="ลักษณะ IT" className={control} name="group" value={group} onChange={event => {setGroup(event.target.value); setDeviceType("");}}><option value="">ทั้งฮาร์ดแวร์และซอฟต์แวร์เดิม</option><option value="Hardware">ฮาร์ดแวร์</option><option value="Software">ซอฟต์แวร์ (ข้อมูล IT เดิม)</option></select></label>}
         <label className={label}>สัญญาบำรุงรักษา (MA)<select aria-label="สัญญาบำรุงรักษา (MA)" className={control} name="maDays" defaultValue={text("maDays")}><option value="">ทุกช่วงเวลา</option>{[30,60,90].map(days => <option key={days} value={days}>ใกล้หมดภายใน {days} วัน</option>)}</select></label>
-        <label className={label}>เรียงลำดับ<select aria-label="เรียงลำดับ" className={control} name="sort" defaultValue={text("sort")}><option value="">ค่าเริ่มต้น</option><option value="updated_desc">อัปเดตล่าสุดก่อน</option><option value="updated_asc">อัปเดตเก่าสุดก่อน</option><option value="name_asc">ชื่อ ก–ฮ / A–Z</option><option value="name_desc">ชื่อย้อนลำดับ</option><option value="ma_soon">MA ใกล้หมดก่อน</option></select></label>
+        <label className={label}>เรียงลำดับ<select aria-label="เรียงลำดับ" className={control} name="sort" defaultValue={columnSort?.value ?? text("sort")}><option value="">ค่าเริ่มต้น</option>{columnSort && <option value={columnSort.value}>{columnSort.label}</option>}<option value="updated_desc">อัปเดตล่าสุดก่อน</option><option value="updated_asc">อัปเดตเก่าสุดก่อน</option><option value="name_asc">ชื่อ ก–ฮ / A–Z</option><option value="name_desc">ชื่อย้อนลำดับ</option><option value="ma_soon">MA ใกล้หมดก่อน</option></select></label>
         {paginate && <label className={label}>จำนวนต่อหน้า<select aria-label="จำนวนต่อหน้า" className={control} name="perPage" defaultValue={text("perPage") || "25"}>{[10,25,50,100].map(count => <option key={count} value={count}>{count} รายการ</option>)}</select></label>}
       </div>
     </details>

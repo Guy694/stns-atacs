@@ -46,6 +46,14 @@ export function sortHref(pathname: string, params: SearchParamsLike, key: string
   return hrefWith(pathname, params, { [`${prefix}sort`]: key, [`${prefix}dir`]: dir, [`${prefix}page`]: null });
 }
 
+export type ColumnSortOption = { value: string; dir: SortDir; label: string };
+
+/** A header sort expressed as a filter-form option, so submitting the filters keeps it (?sort=<column>&dir=). */
+export function columnSortOption(sort: SortState | null, labels: Record<string, string>): ColumnSortOption | null {
+  if (!sort || !labels[sort.key]) return null;
+  return { value: sort.key, dir: sort.dir, label: `ตามหัวตาราง: ${labels[sort.key]} (${sort.dir === "asc" ? "น้อย → มาก" : "มาก → น้อย"})` };
+}
+
 export function pageHref(pathname: string, params: SearchParamsLike, page: number, prefix = "") {
   return hrefWith(pathname, params, { [`${prefix}page`]: page > 1 ? String(page) : null });
 }

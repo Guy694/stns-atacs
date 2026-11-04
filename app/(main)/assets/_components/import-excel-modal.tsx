@@ -8,6 +8,7 @@ import { createPortal } from "react-dom";
 import { AppIcon } from "@/app/_components/ui/icon";
 import { withBasePath } from "@/lib/base-path";
 import type { FacilityWorkGroupOption } from "@/lib/facility-work-groups";
+import { useEscapeToClose } from "@/app/_components/ui/use-escape-to-close";
 
 type ImportResult = {
   created: number;
@@ -88,7 +89,8 @@ export default function ImportExcelModal({
     setError(null);
     setFacilityId(fixedFacilityId ? String(fixedFacilityId) : "");
     if (fileRef.current) fileRef.current.value = "";
-  }
+  }  useEscapeToClose(open && !loading, handleClose);
+
 
   return (
     <>

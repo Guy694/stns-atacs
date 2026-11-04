@@ -14,6 +14,7 @@ import type {
   FacilityWorkGroupManageRow,
   WorkGroupFacilityOption,
 } from "@/lib/facility-work-groups";
+import { useEscapeToClose } from "@/app/_components/ui/use-escape-to-close";
 
 type WorkGroupsClientProps = {
   facilities: WorkGroupFacilityOption[];
@@ -44,6 +45,7 @@ function WorkGroupModal({
   );
 
   const singleFacility = facilities.length === 1 ? facilities[0] : null;
+  useEscapeToClose(!pending, onClose);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center px-4">

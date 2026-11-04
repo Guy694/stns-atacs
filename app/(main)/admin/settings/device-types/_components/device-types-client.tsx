@@ -8,6 +8,7 @@ import { ActionIconButton } from "@/app/_components/ui/action-icon-button";
 import { useTableState } from "@/app/_components/ui/use-table-state";
 import { createDeviceTypeAction, toggleDeviceTypeActiveAction, updateDeviceTypeAction } from "../actions";
 import type { DeviceTypeRow } from "@/lib/device-types";
+import { useEscapeToClose } from "@/app/_components/ui/use-escape-to-close";
 
 function DeviceTypeModal({
   mode,
@@ -32,6 +33,7 @@ function DeviceTypeModal({
     },
     null
   );
+  useEscapeToClose(!pending, onClose);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -140,7 +142,7 @@ function DeviceTypeTable({ label, data }: { label: string; data: DeviceTypeRow[]
   return (
     <div className="glass-panel overflow-hidden rounded-2xl">
       <div className="border-b border-black/6 bg-stone-50/60 px-4 py-2.5">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">{label}</h2>
+        <h2 className="text-xs font-semibold text-[var(--muted)]">{label}</h2>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">

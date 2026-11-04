@@ -5,7 +5,7 @@ import { LogoutConfirmForm } from "@/app/_components/logout-confirm-form";
 import { MobileMenuButton } from "@/app/_components/sidebar";
 import { AppIcon } from "@/app/_components/ui/icon";
 import { withBasePath } from "@/lib/base-path";
-import { APP_NAME, roleLabel } from "@/lib/app-brand";
+import { APP_NAME, APP_SHORT, roleLabel } from "@/lib/app-brand";
 
 type MainNavbarProps = {
   user: {
@@ -32,7 +32,7 @@ export function MainNavbar({ user }: MainNavbarProps) {
             priority
           />
           <div className="min-w-0">
-            <p className="truncate text-[10px] font-bold tracking-[0.16em] text-[var(--accent-strong)] uppercase">ATACS</p>
+            <p className="truncate text-[11px] font-semibold text-[var(--accent-strong)]">{APP_SHORT}</p>
             <p className="truncate text-sm font-semibold text-[var(--foreground)] sm:hidden">{APP_NAME.replace(/^ระบบ/, "")}</p>
             <p className="hidden truncate text-sm font-semibold text-[var(--foreground)] sm:block sm:text-base">{APP_NAME} จังหวัดสตูล</p>
           </div>

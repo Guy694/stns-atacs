@@ -6,6 +6,7 @@ import { listFacilities } from "@/lib/assets";
 import { getAssetFacilityScopeIds } from "@/lib/facility-scope";
 import { SortableTh, TablePagination } from "@/app/_components/ui/data-table";
 import { pageHref, paginate, readPage, readSort, sortHref, sortRows } from "@/lib/table-sort";
+import { AppIcon } from "@/app/_components/ui/icon";
 
 type Props = { searchParams: Promise<Record<string, string | string[] | undefined>> };
 
@@ -128,19 +129,19 @@ export default async function FacilitiesPage({ searchParams }: Props) {
       {/* KPI Strip */}
       <div className="grid grid-cols-3 gap-4">
         <div className="glass-panel rounded-2xl p-5">
-          <p className="text-xs font-medium uppercase tracking-wider text-[var(--muted)]">หน่วยบริการทั้งหมด</p>
+          <p className="text-xs font-medium text-[var(--muted)]">หน่วยบริการทั้งหมด</p>
           <p className="mt-2 text-3xl font-bold text-[var(--accent)]">{totalFacilities}</p>
           <p className="mt-0.5 text-xs text-[var(--muted)]">หน่วยงาน</p>
         </div>
         <div className="glass-panel rounded-2xl p-5">
-          <p className="text-xs font-medium uppercase tracking-wider text-[var(--muted)]">มีข้อมูลทรัพย์สิน</p>
+          <p className="text-xs font-medium text-[var(--muted)]">มีข้อมูลทรัพย์สิน</p>
           <p className="mt-2 text-3xl font-bold text-[var(--accent)]">{surveyed}</p>
           <p className="mt-0.5 text-xs text-[var(--muted)]">
             จาก {totalFacilities} หน่วยงาน ({Math.round((surveyed / (totalFacilities || 1)) * 100)}%)
           </p>
         </div>
         <div className="glass-panel rounded-2xl p-5">
-          <p className="text-xs font-medium uppercase tracking-wider text-[var(--muted)]">ทรัพย์สินรวม</p>
+          <p className="text-xs font-medium text-[var(--muted)]">ทรัพย์สินรวม</p>
           <p className="mt-2 text-3xl font-bold text-[var(--accent)]">{totalAssets.toLocaleString()}</p>
           <p className="mt-0.5 text-xs text-[var(--muted)]">รายการ (ฮาร์ดแวร์ + ซอฟต์แวร์)</p>
         </div>
@@ -172,7 +173,7 @@ export default async function FacilitiesPage({ searchParams }: Props) {
 
       {facilities.length === 0 && (
         <div className="glass-panel flex flex-col items-center justify-center rounded-2xl py-20 text-center">
-          <p className="text-4xl">🏥</p>
+          <AppIcon name="building" aria-hidden="true" className="mx-auto h-10 w-10 text-[var(--muted)]" />
           <p className="mt-3 font-medium text-[var(--foreground)]">ยังไม่พบข้อมูลหน่วยบริการ</p>
           <p className="mt-1 text-sm text-[var(--muted)]">ไม่สามารถเชื่อมต่อฐานข้อมูลได้</p>
         </div>

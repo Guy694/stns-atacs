@@ -2,20 +2,15 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { updateMenuVisibilityAction } from "@/app/(main)/admin/settings/menus/actions";
-import { SortableTh } from "@/app/_components/ui/data-table";
-import { AppIcon } from "@/app/_components/ui/icon";
-import { StatusBadge } from "@/app/_components/ui/status-badge";
+import { MenuVisibilityTable, type MenuVisibilityRow } from "./_components/menu-visibility-table";
 import { getMenuVisibility } from "@/lib/app-settings";
 import { getCurrentUser } from "@/lib/auth";
 import { APP_MENU_GROUPS, APP_MENU_ITEMS } from "@/lib/menu";
-import { readSort, sortHref, sortRows } from "@/lib/table-sort";
 
 type MenuSettingsPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
-const MENU_PATH = "/admin/settings/menus";
-const MENU_SORT_KEYS = ["menu", "group", "permission", "status"] as const;
 
 function readQueryValue(value: string | string[] | undefined) {
   if (!value) return "";
@@ -30,19 +25,17 @@ export default async function MenuSettingsPage({ searchParams }: MenuSettingsPag
   const [params, menuVisibility] = await Promise.all([searchParams, getMenuVisibility()]);
   const notice = readQueryValue(params.notice);
 
-  // Short fixed list (APP_MENU_ITEMS) → sorting only, no pagination. Sort links drop the one-off notice.
-  const sort = readSort(params, MENU_SORT_KEYS);
-  const linkParams = { ...params, notice: undefined };
-  const groupRank = (key: string) => APP_MENU_GROUPS.findIndex((entry) => entry.key === key);
-  const menuItems = sortRows(APP_MENU_ITEMS, sort, {
-    menu: (item) => item.label,
-    group: (item) => groupRank(item.group),
-    permission: (item) => item.permissionKey ?? null,
-    status: (item) => (menuVisibility[item.key] ? 0 : 1),
-  });
-  const th = (key: (typeof MENU_SORT_KEYS)[number], label: string) => (
-    <SortableTh label={label} sortKey={key} sort={sort} href={sortHref(MENU_PATH, linkParams, key, sort)} className="px-5 py-3 font-medium" />
-  );
+  const rows: MenuVisibilityRow[] = APP_MENU_ITEMS.map((item) => ({
+    key: item.key,
+    label: item.label,
+    description: item.description,
+    href: item.href,
+    icon: item.icon,
+    groupLabel: APP_MENU_GROUPS.find((entry) => entry.key === item.group)?.label ?? item.group,
+    groupRank: APP_MENU_GROUPS.findIndex((entry) => entry.key === item.group),
+    permissionKey: item.permissionKey ?? null,
+    enabled: Boolean(menuVisibility[item.key]),
+  }));
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6">
@@ -50,12 +43,12 @@ export default async function MenuSettingsPage({ searchParams }: MenuSettingsPag
         <p className="text-xs font-semibold text-[var(--accent-strong)]">ตั้งค่าระบบ · เมนู</p>
         <h1 className="section-title mt-1 text-3xl font-semibold">ตั้งค่าการแสดงเมนู</h1>
         <p className="mt-1 text-sm text-[var(--muted)]">
-          เปิดหรือปิดเมนูหลักของระบบ โดยยังคงตรวจสิทธิ์ผู้ใช้จาก Permission Matrix เหมือนเดิม
+          เปิดหรือปิดเมนูหลักของระบบ โดยยังคงตรวจสิทธิ์ผู้ใช้ตามตารางสิทธิ์เหมือนเดิม
         </p>
       </div>
 
       {notice ? (
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+        <div className="rounded-xl border border-[var(--state-success-border)] bg-[var(--state-success-bg)] px-4 py-3 text-sm text-[var(--state-success-fg)]">
           {notice}
         </div>
       ) : null}
@@ -65,11 +58,11 @@ export default async function MenuSettingsPage({ searchParams }: MenuSettingsPag
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="text-base font-semibold">เมนูทั้งหมด</h2>
-              <p className="mt-0.5 text-xs text-[var(--muted)]">หากปิดเมนู จะซ่อนจาก sidebar แต่ URL และ Permission Matrix ยังทำงานตามสิทธิ์เดิม</p>
+              <p className="mt-0.5 text-xs text-[var(--muted)]">หากปิดเมนู จะซ่อนจากแถบเมนู แต่ลิงก์และตารางสิทธิ์ยังทำงานตามสิทธิ์เดิม</p>
             </div>
             <button
               type="submit"
-              className="rounded-xl bg-[var(--accent-strong)] px-5 py-2 text-sm font-semibold text-white transition hover:opacity-90"
+              className="primary-action"
             >
               บันทึกการตั้งค่า
             </button>
@@ -77,64 +70,7 @@ export default async function MenuSettingsPage({ searchParams }: MenuSettingsPag
         </div>
 
         <div className="overflow-x-auto">
-          <table className="min-w-[820px] w-full text-left text-sm">
-            <thead className="border-b border-black/8 bg-[var(--neutral-bg)] text-xs text-[var(--muted)]">
-              <tr>
-                {th("menu", "เมนู")}
-                {th("group", "กลุ่ม")}
-                {th("permission", "สิทธิ์ที่เกี่ยวข้อง")}
-                {th("status", "สถานะ")}
-                <th className="px-5 py-3 text-right font-medium">เปิดใช้งาน</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-black/6 bg-white/70">
-              {menuItems.map((item) => {
-                const group = APP_MENU_GROUPS.find((entry) => entry.key === item.group);
-                const enabled = menuVisibility[item.key];
-
-                return (
-                  <tr key={item.key} className="align-middle hover:bg-[var(--primary-soft)]/30">
-                    <td className="px-5 py-4">
-                      <div className="flex min-w-0 items-start gap-3">
-                        <span className="rounded-xl bg-[var(--primary-soft)] p-2 text-[var(--primary-text)]">
-                          <AppIcon name={item.icon} className="h-4 w-4" />
-                        </span>
-                        <div className="min-w-0">
-                          <p className="font-semibold text-[var(--foreground)]">{item.label}</p>
-                          <p className="mt-0.5 text-xs leading-5 text-[var(--muted)]">{item.description}</p>
-                          <p className="mt-1 font-mono text-[11px] text-[var(--muted)]">{item.href}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-5 py-4 text-xs text-[var(--muted)]">{group?.label ?? item.group}</td>
-                    <td className="px-5 py-4">
-                      {item.permissionKey ? (
-                        <code className="rounded-lg bg-stone-100 px-2 py-1 text-xs text-[var(--foreground)]">{item.permissionKey}</code>
-                      ) : (
-                        <span className="text-xs text-[var(--muted)]">ไม่มี</span>
-                      )}
-                    </td>
-                    <td className="px-5 py-4">
-                      <StatusBadge tone={enabled ? "success" : "neutral"}>
-                        {enabled ? "แสดงในเมนู" : "ซ่อนจากเมนู"}
-                      </StatusBadge>
-                    </td>
-                    <td className="px-5 py-4 text-right">
-                      <label className="inline-flex cursor-pointer items-center justify-end gap-2">
-                        <span className="sr-only">เปิดใช้งานเมนู {item.label}</span>
-                        <input
-                          type="checkbox"
-                          name={`menu:${item.key}`}
-                          defaultChecked={enabled}
-                          className="h-5 w-5 rounded border-black/20 text-[var(--accent)] accent-[var(--accent)]"
-                        />
-                      </label>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          <MenuVisibilityTable rows={rows} />
         </div>
       </form>
 

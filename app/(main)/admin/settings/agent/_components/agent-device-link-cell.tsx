@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 
 import { linkAgentDeviceAction } from "@/app/(main)/admin/settings/agent/actions";
 import type { AssetSelectOption } from "@/lib/assets";
+import { useEscapeToClose } from "@/app/_components/ui/use-escape-to-close";
 
 type Props = {
   deviceId: number;
@@ -23,6 +24,7 @@ export function AgentDeviceLinkCell({
   assets,
 }: Props) {
   const [open, setOpen] = useState(false);
+  useEscapeToClose(open, () => setOpen(false));
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [pending, startTransition] = useTransition();

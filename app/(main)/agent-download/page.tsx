@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { getFacilityAgentContext, listFacilityWorkGroups } from "@/lib/facility-work-groups";
 import { hasPermission } from "@/lib/role-permissions";
 import { AgentDownloadPanel } from "./_components/agent-download-panel";
+import { AppIcon } from "@/app/_components/ui/icon";
 
 export default async function AgentDownloadPage() {
   const user = await getCurrentUser();
@@ -41,7 +42,7 @@ export default async function AgentDownloadPage() {
 
       {!user.facilityId ? (
         <div className="glass-panel rounded-2xl px-6 py-8 text-center">
-          <p className="text-2xl mb-2">🏥</p>
+          <AppIcon name="building" aria-hidden="true" className="mx-auto mb-2 h-8 w-8 text-[var(--muted)]" />
           <p className="font-medium">บัญชีของคุณยังไม่ได้ผูกกับหน่วยงาน</p>
           <p className="mt-1 text-sm text-[var(--muted)]">กรุณาติดต่อผู้ดูแลระบบเพื่อกำหนดหน่วยงานที่สังกัดก่อน</p>
         </div>

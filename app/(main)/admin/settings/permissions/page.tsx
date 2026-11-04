@@ -14,6 +14,8 @@ import {
 } from "@/lib/role-permissions";
 import { PermissionsMatrixClient } from "./_components/permissions-matrix-client";
 import { withBasePath } from "@/lib/base-path";
+import { roleLabel } from "@/lib/app-brand";
+import { AppIcon } from "@/app/_components/ui/icon";
 
 export const dynamic = "force-dynamic";
 
@@ -42,12 +44,12 @@ export default async function AdminPermissionsPage() {
       <div className="flex items-center gap-2 text-xs text-[var(--muted)]">
         <Link href="/admin/settings" className="hover:underline">ตั้งค่าระบบ</Link>
         <span>›</span>
-        <span>Permission Matrix</span>
+        <span>ตารางสิทธิ์</span>
       </div>
 
       <div>
         <p className="text-xs font-semibold text-[var(--accent-strong)]">ตั้งค่าระบบ · สิทธิ์การใช้งาน</p>
-        <h1 className="section-title mt-1 text-3xl font-semibold">จัดการ Permission Matrix</h1>
+        <h1 className="section-title mt-1 text-3xl font-semibold">จัดการตารางสิทธิ์การใช้งาน</h1>
         <p className="mt-1 text-sm text-[var(--muted)]">
           ปรับสิทธิ์รายบทบาทแบบละเอียด โดยไม่ต้องยึดค่าตายตัวตาม role เดิม
         </p>
@@ -56,7 +58,7 @@ export default async function AdminPermissionsPage() {
             href={withBasePath("/api/export/permissions/")}
             className="secondary-action"
           >
-            Export Policy JSON
+            <AppIcon name="download" className="h-4 w-4" /> ส่งออกนโยบายสิทธิ์ (JSON)
           </a>
         </div>
       </div>
@@ -66,7 +68,7 @@ export default async function AdminPermissionsPage() {
           const allowCount = Object.values(matrix[role]).filter(Boolean).length;
           return (
             <div key={role} className="glass-panel rounded-2xl p-4">
-              <p className="text-xs uppercase tracking-[0.15em] text-[var(--muted)]">{role}</p>
+              <p className="text-xs font-medium text-[var(--muted)]">{roleLabel(role)}</p>
               <p className="mt-1 text-2xl font-semibold text-[var(--foreground)]">{allowCount}</p>
               <p className="text-xs text-[var(--muted)]">สิทธิ์ที่อนุญาต</p>
             </div>
@@ -85,7 +87,7 @@ export default async function AdminPermissionsPage() {
 
       <div className="glass-panel overflow-hidden rounded-2xl">
         <div className="border-b border-black/6 px-5 py-4">
-          <h2 className="text-lg font-semibold">Effective Permissions by User</h2>
+          <h2 className="text-lg font-semibold">สิทธิ์ที่มีผลจริงรายผู้ใช้</h2>
           <p className="mt-1 text-sm text-[var(--muted)]">
             แสดงสิทธิ์ตามบทบาทปัจจุบันของผู้ใช้แต่ละบัญชี เพื่อช่วยตรวจสอบผลกระทบก่อนเปลี่ยนนโยบาย
           </p>

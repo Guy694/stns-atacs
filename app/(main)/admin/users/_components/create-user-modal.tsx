@@ -86,7 +86,7 @@ export function CreateUserModal({ children, facilities }: Props) {
               </div>
 
               <div className="rounded-xl border border-black/8 bg-stone-50/60 p-4 space-y-3">
-                <p className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">วิธีเข้าสู่ระบบ (อย่างน้อย 1 วิธี)</p>
+                <p className="text-xs font-medium text-[var(--muted)]">วิธีเข้าสู่ระบบ (อย่างน้อย 1 วิธี)</p>
                 <div>
                   <label htmlFor={`${fieldId}-thaidCid`} className="block text-sm font-medium">ThaiD (เลขบัตรประชาชน 13 หลัก)</label>
                   <input id={`${fieldId}-thaidCid`} name="thaidCid" placeholder="XXXXXXXXXXXXX" maxLength={13} className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 font-mono text-sm outline-none focus:border-[var(--accent)]" />

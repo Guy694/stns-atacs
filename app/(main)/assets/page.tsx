@@ -11,7 +11,7 @@ import { assetClassLabel } from "@/lib/asset-classes";
 import { getCurrentUser } from "@/lib/auth";
 import { ASSET_SORT_KEYS, countAssets, listAssets, listAllFacilitiesForSelect, listFacilities, type AssetListFilter } from "@/lib/assets";
 import { SortableTh } from "@/app/_components/ui/data-table";
-import { readSort, sortHref } from "@/lib/table-sort";
+import { columnSortOption, readSort, sortHref } from "@/lib/table-sort";
 import { formatThaiDate } from "@/lib/date-format";
 import { listActiveDeviceTypes } from "@/lib/device-types";
 import { listFacilityWorkGroups } from "@/lib/facility-work-groups";
@@ -231,7 +231,7 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
         )}
       </div>
 
-      <AssetFilters key={JSON.stringify(pageQuery)} values={pageQuery} resetHref="/assets" subtypes={subtypes} deviceTypes={deviceTypes} facilities={facilitiesForSelect} districts={districtOptions} workGroups={workGroups} paginate />
+      <AssetFilters key={JSON.stringify(pageQuery)} values={pageQuery} resetHref="/assets" subtypes={subtypes} deviceTypes={deviceTypes} facilities={facilitiesForSelect} districts={districtOptions} workGroups={workGroups} paginate columnSort={columnSortOption(columnSort, { reg: "เลขทะเบียน", name: "ชื่อทรัพย์สิน", facility: "หน่วยงาน", type: "ประเภท", status: "สถานะ", ...(canViewNetworkByPolicy ? { ip: "IP" } : {}), ma: "MA หมด" })} />
 
       {/* Table by district */}
       {Object.entries(byDistrict).map(([district, items]) => (

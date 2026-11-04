@@ -64,3 +64,12 @@ test("readPage reads a positive integer and defaults to 1", () => {
   assert.equal(t.readPage({ page: "abc" }), 1);
   assert.equal(t.readPage({ hpage: "2" }, "h"), 2);
 });
+
+test("columnSortOption keeps a header sort when the filter form is submitted (R1)", () => {
+  const labels = { name: "ชื่อทรัพย์สิน", ma: "MA หมด" };
+  assert.deepEqual({ ...t.columnSortOption({ key: "name", dir: "desc" }, labels) }, { value: "name", dir: "desc", label: "ตามหัวตาราง: ชื่อทรัพย์สิน (มาก → น้อย)" });
+  assert.deepEqual({ ...t.columnSortOption({ key: "ma", dir: "asc" }, labels) }, { value: "ma", dir: "asc", label: "ตามหัวตาราง: MA หมด (น้อย → มาก)" });
+  assert.equal(t.columnSortOption(null, labels), null);
+  // A column the table does not show (e.g. hidden by permission) is not offered.
+  assert.equal(t.columnSortOption({ key: "ip", dir: "asc" }, labels), null);
+});

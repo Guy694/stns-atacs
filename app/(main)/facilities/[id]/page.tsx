@@ -21,7 +21,7 @@ import { listAssetLocations } from "@/lib/asset-locations";
 import { DeleteAssetButton } from "@/app/(main)/assets/_components/delete-asset-button";
 import { FacilityAssetQrActions } from "@/app/(main)/facilities/[id]/_components/facility-asset-qr-actions";
 import { SortableTh, TablePagination } from "@/app/_components/ui/data-table";
-import { pageHref, paginate, readPage, readSort, sortHref, sortRows, type SortState } from "@/lib/table-sort";
+import { columnSortOption, pageHref, paginate, readPage, readSort, sortHref, sortRows, type SortState } from "@/lib/table-sort";
 
 type Props = {
   params: Promise<{ id: string }>;
@@ -267,7 +267,7 @@ export default async function FacilityDetailPage({ params, searchParams }: Props
         </div>
 
         <div className="p-4 sm:p-5">
-          <AssetFilters key={JSON.stringify(query)} resetHref={buildFacilityHref(facilityId, {})} values={{ search, status: statusFilter, assetClass: assetClassFilter, subtype: subtypeFilter, group: groupFilter, deviceType: deviceTypeFilter, workGroup: workGroupFilter, maDays: maDaysFilter, sort: normalizedSort }} subtypes={subtypes} deviceTypes={deviceTypes} workGroups={workGroups} />
+          <AssetFilters key={JSON.stringify(query)} resetHref={buildFacilityHref(facilityId, {})} values={{ search, status: statusFilter, assetClass: assetClassFilter, subtype: subtypeFilter, group: groupFilter, deviceType: deviceTypeFilter, workGroup: workGroupFilter, maDays: maDaysFilter, sort: normalizedSort }} subtypes={subtypes} deviceTypes={deviceTypes} workGroups={workGroups} columnSort={readSort(query, columnKeys) ? columnSortOption(tableSort, { number: "เลขทะเบียน", name: "ชื่อทรัพย์สิน", class: "ประเภท", status: "สถานะ", ...(canManageAssets ? { ip: "IP / ที่ตั้ง", serial: "Serial" } : {}), ma: "MA หมด" }) : null} />
         </div>
 
         {assets.length === 0 ? (
