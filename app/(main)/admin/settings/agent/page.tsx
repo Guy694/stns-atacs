@@ -140,14 +140,14 @@ export default async function AgentSettingsPage({ searchParams }: AgentSettingsP
 
           <AgentUninstallCommands />
 
-          <div className="grid gap-6 xl:grid-cols-[1.05fr_1.4fr]">
-            <section className="glass-panel overflow-hidden rounded-2xl">
+          <div className="grid gap-6 2xl:grid-cols-[0.85fr_1.6fr]">
+            <section className="glass-panel min-w-0 overflow-hidden rounded-2xl">
               <div className="border-b border-black/6 px-5 py-4">
                 <h2 className="text-lg font-semibold">Enrollment Tokens</h2>
                 <p className="mt-1 text-sm text-[var(--muted)]">token ถูกผูกกับหน่วยงานเดียวเสมอ และสามารถปิดใช้งานได้</p>
               </div>
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <table className="w-full min-w-[760px] text-sm">
                   <thead>
                     <tr className="border-b border-black/6 bg-stone-50/60 text-xs text-[var(--muted)]">
                       <th className="px-4 py-3 w-14 text-right font-medium">ลำดับ</th>
@@ -200,7 +200,7 @@ export default async function AgentSettingsPage({ searchParams }: AgentSettingsP
               </div>
             </section>
 
-            <section className="glass-panel overflow-hidden rounded-2xl">
+            <section className="glass-panel min-w-0 overflow-hidden rounded-2xl">
               <div className="border-b border-black/6 px-5 py-4">
                 <h2 className="text-lg font-semibold">Agent Devices</h2>
                 <p className="mt-1 text-sm text-[var(--muted)]">เครื่องที่ติดตั้ง agent แล้วและส่ง inventory เข้ามาล่าสุด</p>
@@ -212,16 +212,16 @@ export default async function AgentSettingsPage({ searchParams }: AgentSettingsP
                 )}
               </div>
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <table className="w-full min-w-[1180px] text-sm">
                   <thead>
                     <tr className="border-b border-black/6 bg-stone-50/60 text-xs text-[var(--muted)]">
                       <th className="px-4 py-3 w-14 text-right font-medium">ลำดับ</th>
-                      <th className="px-4 py-3 text-left font-medium">เครื่อง</th>
-                      <th className="px-4 py-3 text-left font-medium">หน่วยงาน</th>
-                      <th className="px-4 py-3 text-left font-medium">OS / IP</th>
-                      <th className="px-4 py-3 text-left font-medium">Asset</th>
-                      <th className="px-4 py-3 text-left font-medium">ล่าสุด</th>
-                      <th className="px-4 py-3 text-left font-medium">การติดตั้ง</th>
+                      <th className="min-w-40 px-4 py-3 text-left font-medium whitespace-nowrap">เครื่อง</th>
+                      <th className="min-w-32 px-4 py-3 text-left font-medium whitespace-nowrap">หน่วยงาน</th>
+                      <th className="min-w-36 px-4 py-3 text-left font-medium whitespace-nowrap">OS / IP</th>
+                      <th className="min-w-40 px-4 py-3 text-left font-medium whitespace-nowrap">Asset</th>
+                      <th className="min-w-32 px-4 py-3 text-left font-medium whitespace-nowrap">ล่าสุด</th>
+                      <th className="min-w-56 px-4 py-3 text-left font-medium whitespace-nowrap">การติดตั้ง</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-black/4">

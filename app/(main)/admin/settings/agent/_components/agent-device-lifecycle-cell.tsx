@@ -35,7 +35,7 @@ type Props = {
   canManage: boolean;
 };
 
-const buttonClass = "rounded-lg border px-2.5 py-1 text-xs font-medium transition disabled:opacity-50";
+const buttonClass = "whitespace-nowrap rounded-lg border px-2.5 py-1 text-xs font-medium transition disabled:opacity-50";
 
 export function AgentDeviceLifecycleCell({ device, canManage }: Props) {
   const [pending, startTransition] = useTransition();
@@ -91,7 +91,7 @@ export function AgentDeviceLifecycleCell({ device, canManage }: Props) {
   }
 
   return (
-    <td className="px-4 py-3 align-top">
+    <td className="min-w-56 px-4 py-3 align-top">
       {state === "active" && <StatusBadge tone="success">{AGENT_LIFECYCLE_LABELS.active}</StatusBadge>}
       {state === "uninstall-pending" && (
         <div>

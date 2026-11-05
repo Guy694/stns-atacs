@@ -59,7 +59,7 @@ export function AgentDeviceLinkCell({
   }
 
   return (
-    <td className="px-4 py-3">
+    <td className="min-w-40 px-4 py-3">
       {linkedAssetId ? (
         <div>
           <p className="font-medium">{linkedAssetName ?? "Asset linked"}</p>
