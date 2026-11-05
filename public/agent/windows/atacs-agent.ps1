@@ -430,7 +430,7 @@ function Enroll-Agent {
             $body.workGroupName = $WorkGroupName
         }
     }
-    $response = Invoke-JsonPost -Url "$normalizedBaseUrl/api/agent/enroll" -Body $body -Headers @{}
+    $response = Invoke-JsonPost -Url "$normalizedBaseUrl/api/agent/enroll/" -Body $body -Headers @{}
 
     $config = @{
         apiBaseUrl = $normalizedBaseUrl
@@ -456,7 +456,7 @@ function Send-Inventory {
         "x-agent-key" = $Config.agentKey
     }
 
-    return Invoke-JsonPost -Url "$($Config.apiBaseUrl.TrimEnd('/'))/api/agent/report" -Body $Payload -Headers $headers
+    return Invoke-JsonPost -Url "$($Config.apiBaseUrl.TrimEnd('/'))/api/agent/report/" -Body $Payload -Headers $headers
 }
 
 try {

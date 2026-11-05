@@ -39,7 +39,7 @@ powershell -ExecutionPolicy Bypass -File install-atacs-agent.ps1 -ApiBaseUrl htt
 Example Linux static install command shape:
 
 ```bash
-sudo bash install-atacs-agent.sh --api-base-url https://stns-atacs.vercel.app --install-key <INSTALL_KEY> --facility-id 65 --work-group-name "กลุ่มงานไอที"
+sudo bash install-atacs-agent.sh --api-base-url https://stn.moph.go.th/stns-atacs --install-key <INSTALL_KEY> --facility-id 65 --work-group-name "กลุ่มงานไอที"
 ```
 
 ### Admin Flow
@@ -54,7 +54,7 @@ sudo bash install-atacs-agent.sh --api-base-url https://stns-atacs.vercel.app --
 Install the agent on a Windows client machine with PowerShell:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File install-atacs-agent.ps1 -ApiBaseUrl https://stns-atacs.vercel.app -EnrollmentToken <token>
+powershell -ExecutionPolicy Bypass -File install-atacs-agent.ps1 -ApiBaseUrl https://stn.moph.go.th/stns-atacs -EnrollmentToken <token>
 ```
 
 The installer enrolls the device, stores credentials under `ProgramData`, and registers a scheduled task to report inventory every 4 hours.
@@ -64,7 +64,7 @@ The installer enrolls the device, stores credentials under `ProgramData`, and re
 Install the agent on a Linux client machine with sudo or root access:
 
 ```bash
-sudo bash install-atacs-agent.sh --api-base-url https://stns-atacs.vercel.app --enrollment-token <token>
+sudo bash install-atacs-agent.sh --api-base-url https://stn.moph.go.th/stns-atacs --enrollment-token <token>
 ```
 
 The installer copies the Python agent into `/opt/atacs-agent`, stores config under `/var/lib/atacs-agent`, and registers a systemd timer or cron fallback to report inventory every 4 hours.

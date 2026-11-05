@@ -496,7 +496,7 @@ def enroll_agent(
             body["workGroupName"] = work_group_name
 
     response = post_json(
-        f"{base_url.rstrip('/')}/api/agent/enroll",
+        f"{base_url.rstrip('/')}/api/agent/enroll/",
         body,
     )
 
@@ -518,7 +518,7 @@ def send_inventory(config: Dict[str, Any], payload: Dict[str, Any]) -> Dict[str,
         "x-agent-id": str(config["agentId"]),
         "x-agent-key": str(config["agentKey"]),
     }
-    return post_json(f"{str(config['apiBaseUrl']).rstrip('/')}/api/agent/report", payload, headers=headers)
+    return post_json(f"{str(config['apiBaseUrl']).rstrip('/')}/api/agent/report/", payload, headers=headers)
 
 
 def parse_args() -> argparse.Namespace:
