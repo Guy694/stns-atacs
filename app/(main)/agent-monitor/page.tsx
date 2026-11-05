@@ -11,7 +11,19 @@ import {
   type HealthIssueCode,
   type HealthSeverity,
 } from "@/lib/agent-health";
+import {
+  agentConnectionState,
+  agentOfflineThresholdMinutes,
+  CONNECTION_LABELS,
+  isConnectionState,
+  isOsFamilyKey,
+  osFamily,
+  osFamilyLabel,
+  summarizeAgentFleet,
+  type AgentConnectionState,
+} from "@/lib/agent-monitor-summary";
 import { AGENT_LATEST_VERSION } from "@/lib/agent-payload";
+import { AGENT_LIFECYCLE_LABELS } from "@/lib/agent-uninstall";
 import { getCurrentUser } from "@/lib/auth";
 import { listAllFacilitiesForSelect } from "@/lib/assets";
 import { formatThaiDateTime } from "@/lib/date-format";
@@ -20,10 +32,13 @@ import { hasPermission } from "@/lib/role-permissions";
 import { SortableTh, TablePagination } from "@/app/_components/ui/data-table";
 import { pageHref, paginate, readPage, readSort, sortHref, sortRows } from "@/lib/table-sort";
 
+import { FleetDashboard } from "./_components/fleet-dashboard";
+
 type Props = { searchParams: Promise<Record<string, string | string[] | undefined>> };
 
 const one = (value: string | string[] | undefined) => (Array.isArray(value) ? value[0] : value) ?? "";
 const TONE: Record<HealthSeverity, "danger" | "warning" | "info"> = { critical: "danger", warning: "warning", info: "info" };
+const CONNECTION_TONE: Record<AgentConnectionState, "success" | "danger" | "neutral"> = { online: "success", offline: "danger", never: "neutral" };
 const SEVERITY_FILTERS = [
   { key: "", label: "มีปัญหาทั้งหมด" },
   { key: "critical", label: "วิกฤต" },
@@ -64,6 +79,10 @@ export default async function AgentMonitorPage({ searchParams }: Props) {
   const severity = one(params.severity);
   const issue = one(params.issue) as HealthIssueCode | "";
   const query = one(params.q).trim().toLowerCase().slice(0, 100);
+  const osParam = one(params.os);
+  const os = isOsFamilyKey(osParam) ? osParam : "";
+  const connParam = one(params.conn);
+  const conn = isConnectionState(connParam) ? connParam : "";
 
   let devices: Awaited<ReturnType<typeof listAgentDevices>> = [];
   let dbError = "";
@@ -73,9 +92,18 @@ export default async function AgentMonitorPage({ searchParams }: Props) {
     dbError = "ยังไม่พบตาราง Agent กรุณารัน database/agent_inventory.sql";
   }
   const facilities = facilityScopeId ? [] : await listAllFacilitiesForSelect();
-  const summary = summarizeAgentMonitor(devices);
+  const now = new Date();
+  const summary = summarizeAgentMonitor(devices, now);
+  const offlineMinutes = agentOfflineThresholdMinutes(process.env.AGENT_OFFLINE_MINUTES);
+  // ส่งทุกเครื่อง: เครื่องที่ถอนการติดตั้ง/ลบออกจากระบบแล้วไม่นับใน KPI แต่แสดงเป็นจำนวนแยก (fleet.retired)
+  const fleet = summarizeAgentFleet(devices, { now, latestVersion: AGENT_LATEST_VERSION, offlineMinutes });
+  const connectionOf = new Map(summary.rows.map((row) => [row.device.id, agentConnectionState(row.device, now, offlineMinutes)]));
 
   const visibleRows = summary.rows.filter((row) => {
+    const state = connectionOf.get(row.device.id);
+    // "ออฟไลน์" ในตัวกรองรวมเครื่องที่ยังไม่เคยรายงานด้วย ให้ตรงกับการ์ดสรุปด้านบน
+    if (conn === "offline" ? state === "online" : conn && state !== conn) return false;
+    if (os && osFamily(row.device.operatingSystem) !== os) return false;
     if (issue && !row.issues.some((item) => item.code === issue)) return false;
     if (severity === "critical" && row.worst !== "critical") return false;
     if (severity === "warning" && row.worst !== "critical" && row.worst !== "warning") return false;
@@ -104,7 +132,7 @@ export default async function AgentMonitorPage({ searchParams }: Props) {
 
   const linkWith = (patch: Record<string, string>) => {
     const next = new URLSearchParams();
-    const merged = { facility: facilityScopeId ? "" : String(facilityId ?? ""), severity, issue, q: query, sort: sort?.key ?? "", dir: sort?.dir ?? "", ...patch };
+    const merged = { facility: facilityScopeId ? "" : String(facilityId ?? ""), severity, issue, q: query, os, conn, sort: sort?.key ?? "", dir: sort?.dir ?? "", ...patch };
     for (const [key, value] of Object.entries(merged)) if (value) next.set(key, value);
     const text = next.toString();
     return text ? `/agent-monitor?${text}` : "/agent-monitor";
@@ -116,26 +144,41 @@ export default async function AgentMonitorPage({ searchParams }: Props) {
         <p className="text-xs font-semibold text-[var(--accent-strong)]">สุขภาพเครื่องคอมพิวเตอร์</p>
         <h1 className="section-title mt-1 text-3xl font-semibold">สุขภาพเครื่องคอมพิวเตอร์</h1>
         <p className="mt-1 text-sm text-[var(--muted)]">
-          ข้อมูลจาก ATACS Agent ที่ติดตั้งในเครื่อง (ส่งทุก 4 ชั่วโมงและตอนเปิดเครื่อง) เรียงจากปัญหาหนักที่สุด
+          ข้อมูลจาก ATACS Agent ที่ติดตั้งในเครื่อง (ส่งทุก 4 ชั่วโมงและตอนเปิดเครื่อง) ตารางเรียงจากปัญหาหนักที่สุด
         </p>
+        <p className="mt-1 text-xs text-[var(--muted)]">ข้อมูล ณ {formatThaiDateTime(now)}</p>
       </div>
 
       {dbError && <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">{dbError}</div>}
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-        {[
-          { label: "เครื่องที่ติดตั้ง Agent", value: summary.total, tone: "" },
-          { label: "ส่งข้อมูลภายใน 3 วัน", value: summary.reportingRecently, tone: "" },
-          { label: "ปัญหาวิกฤต", value: summary.critical, tone: "text-red-600" },
-          { label: "ควรแก้ไข", value: summary.warning, tone: "text-amber-600" },
-          { label: `มีข้อมูลสุขภาพ (Agent ${AGENT_LATEST_VERSION})`, value: summary.withHealthData, tone: "" },
-        ].map((tile) => (
-          <div key={tile.label} className="glass-panel rounded-2xl p-4">
-            <p className="text-xs text-[var(--muted)]">{tile.label}</p>
-            <p className={`mt-1 text-2xl font-semibold tabular-nums ${tile.tone}`}>{tile.value.toLocaleString("th-TH")}</p>
-          </div>
-        ))}
-      </div>
+      {!dbError && summary.total === 0 ? (
+        <section className="glass-panel rounded-2xl px-5 py-10 text-center">
+          <h2 className="text-base font-semibold">ยังไม่มีเครื่องที่ติดตั้ง Agent{facilityId && !facilityScopeId ? "ในหน่วยงานนี้" : ""}</h2>
+          <p className="mt-1 text-sm text-[var(--muted)]">ติดตั้ง ATACS Agent ในเครื่องคอมพิวเตอร์ของหน่วยงาน แล้วข้อมูลสุขภาพเครื่องจะแสดงที่หน้านี้</p>
+          <Link href="/agent-download" className="mt-4 inline-flex min-h-11 items-center rounded-xl bg-[var(--primary)] px-4 text-sm font-semibold text-white hover:opacity-90">
+            ดาวน์โหลด Agent
+          </Link>
+        </section>
+      ) : summary.total > 0 ? (
+        <FleetDashboard
+          fleet={fleet}
+          critical={summary.critical}
+          latestVersion={AGENT_LATEST_VERSION}
+          offlineMinutes={offlineMinutes}
+          activeOs={os}
+          activeConnection={conn}
+          showFacilities={!facilityScopeId && !facilityId}
+          linkWith={linkWith}
+        />
+      ) : null}
+
+      {fleet.retired > 0 && (
+        <p className="text-xs text-[var(--muted)]">
+          ไม่นับ {fleet.retired.toLocaleString("th-TH")} เครื่องที่ถอนการติดตั้งหรือลบออกจากระบบแล้ว
+          {fleet.uninstallPending > 0 ? ` · รอถอนการติดตั้ง ${fleet.uninstallPending.toLocaleString("th-TH")} เครื่อง (ยังนับรวม)` : ""}
+          {" "}— จัดการได้ที่ <Link href="/admin/settings/agent" className="font-medium text-[var(--primary)] hover:underline">ตั้งค่าระบบ › Agent</Link>
+        </p>
+      )}
 
       {summary.total > 0 && summary.withHealthData < summary.total && (
         <p className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
@@ -188,6 +231,8 @@ export default async function AgentMonitorPage({ searchParams }: Props) {
           <input name="q" defaultValue={query} placeholder="ชื่อเครื่อง ผู้ใช้ เลขทะเบียน รุ่น" className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm" />
         </label>
         {issue && <input type="hidden" name="issue" value={issue} />}
+        {os && <input type="hidden" name="os" value={os} />}
+        {conn && <input type="hidden" name="conn" value={conn} />}
         {sort && <input type="hidden" name="sort" value={sort.key} />}
         {sort && <input type="hidden" name="dir" value={sort.dir} />}
         <button type="submit" className="rounded-xl bg-[var(--primary)] px-4 py-2 text-sm font-semibold text-white hover:opacity-90">กรอง</button>
@@ -198,6 +243,16 @@ export default async function AgentMonitorPage({ searchParams }: Props) {
         <div className="border-b border-black/6 px-5 py-3 text-sm text-[var(--muted)]">
           แสดง {visibleRows.length.toLocaleString("th-TH")} จาก {summary.total.toLocaleString("th-TH")} เครื่อง
           {issue ? ` · ปัญหา: ${HEALTH_ISSUE_LABELS[issue] ?? issue}` : ""}
+          {os && (
+            <Link href={linkWith({ os: "" })} className="ml-2 inline-flex items-center gap-1 rounded-full border border-[var(--primary-soft-strong)] bg-[var(--primary-soft)] px-2.5 py-0.5 text-xs font-medium text-[var(--primary-text)] hover:underline">
+              {osFamilyLabel(os)} <span aria-hidden>×</span><span className="sr-only">ล้างตัวกรองระบบปฏิบัติการ</span>
+            </Link>
+          )}
+          {conn && (
+            <Link href={linkWith({ conn: "" })} className="ml-2 inline-flex items-center gap-1 rounded-full border border-[var(--primary-soft-strong)] bg-[var(--primary-soft)] px-2.5 py-0.5 text-xs font-medium text-[var(--primary-text)] hover:underline">
+              {CONNECTION_LABELS[conn]} <span aria-hidden>×</span><span className="sr-only">ล้างตัวกรองสถานะการเชื่อมต่อ</span>
+            </Link>
+          )}
         </div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[980px] text-sm">
@@ -231,6 +286,9 @@ export default async function AgentMonitorPage({ searchParams }: Props) {
                         {row.device.currentUser ? ` · ผู้ใช้ ${row.device.currentUser}` : ""}
                         {row.device.ramMb ? ` · RAM ${(row.device.ramMb / 1024).toFixed(0)} GB` : ""}
                       </p>
+                      {row.device.uninstallRequestedAt && (
+                        <StatusBadge tone="warning" className="mt-1 text-[10px]">{AGENT_LIFECYCLE_LABELS["uninstall-pending"]}</StatusBadge>
+                      )}
                       {row.device.linkedAssetId && (
                         <Link href={`/assets/${row.device.linkedAssetId}`} className="text-xs font-semibold text-[var(--primary)] hover:underline">
                           {row.device.linkedAssetRegistrationNo ?? "ดูทะเบียน"}
@@ -256,7 +314,11 @@ export default async function AgentMonitorPage({ searchParams }: Props) {
                       )}
                     </td>
                     <td className="whitespace-nowrap px-4 py-3 text-xs text-[var(--muted)]">
-                      {row.device.lastSeenAt ? formatThaiDateTime(row.device.lastSeenAt) : "-"}
+                      {(() => {
+                        const state = connectionOf.get(row.device.id) ?? "never";
+                        return <StatusBadge tone={CONNECTION_TONE[state]} className="mb-1 text-[10px]">{CONNECTION_LABELS[state]}</StatusBadge>;
+                      })()}
+                      <span className="block">{row.device.lastSeenAt ? formatThaiDateTime(row.device.lastSeenAt) : "-"}</span>
                       <span className="block">Agent {row.device.agentVersion ?? "-"}</span>
                     </td>
                   </tr>

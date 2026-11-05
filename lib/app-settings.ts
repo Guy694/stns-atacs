@@ -2,6 +2,13 @@ import "server-only";
 
 import type { RowDataPacket } from "mysql2/promise";
 
+import {
+  AGENT_AUTO_UPDATE_PILOT_SETTING_KEY,
+  AGENT_AUTO_UPDATE_SETTING_KEY,
+  readAgentAutoUpdateSettings,
+  serializePilotFacilityIds,
+  type AgentAutoUpdateSettings,
+} from "@/lib/agent-update";
 import { APP_MENU_ITEMS, menuSettingKey } from "@/lib/menu";
 import { executeStatement, selectRows } from "@/lib/mysql";
 
@@ -108,4 +115,17 @@ export async function setMenuVisibility(values: MenuVisibility) {
   for (const item of APP_MENU_ITEMS) {
     await setBooleanSetting(menuSettingKey(item.key), Boolean(values[item.key]));
   }
+}
+
+/** การอัปเดต Agent อัตโนมัติ: ค่าเริ่มต้น off (อ่านไม่ได้ก็ถือว่าปิด) */
+export async function getAgentAutoUpdateSettings(): Promise<AgentAutoUpdateSettings> {
+  return readAgentAutoUpdateSettings(await listAppSettingsByPrefix("agent.autoUpdate"));
+}
+
+export async function setAgentAutoUpdateSettings(settings: AgentAutoUpdateSettings) {
+  const pilotIds = serializePilotFacilityIds(settings.pilotFacilityIds);
+  // setting_value เป็น varchar(255)
+  if (pilotIds.length > 255) throw new Error("PILOT_LIST_TOO_LONG");
+  await setAppSetting(AGENT_AUTO_UPDATE_SETTING_KEY, settings.mode);
+  await setAppSetting(AGENT_AUTO_UPDATE_PILOT_SETTING_KEY, pilotIds);
 }

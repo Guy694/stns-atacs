@@ -2,12 +2,19 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 
 import { StatusBadge, activeTone } from "@/app/_components/ui/status-badge";
+import { AgentAutoUpdateCard } from "@/app/(main)/admin/settings/agent/_components/agent-auto-update-card";
+import { AgentDeviceLifecycleCell } from "@/app/(main)/admin/settings/agent/_components/agent-device-lifecycle-cell";
 import { AgentDeviceLinkCell } from "@/app/(main)/admin/settings/agent/_components/agent-device-link-cell";
+import { AgentUninstallCommands } from "@/app/(main)/agent-download/_components/agent-uninstall-commands";
 import { AgentEnrollmentPanel } from "@/app/(main)/admin/settings/agent/_components/agent-enrollment-panel";
 import { revokeAgentEnrollmentAction } from "@/app/(main)/admin/settings/agent/actions";
 import { supportsAgentAsset } from "@/lib/asset-policy";
 import { listAgentDevices, listAgentEnrollments } from "@/lib/agent";
 import { getFacilityBoundAgentInstallKey, getPrimaryAgentInstallKey } from "@/lib/agent-install-key";
+import { AGENT_LATEST_VERSION } from "@/lib/agent-payload";
+import { AGENT_SELF_UNINSTALL_MIN_VERSION } from "@/lib/agent-uninstall";
+import { summarizeAgentUpdateFleet } from "@/lib/agent-update";
+import { getAgentAutoUpdateSettings } from "@/lib/app-settings";
 import { getCurrentUser } from "@/lib/auth";
 import { listAllFacilitiesForSelect, listAssetsForFacilityIds } from "@/lib/assets";
 import { formatThaiDateTime } from "@/lib/date-format";
@@ -31,7 +38,19 @@ function formatDiskUsage(device: { diskTotalGb: number | null; diskUsedGb: numbe
   return parts.length ? parts.join(" · ") : "-";
 }
 
-export default async function AgentSettingsPage() {
+const AUTO_UPDATE_NOTICES: Record<string, { notice?: string; error?: string }> = {
+  saved: { notice: "บันทึกการตั้งค่าอัปเดต Agent แล้ว" },
+  invalid: { error: "โหมดการอัปเดตไม่ถูกต้อง" },
+  "no-pilot": { error: "โหมดนำร่องต้องเลือกหน่วยงานอย่างน้อย 1 แห่ง" },
+  "too-many": { error: "เลือกหน่วยงานนำร่องมากเกินไป ให้ใช้โหมด “ทุกหน่วยงาน” แทน" },
+  failed: { error: "บันทึกการตั้งค่าไม่สำเร็จ" },
+};
+
+type AgentSettingsPageProps = {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+};
+
+export default async function AgentSettingsPage({ searchParams }: AgentSettingsPageProps) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
   const allowAgentManage = user.role === "admin" || (await hasPermission(user.role, "agent.manage"));
@@ -39,6 +58,11 @@ export default async function AgentSettingsPage() {
 
   const facilityScopeId = getFacilityScopeId(user);
   if (facilityScopeId === null) redirect("/profile");
+  // การอัปเดตอัตโนมัติมีผลทุกหน่วยงาน: แสดง/แก้ได้เฉพาะผู้ดูแลระบบส่วนกลาง
+  const canManageAutoUpdate = user.role === "admin" && facilityScopeId === undefined;
+  const params = await searchParams;
+  const autoUpdateQuery = Array.isArray(params.autoUpdate) ? params.autoUpdate[0] : params.autoUpdate;
+  const autoUpdateMessage = (autoUpdateQuery && AUTO_UPDATE_NOTICES[autoUpdateQuery]) || {};
   const scopedFilter = facilityScopeId ? { facilityId: facilityScopeId } : undefined;
   const facilities = await listAllFacilitiesForSelect(scopedFilter);
   /**
@@ -56,6 +80,7 @@ export default async function AgentSettingsPage() {
   let assetOptions: Awaited<ReturnType<typeof listAssetsForFacilityIds>> = [];
   let workGroups: Awaited<ReturnType<typeof listFacilityWorkGroups>> = [];
   let dbError: string | null = null;
+  const autoUpdateSettings = canManageAutoUpdate ? await getAgentAutoUpdateSettings() : null;
 
   try {
     [enrollments, devices, workGroups] = await Promise.all([
@@ -101,6 +126,19 @@ export default async function AgentSettingsPage() {
             workGroups={workGroups}
             staticInstallKey={staticInstallKey}
           />
+
+          {canManageAutoUpdate && autoUpdateSettings ? (
+            <AgentAutoUpdateCard
+              settings={autoUpdateSettings}
+              summary={summarizeAgentUpdateFleet(devices, autoUpdateSettings, AGENT_LATEST_VERSION)}
+              latestVersion={AGENT_LATEST_VERSION}
+              facilities={facilities.map((facility) => ({ id: facility.id, facility_name: facility.facility_name, district_name: facility.district_name }))}
+              notice={autoUpdateMessage.notice ?? null}
+              error={autoUpdateMessage.error ?? null}
+            />
+          ) : null}
+
+          <AgentUninstallCommands />
 
           <div className="grid gap-6 xl:grid-cols-[1.05fr_1.4fr]">
             <section className="glass-panel overflow-hidden rounded-2xl">
@@ -166,6 +204,12 @@ export default async function AgentSettingsPage() {
               <div className="border-b border-black/6 px-5 py-4">
                 <h2 className="text-lg font-semibold">Agent Devices</h2>
                 <p className="mt-1 text-sm text-[var(--muted)]">เครื่องที่ติดตั้ง agent แล้วและส่ง inventory เข้ามาล่าสุด</p>
+                {canManageAutoUpdate && (
+                  <p className="mt-1 text-xs text-[var(--muted)]">
+                    “ถอนการติดตั้ง” — Agent {AGENT_SELF_UNINSTALL_MIN_VERSION} ขึ้นไปถอนตัวเองในรอบรายงานถัดไป (~4 ชม. หรือเปิดเครื่อง) ·
+                    “ลบออกจากระบบ” — ยกเลิกกุญแจของเครื่องที่ไม่กลับมาแล้ว เก็บประวัติไว้ ไม่แตะตัวเครื่อง
+                  </p>
+                )}
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
@@ -177,6 +221,7 @@ export default async function AgentSettingsPage() {
                       <th className="px-4 py-3 text-left font-medium">OS / IP</th>
                       <th className="px-4 py-3 text-left font-medium">Asset</th>
                       <th className="px-4 py-3 text-left font-medium">ล่าสุด</th>
+                      <th className="px-4 py-3 text-left font-medium">การติดตั้ง</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-black/4">
@@ -207,12 +252,26 @@ export default async function AgentSettingsPage() {
 	                            {device.status}
 	                          </StatusBadge>
                           <p className="mt-1 font-mono text-xs text-[var(--muted)]">{formatDate(device.lastSeenAt)}</p>
+                          <p className="mt-0.5 text-xs text-[var(--muted)]">Agent {device.agentVersion ?? "-"}</p>
                         </td>
+                        <AgentDeviceLifecycleCell
+                          canManage={canManageAutoUpdate}
+                          device={{
+                            id: device.id,
+                            hostname: device.hostname,
+                            agentVersion: device.agentVersion,
+                            operatingSystem: device.operatingSystem,
+                            isActive: device.isActive,
+                            uninstallRequestedAt: device.uninstallRequestedAt,
+                            uninstallRequestedBy: device.uninstallRequestedBy,
+                            uninstalledAt: device.uninstalledAt,
+                          }}
+                        />
                       </tr>
                     ))}
                     {devices.length === 0 && (
                       <tr>
-                        <td colSpan={6} className="px-4 py-10 text-center text-[var(--muted)]">ยังไม่มีเครื่องที่ enroll สำเร็จ</td>
+                        <td colSpan={7} className="px-4 py-10 text-center text-[var(--muted)]">ยังไม่มีเครื่องที่ enroll สำเร็จ</td>
                       </tr>
                     )}
                   </tbody>

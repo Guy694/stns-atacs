@@ -11,6 +11,8 @@ import {
   buildWindowsStaticAgentInstallCommand,
 } from "@/lib/agent-install";
 
+import { AgentUninstallCommands } from "./agent-uninstall-commands";
+
 type AgentDownloadPanelProps = {
   facilityId: number;
   facilityName: string;
@@ -145,6 +147,8 @@ export function AgentDownloadPanel({ facilityId, facilityName, requiresWorkGroup
             : "คำสั่งนี้แสดง <INSTALL_KEY> ไว้ — ขอคีย์ติดตั้งของหน่วยงานจากผู้ดูแลระบบ หรือใช้ปุ่มสร้าง enrollment token ด้านล่างซึ่งผูกกับหน่วยงานนี้อยู่แล้ว"}
         </p>
       </div>
+
+      <AgentUninstallCommands />
 
       {!token ? (
         <div className="glass-panel rounded-2xl px-5 py-6 text-center">

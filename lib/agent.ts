@@ -8,7 +8,13 @@ import { supportsAgentAsset } from "@/lib/asset-policy";
 import { isTerminalAssetStatus } from "@/lib/asset-status";
 import { createAsset, findOrCreateSurvey, updateAsset } from "@/lib/assets";
 import { findActiveFacilityWorkGroup, getActiveFacilityWorkGroupForFacility, getFacilityAgentContext, normalizeWorkGroupName } from "@/lib/facility-work-groups";
-import { cleanAgentReport, cleanFingerprint, cleanText, type CleanAgentReport } from "@/lib/agent-payload";
+import { cleanAgentCapabilities, cleanAgentReport, cleanFingerprint, cleanText, type CleanAgentReport } from "@/lib/agent-payload";
+import {
+  decideAgentUninstall,
+  decideAgentUninstallConfirmation,
+  type AgentUninstallInstruction,
+  type AgentUninstallReason,
+} from "@/lib/agent-uninstall";
 import { executeStatement, selectRows } from "@/lib/mysql";
 import { formatThaiDateTime } from "@/lib/date-format";
 import { dbDateTime, todayBangkok } from "@/lib/local-date";
@@ -65,6 +71,10 @@ type DeviceRow = RowDataPacket & {
   health_json?: string | null;
   /** มีเมื่อรัน database/add_agent_link_mode.sql แล้ว: 1 = ผู้ดูแลยกเลิกการผูก ห้ามผูก/สร้างทะเบียนอัตโนมัติ */
   auto_link_disabled?: number | null;
+  /** มีเมื่อรัน database/add_agent_uninstall.sql แล้ว */
+  uninstall_requested_at?: Date | string | null;
+  uninstall_requested_by?: string | null;
+  uninstalled_at?: Date | string | null;
   linked_asset_registration_no: string | null;
   linked_asset_name: string | null;
 };
@@ -126,6 +136,11 @@ export type AgentDevice = {
   autoLinkDisabled: boolean;
   /** ข้อมูลสุขภาพเครื่องจาก Agent 2.x (JSON ที่ผ่าน cleanAgentHealth แล้ว) */
   healthJson: string | null;
+  /** ผู้ดูแลสั่งถอนการติดตั้ง (ISO +07:00) — null เมื่อไม่มีคำสั่งหรือยังไม่ได้รัน add_agent_uninstall.sql */
+  uninstallRequestedAt: string | null;
+  uninstallRequestedBy: string | null;
+  /** Agent ยืนยันว่าถอนการติดตั้งแล้ว (ISO +07:00) */
+  uninstalledAt: string | null;
 };
 
 export type OfflineAgentDevice = Pick<AgentDevice, "id" | "facilityName" | "agentUuid" | "hostname" | "lastSeenAt">;
@@ -155,6 +170,9 @@ export type AgentReportPayload = {
   raw?: unknown;
   /** Agent 2.x: ข้อมูลสุขภาพเครื่อง (ดู lib/agent-payload.ts) */
   health?: unknown;
+  /** Agent 2.2+: "windows" | "linux" และ ["self-update"] (ดู lib/agent-update.ts) */
+  agentPlatform?: string | null;
+  capabilities?: unknown;
 };
 
 function isDbError(error: unknown, code: string) {
@@ -277,6 +295,9 @@ function toDevice(row: DeviceRow): AgentDevice {
     })(),
     autoLinkDisabled: Number(row.auto_link_disabled ?? 0) === 1,
     healthJson: row.health_json ?? null,
+    uninstallRequestedAt: toDateTime(row.uninstall_requested_at),
+    uninstallRequestedBy: row.uninstall_requested_by ?? null,
+    uninstalledAt: toDateTime(row.uninstalled_at),
   };
 }
 
@@ -562,6 +583,13 @@ async function enrollAgentDeviceForEnrollment(input: {
       [input.enrollment.id, agentUuid, deviceSecretHash, hostname, agentVersion, existing[0].id]
     );
     deviceId = existing[0].id;
+    if (existing[0].uninstall_requested_at || existing[0].uninstalled_at) {
+      // ติดตั้งใหม่บนเครื่องที่เคยสั่งถอน/ถอนไปแล้ว: ล้างคำสั่งเดิม ไม่ให้รายงานแรกสั่งถอนตัวเองซ้ำ
+      await executeStatement(
+        "UPDATE agent_devices SET uninstall_requested_at = NULL, uninstall_requested_by = NULL, uninstalled_at = NULL WHERE id = ?",
+        [existing[0].id]
+      );
+    }
   } else {
     const result = await executeStatement(
       `INSERT INTO agent_devices
@@ -775,11 +803,25 @@ export async function reportAgentInventory(input: {
   const recovered = deviceRow.status === "offline" && reportedStatus !== "offline";
   const baseResult = {
     deviceId: deviceRow.id,
+    facilityId: deviceRow.facility_id,
     recovered,
     hostname: payload.hostname?.trim() || deviceRow.hostname,
     facilityName: deviceRow.facility_name,
     agentUuid: deviceRow.agent_uuid,
+    uninstall: null as AgentUninstallInstruction | null,
   };
+
+  // ผู้ดูแลสั่งถอนการติดตั้งและ agent ถอนตัวเองได้: ส่งคำสั่งกลับไป ไม่ต้องผูก/สร้าง/แก้ทะเบียนของเครื่องที่กำลังถอน
+  // (ไม่ให้ปัญหาทะเบียนที่ผูกไว้ 409 กลบคำสั่งถอนการติดตั้ง)
+  const uninstallDecision = decideAgentUninstall({
+    isActive: Number(deviceRow.is_active) === 1,
+    uninstallRequestedAt: toDateTime(deviceRow.uninstall_requested_at),
+    uninstalledAt: toDateTime(deviceRow.uninstalled_at),
+    capabilities: cleanAgentCapabilities((input.payload as { capabilities?: unknown } | null)?.capabilities),
+  });
+  if (uninstallDecision.uninstall) {
+    return { ...baseResult, uninstall: uninstallDecision.uninstall, linkedAssetId: deviceRow.linked_asset_id, surveyId: null };
+  }
 
   // G10: บันทึกว่าเครื่องยังออนไลน์ไปแล้วข้างบน จากนั้นจึงตรวจทะเบียนที่ผูกไว้
   // ถ้าทะเบียนถูกย้าย/เปลี่ยนประเภท/ลบ ไม่แตะทะเบียนและแจ้ง 409 ให้ผู้ดูแลผูกใหม่หรือยกเลิกการผูก
@@ -940,24 +982,35 @@ export async function heartbeatAgent(input: { agentId: string; agentKey: string;
 
 export async function findOfflineAgentDevices(thresholdMinutes: number): Promise<OfflineAgentDevice[]> {
   const safeMinutes = Math.max(5, Math.floor(thresholdMinutes));
-  const rows = await selectRows<DeviceRow>(
+  // เครื่องที่ถอนการติดตั้งแล้ว/ลบออกจากระบบ (is_active = 0) ไม่ใช่ "ออฟไลน์" — ไม่แจ้งเตือน
+  // uninstalled_at กันซ้ำอีกชั้น และตัดออกได้เมื่อยังไม่ได้รัน add_agent_uninstall.sql
+  const query = (withUninstall: boolean) => selectRows<DeviceRow>(
     `SELECT ad.*, hf.name AS facility_name,
             a.asset_registration_no AS linked_asset_registration_no,
             a.asset_name AS linked_asset_name
      FROM agent_devices ad
      JOIN health_facilities hf ON hf.id = ad.facility_id
      LEFT JOIN information_assets a ON a.id = ad.linked_asset_id
-     WHERE ad.is_active = 1
+     WHERE ad.is_active = 1${withUninstall ? "\n       AND ad.uninstalled_at IS NULL" : ""}
        AND (ad.last_seen_at IS NULL OR ad.last_seen_at < DATE_SUB(NOW(), INTERVAL ? MINUTE))
      ORDER BY ad.last_seen_at ASC, ad.id ASC`,
     [safeMinutes]
   );
+  let withUninstall = true;
+  let rows: DeviceRow[];
+  try {
+    rows = await query(true);
+  } catch (error) {
+    if (!isMissingColumnError(error)) throw error;
+    withUninstall = false;
+    rows = await query(false);
+  }
 
   if (rows.length > 0) {
     await executeStatement(
       `UPDATE agent_devices
        SET status = 'offline'
-       WHERE is_active = 1
+       WHERE is_active = 1${withUninstall ? "\n         AND uninstalled_at IS NULL" : ""}
          AND (last_seen_at IS NULL OR last_seen_at < DATE_SUB(NOW(), INTERVAL ? MINUTE))`,
       [safeMinutes]
     );
@@ -970,4 +1023,185 @@ export async function findOfflineAgentDevices(thresholdMinutes: number): Promise
     hostname: row.hostname,
     lastSeenAt: toDateTime(row.last_seen_at),
   }));
+}
+
+/** ยังไม่ได้รัน database/add_agent_uninstall.sql */
+export class AgentUninstallMigrationError extends Error {
+  constructor() {
+    super("AGENT_UNINSTALL_MIGRATION_REQUIRED");
+    this.name = "AgentUninstallMigrationError";
+  }
+}
+
+/** กุญแจของเครื่องที่ถอนการติดตั้งแล้ว: ใช้ส่งรายงานไม่ได้อีก แต่ /api/agent/uninstalled/ ยังจำคำยืนยันซ้ำได้ (idempotent) */
+function uninstalledKeyHash(agentKey: string) {
+  return hashSecret(`uninstalled:${hashSecret(agentKey.trim())}`);
+}
+
+export async function getAgentDeviceById(deviceId: number): Promise<AgentDevice | null> {
+  if (!Number.isSafeInteger(deviceId) || deviceId <= 0) return null;
+  const rows = await selectRows<DeviceRow>(
+    `SELECT ad.*, hf.name AS facility_name,
+            a.asset_registration_no AS linked_asset_registration_no,
+            a.asset_name AS linked_asset_name
+     FROM agent_devices ad
+     JOIN health_facilities hf ON hf.id = ad.facility_id
+     LEFT JOIN information_assets a ON a.id = ad.linked_asset_id
+     WHERE ad.id = ?
+     LIMIT 1`,
+    [deviceId]
+  );
+  return rows[0] ? toDevice(rows[0]) : null;
+}
+
+type UninstallStateRow = RowDataPacket & {
+  id: number;
+  is_active: number;
+  uninstall_requested_at: Date | string | null;
+  uninstalled_at: Date | string | null;
+};
+
+async function readUninstallState(deviceId: number) {
+  try {
+    const rows = await selectRows<UninstallStateRow>(
+      "SELECT id, is_active, uninstall_requested_at, uninstalled_at FROM agent_devices WHERE id = ? LIMIT 1",
+      [deviceId]
+    );
+    return rows[0] ?? null;
+  } catch (error) {
+    if (isMissingColumnError(error)) throw new AgentUninstallMigrationError();
+    throw error;
+  }
+}
+
+/** ผู้ดูแลสั่งถอนการติดตั้ง: agent 2.2.0+ ถอนตัวเองในรอบรายงานถัดไป */
+export async function requestAgentUninstall(deviceId: number, requestedBy: string): Promise<"requested" | "already-pending" | "inactive" | "not-found"> {
+  const row = await readUninstallState(deviceId);
+  if (!row) return "not-found";
+  if (Number(row.is_active) !== 1 || row.uninstalled_at) return "inactive";
+  if (row.uninstall_requested_at) return "already-pending";
+  const result = await executeStatement(
+    `UPDATE agent_devices SET uninstall_requested_at = NOW(), uninstall_requested_by = ?
+     WHERE id = ? AND is_active = 1 AND uninstalled_at IS NULL AND uninstall_requested_at IS NULL`,
+    [requestedBy.slice(0, 255), deviceId]
+  );
+  return Number(result.affectedRows ?? 0) > 0 ? "requested" : "already-pending";
+}
+
+/** ยกเลิกคำสั่งที่ยังไม่ถูกทำ (เครื่องยังไม่ยืนยันว่าถอนแล้ว) */
+export async function cancelAgentUninstall(deviceId: number): Promise<"cancelled" | "not-pending" | "not-found"> {
+  const row = await readUninstallState(deviceId);
+  if (!row) return "not-found";
+  if (!row.uninstall_requested_at || row.uninstalled_at) return "not-pending";
+  const result = await executeStatement(
+    `UPDATE agent_devices SET uninstall_requested_at = NULL, uninstall_requested_by = NULL
+     WHERE id = ? AND uninstalled_at IS NULL AND uninstall_requested_at IS NOT NULL`,
+    [deviceId]
+  );
+  return Number(result.affectedRows ?? 0) > 0 ? "cancelled" : "not-pending";
+}
+
+/**
+ * ลบออกจากระบบ (retire): ยกเลิกกุญแจของเครื่อง (รายงานถัดไปได้ 401) และปิดใช้งาน เก็บประวัติ/ทะเบียนไว้
+ * ไม่แตะตัวเครื่อง ไม่ต้องใช้ migration ใหม่ ถ้าเครื่องกลับมาติดตั้งใหม่ด้วย token/คีย์จะได้แถวเดิมคืน
+ */
+export async function retireAgentDevice(deviceId: number): Promise<"retired" | "already-inactive"> {
+  const result = await executeStatement(
+    `UPDATE agent_devices SET is_active = 0, status = 'offline', agent_key_hash = ?
+     WHERE id = ? AND is_active = 1`,
+    [hashSecret(randomToken("atacs_retired")), deviceId]
+  );
+  return Number(result.affectedRows ?? 0) > 0 ? "retired" : "already-inactive";
+}
+
+/** ใช้ตอนรายงานได้ 401: เครื่องนี้ถูกถอน/ลบออกจากระบบไปแล้วหรือไม่ (ไม่ต้องแจ้งเตือนความปลอดภัยซ้ำทุกรอบ) */
+export async function isRetiredAgentUuid(agentId: string) {
+  if (!agentId.trim()) return false;
+  try {
+    const rows = await selectRows<RowDataPacket & { is_active: number }>(
+      "SELECT is_active FROM agent_devices WHERE agent_uuid = ? LIMIT 1",
+      [agentId.trim()]
+    );
+    return rows[0] ? Number(rows[0].is_active) !== 1 : false;
+  } catch {
+    return false;
+  }
+}
+
+export type AgentUninstalledResult =
+  | { outcome: "invalid" }
+  | { outcome: "not-requested"; deviceId: number }
+  | { outcome: "already"; deviceId: number }
+  | {
+      outcome: "confirmed";
+      deviceId: number;
+      hostname: string | null;
+      facilityName: string;
+      agentUuid: string;
+      agentVersion: string | null;
+      requestedAt: string | null;
+      requestedBy: string | null;
+      reason: AgentUninstallReason;
+    };
+
+/**
+ * Agent ยืนยันว่ากำลังถอนการติดตั้งตัวเอง (POST /api/agent/uninstalled/)
+ * บันทึก uninstalled_at, ปิดใช้งาน และเปลี่ยนกุญแจเป็นค่าที่ใช้ส่งรายงานไม่ได้อีก
+ * เรียกซ้ำด้วยกุญแจเดิม (คำตอบรอบแรกหายระหว่างทาง) ได้ผล "already" ไม่ใช่ 401
+ */
+export async function confirmAgentUninstalled(input: { agentId: string; agentKey: string; reason: AgentUninstallReason }): Promise<AgentUninstalledResult> {
+  const agentId = input.agentId.trim();
+  const agentKey = input.agentKey.trim();
+  if (!agentId || !agentKey) return { outcome: "invalid" };
+
+  const device = await getAgentDeviceByCredentials(agentId, agentKey);
+  if (device) {
+    const decision = decideAgentUninstallConfirmation(
+      {
+        isActive: Number(device.is_active) === 1,
+        uninstallRequestedAt: toDateTime(device.uninstall_requested_at),
+        uninstalledAt: toDateTime(device.uninstalled_at),
+      },
+      input.reason
+    );
+    if (decision === "not-requested") return { outcome: "not-requested", deviceId: device.id };
+    if (decision === "confirm") {
+      const values = [uninstalledKeyHash(agentKey), device.id, hashSecret(agentKey)];
+      let result;
+      try {
+        result = await executeStatement(
+          `UPDATE agent_devices SET is_active = 0, status = 'offline', agent_key_hash = ?, uninstalled_at = NOW()
+           WHERE id = ? AND agent_key_hash = ?`,
+          values
+        );
+      } catch (error) {
+        // ยังไม่ได้รัน add_agent_uninstall.sql (มาได้เฉพาะสคริปต์ถอนด้วยมือ): ยกเลิกกุญแจและปิดใช้งานเหมือน retire
+        if (!isMissingColumnError(error)) throw error;
+        result = await executeStatement(
+          `UPDATE agent_devices SET is_active = 0, status = 'offline', agent_key_hash = ?
+           WHERE id = ? AND agent_key_hash = ?`,
+          values
+        );
+      }
+      if (Number(result.affectedRows ?? 0) === 0) return { outcome: "already", deviceId: device.id };
+      return {
+        outcome: "confirmed",
+        deviceId: device.id,
+        hostname: device.hostname,
+        facilityName: device.facility_name,
+        agentUuid: device.agent_uuid,
+        agentVersion: device.agent_version,
+        requestedAt: toDateTime(device.uninstall_requested_at),
+        requestedBy: device.uninstall_requested_by ?? null,
+        reason: input.reason,
+      };
+    }
+  }
+
+  const previous = await selectRows<RowDataPacket & { id: number }>(
+    "SELECT id FROM agent_devices WHERE agent_uuid = ? AND agent_key_hash = ? AND is_active = 0 LIMIT 1",
+    [agentId, uninstalledKeyHash(agentKey)]
+  );
+  if (previous[0]) return { outcome: "already", deviceId: previous[0].id };
+  return { outcome: "invalid" };
 }

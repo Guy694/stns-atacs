@@ -6,7 +6,7 @@
  * ไฟล์นี้ไม่แตะฐานข้อมูล จึงทดสอบได้โดยตรง
  */
 
-export const AGENT_LATEST_VERSION = "2.1.0";
+export const AGENT_LATEST_VERSION = "2.2.0";
 /** ขนาดสูงสุดของ body ที่ /api/agent/report ยอมรับ */
 export const AGENT_REPORT_MAX_BYTES = 256 * 1024;
 
@@ -234,6 +234,18 @@ export function cleanAgentReport(value: unknown, now = new Date()): CleanAgentRe
     status: value.status === "offline" ? "offline" : "online",
     health,
   };
+}
+
+/** ความสามารถที่ agent ประกาศ (เช่น "self-update" ตั้งแต่ 2.2.0) — ตัวพิมพ์เล็ก ไม่ซ้ำ ไม่เกิน 16 รายการ */
+export function cleanAgentCapabilities(value: unknown): string[] {
+  const items = Array.isArray(value) ? value.slice(0, 16) : typeof value === "string" ? [value] : [];
+  const result = new Set<string>();
+  for (const item of items) {
+    if (typeof item !== "string") continue;
+    const token = item.trim().toLowerCase();
+    if (/^[a-z0-9-]{1,32}$/.test(token)) result.add(token);
+  }
+  return [...result];
 }
 
 /** เปรียบเทียบเวอร์ชันแบบ x.y.z (ค่าที่อ่านไม่ได้ถือว่าเก่ากว่า) */

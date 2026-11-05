@@ -53,7 +53,7 @@ test("ไดรฟ์ระบบใกล้เต็มเป็นวิก�
     lastSeenAt: "2026-10-13 06:00:00",
     operatingSystem: "Windows 11 Pro",
     ramMb: 8192,
-    agentVersion: "2.1.0",
+    agentVersion: "2.2.0",
     serialNumber: "SN1",
     diskTotalGb: 238,
     diskFreeGb: 3,
@@ -77,7 +77,7 @@ test("Agent รุ่นเก่าใช้ยอดดิสก์รวม �
 
 test("ฮาร์ดดิสก์เสีย แอนตี้ไวรัสปิด และ Windows ไม่ได้ Activate", () => {
   const issues = health.evaluateAgentHealth({
-    lastSeenAt: "2026-10-13 07:00:00", operatingSystem: "Windows 11 Pro", ramMb: 16384, agentVersion: "2.1.0", serialNumber: "S1",
+    lastSeenAt: "2026-10-13 07:00:00", operatingSystem: "Windows 11 Pro", ramMb: 16384, agentVersion: "2.2.0", serialNumber: "S1",
     diskTotalGb: 500, diskFreeGb: 300,
     healthJson: JSON.stringify({
       volumes: [{ mount: "C:", totalGb: 500, freeGb: 300, isSystem: true }],
@@ -95,7 +95,7 @@ test("ฮาร์ดดิสก์เสีย แอนตี้ไวรั�
 });
 
 test("สรุปหน้าติดตาม: ไม่นับเครื่องที่ปิดใช้งาน และนับปัญหาตามประเภท", () => {
-  const base = { operatingSystem: "Windows 11", ramMb: 8192, agentVersion: "2.1.0", serialNumber: "S", diskTotalGb: 100, diskFreeGb: 50, healthJson: null };
+  const base = { operatingSystem: "Windows 11", ramMb: 8192, agentVersion: "2.2.0", serialNumber: "S", diskTotalGb: 100, diskFreeGb: 50, healthJson: null };
   const summary = health.summarizeAgentMonitor([
     { ...base, id: 1, isActive: true, lastSeenAt: "2026-10-13 07:00:00", diskFreeGb: 2 },
     { ...base, id: 2, isActive: true, lastSeenAt: "2026-10-13 07:00:00" },

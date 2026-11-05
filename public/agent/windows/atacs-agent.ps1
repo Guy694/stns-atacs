@@ -11,7 +11,14 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$script:AgentVersion = "2.1.0"
+$script:AgentVersion = "2.2.0"
+# Self-update (2.2.0+): the running script replaces itself after a verified download.
+$script:AgentScriptPath = $MyInvocation.MyCommand.Path
+$script:AgentCapabilities = @("self-update", "self-uninstall")
+# Remote uninstall (2.2.0+): same task name as install-atacs-agent.ps1 (Register-ScheduledTask and schtasks fallback).
+$script:AgentTaskName = "ATACS Agent Inventory"
+$script:UpdateMaxBytes = 2MB
+$script:UpdateTimeoutSec = 60
 
 function Enable-TlsForLegacyPowerShell {
     try {
@@ -54,6 +61,264 @@ function Test-ApiBaseAllowed {
         if ($targetHost -eq $suffix.TrimStart('.') -or $targetHost.EndsWith($suffix)) { return $true }
     }
     return $false
+}
+
+function Compare-AgentVersion {
+    param([string]$Left, [string]$Right)
+    try { return ([Version]$Left).CompareTo([Version]$Right) } catch { return -1 }
+}
+
+function Test-UpdateUrlAllowed {
+    # Update downloads reuse the SEC-06 allow-list: https and the current server host or an allow-listed host.
+    # Plain http is accepted only for a localhost development server the agent already reports to.
+    param([string]$Url, [string]$CurrentBase)
+    try { $uri = [Uri]$Url } catch { return $false }
+    if (-not $uri.IsAbsoluteUri) { return $false }
+    if ($uri.Scheme -eq 'http') {
+        $currentHost = ''
+        if ($CurrentBase) { try { $currentHost = ([Uri]$CurrentBase).Host.ToLowerInvariant() } catch { $currentHost = '' } }
+        $targetHost = $uri.Host.ToLowerInvariant()
+        return (($targetHost -eq 'localhost' -or $targetHost -eq '127.0.0.1') -and $targetHost -eq $currentHost)
+    }
+    return (Test-ApiBaseAllowed -NewBase $Url -CurrentBase $CurrentBase)
+}
+
+function Write-UpdateLog {
+    param([string]$Message)
+    Write-Host "Agent update: $Message"
+    if (-not $script:AgentScriptPath) { return }
+    try {
+        $log = Join-Path (Split-Path -Parent $script:AgentScriptPath) "update.log"
+        if ((Test-Path -LiteralPath $log) -and (Get-Item -LiteralPath $log).Length -gt 256KB) {
+            Remove-Item -LiteralPath $log -Force -ErrorAction SilentlyContinue
+        }
+        Add-Content -LiteralPath $log -Value ("{0} {1}" -f (Get-Date).ToString("s"), $Message) -Encoding UTF8
+    }
+    catch { }
+}
+
+function Save-UpdateDownload {
+    # Streams the download with a hard size cap and no redirects (Invoke-WebRequest -OutFile cannot stop at a limit).
+    param([string]$Url, [string]$Path, [int64]$MaxBytes, [int]$TimeoutSec)
+    $request = [System.Net.WebRequest]::Create($Url)
+    $request.Method = "GET"
+    $request.AllowAutoRedirect = $false
+    $request.Timeout = $TimeoutSec * 1000
+    $request.ReadWriteTimeout = $TimeoutSec * 1000
+    $request.UserAgent = "ATACS-Agent/$($script:AgentVersion)"
+    $response = $request.GetResponse()
+    try {
+        if ([int]$response.StatusCode -ne 200) { throw "HTTP $([int]$response.StatusCode) from $Url" }
+        if ($response.ContentLength -gt $MaxBytes) { throw "Download is larger than $MaxBytes bytes" }
+        $stream = $response.GetResponseStream()
+        $output = [System.IO.File]::Open($Path, [System.IO.FileMode]::CreateNew, [System.IO.FileAccess]::Write)
+        try {
+            $buffer = New-Object byte[] 65536
+            $total = [int64]0
+            $deadline = (Get-Date).AddSeconds($TimeoutSec)
+            while (($read = $stream.Read($buffer, 0, $buffer.Length)) -gt 0) {
+                $total += $read
+                if ($total -gt $MaxBytes) { throw "Download is larger than $MaxBytes bytes" }
+                if ((Get-Date) -gt $deadline) { throw "Download timed out after $TimeoutSec seconds" }
+                $output.Write($buffer, 0, $read)
+            }
+        }
+        finally {
+            $output.Dispose()
+            $stream.Dispose()
+        }
+    }
+    finally {
+        $response.Close()
+    }
+}
+
+function Invoke-AgentSelfUpdate {
+    # Never throws: an update problem must not fail the inventory run. At most one attempt per run;
+    # the next scheduled run starts the new script. Manual rollback: copy atacs-agent.ps1.bak over atacs-agent.ps1.
+    param($Update, [string]$CurrentBase)
+    $temp = $null
+    try {
+        $target = $script:AgentScriptPath
+        if (-not $target -or -not (Test-Path -LiteralPath $target)) { Write-UpdateLog "skipped: cannot locate the running script"; return }
+        $version = [string]$Update.version
+        $url = [string]$Update.url
+        $expectedHash = ([string]$Update.sha256).Trim().ToLowerInvariant()
+        $size = [int64]0
+        try { $size = [int64]$Update.size } catch { $size = [int64]0 }
+        if ($version -notmatch '^\d+\.\d+\.\d+$') { Write-UpdateLog "refused: invalid version '$version'"; return }
+        if ((Compare-AgentVersion $version $script:AgentVersion) -le 0) { Write-UpdateLog "skipped: $version is not newer than $($script:AgentVersion)"; return }
+        if ($expectedHash -notmatch '^[0-9a-f]{64}$') { Write-UpdateLog "refused: invalid sha256"; return }
+        if ($size -le 0 -or $size -gt $script:UpdateMaxBytes) { Write-UpdateLog "refused: invalid size $size"; return }
+        if (-not (Test-UpdateUrlAllowed -Url $url -CurrentBase $CurrentBase)) { Write-UpdateLog "refused: download host is not allowed ($url)"; return }
+
+        $dir = Split-Path -Parent $target
+        # Temp file in the install directory: it inherits the directory ACL (SYSTEM + Administrators).
+        $temp = Join-Path $dir ("atacs-agent.ps1.download-" + [Guid]::NewGuid().ToString("N"))
+        Save-UpdateDownload -Url $url -Path $temp -MaxBytes $script:UpdateMaxBytes -TimeoutSec $script:UpdateTimeoutSec
+        $actualSize = (Get-Item -LiteralPath $temp).Length
+        if ($actualSize -ne $size) { throw "Size mismatch: expected $size bytes, got $actualSize" }
+        $actualHash = (Get-FileHash -LiteralPath $temp -Algorithm SHA256).Hash.ToLowerInvariant()
+        if ($actualHash -ne $expectedHash) { throw "SHA-256 mismatch: expected $expectedHash, got $actualHash" }
+        $text = [System.IO.File]::ReadAllText($temp, [System.Text.Encoding]::UTF8)
+        $versionLine = '(?m)^\$script:AgentVersion = "' + [regex]::Escape($version) + '"'
+        if ($text -notmatch $versionLine) { throw "Downloaded script does not declare version $version" }
+        $tokens = $null
+        $parseErrors = $null
+        [void][System.Management.Automation.Language.Parser]::ParseFile($temp, [ref]$tokens, [ref]$parseErrors)
+        if ($parseErrors -and $parseErrors.Count -gt 0) { throw "Downloaded script has $($parseErrors.Count) parse error(s)" }
+
+        Copy-Item -LiteralPath $target -Destination "$target.bak" -Force
+        Move-Item -LiteralPath $temp -Destination $target -Force
+        $temp = $null
+        Write-UpdateLog "updated $($script:AgentVersion) -> $version (backup: $target.bak); the next scheduled run uses the new version"
+    }
+    catch {
+        Write-UpdateLog "failed: $($_.Exception.Message)"
+    }
+    finally {
+        if ($temp -and (Test-Path -LiteralPath $temp)) { Remove-Item -LiteralPath $temp -Force -ErrorAction SilentlyContinue }
+    }
+}
+
+function Write-UninstallLog {
+    param([string]$Message)
+    Write-Host "Agent uninstall: $Message"
+    if (-not $script:AgentScriptPath) { return }
+    try {
+        $log = Join-Path (Split-Path -Parent $script:AgentScriptPath) "update.log"
+        if (Test-Path -LiteralPath (Split-Path -Parent $log)) {
+            Add-Content -LiteralPath $log -Value ("{0} uninstall: {1}" -f (Get-Date).ToString("s"), $Message) -Encoding UTF8
+        }
+    }
+    catch { }
+}
+
+function Test-ServerTrustedForUninstall {
+    # Only an answer from the configured server over https (http only for a localhost dev server)
+    # may remove the agent. Same SEC-06 rules as updates.
+    param([string]$Base)
+    if (-not $Base) { return $false }
+    return (Test-UpdateUrlAllowed -Url $Base -CurrentBase $Base)
+}
+
+function Test-SafeInstallRoot {
+    # Never delete a drive root or a shared system/profile folder, and only a folder that holds the agent script.
+    param([string]$Path)
+    if (-not $Path) { return $false }
+    try { $full = [System.IO.Path]::GetFullPath($Path).TrimEnd('\') } catch { return $false }
+    $root = ([System.IO.Path]::GetPathRoot($full)).TrimEnd('\')
+    if ($full.Length -lt 4 -or $full -ieq $root) { return $false }
+    if ($full -match '["%&|<>^]') { return $false }
+    foreach ($shared in @($env:SystemRoot, $env:ProgramData, $env:ProgramFiles, ${env:ProgramFiles(x86)}, $env:LOCALAPPDATA, $env:APPDATA, $env:USERPROFILE, $env:TEMP, $env:PUBLIC)) {
+        if ($shared -and $full -ieq ([string]$shared).TrimEnd('\')) { return $false }
+    }
+    return (Test-Path -LiteralPath (Join-Path $full "atacs-agent.ps1"))
+}
+
+function Send-UninstallConfirmation {
+    # POST /api/agent/uninstalled/ with this machine's credentials. True only for { ok: true, uninstalled: true }.
+    param($Config, [string]$Reason)
+    $headers = @{
+        "x-agent-id" = [string]$Config.agentId
+        "x-agent-key" = [string]$Config.agentKey
+    }
+    $base = ([string]$Config.apiBaseUrl).TrimEnd('/')
+    $response = Invoke-JsonPost -Url "$base/api/agent/uninstalled/" -Body @{ reason = $Reason; agentVersion = $script:AgentVersion } -Headers $headers
+    return ($null -ne $response -and $response.ok -eq $true -and $response.uninstalled -eq $true)
+}
+
+function Remove-AgentScheduledTask {
+    # Removes the task whichever way the installer created it. Returns $true when a task was removed.
+    param([string]$TaskName)
+    $ErrorActionPreference = "Continue"
+    $removed = $false
+    try {
+        if (Get-Command Unregister-ScheduledTask -ErrorAction SilentlyContinue) {
+            $task = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+            if ($task) {
+                Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction Stop
+                $removed = $true
+            }
+        }
+    }
+    catch { Write-UninstallLog "Unregister-ScheduledTask failed: $($_.Exception.Message)" }
+    try {
+        & schtasks.exe /Query /TN "$TaskName" 2>&1 | Out-Null
+        if ($LASTEXITCODE -eq 0) {
+            & schtasks.exe /Delete /TN "$TaskName" /F 2>&1 | Out-Null
+            if ($LASTEXITCODE -eq 0) { $removed = $true }
+            else { Write-UninstallLog "schtasks.exe /Delete failed with exit code $LASTEXITCODE" }
+        }
+    }
+    catch { Write-UninstallLog "schtasks.exe failed: $($_.Exception.Message)" }
+    return $removed
+}
+
+function Remove-AgentInstallation {
+    # Order: secrets first (config with the agent key), then the scheduled task, then files.
+    # The running script and its folder are removed by a detached cmd.exe after this process exits.
+    param([string]$ConfigPath, [string]$InstallRoot)
+    $ErrorActionPreference = "Continue"
+    Write-UninstallLog "removing ATACS Agent from $InstallRoot"
+    $configFiles = @($ConfigPath, (Join-Path $InstallRoot "agent-config.json")) | Where-Object { $_ } | Select-Object -Unique
+    foreach ($file in $configFiles) {
+        if (Test-Path -LiteralPath $file) {
+            Remove-Item -LiteralPath $file -Force -ErrorAction SilentlyContinue
+            if (Test-Path -LiteralPath $file) { Write-UninstallLog "could not remove $file" } else { Write-UninstallLog "removed config $file" }
+        }
+    }
+    if (Remove-AgentScheduledTask -TaskName $script:AgentTaskName) { Write-UninstallLog "removed scheduled task '$($script:AgentTaskName)'" }
+    else { Write-UninstallLog "scheduled task '$($script:AgentTaskName)' not found" }
+
+    $scriptFile = Join-Path $InstallRoot "atacs-agent.ps1"
+    $known = @(Get-ChildItem -LiteralPath $InstallRoot -Force -ErrorAction SilentlyContinue | Where-Object {
+        $_.Name -eq "atacs-agent.ps1.bak" -or $_.Name -like "atacs-agent.ps1.download-*"
+    })
+    foreach ($item in $known) {
+        Remove-Item -LiteralPath $item.FullName -Force -ErrorAction SilentlyContinue
+        Write-UninstallLog "removed $($item.FullName)"
+    }
+    # Our own folder name: remove everything. A custom InstallRoot is only removed when it is empty.
+    if ((Split-Path -Leaf $InstallRoot) -ieq "ATACSAgent") { $rmdir = "rmdir /s /q `"$InstallRoot`"" } else { $rmdir = "del /f /q `"$InstallRoot\update.log`" & rmdir `"$InstallRoot`"" }
+    Write-UninstallLog "scheduling removal of $scriptFile and $InstallRoot in a few seconds"
+    $command = "cmd.exe /d /c ping -n 6 127.0.0.1 >nul & del /f /q `"$scriptFile`" & $rmdir"
+    try {
+        # WMI starts the cleanup outside this task's process tree, so it survives the task ending.
+        $created = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{ CommandLine = $command; CurrentDirectory = $env:SystemRoot } -ErrorAction Stop
+        if ($created.ReturnValue -ne 0) { throw "Win32_Process.Create returned $($created.ReturnValue)" }
+    }
+    catch {
+        Start-Process -FilePath "cmd.exe" -ArgumentList ($command.Substring(8)) -WorkingDirectory $env:SystemRoot -WindowStyle Hidden
+    }
+    Write-Host "Agent uninstall: completed (install directory is removed after this process exits)"
+}
+
+function Invoke-AgentSelfUninstall {
+    # Returns $true only after the server confirmed and removal started. Never throws.
+    # If the confirmation fails nothing is removed; the next scheduled run tries again.
+    param($Uninstall, $Config, [string]$ConfigPath, [string]$Trigger = "instruction")
+    try {
+        $requestedAt = ""
+        if ($Uninstall) { $requestedAt = [string]$Uninstall.requestedAt }
+        if ($Trigger -eq "instruction" -and [string]::IsNullOrWhiteSpace($requestedAt)) { Write-UninstallLog "refused: invalid uninstall instruction"; return $false }
+        $base = Normalize-ApiBaseUrl -BaseUrl ([string]$Config.apiBaseUrl)
+        if (-not (Test-ServerTrustedForUninstall -Base $base)) { Write-UninstallLog "refused: server address is not https ($base)"; return $false }
+        if (-not $script:AgentScriptPath) { Write-UninstallLog "refused: cannot locate the running script"; return $false }
+        $installRoot = Split-Path -Parent $script:AgentScriptPath
+        if (-not (Test-SafeInstallRoot -Path $installRoot)) { Write-UninstallLog "refused: unexpected install directory $installRoot"; return $false }
+        if ($Trigger -eq "instruction") { Write-UninstallLog "requested by the administrator at $requestedAt; confirming with $base" }
+        else { Write-UninstallLog "server rejected this agent; checking whether the uninstall was already recorded" }
+        try { $confirmed = Send-UninstallConfirmation -Config $Config -Reason "remote" }
+        catch { Write-UninstallLog "confirmation failed: $($_.Exception.Message); nothing was removed, will retry next run"; return $false }
+        if (-not $confirmed) { Write-UninstallLog "server did not confirm; nothing was removed"; return $false }
+        Remove-AgentInstallation -ConfigPath $ConfigPath -InstallRoot $installRoot
+        return $true
+    }
+    catch {
+        Write-UninstallLog "failed: $($_.Exception.Message)"
+        return $false
+    }
 }
 
 function Ensure-Directory {
@@ -351,6 +616,8 @@ function Get-InventoryPayload {
         diskUsedGb = if ($null -ne $diskBytes -and $null -ne $diskFree) { [int][math]::Round($diskBytes - $diskFree) } else { $null }
         locationDetail = $env:COMPUTERNAME
         agentVersion = $script:AgentVersion
+        agentPlatform = "windows"
+        capabilities = $script:AgentCapabilities
         status = "online"
         collectedAt = (Get-Date).ToUniversalTime().ToString("o")
         health = $health
@@ -507,8 +774,29 @@ try {
     }
 
     $payload = Get-InventoryPayload
-    $result = Send-Inventory -Config $config -Payload $payload
+    try {
+        $result = Send-Inventory -Config $config -Payload $payload
+    }
+    catch {
+        $reportStatus = 0
+        if ($_.Exception.Data -and $_.Exception.Data.Contains("StatusCode")) { $reportStatus = [int]$_.Exception.Data["StatusCode"] }
+        # The server may have recorded our uninstall while its answer was lost: the confirmation is idempotent.
+        if ($reportStatus -eq 401 -and $_.Exception.Message -match 'AGENT_RETIRED') {
+            if (Invoke-AgentSelfUninstall -Uninstall $null -Config $config -ConfigPath $ConfigPath -Trigger "rejected") { exit 0 }
+        }
+        throw
+    }
     Write-Host "Inventory report sent successfully. DeviceId=$($result.deviceId) AssetId=$($result.linkedAssetId)"
+
+    # Remote uninstall (requested by a central administrator): confirm with the server first, then remove.
+    if ($result -and $result.uninstall) {
+        if (Invoke-AgentSelfUninstall -Uninstall $result.uninstall -Config $config -ConfigPath $ConfigPath) {
+            Write-Host "ATACS Agent was uninstalled at the administrator's request."
+            exit 0
+        }
+        # Not confirmed: keep running as usual and retry next run; never update a machine being uninstalled.
+        exit 0
+    }
 
     # The server announces its current address after a move (e.g. Vercel -> own server); follow it once.
     if ($result -and $result.apiBaseUrl) {
@@ -529,6 +817,12 @@ try {
             Save-Config -Path $ConfigPath -Config $updated
             Write-Host "Server address changed; apiBaseUrl updated to $newBase"
         }
+    }
+
+    # Auto-update (enabled per facility by the administrator): verified download, then replace this script.
+    if ($result -and $result.update) {
+        try { Invoke-AgentSelfUpdate -Update $result.update -CurrentBase ([string]$config.apiBaseUrl) }
+        catch { Write-Warning "Agent update failed: $_" }
     }
 }
 catch {

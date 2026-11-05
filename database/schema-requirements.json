@@ -222,6 +222,17 @@
     }
   },
   {
+    "file": "add_agent_uninstall.sql (ถอนการติดตั้ง Agent จากระยะไกล — ก่อนรัน สั่งถอนจากหน้าตั้งค่าไม่ได้)",
+    "tables": [],
+    "columns": {
+      "agent_devices": [
+        "uninstall_requested_at",
+        "uninstall_requested_by",
+        "uninstalled_at"
+      ]
+    }
+  },
+  {
     "file": "add_asset_soft_delete.sql (ลบทรัพย์สินแบบเก็บประวัติ — ก่อนรัน ลบทรัพย์สินจากหน้าจอไม่ได้)",
     "tables": [],
     "columns": {

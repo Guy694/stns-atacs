@@ -20,14 +20,24 @@ import shutil
 import socket
 import subprocess
 import sys
+import tempfile
 import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
-AGENT_VERSION = "2.1.0"
+AGENT_VERSION = "2.2.0"
 DEFAULT_CONFIG_PATH = "/var/lib/atacs-agent/agent-config.json"
+# Self-update (2.2.0+): the running script replaces itself after a verified download.
+AGENT_CAPABILITIES = ["self-update", "self-uninstall"]
+UPDATE_MAX_BYTES = 2 * 1024 * 1024
+UPDATE_TIMEOUT_SECONDS = 60
+# Remote uninstall (2.2.0+): the unit/cron names and paths created by install-atacs-agent.sh.
+SERVICE_NAME = "atacs-agent"
+SYSTEMD_UNIT_DIR = "/etc/systemd/system"
+CRON_FILE = "/etc/cron.d/atacs-agent"
+CRON_LOG_FILE = "/var/log/atacs-agent.log"
 
 
 def read_text_file(path: str) -> Optional[str]:
@@ -80,6 +90,320 @@ def api_base_allowed(new_base: str, current_base: str) -> bool:
     if current_host and host == current_host:
         return True
     return any(host == suffix.lstrip(".") or host.endswith(suffix) for suffix in ALLOWED_API_HOST_SUFFIXES)
+
+
+def update_url_allowed(url: str, current_base: str) -> bool:
+    """Update downloads reuse the SEC-06 allowlist (https + current host or allow-listed host).
+    Plain http is accepted only for a localhost development server the agent already reports to."""
+    try:
+        parsed = urllib.parse.urlparse(url)
+        current_host = (urllib.parse.urlparse(current_base or "").hostname or "").lower()
+    except ValueError:
+        return False
+    if parsed.scheme == "http":
+        host = (parsed.hostname or "").lower()
+        return host in ("localhost", "127.0.0.1") and host == current_host
+    return api_base_allowed(url, current_base)
+
+
+def version_tuple(value: Any) -> tuple:
+    parts = []
+    for part in str(value or "").split(".")[:3]:
+        match = re.match(r"\d+", part)
+        parts.append(int(match.group(0)) if match else 0)
+    while len(parts) < 3:
+        parts.append(0)
+    return tuple(parts)
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):  # type: ignore[override]
+        return None
+
+
+def download_limited(url: str, max_bytes: int, timeout: int) -> bytes:
+    """Download with a hard size cap, an overall deadline and no redirects."""
+    opener = urllib.request.build_opener(_NoRedirect)
+    request = urllib.request.Request(url, headers={"User-Agent": "ATACS-Agent/" + AGENT_VERSION})
+    deadline = time.time() + timeout
+    chunks = []  # type: List[bytes]
+    total = 0
+    try:
+        with opener.open(request, timeout=timeout) as response:
+            if response.getcode() != 200:
+                raise RuntimeError("HTTP {} from {}".format(response.getcode(), url))
+            declared = response.headers.get("Content-Length")
+            if declared and declared.isdigit() and int(declared) > max_bytes:
+                raise RuntimeError("download is larger than {} bytes".format(max_bytes))
+            while True:
+                chunk = response.read(65536)
+                if not chunk:
+                    break
+                total += len(chunk)
+                if total > max_bytes:
+                    raise RuntimeError("download is larger than {} bytes".format(max_bytes))
+                if time.time() > deadline:
+                    raise RuntimeError("download timed out after {} seconds".format(timeout))
+                chunks.append(chunk)
+    except urllib.error.HTTPError as exc:
+        raise RuntimeError("HTTP {} from {}".format(exc.code, url)) from exc
+    except urllib.error.URLError as exc:
+        raise RuntimeError("download failed: {}".format(exc.reason)) from exc
+    return b"".join(chunks)
+
+
+def update_log(message: str, directory: Optional[str] = None) -> None:
+    print("Agent update: {}".format(message))
+    if not directory:
+        return
+    log_path = os.path.join(directory, "update.log")
+    try:
+        if os.path.exists(log_path) and os.path.getsize(log_path) > 256 * 1024:
+            os.remove(log_path)
+        with open(log_path, "a", encoding="utf-8") as handle:
+            handle.write("{} {}\n".format(time_iso(), message))
+    except OSError:
+        pass
+
+
+def self_update(update: Any, current_base: str, target: Optional[str] = None, downloader: Any = None) -> bool:
+    """Replace this script with a verified newer version. Never raises: an update problem must not
+    fail the inventory run. At most one attempt per run; the next scheduled run starts the new script.
+    Manual rollback: cp /opt/atacs-agent/atacs-agent.py.bak /opt/atacs-agent/atacs-agent.py"""
+    target_path = os.path.realpath(target or os.path.abspath(__file__))
+    directory = os.path.dirname(target_path)
+    temp_path = None  # type: Optional[str]
+    try:
+        if not isinstance(update, dict):
+            update_log("refused: invalid update info", directory)
+            return False
+        version = str(update.get("version") or "")
+        url = str(update.get("url") or "")
+        expected_hash = str(update.get("sha256") or "").strip().lower()
+        try:
+            size = int(update.get("size") or 0)
+        except (TypeError, ValueError):
+            size = 0
+        if not re.match(r"^\d+\.\d+\.\d+$", version):
+            update_log("refused: invalid version {!r}".format(version), directory)
+            return False
+        if version_tuple(version) <= version_tuple(AGENT_VERSION):
+            update_log("skipped: {} is not newer than {}".format(version, AGENT_VERSION), directory)
+            return False
+        if not re.match(r"^[0-9a-f]{64}$", expected_hash):
+            update_log("refused: invalid sha256", directory)
+            return False
+        if size <= 0 or size > UPDATE_MAX_BYTES:
+            update_log("refused: invalid size {}".format(size), directory)
+            return False
+        if not update_url_allowed(url, current_base):
+            update_log("refused: download host is not allowed ({})".format(url), directory)
+            return False
+
+        body = (downloader or download_limited)(url, UPDATE_MAX_BYTES, UPDATE_TIMEOUT_SECONDS)
+        if len(body) != size:
+            raise RuntimeError("size mismatch: expected {} bytes, got {}".format(size, len(body)))
+        actual_hash = hashlib.sha256(body).hexdigest()
+        if actual_hash != expected_hash:
+            raise RuntimeError("SHA-256 mismatch: expected {}, got {}".format(expected_hash, actual_hash))
+        text = body.decode("utf-8")
+        if not re.search(r'^AGENT_VERSION = "{}"$'.format(re.escape(version)), text, re.MULTILINE):
+            raise RuntimeError("downloaded script does not declare version {}".format(version))
+        # Refuse a script this interpreter cannot even compile (e.g. syntax newer than Python 3.6).
+        compile(text, target_path, "exec")
+
+        fd, temp_path = tempfile.mkstemp(prefix=".atacs-agent-update-", dir=directory)
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(body)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.chmod(temp_path, 0o755)
+        if hasattr(os, "geteuid") and os.geteuid() == 0:
+            os.chown(temp_path, 0, 0)
+        shutil.copy2(target_path, target_path + ".bak")
+        os.replace(temp_path, target_path)
+        temp_path = None
+        update_log(
+            "updated {} -> {} (backup: {}.bak); the next scheduled run uses the new version".format(
+                AGENT_VERSION, version, target_path
+            ),
+            directory,
+        )
+        return True
+    except Exception as exc:  # noqa: BLE001 - never fail the report run because of an update
+        update_log("failed: {}".format(exc), directory)
+        return False
+    finally:
+        if temp_path and os.path.exists(temp_path):
+            try:
+                os.unlink(temp_path)
+            except OSError:
+                pass
+
+
+def uninstall_log(message: str, directory: Optional[str] = None) -> None:
+    print("Agent uninstall: {}".format(message))
+    if not directory or not os.path.isdir(directory):
+        return
+    try:
+        with open(os.path.join(directory, "update.log"), "a", encoding="utf-8") as handle:
+            handle.write("{} uninstall: {}\n".format(time_iso(), message))
+    except OSError:
+        pass
+
+
+def server_trusted_for_uninstall(base: str) -> bool:
+    """Only an answer from the configured server over https (http only for a localhost dev server)
+    may remove the agent. Same SEC-06 rules as updates."""
+    return bool(base) and update_url_allowed(base, base)
+
+
+def safe_install_dir(path: str) -> bool:
+    """Never delete / or a shared system directory, and only a directory that holds the agent script."""
+    if not path:
+        return False
+    real = os.path.realpath(path)
+    if real in ("/", "/opt", "/usr", "/usr/local", "/var", "/var/lib", "/etc", "/home", "/root", "/tmp", "/bin", "/sbin", "/lib"):
+        return False
+    return os.path.isfile(os.path.join(real, "atacs-agent.py"))
+
+
+def confirm_uninstalled(config: Dict[str, Any], reason: str = "remote", poster: Any = None) -> bool:
+    """POST /api/agent/uninstalled/ with this machine's credentials; True only for {ok: true, uninstalled: true}."""
+    headers = {"x-agent-id": str(config.get("agentId") or ""), "x-agent-key": str(config.get("agentKey") or "")}
+    url = "{}/api/agent/uninstalled/".format(str(config.get("apiBaseUrl") or "").rstrip("/"))
+    response = (poster or post_json)(url, {"reason": reason, "agentVersion": AGENT_VERSION}, headers)
+    return isinstance(response, dict) and response.get("ok") is True and response.get("uninstalled") is True
+
+
+def _remove_file(path: str, directory: Optional[str], removed: List[str]) -> None:
+    try:
+        if os.path.lexists(path):
+            os.unlink(path)
+            removed.append(path)
+            uninstall_log("removed {}".format(path), directory)
+    except OSError as exc:
+        uninstall_log("could not remove {}: {}".format(path, exc), directory)
+
+
+def remove_installation(
+    install_dir: str,
+    config_path: str,
+    systemd_dir: str = SYSTEMD_UNIT_DIR,
+    cron_file: str = CRON_FILE,
+    cron_log_file: str = CRON_LOG_FILE,
+) -> List[str]:
+    """Stop/disable the timer, remove units, cron entry, config (agent key) and the install directory.
+    The running oneshot service is not stopped (that would kill this process); its unit file is removed
+    and systemd forgets it after daemon-reload. Returns what was removed."""
+    removed = []  # type: List[str]
+    install_dir = os.path.realpath(install_dir)
+    uninstall_log("removing ATACS Agent from {}".format(install_dir), install_dir)
+
+    # Secrets first: the config holds the agent key.
+    _remove_file(config_path, install_dir, removed)
+    config_dir = os.path.dirname(os.path.realpath(config_path))
+    if os.path.basename(config_dir) == SERVICE_NAME:
+        shutil.rmtree(config_dir, ignore_errors=True)
+        if not os.path.exists(config_dir):
+            removed.append(config_dir)
+            uninstall_log("removed {}".format(config_dir), install_dir)
+
+    timer = "{}.timer".format(SERVICE_NAME)
+    service = "{}.service".format(SERVICE_NAME)
+    if shutil.which("systemctl"):
+        for args in (["disable", "--now", timer], ["stop", timer]):
+            try:
+                subprocess.run(["systemctl"] + args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=60)
+            except (OSError, subprocess.SubprocessError) as exc:
+                uninstall_log("systemctl {} failed: {}".format(" ".join(args), exc), install_dir)
+        uninstall_log("stopped and disabled {}".format(timer), install_dir)
+    for unit in (timer, service):
+        _remove_file(os.path.join(systemd_dir, unit), install_dir, removed)
+        _remove_file(os.path.join(systemd_dir, "timers.target.wants", unit), install_dir, removed)
+    if shutil.which("systemctl"):
+        try:
+            subprocess.run(["systemctl", "daemon-reload"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=60)
+            subprocess.run(["systemctl", "reset-failed", service], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=60)
+        except (OSError, subprocess.SubprocessError) as exc:
+            uninstall_log("systemctl daemon-reload failed: {}".format(exc), install_dir)
+
+    _remove_file(cron_file, install_dir, removed)
+    _remove_file(cron_log_file, install_dir, removed)
+
+    if safe_install_dir(install_dir):
+        if os.path.basename(install_dir) == SERVICE_NAME:
+            uninstall_log("removing directory {}".format(install_dir), install_dir)
+            shutil.rmtree(install_dir, ignore_errors=True)
+        else:
+            # Custom --install-root: remove only our files, and the directory only when it is then empty.
+            for name in ("atacs-agent.py", "atacs-agent.py.bak", "update.log"):
+                path = os.path.join(install_dir, name)
+                if os.path.lexists(path):
+                    try:
+                        os.unlink(path)
+                    except OSError:
+                        pass
+            for name in os.listdir(install_dir) if os.path.isdir(install_dir) else []:
+                if name.startswith(".atacs-agent-update-"):
+                    try:
+                        os.unlink(os.path.join(install_dir, name))
+                    except OSError:
+                        pass
+            try:
+                os.rmdir(install_dir)
+            except OSError:
+                pass
+        if not os.path.exists(install_dir):
+            removed.append(install_dir)
+            print("Agent uninstall: removed {}".format(install_dir))
+    else:
+        uninstall_log("left {} in place (not an agent install directory)".format(install_dir), install_dir)
+    print("Agent uninstall: completed")
+    return removed
+
+
+def self_uninstall(
+    uninstall: Any,
+    config: Dict[str, Any],
+    config_path: str,
+    install_dir: Optional[str] = None,
+    poster: Any = None,
+    remover: Any = None,
+    trigger: str = "instruction",
+) -> bool:
+    """Confirm with the server, then remove this agent. Never raises. Nothing is removed unless the
+    configured https server confirmed; a failed confirmation is retried on the next scheduled run."""
+    directory = os.path.realpath(install_dir or os.path.dirname(os.path.abspath(__file__)))
+    try:
+        requested_at = str(uninstall.get("requestedAt") or "") if isinstance(uninstall, dict) else ""
+        if trigger == "instruction" and not requested_at.strip():
+            uninstall_log("refused: invalid uninstall instruction", directory)
+            return False
+        base = str(config.get("apiBaseUrl") or "").rstrip("/")
+        if not server_trusted_for_uninstall(base):
+            uninstall_log("refused: server address is not https ({})".format(base), directory)
+            return False
+        if not safe_install_dir(directory):
+            uninstall_log("refused: unexpected install directory {}".format(directory), directory)
+            return False
+        if trigger == "instruction":
+            uninstall_log("requested by the administrator at {}; confirming with {}".format(requested_at, base), directory)
+        else:
+            uninstall_log("server rejected this agent; checking whether the uninstall was already recorded", directory)
+        try:
+            confirmed = confirm_uninstalled(config, "remote", poster)
+        except Exception as exc:  # noqa: BLE001 - keep the agent installed and retry next run
+            uninstall_log("confirmation failed: {}; nothing was removed, will retry next run".format(exc), directory)
+            return False
+        if not confirmed:
+            uninstall_log("server did not confirm; nothing was removed", directory)
+            return False
+        (remover or remove_installation)(directory, config_path)
+        return True
+    except Exception as exc:  # noqa: BLE001 - never fail the run because of the uninstall step
+        uninstall_log("failed: {}".format(exc), directory)
+        return False
 
 
 def ensure_dir_for_file(path: str) -> None:
@@ -427,6 +751,8 @@ def get_inventory_payload() -> Dict[str, Any]:
         "diskUsedGb": disk_usage["used"],
         "locationDetail": hostname,
         "agentVersion": AGENT_VERSION,
+        "agentPlatform": "linux",
+        "capabilities": list(AGENT_CAPABILITIES),
         "status": "online",
         "collectedAt": time_iso(),
         "health": get_health(),
@@ -585,12 +911,25 @@ def main() -> int:
         return 0
 
     payload = get_inventory_payload()
-    result = send_inventory(config, payload)
+    try:
+        result = send_inventory(config, payload)
+    except HttpError as exc:
+        # The server may have recorded our uninstall while its answer was lost: the confirmation is idempotent.
+        if exc.status == 401 and "AGENT_RETIRED" in str(exc):
+            if self_uninstall(None, config, args.config_path, trigger="rejected"):
+                return 0
+        raise
     print(
         "Inventory report sent successfully. DeviceId={} AssetId={}".format(
             result.get("deviceId"), result.get("linkedAssetId")
         )
     )
+    # Remote uninstall (requested by a central administrator): confirm with the server first, then remove.
+    if result.get("uninstall"):
+        if self_uninstall(result.get("uninstall"), config, args.config_path):
+            print("ATACS Agent was uninstalled at the administrator's request.")
+        # Not confirmed: retry next run; never update or move a machine that is being uninstalled.
+        return 0
     # The server announces its current address after a move (e.g. Vercel -> own server); follow it once.
     new_base = normalize(result.get("apiBaseUrl"))
     current_base = str(config.get("apiBaseUrl", "")).rstrip("/")
@@ -606,6 +945,9 @@ def main() -> int:
                 "Still reporting to {}.".format(new_base, current_base),
                 file=sys.stderr,
             )
+    # Auto-update (enabled per facility by the administrator): verified download, then replace this script.
+    if result.get("update"):
+        self_update(result.get("update"), current_base)
     return 0
 
 

@@ -258,7 +258,7 @@ test("agent version strings are consistent across scripts", () => {
   const py = read("public/agent/linux/atacs-agent.py").match(/AGENT_VERSION = "([\d.]+)"/)[1];
   const ps = read("public/agent/windows/atacs-agent.ps1").match(/\$script:AgentVersion = "([\d.]+)"/)[1];
   assert.equal(py, ps);
-  assert.equal(py, "2.1.0");
+  assert.equal(py, "2.2.0");
   assert.equal(fs.existsSync(new URL("../scripts/agent", import.meta.url)), false, "stale scripts/agent copy removed");
   assert.equal(fs.existsSync(new URL("../public/agent/linux/__pycache__", import.meta.url)), false);
 });

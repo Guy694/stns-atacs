@@ -86,3 +86,31 @@ export function buildLinuxStaticAgentInstallCommand(input: StaticInstallInput) {
     'sudo bash "$dir/install-atacs-agent.sh" --api-base-url "$base" --install-key "$install_key" --facility-id "$facility_id" --work-group-id "$work_group_id"',
   ].join("; ");
 }
+
+/**
+ * ถอนการติดตั้งด้วยมือ (ใช้กับ Agent ทุกรุ่น รวม 2.0.x/2.1.0 ที่ถอนตัวเองจากระยะไกลไม่ได้)
+ * -NotifyServer / --notify-server: ถ้ายังมี config ให้แจ้งเซิร์ฟเวอร์ก่อน เครื่องจะขึ้นสถานะ "ถอนการติดตั้งแล้ว"
+ */
+export function buildWindowsAgentUninstallCommand() {
+  const baseUrl = powerShellSingleQuote(AGENT_INSTALL_API_BASE_URL);
+  return [
+    "Set-ExecutionPolicy -Scope Process Bypass -Force",
+    "[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12",
+    `$base=${baseUrl}`,
+    '$dir=Join-Path $env:TEMP "atacs-agent"',
+    "New-Item -ItemType Directory -Force -Path $dir | Out-Null",
+    'Invoke-WebRequest -UseBasicParsing "$base/agent/windows/uninstall-atacs-agent.ps1" -OutFile (Join-Path $dir "uninstall-atacs-agent.ps1")',
+    'powershell -ExecutionPolicy Bypass -File (Join-Path $dir "uninstall-atacs-agent.ps1") -NotifyServer',
+  ].join("; ");
+}
+
+export function buildLinuxAgentUninstallCommand() {
+  const baseUrl = shellSingleQuote(AGENT_INSTALL_API_BASE_URL);
+  return [
+    `base=${baseUrl}`,
+    'dir="$(mktemp -d)"',
+    'download() { if command -v curl >/dev/null 2>&1; then curl -fsSL "$1" -o "$2"; else wget -qO "$2" "$1"; fi; }',
+    'download "$base/agent/linux/uninstall-atacs-agent.sh" "$dir/uninstall-atacs-agent.sh"',
+    'sudo bash "$dir/uninstall-atacs-agent.sh" --notify-server',
+  ].join("; ");
+}

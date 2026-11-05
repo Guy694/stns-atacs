@@ -210,12 +210,13 @@ export function systemVolume(device: HealthDeviceInput) {
   return null;
 }
 
-export type MonitorDeviceInput = HealthDeviceInput & { id: number; isActive: boolean };
+export type MonitorDeviceInput = HealthDeviceInput & { id: number; isActive: boolean; uninstalledAt?: string | null };
 
 /** สรุปสำหรับหน้าติดตามสุขภาพเครื่อง: แถวเรียงจากปัญหาหนักสุด + ยอดรวม */
 export function summarizeAgentMonitor<T extends MonitorDeviceInput>(devices: T[], now = new Date()) {
   const rows = devices
-    .filter((device) => device.isActive)
+    // ถอนการติดตั้งแล้ว/ลบออกจากระบบ ไม่อยู่ในหน้าติดตามสุขภาพเครื่อง
+    .filter((device) => device.isActive && !device.uninstalledAt)
     .map((device) => {
       const issues = evaluateAgentHealth(device, now);
       return { device, issues, worst: worstSeverity(issues), volume: systemVolume(device), hasHealth: Boolean(parseHealthJson(device.healthJson)) };

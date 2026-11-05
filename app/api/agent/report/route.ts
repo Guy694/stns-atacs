@@ -1,11 +1,39 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { isPlainObject, readJsonBody } from "@/app/api/agent/_lib/request-body";
-import { AgentLinkedAssetError, reportAgentInventory, type AgentReportPayload } from "@/lib/agent";
+import { AgentLinkedAssetError, isRetiredAgentUuid, reportAgentInventory, type AgentReportPayload } from "@/lib/agent";
 import { announcedApiBaseUrl } from "@/lib/agent-api-base";
-import { AGENT_REPORT_MAX_BYTES } from "@/lib/agent-payload";
+import { AGENT_INSTALL_API_BASE_URL } from "@/lib/agent-install";
+import { AGENT_LATEST_VERSION, AGENT_REPORT_MAX_BYTES, cleanAgentCapabilities, cleanText } from "@/lib/agent-payload";
+import { resolveAgentUpdateOffer, type AgentUpdateOffer } from "@/lib/agent-update";
+import { getAgentAutoUpdateSettings } from "@/lib/app-settings";
 import { notifyTelegramSafe } from "@/lib/telegram";
 import { readRequestIp, recordSecurityEvent } from "@/lib/security";
+
+/** ข้อมูลอัปเดต Agent (ถ้าเข้าเงื่อนไข) — ผิดพลาดอย่างไรก็ไม่ทำให้รายงานล้ม */
+async function agentUpdateFor(facilityId: number, payload: AgentReportPayload): Promise<AgentUpdateOffer | null> {
+  const capabilities = cleanAgentCapabilities(payload.capabilities);
+  // agent รุ่นเก่าไม่ส่ง capabilities: ไม่ต้องอ่านการตั้งค่าเลย
+  if (capabilities.length === 0) return null;
+  try {
+    const decision = await resolveAgentUpdateOffer({
+      settings: await getAgentAutoUpdateSettings(),
+      facilityId,
+      agentVersion: cleanText(payload.agentVersion, 50),
+      capabilities,
+      payload,
+      baseUrl: AGENT_INSTALL_API_BASE_URL,
+      latestVersion: AGENT_LATEST_VERSION,
+    });
+    if (decision.reason === "insecure-base-url" || decision.reason === "artifact-unavailable" || decision.reason === "artifact-version-mismatch") {
+      console.warn(`[agent-update] not offered: ${decision.reason}`);
+    }
+    return decision.update;
+  } catch (updateError) {
+    console.error("[agent-update] unable to resolve update offer", updateError);
+    return null;
+  }
+}
 
 function readAgentCredentials(req: NextRequest) {
   const agentId = req.headers.get("x-agent-id")?.trim() ?? "";
@@ -52,10 +80,32 @@ export async function POST(req: NextRequest) {
       });
     }
     const apiBaseUrl = announcedApiBaseUrl();
-    return NextResponse.json({ ok: true, ...result, ...(apiBaseUrl ? { apiBaseUrl } : {}) });
+    const { uninstall, ...reportResult } = result;
+    if (uninstall) {
+      // ผู้ดูแลสั่งถอนการติดตั้ง: agent ยืนยันที่ /api/agent/uninstalled/ ก่อนลบตัวเอง ไม่เสนออัปเดตให้เครื่องที่กำลังถอน
+      return NextResponse.json({ ok: true, ...reportResult, ...(apiBaseUrl ? { apiBaseUrl } : {}), uninstall });
+    }
+    const update = await agentUpdateFor(result.facilityId, payload);
+    return NextResponse.json({ ok: true, ...reportResult, ...(apiBaseUrl ? { apiBaseUrl } : {}), ...(update ? { update } : {}) });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     if (message === "INVALID_AGENT_CREDENTIALS") {
+      if (await isRetiredAgentUuid(agentId)) {
+        // เครื่องที่ถอนการติดตั้ง/ลบออกจากระบบแล้วแต่ Agent ยังทำงานอยู่ (เช่น เครื่องที่ปิดไปนานกลับมาเปิด)
+        // บันทึกไว้ แต่ไม่แจ้ง Telegram ทุกรอบ 4 ชั่วโมง; agent 2.2.0 ใช้ code นี้ตรวจว่าถูกถอนไปแล้วหรือยัง
+        await recordSecurityEvent({
+          eventType: "agent_retired_report",
+          ipAddress: readRequestIp(req.headers),
+          identity: agentId,
+          path: req.nextUrl.pathname,
+          detail: "Agent ที่ถอนการติดตั้งหรือลบออกจากระบบแล้วยังส่งรายงานมา",
+          skipBurstAlert: true,
+        });
+        return NextResponse.json(
+          { error: "This agent was uninstalled or retired by an administrator", code: "AGENT_RETIRED" },
+          { status: 401 }
+        );
+      }
       await recordSecurityEvent({
         eventType: "agent_invalid_credentials",
         ipAddress: readRequestIp(req.headers),
