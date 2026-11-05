@@ -85,10 +85,16 @@ function Protect-ConfigDirectory {
     if (-not (Test-IsElevated)) { return }
     $dir = Split-Path -Parent $Path
     try {
-        & icacls.exe $dir /inheritance:r /grant:r "*S-1-5-18:(OI)(CI)F" "*S-1-5-32-544:(OI)(CI)F" /T /C /Q | Out-Null
+        # Restore inheritance on existing children first. Applying /inheritance:r recursively
+        # leaves files (including atacs-agent.ps1) with an empty DACL and prevents the installer
+        # from launching its first report after enrollment.
+        & icacls.exe $dir /reset /T /C /Q | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "Unable to restore inherited permissions on $dir" }
+        & icacls.exe $dir /inheritance:r /grant:r "*S-1-5-18:(OI)(CI)F" "*S-1-5-32-544:(OI)(CI)F" /C /Q | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "Unable to restrict permissions on $dir" }
     }
     catch {
-        Write-Warning "Unable to restrict permissions on $dir"
+        Write-Warning "Unable to restrict permissions on ${dir}: $_"
     }
 }
 
