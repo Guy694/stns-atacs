@@ -96,22 +96,46 @@ chmod 755 "$agent_target"
 
 chmod 700 "$(dirname "$config_path")"
 
-echo "Running first enrollment and inventory report..."
-enroll_args=(--api-base-url "$api_base_url" --config-path "$config_path" --run-once)
+echo "Enrolling this machine..."
+# G3/G8: ลงทะเบียน (หรือลงทะเบียนใหม่เมื่อติดตั้งทับ) ก่อน ถ้าไม่สำเร็จต้องหยุด ไม่ติดตั้งตัวตั้งเวลา
+enroll_args=(--api-base-url "$api_base_url" --config-path "$config_path" --enroll-only)
 if [[ -n "$enrollment_token" ]]; then
   enroll_args+=(--enrollment-token "$enrollment_token")
 else
   enroll_args+=(--install-key "$install_key" --facility-id "$facility_id")
-  if [[ -n "$work_group_id" ]]; then
+  if [[ -n "$work_group_id" && "$work_group_id" != "0" ]]; then
     enroll_args+=(--work-group-id "$work_group_id")
   fi
   if [[ -n "$work_group_name" ]]; then
     enroll_args+=(--work-group-name "$work_group_name")
   fi
 fi
-python3 "$agent_target" "${enroll_args[@]}"
+if ! python3 "$agent_target" "${enroll_args[@]}"; then
+  echo "Enrollment failed; the scheduled job was not installed. Check the token/install key and network, then run the installer again." >&2
+  exit 1
+fi
+
+echo "Sending the first inventory report..."
+if ! python3 "$agent_target" --config-path "$config_path" --run-once; then
+  echo "Warning: the first inventory report failed; the scheduled job will retry." >&2
+fi
+
+# S5: ส่งต่อค่า proxy ที่ใช้ตอนติดตั้ง (sudo -E ... หรือ export ไว้ก่อน) ให้งานที่ตั้งเวลาไว้ด้วย
+proxy_env_lines=()
+for proxy_var in https_proxy HTTPS_PROXY http_proxy HTTP_PROXY no_proxy NO_PROXY; do
+  proxy_value="${!proxy_var:-}"
+  if [[ -n "$proxy_value" && "$proxy_value" != *$'\n'* && "$proxy_value" != *'"'* && "$proxy_value" != *'\'* ]]; then
+    proxy_env_lines+=("${proxy_var}=${proxy_value}")
+  fi
+done
 
 if command -v systemctl >/dev/null 2>&1; then
+  systemd_env=""
+  for line in "${proxy_env_lines[@]+"${proxy_env_lines[@]}"}"; do
+    # systemd: ค่าใน Environment= ต้องครอบ "" และ % ต้องเขียนเป็น %%
+    systemd_env+="Environment=\"${line//%/%%}\""$'\n'
+  done
+
   cat > "$service_file" <<EOF
 [Unit]
 Description=ATACS Linux agent inventory collector
@@ -120,7 +144,7 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/env python3 ${agent_target} --config-path ${config_path} --run-once
+${systemd_env}ExecStart=/usr/bin/env python3 ${agent_target} --config-path ${config_path} --run-once
 User=root
 Group=root
 EOF
@@ -143,10 +167,14 @@ EOF
   systemctl enable --now "${service_name}.timer"
   echo "Scheduled timer '${service_name}.timer' created successfully."
 else
+  cron_env=""
+  for line in "${proxy_env_lines[@]+"${proxy_env_lines[@]}"}"; do
+    cron_env+="${line}"$'\n'
+  done
   cat > "$cron_file" <<EOF
 SHELL=/bin/bash
 PATH=/usr/sbin:/usr/bin:/sbin:/bin
-0 */4 * * * root /usr/bin/env python3 ${agent_target} --config-path ${config_path} --run-once >/var/log/${service_name}.log 2>&1
+${cron_env}0 */4 * * * root /usr/bin/env python3 ${agent_target} --config-path ${config_path} --run-once >/var/log/${service_name}.log 2>&1
 EOF
   chmod 644 "$cron_file"
   echo "systemctl not found; installed cron fallback at ${cron_file}."

@@ -9,6 +9,7 @@ import type { LifecycleList } from "@/lib/asset-transfers";
 import { updateAsset } from "@/lib/assets";
 import { RETURN_CONDITION_LABELS, validateLoanInput, validateReturn, type LoanInput, type LoanStatus, type ReturnCondition } from "@/lib/loan-options";
 import { executeStatement, selectRows, withTransaction } from "@/lib/mysql";
+import { assetNotDeletedSql } from "@/lib/asset-soft-delete";
 import { isMissingSchemaError } from "@/lib/schema-errors";
 import { todayBangkok, dbDate } from "@/lib/local-date";
 
@@ -77,10 +78,11 @@ export type CreateLoanInput = LoanInput & { assetId: number; userId: number; use
 export async function createLoan(input: CreateLoanInput) {
   const loan = validateLoanInput(input);
   await ensureAssetStatusHistoryTable();
+  const notDeleted = await assetNotDeletedSql("a");
   return withTransaction(async () => {
     const [asset] = await selectRows<RowDataPacket & { facility_id: number; current_status: string | null }>(
       `SELECT s.facility_id, a.current_status FROM information_assets a
-       JOIN information_asset_surveys s ON s.id = a.survey_id WHERE a.id = ? FOR UPDATE`,
+       JOIN information_asset_surveys s ON s.id = a.survey_id WHERE a.id = ? AND ${notDeleted} FOR UPDATE`,
       [input.assetId]
     );
     if (!asset) throw new Error("ไม่พบทรัพย์สิน");

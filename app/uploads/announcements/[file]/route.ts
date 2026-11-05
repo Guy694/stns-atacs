@@ -10,7 +10,8 @@ type RouteContext = { params: Promise<{ file: string }> };
 // ภาพประกาศแสดงเฉพาะผู้ที่เข้าสู่ระบบแล้ว
 export async function GET(_request: Request, { params }: RouteContext) {
   const { file } = await params;
-  const name = safeAssetImageName(decodeURIComponent(file));
+  // params are already decoded; decoding again throws on "%" (B9)
+  const name = safeAssetImageName(file);
   if (!name) return new Response("Not found", { status: 404 });
 
   const user = await getCurrentUser();

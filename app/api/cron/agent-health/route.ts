@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { findOfflineAgentDevices } from "@/lib/agent";
+import { formatThaiDateTime } from "@/lib/date-format";
 import { notifyTelegramSafe } from "@/lib/telegram";
 import { readRequestIp, recordSecurityEvent } from "@/lib/security";
 import { isAuthorizedCronHeader } from "@/lib/cron-auth";
@@ -34,7 +35,8 @@ export async function GET(req: NextRequest) {
           เครื่อง: device.hostname ?? `Device #${device.id}`,
           หน่วยงาน: device.facilityName,
           "Agent ID": device.agentUuid,
-          "พบล่าสุด": device.lastSeenAt ?? "ไม่เคยส่งสัญญาณ",
+          // lastSeenAt เป็น ISO +07:00 (lib/agent.ts agentTimestamp) แสดงเป็นเวลาไทย
+          "พบล่าสุด": formatThaiDateTime(device.lastSeenAt, "ไม่เคยส่งสัญญาณ"),
           "เกณฑ์ Offline": `${thresholdMinutes} นาที`,
         },
       })

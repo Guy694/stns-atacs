@@ -1,6 +1,6 @@
 "use server";
 
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 
@@ -12,13 +12,14 @@ import { parseAssetFields, type AssetFields } from "@/lib/asset-input";
 import { findActiveFacilityWorkGroup, findOrCreateFacilityWorkGroup } from "@/lib/facility-work-groups";
 import { isMissingSchemaError } from "@/lib/schema-errors";
 import { getCurrentUser } from "@/lib/auth";
-import { recordAssetStatusHistory } from "@/lib/asset-status-history";
+import { detectImageExtension } from "@/lib/announcement-shared";
 import { createAsset, deleteAsset, findOrCreateSurvey, getAssetById, updateAsset, type AssetInput, type AssetWithFacility } from "@/lib/assets";
-import { writeAuditLog } from "@/lib/audit";
-import { assetImageDir, assetImageUrl } from "@/lib/upload-storage";
+import { writeAuditLogSafe } from "@/lib/audit";
+import { ASSET_IMAGE_URL_PREFIX, assetImageDir, assetImageUrl, safeAssetImageName } from "@/lib/upload-storage";
 import { selectRows } from "@/lib/mysql";
 import { canManageAssetRecord, canMutateAssets } from "@/lib/permissions";
 import { hasPermission, type AppRole } from "@/lib/role-permissions";
+import { assetNotDeletedSql, hasAssetSoftDelete } from "@/lib/asset-soft-delete";
 import { todayBangkok } from "@/lib/local-date";
 
 async function requireAuth() {
@@ -40,11 +41,7 @@ type AssetFormInput = AssetInput & { facilityId: number };
 
 const IPV4_REGEX = /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
 const MAX_ASSET_IMAGE_BYTES = 5 * 1024 * 1024;
-const ASSET_IMAGE_TYPES: Record<string, string> = {
-  "image/jpeg": "jpg",
-  "image/png": "png",
-  "image/webp": "webp",
-};
+const FACILITY_CHANGE_MESSAGE = "การย้ายหน่วยงานต้องทำผ่านเมนูโอนย้ายทรัพย์สิน";
 
 function parseDateOnly(value?: string | null) {
   if (!value) return null;
@@ -58,12 +55,14 @@ function readFile(fd: FormData, key: string) {
 }
 
 async function storeAssetImage(file: File, slot: 1 | 2) {
-  const extension = ASSET_IMAGE_TYPES[file.type];
-  if (!extension) {
-    throw new Error("รองรับเฉพาะไฟล์รูปภาพ JPG, PNG หรือ WebP");
-  }
   if (file.size > MAX_ASSET_IMAGE_BYTES) {
     throw new Error("รูปภาพต้องมีขนาดไม่เกิน 5MB ต่อภาพ");
+  }
+  // The type is read from the file's own bytes; the browser-sent Content-Type is not trusted.
+  const bytes = Buffer.from(await file.arrayBuffer());
+  const extension = detectImageExtension(bytes);
+  if (!extension) {
+    throw new Error("รองรับเฉพาะไฟล์รูปภาพ JPG, PNG หรือ WebP");
   }
 
   // Stored outside public/ and served by app/uploads/assets/[file] (login + facility check).
@@ -71,30 +70,66 @@ async function storeAssetImage(file: File, slot: 1 | 2) {
   await mkdir(uploadDir, { recursive: true });
 
   const filename = `asset-${Date.now()}-${slot}-${randomUUID()}.${extension}`;
-  const bytes = Buffer.from(await file.arrayBuffer());
   await writeFile(path.join(uploadDir, filename), bytes);
 
   return assetImageUrl(filename);
 }
 
-async function buildAssetImageUrls(fd: FormData, currentAsset?: AssetWithFacility | null) {
+/**
+ * Best-effort removal of a photo file that no asset uses any more. Only plain file names under the
+ * asset upload folder are touched, and never a file another asset row (including a soft-deleted one) still references.
+ */
+async function removeStoredAssetImage(url: string | null | undefined) {
+  try {
+    if (!url || !url.startsWith(ASSET_IMAGE_URL_PREFIX)) return;
+    const name = safeAssetImageName(url.slice(ASSET_IMAGE_URL_PREFIX.length));
+    if (!name) return;
+    const uploadDir = path.resolve(assetImageDir());
+    const file = path.resolve(uploadDir, name);
+    if (path.dirname(file) !== uploadDir) return;
+    const stillUsed = await selectRows<RowDataPacket & { id: number }>(
+      "SELECT id FROM information_assets WHERE asset_image_1_url = ? OR asset_image_2_url = ? LIMIT 1",
+      [url, url]
+    );
+    if (stillUsed.length) return;
+    await unlink(file);
+  } catch (error) {
+    console.warn("[assets] could not remove replaced asset photo", url, error instanceof Error ? error.message : error);
+  }
+}
+
+type AssetImageUrls = { assetImage1Url: string | null; assetImage2Url: string | null };
+
+async function buildAssetImageUrls(fd: FormData, currentAsset?: AssetWithFacility | null): Promise<AssetImageUrls & { stored: string[] }> {
   const firstFile = readFile(fd, "assetImage1");
   const secondFile = readFile(fd, "assetImage2");
   const removeFirst = readStr(fd, "removeAssetImage1") === "1";
   const removeSecond = readStr(fd, "removeAssetImage2") === "1";
-
-  return {
-    assetImage1Url: firstFile
-      ? await storeAssetImage(firstFile, 1)
-      : removeFirst
-        ? null
-        : currentAsset?.assetImage1Url || null,
-    assetImage2Url: secondFile
-      ? await storeAssetImage(secondFile, 2)
-      : removeSecond
-        ? null
-        : currentAsset?.assetImage2Url || null,
+  const stored: string[] = [];
+  const store = async (file: File, slot: 1 | 2) => {
+    const url = await storeAssetImage(file, slot);
+    stored.push(url);
+    return url;
   };
+
+  try {
+    return {
+      assetImage1Url: firstFile
+        ? await store(firstFile, 1)
+        : removeFirst
+          ? null
+          : currentAsset?.assetImage1Url || null,
+      assetImage2Url: secondFile
+        ? await store(secondFile, 2)
+        : removeSecond
+          ? null
+          : currentAsset?.assetImage2Url || null,
+      stored,
+    };
+  } catch (error) {
+    await Promise.all(stored.map(removeStoredAssetImage));
+    throw error;
+  }
 }
 
 async function validateAssetBusinessRules(input: AssetFormInput, assetId?: number) {
@@ -121,8 +156,9 @@ async function validateAssetBusinessRules(input: AssetFormInput, assetId?: numbe
   }
 
   if (input.assetRegistrationNo) {
-    const duplicateRows = await selectRows<RowDataPacket & { id: number }>(
-      `SELECT id
+    // Deleted assets keep their number: the trail stays unambiguous and the UNIQUE (survey_id, asset_registration_no) key still covers them.
+    const duplicateRows = await selectRows<RowDataPacket & { id: number; deleted: number }>(
+      `SELECT id, ${(await hasAssetSoftDelete()) ? "deleted_at IS NOT NULL" : "0"} AS deleted
        FROM information_assets
        WHERE asset_registration_no = ?
          AND (? IS NULL OR id <> ?)
@@ -130,7 +166,7 @@ async function validateAssetBusinessRules(input: AssetFormInput, assetId?: numbe
       [input.assetRegistrationNo, assetId ?? null, assetId ?? null]
     );
     if (duplicateRows.length > 0) {
-      throw new Error("เลขทะเบียนทรัพย์สินนี้มีในระบบแล้ว");
+      throw new Error(Number(duplicateRows[0].deleted) ? DELETED_REGISTRATION_MESSAGE : "เลขทะเบียนทรัพย์สินนี้มีในระบบแล้ว");
     }
   }
 
@@ -154,6 +190,7 @@ async function validateAssetBusinessRules(input: AssetFormInput, assetId?: numbe
        WHERE s.facility_id = ?
          AND TRIM(a.serial_number) = ?
          AND (? IS NULL OR a.id <> ?)
+         AND ${await assetNotDeletedSql("a")}
        LIMIT 1`,
       [input.facilityId, serial, assetId ?? null, assetId ?? null]
     );
@@ -163,6 +200,8 @@ async function validateAssetBusinessRules(input: AssetFormInput, assetId?: numbe
     }
   }
 }
+
+const DELETED_REGISTRATION_MESSAGE = "เลขทะเบียนทรัพย์สินนี้เคยใช้กับทรัพย์สินที่ถูกลบไปแล้ว จึงใช้ซ้ำไม่ได้ กรุณาใช้เลขทะเบียนอื่น หรือติดต่อผู้ดูแลระบบ";
 
 function assetErrorMessage(err: unknown) {
   if (isMissingSchemaError(err)) return "ฐานข้อมูลยังไม่รองรับข้อมูลบางช่อง (เช่น แหล่งเงิน วิธีได้มา ผู้ขาย ประกัน หน่วยนับ) กรุณาให้ผู้ดูแลระบบรัน database/add_registry_completeness.sql หรือเว้นช่องเหล่านี้ว่างไว้ก่อน";
@@ -224,18 +263,19 @@ export async function createAssetAction(_prev: string | null, fd: FormData): Pro
     if (!canManageAssetRecord(user, requestedFacilityId)) return "คุณไม่มีสิทธิ์ดำเนินการกับหน่วยงานนี้";
     const input = await buildInput(fd, user.fullName, undefined, await canAddWorkGroups(user));
     await validateAssetBusinessRules(input);
-    const imageUrls = await buildAssetImageUrls(fd);
-    const result = await createAsset({ ...input, ...imageUrls });
+    const { stored, ...imageUrls } = await buildAssetImageUrls(fd);
+    let result;
+    try {
+      // Asset + first status-history row commit together; the audit entry after commit never fails the save.
+      result = await createAsset({ ...input, ...imageUrls }, {
+        history: { note: "สร้างทะเบียนทรัพย์สิน", toStatus: input.currentStatus ?? "Active", changedByUserId: user.id, changedBy: user.fullName },
+      });
+    } catch (error) {
+      await Promise.all(stored.map(removeStoredAssetImage));
+      throw error;
+    }
     const newId = result.insertId;
-    await recordAssetStatusHistory({
-      assetId: newId,
-      fromStatus: null,
-      toStatus: input.currentStatus ?? "Active",
-      note: "สร้างทะเบียนทรัพย์สิน",
-      changedByUserId: user.id,
-      changedBy: user.fullName,
-    });
-    await writeAuditLog({ userId: user.id, userName: user.fullName, action: "create", entity: "information_assets", entityId: newId, summary: input.assetRegistrationNo ? `สร้างทรัพย์สิน ${input.assetName} (${input.assetRegistrationNo})` : `สร้างทรัพย์สิน ${input.assetName}` });
+    await writeAuditLogSafe({ userId: user.id, userName: user.fullName, action: "create", entity: "information_assets", entityId: newId, summary: input.assetRegistrationNo ? `สร้างทรัพย์สิน ${input.assetName} (${input.assetRegistrationNo})` : `สร้างทรัพย์สิน ${input.assetName}` });
     revalidatePath("/assets");
     revalidatePath("/");
   } catch (err) {
@@ -258,21 +298,34 @@ export async function updateAssetAction(_prev: string | null, fd: FormData): Pro
     if (!canManageAssetRecord(user, currentAsset.facilityId)) return "คุณไม่มีสิทธิ์ดำเนินการกับทรัพย์สินนี้";
     const requestedFacilityId = Number(fd.get("facilityId"));
     if (!requestedFacilityId || isNaN(requestedFacilityId)) return "กรุณาเลือกหน่วยงาน";
-    if (!canManageAssetRecord(user, requestedFacilityId)) return "คุณไม่มีสิทธิ์ดำเนินการกับหน่วยงานนี้";
+    // Moving between facilities must go through /transfer (open-work checks, transfer record, history).
+    if (requestedFacilityId !== Number(currentAsset.facilityId)) return FACILITY_CHANGE_MESSAGE;
     const input = await buildInput(fd, user.fullName, currentAsset, await canAddWorkGroups(user));
     if (input.assetClass !== currentAsset.assetClass && readStr(fd, "confirmClassChange") !== "1") return "กรุณายืนยันการเปลี่ยนกลุ่มทรัพย์สิน";
     await validateAssetBusinessRules(input, id);
-    const imageUrls = await buildAssetImageUrls(fd, currentAsset);
-    await updateAsset(id, { ...input, ...imageUrls });
-    await recordAssetStatusHistory({
-      assetId: id,
-      fromStatus: currentAsset.currentStatus,
-      toStatus: input.currentStatus ?? currentAsset.currentStatus,
-      note: "แก้ไขข้อมูลทรัพย์สิน",
-      changedByUserId: user.id,
-      changedBy: user.fullName,
-    });
-    await writeAuditLog({ userId: user.id, userName: user.fullName, action: "update", entity: "information_assets", entityId: id, summary: `แก้ไขทรัพย์สิน ${input.assetName}${currentAsset.assetClass !== input.assetClass ? ` (เปลี่ยนกลุ่ม ${currentAsset.assetClass} → ${input.assetClass})` : ""}` });
+    const { stored, ...imageUrls } = await buildAssetImageUrls(fd, currentAsset);
+    try {
+      await updateAsset(id, { ...input, ...imageUrls }, {
+        history: {
+          note: "แก้ไขข้อมูลทรัพย์สิน",
+          fromStatus: currentAsset.currentStatus,
+          toStatus: input.currentStatus ?? currentAsset.currentStatus,
+          changedByUserId: user.id,
+          changedBy: user.fullName,
+        },
+      });
+    } catch (error) {
+      await Promise.all(stored.map(removeStoredAssetImage));
+      throw error;
+    }
+    // Photos replaced or removed by this save are no longer referenced by the asset.
+    const kept = new Set([imageUrls.assetImage1Url, imageUrls.assetImage2Url]);
+    await Promise.all(
+      [currentAsset.assetImage1Url, currentAsset.assetImage2Url]
+        .filter((url) => url && !kept.has(url))
+        .map(removeStoredAssetImage)
+    );
+    await writeAuditLogSafe({ userId: user.id, userName: user.fullName, action: "update", entity: "information_assets", entityId: id, summary: `แก้ไขทรัพย์สิน ${input.assetName}${currentAsset.assetClass !== input.assetClass ? ` (เปลี่ยนกลุ่ม ${currentAsset.assetClass} → ${input.assetClass})` : ""}` });
     revalidatePath("/assets");
     revalidatePath(`/assets/${id}`);
     revalidatePath("/");
@@ -292,8 +345,9 @@ export async function deleteAssetAction(id: number): Promise<string | null> {
     const asset = await getAssetById(id);
     if (!asset) return "ไม่พบทรัพย์สิน";
     if (!canManageAssetRecord(user, asset.facilityId)) return "คุณไม่มีสิทธิ์ลบทรัพย์สินของหน่วยงานนี้";
-    await deleteAsset(id);
-    await writeAuditLog({ userId: user.id, userName: user.fullName, action: "delete", entity: "information_assets", entityId: id, summary: `ลบทรัพย์สิน #${id}` });
+    // Soft delete: refused while repairs, loans or disposals are still open (see lib/assets.ts deleteAsset).
+    await deleteAsset(id, { userId: user.id, userName: user.fullName });
+    await writeAuditLogSafe({ userId: user.id, userName: user.fullName, action: "delete", entity: "information_assets", entityId: id, summary: `ลบทรัพย์สิน #${id}${asset.assetNumber ? ` ${asset.assetNumber}` : ""} ${asset.assetName}`.trim() });
     revalidatePath("/assets");
     revalidatePath(`/facilities/${asset.facilityId}`);
     revalidatePath("/");

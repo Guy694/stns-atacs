@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { fiscalYearOf } from "@/lib/asset-valuation";
 import { getCurrentUser } from "@/lib/auth";
 import { getFacilityById, listAssets } from "@/lib/assets";
-import { resolveFacilityFilter } from "@/lib/facility-scope";
+import { resolveRequestedAssetFacility } from "@/lib/facility-scope";
 import { buildReplacementPlan, DEFAULT_REPLACEMENT_RULES, repairWindowStart } from "@/lib/replacement-plan";
 import { getPendingDisposalAssetIds, getRepairStats } from "@/lib/replacement-plan-db";
 import { buildReplacementWorkbook } from "@/lib/replacement-report";
@@ -20,8 +20,9 @@ export async function GET(req: NextRequest) {
   }
   if (!(await hasPermission(user.role, "reports.view"))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const requested = req.nextUrl.searchParams.get("facilityId");
-  const facilityId = resolveFacilityFilter(user, requested ? Number(requested) : undefined);
-  if (facilityId === null) return NextResponse.json({ error: "No facility scope" }, { status: 403 });
+  const facilityScope = resolveRequestedAssetFacility(user, requested ? Number(requested) : undefined);
+  if (!facilityScope.ok) return NextResponse.json({ error: facilityScope.error }, { status: facilityScope.status });
+  const facilityId = facilityScope.facilityId;
 
   const today = todayBangkok();
   const since = repairWindowStart(today, DEFAULT_REPLACEMENT_RULES.repairWindowYears);

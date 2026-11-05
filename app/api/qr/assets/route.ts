@@ -4,8 +4,10 @@ import { createAssetQrSvg } from "@/lib/asset-qr";
 import { getCurrentUser } from "@/lib/auth";
 import { listAssetsByIds } from "@/lib/assets";
 
-const MAX_QR_ASSETS = 2000;
 import { canAccessAssetFacility } from "@/lib/permissions";
+import { getPublicRequestOrigin } from "@/lib/request-url";
+
+const MAX_QR_ASSETS = 2000;
 
 type DownloadQrRequest = {
   ids?: unknown;
@@ -153,10 +155,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  const publicOrigin = getPublicRequestOrigin(req);
   const entries = await Promise.all(
     assets.map(async (asset) => {
       const label = sanitizeFilename(`${asset.assetRegistrationNo || `asset-${asset.id}`} ${asset.assetName}`, `asset-${asset.id}`);
-      const svg = await createAssetQrSvg(asset, req.url);
+      const svg = await createAssetQrSvg(asset, publicOrigin);
       return {
         name: `${label}.svg`,
         data: Buffer.from(svg, "utf8"),

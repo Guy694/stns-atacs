@@ -6,7 +6,7 @@
  * ไฟล์นี้ไม่แตะฐานข้อมูล จึงทดสอบได้โดยตรง
  */
 
-export const AGENT_LATEST_VERSION = "2.0.0";
+export const AGENT_LATEST_VERSION = "2.1.0";
 /** ขนาดสูงสุดของ body ที่ /api/agent/report ยอมรับ */
 export const AGENT_REPORT_MAX_BYTES = 256 * 1024;
 

@@ -63,7 +63,7 @@ export function IdleLogoutGuard() {
         // Ignore network errors and still redirect to login.
       }
 
-      const loginUrl = withBasePath(`/login?notice=${encodeURIComponent(IDLE_NOTICE)}`);
+      const loginUrl = withBasePath(`/login/?notice=${encodeURIComponent(IDLE_NOTICE)}`);
       window.location.replace(loginUrl);
     };
 
@@ -77,10 +77,6 @@ export function IdleLogoutGuard() {
     };
 
     const onActivity = (event: Event) => {
-      if (event.type === "visibilitychange" && document.visibilityState !== "visible") {
-        return;
-      }
-
       // Throttle high-frequency events so we do not reset timers excessively.
       const now = Date.now();
       if ((event.type === "pointermove" || event.type === "scroll") && now - lastResetRef.current < 1000) {
@@ -92,42 +88,46 @@ export function IdleLogoutGuard() {
       resetIdleTimer();
     };
 
+    // U5: coming back to the tab is not activity. Timers may have been throttled or frozen while the tab was
+    // hidden / the device slept, so check the real idle time and sign out if the limit already passed.
+    const onReturn = () => {
+      if (document.visibilityState !== "visible" || isLoggingOutRef.current) {
+        return;
+      }
+      const idleFor = Date.now() - Math.max(readSharedActivity(), lastResetRef.current);
+      clearExistingTimer();
+      if (idleFor >= IDLE_TIMEOUT_MS) {
+        void logoutForIdle();
+        return;
+      }
+      timeoutRef.current = setTimeout(logoutForIdle, IDLE_TIMEOUT_MS - idleFor);
+    };
+
     const onStorage = (event: StorageEvent) => {
       if (event.key === ACTIVITY_KEY) resetIdleTimer();
     };
     window.addEventListener("storage", onStorage);
+    window.addEventListener("focus", onReturn);
+    document.addEventListener("visibilitychange", onReturn);
 
     const passiveOptions: AddEventListenerOptions = { passive: true };
-    const activityEvents = [
-      "pointerdown",
-      "pointermove",
-      "keydown",
-      "scroll",
-      "touchstart",
-      "focus",
-      "visibilitychange",
-    ] as const;
+    const activityEvents = ["pointerdown", "pointermove", "keydown", "scroll", "touchstart"] as const;
 
     activityEvents.forEach((eventName) => {
-      if (eventName === "visibilitychange") {
-        document.addEventListener(eventName, onActivity);
-        return;
-      }
-
       window.addEventListener(eventName, onActivity, passiveOptions);
     });
 
+    // Loading a page is itself activity.
+    lastResetRef.current = Date.now();
+    writeSharedActivity(lastResetRef.current);
     resetIdleTimer();
 
     return () => {
       clearExistingTimer();
       window.removeEventListener("storage", onStorage);
+      window.removeEventListener("focus", onReturn);
+      document.removeEventListener("visibilitychange", onReturn);
       activityEvents.forEach((eventName) => {
-        if (eventName === "visibilitychange") {
-          document.removeEventListener(eventName, onActivity);
-          return;
-        }
-
         window.removeEventListener(eventName, onActivity);
       });
     };

@@ -5,6 +5,7 @@ import type { RowDataPacket } from "mysql2/promise";
 
 import { facilitySurveys as fallbackFacilitySurveys } from "@/app/atacs-data";
 import { selectRows } from "@/lib/mysql";
+import { assetNotDeletedSql } from "@/lib/asset-soft-delete";
 
 type PublicMetricsRow = RowDataPacket & {
   total_facilities: number | null;
@@ -104,6 +105,7 @@ function buildFallbackPublicData(): PublicDashboardData {
 
 export async function getPublicDashboardData(): Promise<PublicDashboardData> {
   try {
+    const notDeleted = await assetNotDeletedSql("a");
     const metricsRows = await selectRows<PublicMetricsRow>(
       `
         SELECT
@@ -116,7 +118,7 @@ export async function getPublicDashboardData(): Promise<PublicDashboardData> {
           SUM(CASE WHEN COALESCE(NULLIF(TRIM(a.asset_class), ''), 'IT') = 'IT' AND a.asset_category = 'Software' THEN 1 ELSE 0 END) AS software_assets
         FROM information_asset_surveys s
         LEFT JOIN health_facilities hf ON hf.id = s.facility_id
-        LEFT JOIN information_assets a ON a.survey_id = s.id
+        LEFT JOIN information_assets a ON a.survey_id = s.id AND ${notDeleted}
       `
     );
 
@@ -139,7 +141,7 @@ export async function getPublicDashboardData(): Promise<PublicDashboardData> {
           )) AS completion_rate
         FROM information_asset_surveys s
         LEFT JOIN health_facilities hf ON hf.id = s.facility_id
-        LEFT JOIN information_assets a ON a.survey_id = s.id
+        LEFT JOIN information_assets a ON a.survey_id = s.id AND ${notDeleted}
         GROUP BY COALESCE(hf.district_name, 'ไม่ระบุอำเภอ')
         ORDER BY assets DESC, district_name ASC
       `
@@ -152,6 +154,7 @@ export async function getPublicDashboardData(): Promise<PublicDashboardData> {
           COUNT(*) AS count
         FROM information_assets a
         INNER JOIN information_asset_surveys s ON s.id = a.survey_id
+        WHERE ${notDeleted}
         GROUP BY CASE WHEN COALESCE(NULLIF(TRIM(a.asset_class), ''), 'IT') = 'IT' THEN COALESCE(NULLIF(a.device_type, ''), 'ไม่ระบุ') ELSE a.asset_class END
         ORDER BY count DESC, device_type ASC
         LIMIT 6

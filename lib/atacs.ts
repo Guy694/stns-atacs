@@ -11,6 +11,7 @@ import {
 import { normalizeAssetClass } from "@/lib/asset-classes";
 import { isItAsset } from "@/lib/asset-policy";
 import { selectRows } from "@/lib/mysql";
+import { assetNotDeletedSql } from "@/lib/asset-soft-delete";
 import { dbDate, dbDateTime } from "@/lib/local-date";
 
 type SurveyRow = RowDataPacket & {
@@ -223,6 +224,7 @@ export async function getDashboardData(): Promise<DashboardData> {
     }
 
     const surveyIds = surveys.map((survey) => survey.survey_id);
+    const notDeleted = await assetNotDeletedSql("information_assets");
     const assets = await selectRows<AssetRow>(
       `
         SELECT
@@ -256,7 +258,7 @@ export async function getDashboardData(): Promise<DashboardData> {
           purchase_date,
           installed_at
         FROM information_assets
-        WHERE survey_id IN (?)
+        WHERE survey_id IN (?) AND ${notDeleted}
         ORDER BY survey_id ASC, row_no ASC, id ASC
       `,
       [surveyIds]

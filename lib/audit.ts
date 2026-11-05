@@ -69,6 +69,23 @@ const ENTITY_LABELS: Record<string, string> = {
   role_permissions: "สิทธิ์การใช้งาน",
 };
 
+/**
+ * For audit entries written after the change itself has committed: a failure is logged, never thrown,
+ * so the user is not told to resubmit something that was already saved.
+ */
+export async function writeAuditLogSafe(input: Parameters<typeof writeAuditLog>[0]) {
+  try {
+    await writeAuditLog(input);
+  } catch (error) {
+    console.error("[audit] could not write audit log after a committed change", {
+      action: input.action,
+      entity: input.entity,
+      entityId: input.entityId ?? null,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
 export async function writeAuditLog(input: {
   userId?: number | null;
   userName?: string;

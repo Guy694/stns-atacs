@@ -1,4 +1,10 @@
-import "dotenv/config";
+// dotenv is a dev dependency: load .env when it is installed, otherwise (Docker standalone image)
+// use the environment the container already has.
+try {
+  await import("dotenv/config");
+} catch {
+  // no dotenv in the production image — env vars come from docker
+}
 import fs from "node:fs";
 import mysql from "mysql2/promise";
 
@@ -80,6 +86,11 @@ try {
   for (const table of ["health_facilities", "information_asset_surveys", "information_assets", "asset_inspections", "asset_inspection_items", "asset_transfers", "asset_disposal_requests", "asset_repairs", "asset_loans", "asset_status_history", "audit_logs", "users"]) {
     const n = await count(table);
     out(`  ${table.padEnd(28)} ${n === null ? "(ไม่มีตาราง)" : n.toLocaleString("en-US")}`);
+  }
+  if (hasColumn("information_assets", "deleted_at")) {
+    // Soft-deleted rows stay in information_assets (history keeps pointing at them) but are hidden everywhere in the app.
+    const deleted = await count("information_assets", "WHERE deleted_at IS NOT NULL");
+    out(`  ${"  └ ถูกลบ (soft delete)".padEnd(28)} ${deleted.toLocaleString("en-US")}`);
   }
 
   out("");

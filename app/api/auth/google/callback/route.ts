@@ -11,7 +11,8 @@ import {
 } from "@/lib/auth";
 import { getGoogleAuthConfig } from "@/lib/google-auth";
 import { notifyTelegramSafe } from "@/lib/telegram";
-import { recordSecurityEvent } from "@/lib/security";
+import { readRequestIp, recordSecurityEvent } from "@/lib/security";
+import { safeNextPath } from "@/lib/input-guards";
 import { withBasePath } from "@/lib/base-path";
 import { getPublicRequestOrigin, getPublicRequestUrl } from "@/lib/request-url";
 
@@ -36,13 +37,6 @@ function redirectWithDeletedState(url: URL) {
   return response;
 }
 
-function safeNextPath(value: string | undefined) {
-  if (!value) return "/dashboard";
-  if (!value.startsWith("/") || value.startsWith("//")) return "/dashboard";
-  if (value.includes("\\")) return "/dashboard";
-  return value;
-}
-
 function loginUrl(req: NextRequest, message: string, nextPath = "/dashboard") {
   const url = getPublicRequestUrl(req, withBasePath("/login"));
   url.searchParams.set("error", message);
@@ -52,7 +46,8 @@ function loginUrl(req: NextRequest, message: string, nextPath = "/dashboard") {
 
 function requestDetails(req: NextRequest) {
   return {
-    IP: req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? req.headers.get("x-real-ip") ?? "unknown",
+    // SEC-08/B11: the first X-Forwarded-For entry is client-controlled; count trusted proxies instead.
+    IP: readRequestIp(req.headers),
     "User Agent": req.headers.get("user-agent") ?? "unknown",
   };
 }

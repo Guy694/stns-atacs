@@ -31,37 +31,48 @@ export type NavContext = {
   menuVisibility: Record<string, boolean>;
 };
 
-export function buildNavItems({ user, grantedPermissions, menuVisibility }: NavContext): NavItem[] {
-  const baseItems = APP_MENU_ITEMS.filter((item) => {
-    if (!menuVisibility[item.key]) return false;
-    if (user.role === "officer" && item.key === "assets") return false;
-    if (item.adminOnly && user.role !== "admin") return false;
-    if (item.officerOnly && user.role !== "officer") return false;
-    if (item.hideForViewer && user.role === "viewer") return false;
-    if (item.permissionKey && !grantedPermissions.includes(item.permissionKey)) return false;
-    return true;
-  });
-  if (user.role !== "officer") return baseItems;
+function officerAssetsItem(user: NavUser): NavItem {
+  const managed = user.managedAssetFacilityIds ?? [];
+  const managesMany = managed.length > 1;
+  // Officers with exactly one managed facility but no home facility still land on that facility.
+  const singleFacilityId = user.facilityId ?? (managed.length === 1 ? managed[0] : null);
+  return {
+    key: "officer-assets",
+    href: managesMany ? "/facilities" : singleFacilityId ? `/facilities/${singleFacilityId}` : "/profile",
+    label: managesMany ? "หน่วยงานในความดูแล" : "รายการทรัพย์สิน",
+    icon: "package",
+    group: "overview",
+  };
+}
 
-  const managesMany = (user.managedAssetFacilityIds?.length ?? 0) > 1;
-  return baseItems.flatMap((item) => {
-    if (item.key !== "dashboard") return [item];
-    return [
-      item,
-      {
-        key: "officer-assets",
-        href: managesMany ? "/facilities" : user.facilityId ? `/facilities/${user.facilityId}` : "/profile",
-        label: managesMany ? "หน่วยงานในความดูแล" : "รายการทรัพย์สิน",
-        icon: "package",
-        group: "overview",
-      },
-    ];
+export function buildNavItems({ user, grantedPermissions, menuVisibility }: NavContext): NavItem[] {
+  return APP_MENU_ITEMS.flatMap((item): NavItem[] => {
+    if (!menuVisibility[item.key]) return [];
+    // Officers see their facility register in place of the province-wide list; it follows the same "assets" toggle.
+    if (user.role === "officer" && item.key === "assets") return [officerAssetsItem(user)];
+    if (item.adminOnly && user.role !== "admin") return [];
+    if (item.officerOnly && user.role !== "officer") return [];
+    if (item.hideForViewer && user.role === "viewer") return [];
+    if (item.permissionKey && !grantedPermissions.includes(item.permissionKey)) return [];
+    return [item];
   });
 }
 
+function trimTrailingSlash(path: string) {
+  return path.length > 1 ? path.replace(/\/+$/, "") || "/" : path;
+}
+
+/** True when `pathname` is `base` or below it, ignoring trailing slashes (next.config uses trailingSlash: true). */
+export function pathMatches(pathname: string, base: string, exact = false) {
+  const current = trimTrailingSlash(pathname);
+  const target = trimTrailingSlash(base);
+  if (current === target) return true;
+  if (exact) return false;
+  return current.startsWith(target === "/" ? "/" : `${target}/`);
+}
+
 function matchesPath(item: NavItem, pathname: string) {
-  if (item.exact) return pathname === item.href;
-  return pathname === item.href || pathname.startsWith(item.href.endsWith("/") ? item.href : `${item.href}/`);
+  return pathMatches(pathname, item.href, item.exact);
 }
 
 /** Only the most specific matching item is active (/admin/settings/work-groups must not also light up /admin/settings). */

@@ -10,10 +10,38 @@ export {
   type PermissionKey,
 } from "@/lib/permission-definitions";
 import {
+  APP_ROLES,
   PERMISSION_DEFINITIONS,
   type AppRole,
   type PermissionKey,
 } from "@/lib/permission-definitions";
+
+/** B13: the role/permission pair must be one the app defines, never an arbitrary form value. */
+export function isValidRolePermission(role: unknown, permission: unknown): boolean {
+  if (typeof role !== "string" || typeof permission !== "string") return false;
+  return (APP_ROLES as string[]).includes(role) && PERMISSION_DEFINITIONS.some((definition) => definition.key === permission);
+}
+
+/**
+ * B12: why a role change must be refused, or null when it is allowed.
+ * An admin may not change their own role, and the last active admin may not be demoted
+ * (otherwise nobody could manage users or permissions any more).
+ */
+export function roleChangeBlockReason(input: {
+  actorId: number | string;
+  targetId: number | string;
+  currentRole: string | null | undefined;
+  newRole: string;
+  /** Active admins other than the target. */
+  otherActiveAdmins: number;
+}): string | null {
+  if (input.currentRole === input.newRole) return null;
+  if (Number(input.actorId) === Number(input.targetId)) return "ไม่สามารถเปลี่ยนบทบาทของบัญชีตนเองได้";
+  if (input.currentRole === "admin" && input.newRole !== "admin" && input.otherActiveAdmins < 1) {
+    return "ต้องมีผู้ดูแลระบบที่ใช้งานอยู่อย่างน้อย 1 คน ไม่สามารถลดบทบาทผู้ดูแลระบบคนสุดท้ายได้";
+  }
+  return null;
+}
 
 type Matrix = Record<AppRole, Record<PermissionKey, boolean>>;
 
@@ -125,6 +153,7 @@ export async function upsertRolePermission(input: {
   isAllowed: boolean;
   updatedBy?: string;
 }) {
+  if (!isValidRolePermission(input.role, input.permission)) throw new Error("Role หรือสิทธิ์ไม่ถูกต้อง");
   await executeStatement(
     `INSERT INTO role_permissions (role, permission_key, is_allowed, updated_by)
      VALUES (?, ?, ?, ?)

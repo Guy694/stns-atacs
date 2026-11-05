@@ -13,6 +13,7 @@ import {
   type DisposalRequestType,
 } from "@/lib/disposal-options";
 import { executeStatement, selectRows, withTransaction } from "@/lib/mysql";
+import { assetNotDeletedSql } from "@/lib/asset-soft-delete";
 import { isMissingSchemaError } from "@/lib/schema-errors";
 import type { LifecycleList } from "@/lib/asset-transfers";
 import { formatAssetNumber } from "@/lib/asset-number";
@@ -132,12 +133,13 @@ export async function createDisposalRequest(input: CreateDisposalInput) {
     method = null; // Loss approval records the write-off decision itself.
   }
   await ensureAssetStatusHistoryTable();
+  const notDeleted = await assetNotDeletedSql("a");
 
   return withTransaction(async () => {
     const [asset] = await selectRows<RowDataPacket & { id: number; facility_id: number; current_status: string | null; purchase_price: string | number | null }>(
       `SELECT a.id, s.facility_id, a.current_status, a.purchase_price
        FROM information_assets a JOIN information_asset_surveys s ON s.id = a.survey_id
-       WHERE a.id = ? FOR UPDATE`,
+       WHERE a.id = ? AND ${notDeleted} FOR UPDATE`,
       [input.assetId]
     );
     if (!asset) throw new Error("ไม่พบทรัพย์สิน");

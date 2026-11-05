@@ -1,55 +1,83 @@
+import crypto from "node:crypto";
+
 import { NextRequest, NextResponse } from "next/server";
 
+import {
+  ENROLL_FAILURE_LIMIT,
+  ENROLL_SUCCESS_LIMIT,
+  ENROLL_WINDOW_MS,
+  enrollFailureAllowed,
+  enrollSuccessAllowed,
+  recordEnrollFailure,
+  recordEnrollSuccess,
+} from "@/app/api/agent/_lib/enroll-limits";
+import { INVALID, isPlainObject, optionalInteger, optionalString, readJsonBody } from "@/app/api/agent/_lib/request-body";
 import { enrollAgentDevice, enrollAgentDeviceWithInstallKey } from "@/lib/agent";
 import { isAgentInstallKeyConfigured, verifyAgentInstallKey } from "@/lib/agent-install-key";
+import { formatThaiDateTime } from "@/lib/date-format";
 import { notifyTelegramSafe } from "@/lib/telegram";
-import { consumeRateLimit } from "@/lib/rate-limit";
 import { readRequestIp, recordSecurityEvent } from "@/lib/security";
 
-type EnrollBody = {
-  enrollmentToken?: string;
-  installKey?: string;
-  facilityId?: number | string;
-  workGroupId?: number | string | null;
-  workGroupName?: string | null;
-  fingerprint?: string;
-  hostname?: string | null;
-  agentVersion?: string | null;
-};
+/** body ของการลงทะเบียนมีแค่ token/คีย์ + ชื่อเครื่อง ไม่กี่ร้อยไบต์ */
+const ENROLL_BODY_MAX_BYTES = 16 * 1024;
 
-/** SEC-03: จำกัดจำนวนครั้งที่ลงทะเบียน Agent ได้ต่อ IP กัน enroll เครื่องปลอมจำนวนมาก */
-const ENROLL_LIMIT_PER_IP = 10;
-const ENROLL_WINDOW_MS = 10 * 60 * 1000;
+function tooManyAttempts(retryAfterSeconds: number) {
+  return NextResponse.json(
+    { error: "Too many enrollment attempts" },
+    { status: 429, headers: { "Retry-After": String(retryAfterSeconds) } }
+  );
+}
 
 export async function POST(req: NextRequest) {
   const clientIp = readRequestIp(req.headers) ?? "unknown";
-  const rate = consumeRateLimit(`agent-enroll:${clientIp}`, ENROLL_LIMIT_PER_IP, ENROLL_WINDOW_MS);
-  if (!rate.allowed) {
+  // G9/SEC-03: นับเฉพาะครั้งที่ token/คีย์ผิดต่อ IP — ติดตั้งพร้อมกันหลายร้อยเครื่องหลัง NAT เดียวได้
+  const failureGate = enrollFailureAllowed(clientIp);
+  if (!failureGate.allowed) {
     await recordSecurityEvent({
       eventType: "agent_enroll_rate_limited",
       ipAddress: clientIp,
       identity: null,
       path: req.nextUrl.pathname,
-      detail: `เกิน ${ENROLL_LIMIT_PER_IP} ครั้งใน ${ENROLL_WINDOW_MS / 60000} นาที`,
+      detail: `ลงทะเบียนผิดเกิน ${ENROLL_FAILURE_LIMIT} ครั้งใน ${ENROLL_WINDOW_MS / 60000} นาที`,
     });
-    return NextResponse.json(
-      { error: "Too many enrollment attempts" },
-      { status: 429, headers: { "Retry-After": String(rate.retryAfterSeconds) } }
-    );
+    return tooManyAttempts(failureGate.retryAfterSeconds);
   }
 
-  let body: EnrollBody;
-  try {
-    body = (await req.json()) as EnrollBody;
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  const parsed = await readJsonBody(req, ENROLL_BODY_MAX_BYTES);
+  if (!parsed.ok) {
+    return NextResponse.json({ error: parsed.error }, { status: parsed.status });
   }
+  if (!isPlainObject(parsed.value)) {
+    return NextResponse.json({ error: "JSON body must be an object" }, { status: 400 });
+  }
+  const body = parsed.value;
 
-  const enrollmentToken = body.enrollmentToken?.trim() ?? "";
-  const installKey = body.installKey?.trim() ?? "";
-  const facilityId = Number(body.facilityId ?? 0);
-  const workGroupId = Number(body.workGroupId ?? 0);
-  const fingerprint = body.fingerprint?.trim() ?? "";
+  // G11: ชนิดผิด (เช่น fingerprint เป็นตัวเลข/ออบเจกต์) ต้องได้ 400 ไม่ใช่ 500 จาก .trim()
+  const stringFields = ["enrollmentToken", "installKey", "fingerprint", "hostname", "agentVersion", "workGroupName"] as const;
+  const integerFields = ["facilityId", "workGroupId"] as const;
+  const invalidField =
+    stringFields.find((key) => optionalString(body[key]) === INVALID) ??
+    integerFields.find((key) => optionalInteger(body[key]) === INVALID);
+  if (invalidField) {
+    return NextResponse.json({ error: `${invalidField} has an invalid type` }, { status: 400 });
+  }
+  const text = (key: (typeof stringFields)[number]) => {
+    const value = body[key];
+    return typeof value === "string" ? value.trim() : "";
+  };
+  const integer = (key: (typeof integerFields)[number]) => {
+    const value = optionalInteger(body[key]);
+    return typeof value === "number" ? value : 0;
+  };
+
+  const enrollmentToken = text("enrollmentToken");
+  const installKey = text("installKey");
+  const facilityId = integer("facilityId");
+  const workGroupId = integer("workGroupId");
+  const fingerprint = text("fingerprint");
+  const hostname = text("hostname") || null;
+  const agentVersion = text("agentVersion") || null;
+  const workGroupName = text("workGroupName") || null;
 
   if (!fingerprint) {
     return NextResponse.json({ error: "fingerprint is required" }, { status: 400 });
@@ -60,7 +88,7 @@ export async function POST(req: NextRequest) {
     if (!installKey) {
       return NextResponse.json({ error: "enrollmentToken or installKey is required" }, { status: 400 });
     }
-    if (!facilityId || !Number.isInteger(facilityId)) {
+    if (!facilityId || facilityId <= 0) {
       return NextResponse.json({ error: "facilityId is required for installKey enrollment" }, { status: 400 });
     }
     if (!isAgentInstallKeyConfigured()) {
@@ -68,20 +96,37 @@ export async function POST(req: NextRequest) {
     }
     // SEC-03: คีย์ที่ผูกกับหน่วยงานหนึ่ง จะใช้ลงทะเบียนให้หน่วยงานอื่นไม่ได้
     if (!verifyAgentInstallKey(installKey, facilityId)) {
+      recordEnrollFailure(clientIp);
       await recordSecurityEvent({
         eventType: "agent_invalid_install_key",
         ipAddress: readRequestIp(req.headers),
-        identity: body.hostname ?? fingerprint,
+        identity: hostname ?? fingerprint,
         path: req.nextUrl.pathname,
         detail: `Install key ไม่ถูกต้องสำหรับ facility_id=${facilityId}`,
       });
       await notifyTelegramSafe({
         category: "security",
         title: "พยายามติดตั้ง Agent ด้วย install key ที่ไม่ถูกต้อง",
-        details: { เครื่อง: body.hostname, facilityId, fingerprint, IP: readRequestIp(req.headers) },
+        details: { เครื่อง: hostname, facilityId, fingerprint, IP: readRequestIp(req.headers) },
       });
       return NextResponse.json({ error: "Install key is invalid" }, { status: 401 });
     }
+  }
+
+  // เพดานการลงทะเบียนที่สำเร็จต่อหน่วยงาน (install key) หรือต่อ enrollment token — สูงพอสำหรับติดตั้งทั้งหน่วยงาน
+  const successScope = usesStaticInstall
+    ? `facility:${facilityId}`
+    : `token:${crypto.createHash("sha256").update(enrollmentToken).digest("hex").slice(0, 32)}`;
+  const successGate = enrollSuccessAllowed(successScope);
+  if (!successGate.allowed) {
+    await recordSecurityEvent({
+      eventType: "agent_enroll_rate_limited",
+      ipAddress: clientIp,
+      identity: hostname ?? fingerprint,
+      path: req.nextUrl.pathname,
+      detail: `ลงทะเบียนสำเร็จเกิน ${ENROLL_SUCCESS_LIMIT} เครื่องใน ${ENROLL_WINDOW_MS / 60000} นาที (${usesStaticInstall ? successScope : "enrollment token"})`,
+    });
+    return tooManyAttempts(successGate.retryAfterSeconds);
   }
 
   try {
@@ -89,17 +134,18 @@ export async function POST(req: NextRequest) {
       ? await enrollAgentDevice({
           enrollmentToken,
           fingerprint,
-          hostname: body.hostname,
-          agentVersion: body.agentVersion,
+          hostname,
+          agentVersion,
         })
       : await enrollAgentDeviceWithInstallKey({
           facilityId,
-          workGroupId: Number.isInteger(workGroupId) && workGroupId > 0 ? workGroupId : null,
-          workGroupName: body.workGroupName,
+          workGroupId: workGroupId > 0 ? workGroupId : null,
+          workGroupName,
           fingerprint,
-          hostname: body.hostname,
-          agentVersion: body.agentVersion,
+          hostname,
+          agentVersion,
         });
+    recordEnrollSuccess(successScope);
 
     if (result.previous) {
       // S2: re-enrolment replaces the key of an existing device, so the old agent stops reporting.
@@ -108,18 +154,18 @@ export async function POST(req: NextRequest) {
       await recordSecurityEvent({
         eventType: "agent_reenrolled",
         ipAddress: ip,
-        identity: body.hostname ?? fingerprint,
+        identity: hostname ?? fingerprint,
         path: req.nextUrl.pathname,
-        detail: `Device #${result.deviceId} เดิม ${result.previous.hostname ?? "-"} (ล่าสุด ${result.previous.lastSeenAt ?? "-"})`,
+        detail: `Device #${result.deviceId} เดิม ${result.previous.hostname ?? "-"} (ล่าสุด ${formatThaiDateTime(result.previous.lastSeenAt)})`,
       });
       await notifyTelegramSafe({
         category: "security",
         title: "Agent ลงทะเบียนซ้ำบนเครื่องเดิม — key เดิมถูกยกเลิก",
         throttle: false,
         details: {
-          "เครื่องใหม่": body.hostname ?? "-",
+          "เครื่องใหม่": hostname ?? "-",
           "เครื่องเดิม": result.previous.hostname ?? "-",
-          "เดิมออนไลน์ล่าสุด": result.previous.lastSeenAt ?? "-",
+          "เดิมออนไลน์ล่าสุด": formatThaiDateTime(result.previous.lastSeenAt),
           "สถานะเดิม": result.previous.wasActive ? result.previous.status ?? "-" : "ปิดใช้งาน",
           หน่วยงาน: result.facilityName,
           "Device": `#${result.deviceId}`,
@@ -132,11 +178,11 @@ export async function POST(req: NextRequest) {
         category: "agent",
         title: "ติดตั้ง Agent สำเร็จ",
         details: {
-          เครื่อง: body.hostname ?? `Device #${result.deviceId}`,
+          เครื่อง: hostname ?? `Device #${result.deviceId}`,
           หน่วยงาน: result.facilityName,
           กลุ่มงาน: result.workGroupName ?? "-",
           "Agent ID": result.agentId,
-          เวอร์ชัน: body.agentVersion,
+          เวอร์ชัน: agentVersion,
         },
       });
     }
@@ -154,17 +200,18 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     if (message === "INVALID_ENROLLMENT_TOKEN") {
+      recordEnrollFailure(clientIp);
       await recordSecurityEvent({
         eventType: "agent_invalid_enrollment_token",
         ipAddress: readRequestIp(req.headers),
-        identity: body.hostname ?? fingerprint,
+        identity: hostname ?? fingerprint,
         path: req.nextUrl.pathname,
         detail: "Enrollment token ไม่ถูกต้องหรือหมดอายุ",
       });
       await notifyTelegramSafe({
         category: "security",
         title: "พยายามติดตั้ง Agent ด้วย enrollment token ที่ไม่ถูกต้อง",
-        details: { เครื่อง: body.hostname, fingerprint, IP: readRequestIp(req.headers) },
+        details: { เครื่อง: hostname, fingerprint, IP: readRequestIp(req.headers) },
       });
       return NextResponse.json({ error: "Enrollment token is invalid or expired" }, { status: 401 });
     }

@@ -12,7 +12,10 @@ type RouteContext = { params: Promise<{ file: string }> };
 // Asset photos are only shown to signed-in users who may see the asset's facility.
 export async function GET(_request: Request, { params }: RouteContext) {
   const { file } = await params;
-  const name = safeAssetImageName(decodeURIComponent(file));
+  // B9: Next.js already decodes route params; decoding a second time threw URIError (500) on a
+  // literal "%" and could turn "%2e%2e" into "..". Stored names are [A-Za-z0-9._-] only, so the
+  // decoded param is checked as-is and anything else is a 404.
+  const name = safeAssetImageName(file);
   if (!name) return new Response("Not found", { status: 404 });
 
   const user = await getCurrentUser();

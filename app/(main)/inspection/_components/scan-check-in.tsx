@@ -16,12 +16,11 @@ import {
   type SyncOutcome,
 } from "@/lib/offline-inspection";
 import { confirmAction } from "@/app/_components/ui/confirm";
+import { QR_SCANNER_MESSAGES, cameraAvailable, useQrScanner } from "@/app/_components/ui/use-qr-scanner";
 
 type Item = { itemId: number; assetId: number; number: string; name: string; status: "Pending" | "Found" | "Missing"; currentStatus: string };
 type WorkGroup = { id: number; workGroupName: string };
 
-type Detector = { detect: (source: HTMLVideoElement) => Promise<Array<{ rawValue: string }>> };
-type DetectorConstructor = new (options: { formats: string[] }) => Detector;
 
 function readQueue(inspectionId: number) {
   try {
@@ -47,7 +46,7 @@ function newClientId() {
 
 /**
  * Check-in by QR.
- * - Normal: scan with the page camera (where BarcodeDetector exists) or the phone camera app → the asset page
+ * - Normal: scan with the page camera (BarcodeDetector or jsQR) or the phone camera app → the asset page
  *   shows the “found” buttons for this round.
  * - Continuous / offline: each scan (or tap on a search result) is recorded as “found” at once and kept in this
  *   browser; results are sent automatically when the connection is back, so an area without signal can be
@@ -56,7 +55,6 @@ function newClientId() {
 export function ScanCheckIn({ inspectionId, items, workGroups }: { inspectionId: number; items: Item[]; workGroups: WorkGroup[] }) {
   const router = useRouter();
   const videoRef = useRef<HTMLVideoElement>(null);
-  const lastScan = useRef<{ id: number; at: number }>({ id: 0, at: 0 });
   const syncing = useRef(false);
   const [query, setQuery] = useState("");
   const [scanning, setScanning] = useState(false);
@@ -129,7 +127,7 @@ export function ScanCheckIn({ inspectionId, items, workGroups }: { inspectionId:
   // Decided after mount so the server and first client render match.
   useEffect(() => {
     /* eslint-disable react-hooks/set-state-in-effect */
-    setSupported("BarcodeDetector" in window && Boolean(navigator.mediaDevices?.getUserMedia));
+    setSupported(cameraAvailable());
     setOnline(navigator.onLine);
     const saved = readQueue(inspectionId);
     setQueue(saved);
@@ -177,53 +175,28 @@ export function ScanCheckIn({ inspectionId, items, workGroups }: { inspectionId:
     latest.current = { items, quick, record, router };
   }, [items, quick, record, router]);
 
-  useEffect(() => {
-    if (!scanning) return;
-    let stream: MediaStream | null = null;
-    let timer: number | undefined;
-    let cancelled = false;
-    (async () => {
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-        if (cancelled || !videoRef.current) return;
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-        const Detector = (window as unknown as { BarcodeDetector: DetectorConstructor }).BarcodeDetector;
-        const detector = new Detector({ formats: ["qr_code"] });
-        const tick = async () => {
-          if (cancelled || !videoRef.current) return;
-          const codes = await detector.detect(videoRef.current).catch(() => []);
-          const id = codes.map((code) => assetIdFromScan(code.rawValue)).find((value) => value !== null);
-          const now = Date.now();
-          // The same sticker stays in view for a while: ignore repeats for 3 seconds.
-          if (id && !(lastScan.current.id === id && now - lastScan.current.at < 3000)) {
-            lastScan.current = { id, at: now };
-            const current = latest.current;
-            const item = current.items.find((entry) => entry.assetId === id);
-            if (!item) {
-              setMessage("ครุภัณฑ์นี้ไม่อยู่ในรอบตรวจนับนี้");
-            } else if (current.quick) {
-              current.record(item);
-            } else {
-              setScanning(false);
-              current.router.push(`/assets/${id}#check-in-heading`);
-              return;
-            }
-          }
-          timer = window.setTimeout(tick, 350);
-        };
-        tick();
-      } catch {
-        setMessage(latest.current.quick ? "เปิดกล้องไม่ได้ ค้นหาจากเลขครุภัณฑ์แล้วกด “พบ” แทนได้" : "เปิดกล้องไม่ได้ ใช้แอปกล้องของโทรศัพท์สแกน QR แทนได้");
+  // Camera scanning (BarcodeDetector, or jsQR on iPhone/Safari) via the shared hook.
+  const cameraStatus = useQrScanner({
+    active: scanning,
+    videoRef,
+    onCode: (text) => {
+      const id = assetIdFromScan(text);
+      if (!id) return;
+      const current = latest.current;
+      const item = current.items.find((entry) => entry.assetId === id);
+      if (!item) {
+        setMessage("ครุภัณฑ์นี้ไม่อยู่ในรอบตรวจนับนี้");
+      } else if (current.quick) {
+        current.record(item);
+      } else {
         setScanning(false);
+        current.router.push(`/assets/${id}/#check-in-heading`);
       }
-    })();
-    return () => {
-      cancelled = true;
-      if (timer) window.clearTimeout(timer);
-      stream?.getTracks().forEach((track) => track.stop());
-    };
-  }, [scanning]);
+    },
+  });
+  const cameraMessage = cameraStatus === "denied" || cameraStatus === "unavailable" || cameraStatus === "error"
+    ? (quick ? "เปิดกล้องไม่ได้ ค้นหาจากเลขครุภัณฑ์แล้วกด “พบ” แทนได้" : QR_SCANNER_MESSAGES[cameraStatus])
+    : "";
 
   const queuedIds = new Set(queue.map((entry) => entry.itemId));
   const q = query.trim().toLowerCase();
@@ -312,10 +285,10 @@ export function ScanCheckIn({ inspectionId, items, workGroups }: { inspectionId:
         </label>
       </div>
       {quick && !supported && (
-        <p className="mt-2 text-xs text-[var(--muted)]">เบราว์เซอร์นี้สแกนในหน้าไม่ได้ (เช่น Safari บน iPhone) — ค้นหาจากเลขครุภัณฑ์บนสติ๊กเกอร์แล้วกด “พบ”</p>
+        <p className="mt-2 text-xs text-[var(--muted)]">เบราว์เซอร์นี้เปิดกล้องในหน้าไม่ได้ (ต้องเข้าผ่าน https) — ค้นหาจากเลขครุภัณฑ์บนสติ๊กเกอร์แล้วกด “พบ”</p>
       )}
       {scanning && <video ref={videoRef} muted playsInline className="mt-3 aspect-video w-full max-w-md rounded-xl bg-black object-cover" aria-label="ภาพจากกล้องสำหรับสแกน QR" />}
-      {message && <p role="status" className="mt-2 text-sm text-amber-700">{message}</p>}
+      {(message || cameraMessage) && <p role="status" className="mt-2 text-sm text-amber-700">{message || cameraMessage}</p>}
       {matches.length > 0 && (
         <ul className="mt-3 divide-y divide-black/5 rounded-xl border border-[var(--line)] bg-white">
           {matches.map((item) => (

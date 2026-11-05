@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { INVALID, isPlainObject, optionalString, readJsonBody } from "@/app/api/agent/_lib/request-body";
 import { heartbeatAgent } from "@/lib/agent";
 import { notifyTelegramSafe } from "@/lib/telegram";
 import { readRequestIp, recordSecurityEvent } from "@/lib/security";
+
+const HEARTBEAT_BODY_MAX_BYTES = 4 * 1024;
 
 function readAgentCredentials(req: NextRequest) {
   const agentId = req.headers.get("x-agent-id")?.trim() ?? "";
@@ -23,12 +26,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Missing x-agent-id or x-agent-key" }, { status: 401 });
   }
 
+  // G11: body ของ heartbeat มีแค่ { status } — จำกัดขนาด และไม่ล้มเมื่อชนิดผิด (ไม่มี body ก็ใช้ได้เหมือนเดิม)
   let status: string | null = null;
-  try {
-    const body = (await req.json()) as { status?: string };
-    status = body.status?.trim() ?? null;
-  } catch {
-    status = null;
+  const parsed = await readJsonBody(req, HEARTBEAT_BODY_MAX_BYTES);
+  if (!parsed.ok && parsed.status === 413) {
+    return NextResponse.json({ error: parsed.error }, { status: 413 });
+  }
+  if (parsed.ok && isPlainObject(parsed.value)) {
+    const value = optionalString(parsed.value.status);
+    if (value === INVALID) {
+      return NextResponse.json({ error: "status has an invalid type" }, { status: 400 });
+    }
+    status = value?.trim() || null;
   }
 
   try {

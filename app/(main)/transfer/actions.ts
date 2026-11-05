@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import { getAssetById, getSurveyById } from "@/lib/assets";
 import { transferAsset } from "@/lib/asset-transfers";
-import { writeAuditLog } from "@/lib/audit";
+import { writeAuditLogSafe } from "@/lib/audit";
 import { canManageAsset, canMutateAssets } from "@/lib/permissions";
 import { hasPermission } from "@/lib/role-permissions";
 import { friendlyLifecycleError } from "@/lib/schema-errors";
@@ -54,7 +54,8 @@ export async function transferAssetAction(_prev: string | null, fd: FormData): P
       userName: user.fullName,
     });
 
-    await writeAuditLog({ userId: user.id, userName: user.fullName, action: "transfer", entity: "information_assets", entityId: assetId, summary: `${result.note} (โอนย้าย #${result.transferId})` });
+    // The transfer has committed; an audit failure is logged instead of asking the user to transfer again.
+    await writeAuditLogSafe({ userId: user.id, userName: user.fullName, action: "transfer", entity: "information_assets", entityId: assetId, summary: `${result.note} (โอนย้าย #${result.transferId})` });
     revalidatePath("/assets");
     revalidatePath(`/assets/${assetId}`);
     revalidatePath("/transfer");

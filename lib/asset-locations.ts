@@ -3,6 +3,7 @@ import "server-only";
 import type { RowDataPacket } from "mysql2/promise";
 
 import { selectRows } from "@/lib/mysql";
+import { assetNotDeletedSql } from "@/lib/asset-soft-delete";
 
 /**
  * รายชื่อ "ที่ตั้ง" ที่เคยบันทึกไว้แล้วในทะเบียน แยกตามหน่วยงาน
@@ -15,13 +16,14 @@ type LocationRow = RowDataPacket & { facility_id: number; location: string; usag
 
 export async function listAssetLocations(facilityId?: number): Promise<AssetLocationOption[]> {
   try {
+    const notDeleted = await assetNotDeletedSql("a");
     const rows = await selectRows<LocationRow>(
       `SELECT s.facility_id AS facility_id,
               TRIM(a.location_detail) AS location,
               COUNT(*) AS usage_count
        FROM information_assets a
        JOIN information_asset_surveys s ON s.id = a.survey_id
-       WHERE NULLIF(TRIM(a.location_detail), '') IS NOT NULL
+       WHERE NULLIF(TRIM(a.location_detail), '') IS NOT NULL AND ${notDeleted}
          ${facilityId ? "AND s.facility_id = ?" : ""}
        GROUP BY s.facility_id, TRIM(a.location_detail)
        ORDER BY usage_count DESC, location ASC

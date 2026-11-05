@@ -7,6 +7,7 @@ import { ensureAssetStatusHistoryTable, insertAssetStatusHistory } from "@/lib/a
 import type { LifecycleList } from "@/lib/asset-transfers";
 import { updateAsset } from "@/lib/assets";
 import { executeStatement, selectRows, withTransaction } from "@/lib/mysql";
+import { assetNotDeletedSql } from "@/lib/asset-soft-delete";
 import {
   canTransitionRepair,
   REPAIR_PRIORITIES,
@@ -116,11 +117,12 @@ export async function createRepair(input: CreateRepairInput) {
   const priority = (input.priority || "Normal") as RepairPriority;
   if (!REPAIR_PRIORITIES.includes(priority)) throw new Error("ระดับความเร่งด่วนไม่ถูกต้อง");
   await ensureAssetStatusHistoryTable();
+  const notDeleted = await assetNotDeletedSql("a");
 
   return withTransaction(async () => {
     const [asset] = await selectRows<RowDataPacket & { facility_id: number; current_status: string | null }>(
       `SELECT s.facility_id, a.current_status FROM information_assets a
-       JOIN information_asset_surveys s ON s.id = a.survey_id WHERE a.id = ? FOR UPDATE`,
+       JOIN information_asset_surveys s ON s.id = a.survey_id WHERE a.id = ? AND ${notDeleted} FOR UPDATE`,
       [input.assetId]
     );
     if (!asset) throw new Error("ไม่พบทรัพย์สิน");

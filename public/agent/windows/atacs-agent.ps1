@@ -11,7 +11,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$script:AgentVersion = "2.0.0"
+$script:AgentVersion = "2.1.0"
 
 function Enable-TlsForLegacyPowerShell {
     try {
@@ -167,13 +167,27 @@ function Get-DeviceType {
     }
 }
 
+function Test-JunkUuid {
+    # UUID ที่ผู้ผลิตเมนบอร์ดราคาถูกใส่เหมือนกันทุกเครื่อง: เลขเดียวกันทั้งหมด หรือค่าตัวอย่างของ AMI BIOS
+    param([string]$Value)
+    if ([string]::IsNullOrWhiteSpace($Value)) { return $true }
+    $text = $Value.Trim().ToUpperInvariant()
+    if ($text -eq '03000200-0400-0500-0006-000700080009') { return $true }
+    $digits = $text.Replace('-', '')
+    return (@($digits.ToCharArray() | Select-Object -Unique).Count -le 1)
+}
+
 function Get-Fingerprint {
     # ใช้ UUID ของเครื่องเป็นหลัก ไม่ใช้ MAC (เปลี่ยนได้เมื่อเสียบ USB LAN / VPN / Wi-Fi ทำให้เกิดเครื่องซ้ำ)
     $uuid = Invoke-Safe { (Get-CimInstance Win32_ComputerSystemProduct).UUID }
+    $uuidIsJunk = Test-JunkUuid $uuid
+    # คงสูตรเดิมไว้: UUID ศูนย์ล้วน/F ล้วนถูกตัดทิ้งตั้งแต่รุ่น 2.0 (fingerprint เดิมของเครื่องที่ใช้อยู่ไม่เปลี่ยน)
     if ($uuid -match '^(0{8}-0{4}-0{4}-0{4}-0{12}|F{8}-F{4}-F{4}-F{4}-F{12})$') { $uuid = $null }
     $bios = Get-CleanSerial (Invoke-Safe { (Get-CimInstance Win32_BIOS).SerialNumber })
     $board = Get-CleanSerial (Invoke-Safe { (Get-CimInstance Win32_BaseBoard).SerialNumber })
-    if (-not $uuid -and -not $bios -and -not $board) {
+    # S4: UUID ขยะ (เช่น 03000200-0400-0500-0006-000700080009) + ไม่มี serial = ทุกเครื่องรุ่นนั้นได้ fingerprint เดียวกัน
+    # จึงใช้ MAC + ชื่อเครื่องแทนเฉพาะกรณีนี้ เครื่องที่มี UUID/serial ดีได้ fingerprint เดิมทุกประการ
+    if (($uuidIsJunk -or -not $uuid) -and -not $bios -and -not $board) {
         $adapter = Get-PrimaryAdapter
         return Get-Sha256 -Text "mac|$($adapter.MACAddress)|$env:COMPUTERNAME"
     }
@@ -215,10 +229,14 @@ function Get-PhysicalDisks {
 }
 
 function Get-WindowsActivation {
-    $product = Invoke-Safe {
-        Get-CimInstance SoftwareLicensingProduct -Filter "ApplicationID='55c92734-d682-4d71-983e-d6ec3f16059f' AND PartialProductKey IS NOT NULL" |
-            Sort-Object LicenseStatus | Select-Object -First 1
-    }
+    # S2: เครื่องหนึ่งอาจมีหลาย product (เช่น คีย์ OEM เดิม + คีย์ที่ activate จริง) เลือกตัวที่ Licensed ก่อน
+    # (เดิม Sort-Object LicenseStatus เลือก 0 = Unlicensed ก่อน ทำให้เครื่องแท้ถูกรายงานว่าไม่ได้ activate)
+    $products = @(Invoke-Safe {
+        Get-CimInstance SoftwareLicensingProduct -Filter "ApplicationID='55c92734-d682-4d71-983e-d6ec3f16059f' AND PartialProductKey IS NOT NULL"
+    } @())
+    $product = $products | Where-Object { $_.LicenseStatus -eq 1 } | Select-Object -First 1
+    if (-not $product) { $product = $products | Where-Object { $_.LicenseStatus -ne 0 } | Select-Object -First 1 }
+    if (-not $product) { $product = $products | Select-Object -First 1 }
     if (-not $product) { return $null }
     switch ([int]$product.LicenseStatus) {
         0 { return "Unlicensed" }
@@ -341,24 +359,36 @@ function Invoke-JsonPost {
     )
 
     $json = $Body | ConvertTo-Json -Depth 8
+    # S1: PowerShell 5.1 ส่ง body แบบ string เป็น ISO-8859-1 ทำให้ชื่อเครื่อง/ผู้ใช้ภาษาไทยเพี้ยน ส่งเป็น UTF-8 bytes เอง
+    $bytes = [System.Text.Encoding]::UTF8.GetBytes($json)
     try {
-        return Invoke-RestMethod -Method Post -Uri $Url -ContentType "application/json" -Headers $Headers -Body $json -TimeoutSec 30
+        return Invoke-RestMethod -Method Post -Uri $Url -ContentType "application/json; charset=utf-8" -Headers $Headers -Body $bytes -TimeoutSec 30 -UseBasicParsing
     }
     catch {
-        $errorResponse = $_.Exception.Response
-        if ($errorResponse -and $errorResponse.GetResponseStream) {
+        # G4: แสดงข้อความ error จากเซิร์ฟเวอร์ (เดิม throw ใน try ถูก catch ของตัวเองกลืนไป)
+        $requestError = $_
+        $statusCode = 0
+        $rawBody = $null
+        $errorResponse = $requestError.Exception.Response
+        if ($errorResponse) {
+            try { $statusCode = [int]$errorResponse.StatusCode } catch { $statusCode = 0 }
+        }
+        if ($requestError.ErrorDetails -and $requestError.ErrorDetails.Message) {
+            $rawBody = $requestError.ErrorDetails.Message
+        }
+        elseif ($errorResponse) {
             try {
                 $reader = New-Object System.IO.StreamReader($errorResponse.GetResponseStream())
                 $rawBody = $reader.ReadToEnd()
-                if ($rawBody) {
-                    throw "HTTP request failed: $rawBody"
-                }
             }
             catch {
-                # Fall through to original error below.
+                $rawBody = $null
             }
         }
-        throw
+        $message = if ($rawBody) { "HTTP $statusCode from $Url : $rawBody" } else { "Request to $Url failed: $($requestError.Exception.Message)" }
+        $failure = New-Object System.Exception($message, $requestError.Exception)
+        $failure.Data["StatusCode"] = $statusCode
+        throw $failure
     }
 }
 
@@ -447,7 +477,16 @@ try {
             $forceEnroll = $false
         }
         catch {
-            Write-Host "Existing enrollment was rejected; enrolling again."
+            $status = 0
+            if ($_.Exception.Data -and $_.Exception.Data.Contains("StatusCode")) { $status = [int]$_.Exception.Data["StatusCode"] }
+            if ($status -gt 0 -and $status -ne 401) {
+                # เช่น 409 ทะเบียนที่ผูกไว้ใช้ไม่ได้: กุญแจยังใช้ได้ ไม่ต้องลงทะเบียนใหม่
+                Write-Warning "Existing enrollment is valid but the report failed: $($_.Exception.Message)"
+                $forceEnroll = $false
+            }
+            else {
+                Write-Host "Existing enrollment was rejected ($($_.Exception.Message)); enrolling again."
+            }
         }
     }
 

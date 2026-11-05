@@ -199,6 +199,7 @@ export default async function AgentSettingsPage() {
                           linkedAssetId={device.linkedAssetId}
                           linkedAssetName={device.linkedAssetName}
                           linkedAssetRegistrationNo={device.linkedAssetRegistrationNo}
+                          autoLinkDisabled={device.autoLinkDisabled}
                           assets={assetOptions}
                         />
                         <td className="px-4 py-3">

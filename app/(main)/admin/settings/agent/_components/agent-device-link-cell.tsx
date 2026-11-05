@@ -12,6 +12,8 @@ type Props = {
   linkedAssetId: number | null;
   linkedAssetName: string | null;
   linkedAssetRegistrationNo: string | null;
+  /** ผู้ดูแลยกเลิกการผูกเอง — Agent จะไม่ผูก/สร้างทะเบียนให้อัตโนมัติ */
+  autoLinkDisabled?: boolean;
   assets: AssetSelectOption[];
 };
 
@@ -21,6 +23,7 @@ export function AgentDeviceLinkCell({
   linkedAssetId,
   linkedAssetName,
   linkedAssetRegistrationNo,
+  autoLinkDisabled = false,
   assets,
 }: Props) {
   const [open, setOpen] = useState(false);
@@ -70,13 +73,18 @@ export function AgentDeviceLinkCell({
           </button>
         </div>
       ) : (
-        <button
-          type="button"
-          onClick={() => { setSearch(""); setOpen(true); }}
-          className="rounded-lg border border-[var(--accent)]/30 bg-[var(--accent)]/5 px-2.5 py-1 text-xs font-medium text-[var(--accent)] transition hover:bg-[var(--accent)]/10"
-        >
-          ผูก Asset
-        </button>
+        <div>
+          <button
+            type="button"
+            onClick={() => { setSearch(""); setOpen(true); }}
+            className="rounded-lg border border-[var(--accent)]/30 bg-[var(--accent)]/5 px-2.5 py-1 text-xs font-medium text-[var(--accent)] transition hover:bg-[var(--accent)]/10"
+          >
+            ผูก Asset
+          </button>
+          {autoLinkDisabled && (
+            <p className="mt-1 text-xs text-[var(--muted)]">ยกเลิกการผูกแล้ว — ไม่ผูกอัตโนมัติ</p>
+          )}
+        </div>
       )}
 
       {open && (

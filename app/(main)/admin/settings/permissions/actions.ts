@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 
 import { getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
-import { type AppRole, type PermissionKey, upsertRolePermission } from "@/lib/role-permissions";
+import { type AppRole, type PermissionKey, isValidRolePermission, upsertRolePermission } from "@/lib/role-permissions";
 
 async function requirePermissionManager() {
   const user = await getCurrentUser();
@@ -18,13 +18,16 @@ async function requirePermissionManager() {
 export async function updateRolePermissionAction(_prev: string | null, formData: FormData): Promise<string | null> {
   const actor = await requirePermissionManager();
 
-  const role = String(formData.get("role") ?? "") as AppRole;
-  const permission = String(formData.get("permission") ?? "") as PermissionKey;
+  const roleInput = String(formData.get("role") ?? "");
+  const permissionInput = String(formData.get("permission") ?? "");
   const isAllowed = String(formData.get("isAllowed") ?? "") === "1";
 
-  if (!["admin", "officer", "viewer"].includes(role)) {
-    return "Role ไม่ถูกต้อง";
+  // B13: only roles in APP_ROLES and keys in PERMISSION_DEFINITIONS may be written.
+  if (!isValidRolePermission(roleInput, permissionInput)) {
+    return "Role หรือสิทธิ์ไม่ถูกต้อง";
   }
+  const role = roleInput as AppRole;
+  const permission = permissionInput as PermissionKey;
 
   try {
     await upsertRolePermission({

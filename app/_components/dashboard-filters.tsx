@@ -27,19 +27,33 @@ export function DashboardFilters({ values, fiscalYears, districts, facilities, c
   const [pending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
   const panelId = useId();
+  // U4: keep the user's latest selection locally — the server `values` only catch up after the navigation,
+  // so building the next query from them would drop a change made while the previous one was still loading.
+  const valuesKey = JSON.stringify(values);
+  const [current, setCurrent] = useState(values);
+  const [syncedKey, setSyncedKey] = useState(valuesKey);
+  if (!pending && syncedKey !== valuesKey) {
+    setSyncedKey(valuesKey);
+    setCurrent(values);
+  }
 
-  function apply(patch: Partial<Props["values"]>) {
-    const next = { ...values, ...patch };
-    if (patch.district !== undefined && patch.district !== values.district) next.facility = "";
+  function navigate(next: Props["values"]) {
+    setCurrent(next);
     const query = new URLSearchParams();
     for (const [key, value] of Object.entries(next)) if (value) query.set(key, value);
     startTransition(() => router.push(query.size ? `${pathname}?${query}` : pathname, { scroll: false }));
   }
 
+  function apply(patch: Partial<Props["values"]>) {
+    const next = { ...current, ...patch };
+    if (patch.district !== undefined && patch.district !== current.district) next.facility = "";
+    navigate(next);
+  }
+
   const facilityOptions: Option[] = facilities
-    .filter((facility) => !values.district || facility.district === values.district)
-    .map((facility) => ({ value: String(facility.id), label: values.district ? facility.name : `${facility.name} · อ.${facility.district}` }));
-  const activeCount = Object.values(values).filter(Boolean).length;
+    .filter((facility) => !current.district || facility.district === current.district)
+    .map((facility) => ({ value: String(facility.id), label: current.district ? facility.name : `${facility.name} · อ.${facility.district}` }));
+  const activeCount = Object.values(current).filter(Boolean).length;
 
   return (
     <section aria-label="ตัวกรองแดชบอร์ด" aria-busy={pending} className="rounded-2xl border border-[var(--line)] bg-white p-2 sm:p-4">
@@ -57,25 +71,25 @@ export function DashboardFilters({ values, fiscalYears, districts, facilities, c
       </button>
       <div id={panelId} className={`${open ? "grid" : "hidden"} gap-3 p-1 pt-2 sm:grid sm:grid-cols-2 sm:p-0 xl:grid-cols-[repeat(4,minmax(0,1fr))_auto] xl:items-end`}>
         <label className="filter-label">ปีงบประมาณ (ที่ได้มา)
-          <select className={control} value={values.fy} onChange={(event) => apply({ fy: event.target.value })}>
+          <select className={control} value={current.fy} onChange={(event) => apply({ fy: event.target.value })}>
             <option value="">ทุกปีงบประมาณ</option>
             {fiscalYears.map((year) => <option key={year} value={year}>ปีงบประมาณ {year}</option>)}
           </select>
         </label>
         <label className="filter-label">อำเภอ
-          <select className={control} value={values.district} disabled={lockedFacility || districts.length <= 1} onChange={(event) => apply({ district: event.target.value })}>
+          <select className={control} value={current.district} disabled={lockedFacility || districts.length <= 1} onChange={(event) => apply({ district: event.target.value })}>
             <option value="">ทุกอำเภอ</option>
             {districts.map((district) => <option key={district} value={district}>อ.{district}</option>)}
           </select>
         </label>
         <label className="filter-label">หน่วยงาน
-          <select className={control} value={values.facility} disabled={lockedFacility || facilityOptions.length <= 1} onChange={(event) => apply({ facility: event.target.value })}>
-            <option value="">ทุกหน่วยงาน{values.district ? `ใน อ.${values.district}` : ""}</option>
+          <select className={control} value={current.facility} disabled={lockedFacility || facilityOptions.length <= 1} onChange={(event) => apply({ facility: event.target.value })}>
+            <option value="">ทุกหน่วยงาน{current.district ? `ใน อ.${current.district}` : ""}</option>
             {facilityOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
           </select>
         </label>
         <label className="filter-label">ประเภทครุภัณฑ์
-          <select className={control} value={values.category} onChange={(event) => apply({ category: event.target.value })}>
+          <select className={control} value={current.category} onChange={(event) => apply({ category: event.target.value })}>
             <option value="">ทุกประเภท</option>
             {categories.map((category) => <option key={category.key} value={category.key}>{category.label}</option>)}
           </select>
@@ -84,7 +98,7 @@ export function DashboardFilters({ values, fiscalYears, districts, facilities, c
           <button
             type="button"
             disabled={activeCount === 0 || pending}
-            onClick={() => startTransition(() => router.push(pathname, { scroll: false }))}
+            onClick={() => navigate({ fy: "", district: "", facility: "", category: "" })}
             className="filter-button border border-[var(--line)] font-medium text-[var(--primary-text)] transition hover:bg-[var(--primary-soft)] disabled:cursor-not-allowed disabled:text-[var(--muted)] disabled:hover:bg-transparent"
           >
             ล้างตัวกรอง{activeCount ? ` (${activeCount})` : ""}

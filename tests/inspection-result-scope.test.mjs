@@ -2,17 +2,18 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { loadTs } from "./helpers/load-ts.mjs";
 
-function setup(context) {
-  const calls = { tx: 0, assetWrites: [], itemWrites: [], contextLocks: [] };
+function setup(context, { roundClosed = false } = {}) {
+  const calls = { tx: 0, inTx: false, assetWrites: [], itemWrites: [], contextLocks: [], roundLocks: [] };
   const lib = loadTs("lib/inspection-results.ts", {
-    "@/lib/mysql": { withTransaction: async (work) => { calls.tx += 1; return work(); } },
+    "@/lib/mysql": { withTransaction: async (work) => { calls.tx += 1; calls.inTx = true; try { return await work(); } finally { calls.inTx = false; } } },
     "@/lib/asset-status-history": { ensureAssetStatusHistoryTable: async () => {}, recordAssetStatusHistory: async () => {} },
     "@/lib/assets": { updateAsset: async (id, fields) => { calls.assetWrites.push({ id, fields }); } },
-    "@/lib/audit": { writeAuditLog: async () => {} },
+    "@/lib/audit": { writeAuditLog: async () => {}, writeAuditLogSafe: async () => {} },
     "@/lib/facility-work-groups": { listFacilityWorkGroups: async () => [] },
     "@/lib/inspection": {
       getInspectionItemContext: async (id, options) => { calls.contextLocks.push(Boolean(options?.forUpdate)); return context; },
       getInspectionById: async () => ({ roundStatus: "Open" }),
+      lockInspectionRound: async (id) => { calls.roundLocks.push({ id, inTx: calls.inTx }); return { id, closed: roundClosed }; },
       updateInspectionItem: async (input) => { calls.itemWrites.push(input); },
     },
   });
@@ -36,4 +37,22 @@ test("item, status and history are written in one transaction on a locked row", 
   assert.deepEqual(calls.contextLocks, [true]);
   assert.equal(calls.itemWrites.length, 1);
   assert.equal(calls.assetWrites[0].fields.currentStatus, "Broken");
+});
+
+test("the round row is locked inside the transaction and a closed round rejects the save", async () => {
+  const { lib, calls } = setup(base, { roundClosed: true });
+  await assert.rejects(
+    lib.recordInspectionResult(admin, { itemId: 3, inspectionStatus: "Found", assetStatus: "Active" }),
+    (error) => error.code === "closed"
+  );
+  assert.deepEqual(calls.roundLocks, [{ id: 2, inTx: true }]);
+  assert.equal(calls.itemWrites.length, 0);
+  assert.equal(calls.assetWrites.length, 0);
+});
+
+test("an open round is locked before the result is written", async () => {
+  const { lib, calls } = setup(base);
+  await lib.recordInspectionResult(admin, { itemId: 3, inspectionStatus: "Found", assetStatus: "Active" });
+  assert.deepEqual(calls.roundLocks, [{ id: 2, inTx: true }]);
+  assert.equal(calls.itemWrites.length, 1);
 });

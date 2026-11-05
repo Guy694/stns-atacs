@@ -16,6 +16,7 @@ import {
 import { writeAuditLog } from "@/lib/audit";
 import { executeStatement, selectRows } from "@/lib/mysql";
 import { isMissingSchemaError } from "@/lib/schema-errors";
+import { roleChangeBlockReason } from "@/lib/role-permissions";
 import type { RowDataPacket } from "mysql2/promise";
 
 async function requireAdmin() {
@@ -57,6 +58,22 @@ type UserAuditRow = RowDataPacket & {
   full_name: string;
   role: "admin" | "officer" | "viewer";
 };
+
+/** Active admins other than `userId` (B12: never leave the system without an admin). */
+async function countOtherActiveAdmins(userId: number) {
+  const rows = await selectRows<RowDataPacket & { total: number }>(
+    "SELECT COUNT(*) AS total FROM users WHERE role = 'admin' AND is_active = 1 AND id <> ?",
+    [userId]
+  );
+  return Number(rows[0]?.total ?? 0);
+}
+
+/** B12: reason the actor may not move `userId` from its current role to `newRole`, or null. */
+async function roleChangeError(actorId: number | string, userId: number, currentRole: string | null | undefined, newRole: string) {
+  if (currentRole === newRole) return null;
+  const otherActiveAdmins = currentRole === "admin" ? await countOtherActiveAdmins(userId) : 1;
+  return roleChangeBlockReason({ actorId, targetId: userId, currentRole, newRole, otherActiveAdmins });
+}
 
 async function getUserAuditRow(userId: number) {
   const rows = await selectRows<UserAuditRow>(
@@ -233,8 +250,12 @@ export async function updateUserProfileAction(_prev: string | null, fd: FormData
     if (existingThaiCid.length > 0) return "ThaiD นี้มีในระบบแล้ว";
   }
 
+  const before = await getUserAuditRow(userId);
+  if (!before) return "ไม่พบผู้ใช้";
+  const blocked = await roleChangeError(actor.id, userId, before.role, role);
+  if (blocked) return blocked;
+
   try {
-    const before = await getUserAuditRow(userId);
     try {
       await executeStatement(
         `UPDATE users
@@ -374,7 +395,11 @@ export async function approveUsersAction(userIds: number[]): Promise<void> {
 export async function updateUserRoleAction(userId: number, newRole: "admin" | "officer" | "viewer"): Promise<void> {
   const actor = await requireAdmin();
   if (Number(actor.id) === userId) return;
+  if (!["admin", "officer", "viewer"].includes(newRole)) throw new Error("Role ไม่ถูกต้อง");
   const before = await getUserAuditRow(userId);
+  if (!before) throw new Error("ไม่พบผู้ใช้");
+  const blocked = await roleChangeError(actor.id, userId, before.role, newRole);
+  if (blocked) throw new Error(blocked);
   // SEC-21: บทบาท officer ผูกกับขอบเขตหน่วยงาน ถ้าไม่มีหน่วยงานจะกลายเป็นสิทธิ์ที่ไม่มีขอบเขต
   if (newRole === "officer") {
     const rows = await selectRows<RowDataPacket & { facility_id: number | null }>(
@@ -401,13 +426,16 @@ export async function updateUserFacilityAction(_prev: string | null, fd: FormDat
   const actor = await requireAdmin();
 
   const userId = Number(fd.get("userId"));
-  const role = (fd.get("role") as string | null) ?? "officer";
   const facilityIdRaw = (fd.get("facilityId") as string | null)?.trim() ?? "";
   const facilityId = facilityIdRaw ? Number(facilityIdRaw) : null;
 
   if (!userId || Number.isNaN(userId)) return "User ID ไม่ถูกต้อง";
-  if (facilityId !== null && Number.isNaN(facilityId)) return "หน่วยงานไม่ถูกต้อง";
-  if (role === "officer" && !facilityId) return "Officer ต้องมีหน่วยงาน";
+  if (facilityId !== null && (!Number.isInteger(facilityId) || facilityId <= 0)) return "หน่วยงานไม่ถูกต้อง";
+  // B12: the role comes from the database, never from the form (a forged "viewer" must not let an
+  // officer lose its facility scope).
+  const current = await getUserAuditRow(userId);
+  if (!current) return "ไม่พบผู้ใช้";
+  if (current.role === "officer" && !facilityId) return "Officer ต้องมีหน่วยงาน";
 
   try {
     await executeStatement("UPDATE users SET facility_id = ? WHERE id = ?", [facilityId, userId]);

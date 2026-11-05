@@ -6,6 +6,7 @@ import { fiscalYearRange } from "@/lib/asset-valuation";
 import { inspectionDeadline, summarizeInspectionProgress, type FacilityProgressRow } from "@/lib/inspection-progress";
 import { formatAssetNumber } from "@/lib/asset-number";
 import { selectRows } from "@/lib/mysql";
+import { assetIdNotDeletedSql, assetNotDeletedSql } from "@/lib/asset-soft-delete";
 import { isMissingSchemaError } from "@/lib/schema-errors";
 import { todayBangkok, dbDate } from "@/lib/local-date";
 
@@ -49,6 +50,7 @@ export async function getInspectionProgress(fiscalYear: number, facilities: Arra
   type AssetRow = RowDataPacket & { facility_id: number; assets: number; covered: number; checked: number; found: number; missing: number };
   type RoundRow = RowDataPacket & { facility_id: number; open_rounds: number; closed_rounds: number };
   try {
+    const notDeleted = await assetNotDeletedSql("a");
     const assetRows = await selectRows<AssetRow>(
       `SELECT s.facility_id, COUNT(a.id) AS assets,
          SUM(CASE WHEN x.asset_id IS NULL THEN 0 ELSE 1 END) AS covered,
@@ -56,7 +58,7 @@ export async function getInspectionProgress(fiscalYear: number, facilities: Arra
        FROM information_assets a
        JOIN information_asset_surveys s ON s.id = a.survey_id
        LEFT JOIN (${assetResultsSubquery()}) x ON x.asset_id = a.id
-       WHERE COALESCE(a.current_status, '') NOT IN ('Disposed', 'Lost')${scope.sql}
+       WHERE COALESCE(a.current_status, '') NOT IN ('Disposed', 'Lost') AND ${notDeleted}${scope.sql}
        GROUP BY s.facility_id`,
       [range.start, range.end, ...scope.values]
     );
@@ -120,12 +122,13 @@ export async function listUncoveredAssets(fiscalYear: number, facilityIds: Facil
   if (facilityIds && !facilityIds.length) return { rows: [], total: 0 };
   const range = fiscalYearRange(fiscalYear);
   const scope = scopeClause("s.facility_id", facilityIds);
+  const notDeleted = await assetNotDeletedSql("a");
   const from = `
     FROM information_assets a
     JOIN information_asset_surveys s ON s.id = a.survey_id
     LEFT JOIN health_facilities hf ON hf.id = s.facility_id
     LEFT JOIN facility_work_groups fwg ON fwg.id = a.work_group_id
-    WHERE COALESCE(a.current_status, '') NOT IN ('Disposed', 'Lost')${scope.sql}
+    WHERE COALESCE(a.current_status, '') NOT IN ('Disposed', 'Lost') AND ${notDeleted}${scope.sql}
       AND NOT EXISTS (
         SELECT 1 FROM asset_inspection_items i JOIN asset_inspections r ON r.id = i.inspection_id
         WHERE i.asset_id = a.id AND ${ROUND_DATE} BETWEEN ? AND ?)`;
@@ -205,13 +208,14 @@ export async function getWorkQueue(facilityIds: FacilityScope, today = todayBang
 
   type RoundRow = RowDataPacket & { id: number; round_name: string; facility_name: string | null; start_date: Date | string | null; inspected_at: Date | string; total_items: number; checked_items: number };
   const scope = scopeClause("r.facility_id", facilityIds);
+  const itemNotDeleted = await assetIdNotDeletedSql("i.asset_id");
   const roundRows = await orDefault(() => selectRows<RoundRow>(
     `SELECT r.id, r.round_name, hf.name AS facility_name, r.start_date, r.inspected_at,
        COUNT(i.id) AS total_items,
        SUM(CASE WHEN COALESCE(i.inspection_status, 'Pending') <> 'Pending' THEN 1 ELSE 0 END) AS checked_items
      FROM asset_inspections r
      LEFT JOIN health_facilities hf ON hf.id = r.facility_id
-     LEFT JOIN asset_inspection_items i ON i.inspection_id = r.id
+     LEFT JOIN asset_inspection_items i ON i.inspection_id = r.id AND ${itemNotDeleted}
      WHERE r.round_status = 'Open'${scope.sql}
      GROUP BY r.id, r.round_name, hf.name, r.start_date, r.inspected_at
      ORDER BY COALESCE(r.start_date, DATE(r.inspected_at))

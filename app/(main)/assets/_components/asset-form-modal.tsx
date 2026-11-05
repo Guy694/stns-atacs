@@ -17,6 +17,9 @@ import { isComputerDeviceType, type WindowsLicenseStatus } from "@/lib/windows-l
 import { todayBangkok } from "@/lib/local-date";
 import { submitWithoutReset } from "@/app/_components/ui/submit-without-reset";
 import { confirmAction } from "@/app/_components/ui/confirm";
+import { useEscapeToClose } from "@/app/_components/ui/use-escape-to-close";
+import { useModalA11y } from "@/app/_components/ui/use-modal-a11y";
+import Link from "next/link";
 
 type FacilityOption = { id: number; facility_name: string | null; district_name: string | null; asset_code_prefix?: string | null };
 type DeviceTypeOption = { name: string; category: string };
@@ -142,7 +145,9 @@ function FacilityCombobox({
             event.preventDefault();
             selectFacility(activeFacility);
           }
-          if (event.key === "Escape") {
+          if (event.key === "Escape" && open) {
+            // Close just the suggestion list; the modal's Esc handler skips prevented events.
+            event.preventDefault();
             setOpen(false);
           }
         }}
@@ -276,7 +281,10 @@ function WorkGroupCombobox({
             event.preventDefault();
             choose(filtered[activeOptionIndex]);
           }
-          if (event.key === "Escape") setOpen(false);
+          if (event.key === "Escape" && open) {
+            event.preventDefault();
+            setOpen(false);
+          }
         }}
         className="w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
       />
@@ -422,7 +430,10 @@ function LocationCombobox({
             event.preventDefault();
             choose(filtered[activeOptionIndex].label);
           }
-          if (event.key === "Escape") setOpen(false);
+          if (event.key === "Escape" && open) {
+            event.preventDefault();
+            setOpen(false);
+          }
         }}
         className="w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
       />
@@ -496,6 +507,9 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
   const titleId = useId();
   const mounted = typeof document !== "undefined";
   const formRef = useRef<HTMLFormElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const [dirty, setDirty] = useState(false);
+  const confirmingRef = useRef(false);
   const today = todayBangkok();
   const selectedDeviceType = asset?.deviceType?.trim() ?? "";
   const requiresWindowsLicenseStatus = requiresWindowsLicense({ assetClass, assetCategory, deviceType });
@@ -533,8 +547,25 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
     setAssetCategory(asset?.assetGroup ?? "Hardware");
     setDeviceType(asset?.deviceType?.trim() ?? "");
     setWindowsLicenseStatus(asset?.windowsLicenseStatus ?? "");
+    setDirty(false);
     setOpen(true);
   }
+
+  /** Esc / backdrop: close straight away when nothing was typed, otherwise ask before discarding the form. */
+  async function requestClose() {
+    if (!dirty) {
+      setOpen(false);
+      return;
+    }
+    if (confirmingRef.current) return;
+    confirmingRef.current = true;
+    try {
+      if (await confirmAction({ title: "ปิดโดยไม่บันทึก?", text: "ข้อมูลที่กรอกในฟอร์มนี้จะไม่ถูกบันทึก", confirmText: "ปิดฟอร์ม" })) setOpen(false);
+    } finally {
+      confirmingRef.current = false;
+    }
+  }
+
 
   const action = mode === "create" ? createAssetAction : updateAssetAction;
   const [error, formAction, pending] = useActionState(
@@ -549,6 +580,12 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
     },
     INITIAL
   );
+
+  useEscapeToClose(open && !pending, () => {
+    // SweetAlert handles its own Esc while the discard confirm is showing.
+    if (!confirmingRef.current) void requestClose();
+  });
+  useModalA11y(mounted && open, dialogRef);
 
   const title = mode === "create" ? "เพิ่มทรัพย์สินใหม่" : `แก้ไข: ${asset?.assetName ?? ""}`;
   // C6: แถบลัดไปยังแต่ละส่วนของฟอร์มยาว (เลื่อนภายในหน้าต่าง)
@@ -575,12 +612,11 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
           <div className="fixed inset-0 z-50 flex items-center justify-center">
             <div
               className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-              onClick={async () => {
-                // A stray click outside must not throw away a long, half-filled form.
-                if (await confirmAction({ title: "ปิดโดยไม่บันทึก?", text: "ข้อมูลที่กรอกในฟอร์มนี้จะไม่ถูกบันทึก", confirmText: "ปิดฟอร์ม" })) setOpen(false);
-              }}
+              // A stray click outside must not throw away a long, half-filled form.
+              onClick={() => void requestClose()}
             />
             <div
+              ref={dialogRef}
               role="dialog"
               aria-modal="true"
               aria-labelledby={titleId}
@@ -617,14 +653,39 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
                 <div role="alert" className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>
               )}
 
-              <form ref={formRef} onSubmit={submitWithoutReset(formAction)} className="mt-5 space-y-4">
+              <form ref={formRef} onSubmit={submitWithoutReset(formAction)} onChange={() => setDirty(true)} className="mt-5 space-y-4">
                 {mode === "edit" && <input type="hidden" name="assetId" value={asset?.id} />}
 
               <h3 id={sectionId("general")} className="scroll-mt-16 text-base font-semibold">ข้อมูลทั่วไป</h3>
               {/* Survey / หน่วยงาน */}
               <div>
-                <label htmlFor={fixedFacilityId ? undefined : `${fieldId}-facility`} className="block text-sm font-medium">หน่วยงาน <span className="text-rose-500">*</span></label>
-                {fixedFacilityId ? (
+                <label htmlFor={fixedFacilityId && mode !== "edit" ? undefined : `${fieldId}-facility`} className="block text-sm font-medium">หน่วยงาน <span className="text-rose-500">*</span></label>
+                {mode === "edit" && asset ? (
+                  // B1: an existing asset changes facility only through a transfer (keeps the transfer history).
+                  <>
+                    <input type="hidden" name="facilityId" value={asset.facilityId} />
+                    <select
+                      id={`${fieldId}-facility`}
+                      disabled
+                      value={String(asset.facilityId)}
+                      aria-describedby={`${fieldId}-facility-note`}
+                      className="mt-1 w-full rounded-xl border border-black/10 bg-stone-100 px-3 py-2 text-sm text-[var(--muted)]"
+                    >
+                      <option value={String(asset.facilityId)}>
+                        {(() => {
+                          const current = facilities.find((facility) => facility.id === asset.facilityId);
+                          return current ? formatFacilityOption(current) : asset.facilityName ?? `หน่วยงาน #${asset.facilityId}`;
+                        })()}
+                      </option>
+                    </select>
+                    <p id={`${fieldId}-facility-note`} className="mt-1 text-xs text-[var(--muted)]">
+                      แก้ไขหน่วยงานในฟอร์มนี้ไม่ได้ ·{" "}
+                      <Link href={`/transfer/?assetId=${asset.id}`} className="font-medium text-[var(--primary-text)] underline underline-offset-2">
+                        ต้องการย้ายหน่วยงาน? ใช้เมนูโอนย้าย
+                      </Link>
+                    </p>
+                  </>
+                ) : fixedFacilityId ? (
                   <>
                     <input type="hidden" name="facilityId" value={fixedFacilityId} />
                     <div className="mt-1 rounded-xl border border-black/10 bg-white/60 px-3 py-2 text-sm text-[var(--muted)]">

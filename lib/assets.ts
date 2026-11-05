@@ -9,6 +9,9 @@ import { normalizeAssetClass } from "@/lib/asset-classes";
 import { formatAssetNumber } from "@/lib/asset-number";
 import { isItAsset, parseAssetClass, supportsAgentAsset } from "@/lib/asset-policy";
 import { executeStatement, selectRows, withTransaction } from "@/lib/mysql";
+import { assertNoOpenAssetWork } from "@/lib/asset-open-work";
+import { ASSET_SOFT_DELETE_MIGRATION_MESSAGE, assetNotDeletedSql, hasAssetSoftDelete } from "@/lib/asset-soft-delete";
+import { ensureAssetStatusHistoryTable, insertAssetStatusHistory } from "@/lib/asset-status-history";
 import type { WindowsLicenseStatus } from "@/lib/windows-license";
 import { dbDate } from "@/lib/local-date";
 import { isMissingSchemaError } from "@/lib/schema-errors";
@@ -234,8 +237,9 @@ const ASSET_JOIN_SQL = `
   ${ASSET_FROM_SQL}
 `;
 
-function buildAssetFilter(filter?: AssetListFilter) {
-  const conditions: string[] = [];
+/** `notDeleted` comes from assetNotDeletedSql("a"): soft-deleted assets never appear in lists or counts. */
+function buildAssetFilter(filter: AssetListFilter | undefined, notDeleted: string) {
+  const conditions: string[] = [notDeleted];
   const values: unknown[] = [];
 
   if (filter?.facilityId) {
@@ -405,7 +409,7 @@ function assetOrderBySql(orderBy: AssetListFilter["orderBy"]) {
 
 /** รายการทรัพย์สินทั้งหมด (admin) หรือเฉพาะหน่วยงาน (officer ไม่จำกัดในตอนนี้) */
 export async function listAssets(filter?: AssetListFilter): Promise<AssetWithFacility[]> {
-  const { where, values } = buildAssetFilter(filter);
+  const { where, values } = buildAssetFilter(filter, await assetNotDeletedSql("a"));
   const orderByMap: Record<NonNullable<AssetListFilter["sort"]>, string> = {
     updated_desc: "a.last_updated_at DESC, a.id DESC",
     updated_asc: "a.last_updated_at ASC, a.id ASC",
@@ -434,7 +438,7 @@ export async function listAssets(filter?: AssetListFilter): Promise<AssetWithFac
 }
 
 export async function countAssets(filter?: AssetListFilter): Promise<number> {
-  const { where, values } = buildAssetFilter(filter);
+  const { where, values } = buildAssetFilter(filter, await assetNotDeletedSql("a"));
 
   try {
     const rows = await selectRows<RowDataPacket & { total: number }>(
@@ -448,9 +452,9 @@ export async function countAssets(filter?: AssetListFilter): Promise<number> {
   }
 }
 
-/** ดึงทรัพย์สินเดี่ยว */
+/** ดึงทรัพย์สินเดี่ยว — ทรัพย์สินที่ถูกลบ (soft delete) ได้ null เหมือนไม่มีอยู่ */
 export async function getAssetById(id: number): Promise<AssetWithFacility | null> {
-  const rows = await selectRows<AssetRow>(`${ASSET_JOIN_SQL} WHERE a.id = ? LIMIT 1`, [id]);
+  const rows = await selectRows<AssetRow>(`${ASSET_JOIN_SQL} WHERE a.id = ? AND ${await assetNotDeletedSql("a")} LIMIT 1`, [id]);
   if (!rows[0]) return null;
   const extensions = await loadAssetExtensions([id]);
   return { ...rowToAsset(rows[0]), extensions: extensions.get(id) ?? {} };
@@ -461,10 +465,11 @@ export async function listAssetsByIds(ids: number[]): Promise<AssetWithFacility[
   const clean = [...new Set(ids.filter((id) => Number.isSafeInteger(id) && id > 0))];
   if (!clean.length) return [];
   const rows: AssetRow[] = [];
+  const notDeleted = await assetNotDeletedSql("a");
   // Chunked so a long selection never builds a huge IN list.
   for (let start = 0; start < clean.length; start += 500) {
     const chunk = clean.slice(start, start + 500);
-    rows.push(...(await selectRows<AssetRow>(`${ASSET_JOIN_SQL} WHERE a.id IN (${chunk.map(() => "?").join(",")})`, chunk)));
+    rows.push(...(await selectRows<AssetRow>(`${ASSET_JOIN_SQL} WHERE a.id IN (${chunk.map(() => "?").join(",")}) AND ${notDeleted}`, chunk)));
   }
   const order = new Map(clean.map((id, index) => [id, index]));
   rows.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
@@ -510,8 +515,23 @@ export async function getSurveyById(id: number): Promise<SurveyLookup | null> {
   };
 }
 
-/** เพิ่มทรัพย์สินใหม่ */
-export async function createAsset(input: AssetInput) {
+/** Status-history row written in the same transaction as the asset change. */
+export type AssetHistoryEntry = {
+  note: string;
+  changedByUserId?: number | null;
+  changedBy?: string | null;
+  /** Defaults to the status before the change (null for a new asset). */
+  fromStatus?: string | null;
+  /** Defaults to the status after the change. */
+  toStatus?: string;
+};
+
+/**
+ * เพิ่มทรัพย์สินใหม่ — `options.history` writes the first status-history row atomically with the asset
+ * (do not pass it from inside another withTransaction: the history table check may run DDL).
+ */
+export async function createAsset(input: AssetInput, options: { history?: AssetHistoryEntry } = {}) {
+  if (options.history) await ensureAssetStatusHistoryTable();
   return withTransaction(async () => {
     const result = await executeStatement(
       `INSERT INTO information_assets
@@ -581,6 +601,16 @@ export async function createAsset(input: AssetInput) {
       await executeStatement("UPDATE information_assets SET useful_life_years = ? WHERE id = ?", [input.usefulLifeYears, result.insertId]);
     }
     await saveAssetExtension(result.insertId, parseAssetClass(input.assetClass), input.subtypeId, input.details);
+    if (options.history) {
+      await insertAssetStatusHistory({
+        assetId: result.insertId,
+        fromStatus: options.history.fromStatus ?? null,
+        toStatus: options.history.toStatus ?? (input.currentStatus || "Active"),
+        note: options.history.note,
+        changedByUserId: options.history.changedByUserId ?? null,
+        changedBy: options.history.changedBy ?? null,
+      });
+    }
     return result;
   });
 }
@@ -598,10 +628,12 @@ function optionalColumns(current: RowDataPacket | undefined, values: Record<stri
   return Object.fromEntries(Object.entries(values).map(([column, value]) => [column, !value && current && !(column in current) ? undefined : value]));
 }
 
-/** แก้ไขทรัพย์สิน */
-export async function updateAsset(id: number, input: Partial<AssetInput>) {
+/** แก้ไขทรัพย์สิน — `options.history` is written in the same transaction (see createAsset). */
+export async function updateAsset(id: number, input: Partial<AssetInput>, options: { history?: AssetHistoryEntry } = {}) {
+  if (options.history) await ensureAssetStatusHistoryTable();
   return withTransaction(async () => {
     const locked = await selectRows<RowDataPacket>("SELECT * FROM information_assets WHERE id = ? FOR UPDATE", [id]);
+    if (locked[0]?.deleted_at) throw new Error("ทรัพย์สินนี้ถูกลบแล้ว แก้ไขไม่ได้");
     if (input.assetClass !== undefined) parseAssetClass(input.assetClass);
     // Any classification change on a linked record must leave it eligible for Agent updates.
     if (input.assetClass !== undefined || input.assetCategory !== undefined || input.deviceType !== undefined || input.surveyId !== undefined) {
@@ -676,15 +708,47 @@ export async function updateAsset(id: number, input: Partial<AssetInput>) {
 
     if ((input.details !== undefined || input.subtypeId !== undefined) && !locked[0]) throw new Error("ไม่พบทรัพย์สิน");
     await saveAssetExtension(id, parseAssetClass(input.assetClass, locked[0]?.asset_class), input.subtypeId, input.details);
-    if (sets.length === 0) return null;
-    values.push(id);
-    return executeStatement(`UPDATE information_assets SET ${sets.join(", ")} WHERE id = ?`, values);
+    let result = null;
+    if (sets.length > 0) {
+      values.push(id);
+      result = await executeStatement(`UPDATE information_assets SET ${sets.join(", ")} WHERE id = ?`, values);
+    }
+    if (options.history) {
+      const before = (locked[0]?.current_status as string | null | undefined) ?? null;
+      await insertAssetStatusHistory({
+        assetId: id,
+        fromStatus: options.history.fromStatus !== undefined ? options.history.fromStatus : before,
+        toStatus: options.history.toStatus ?? input.currentStatus ?? before ?? "Active",
+        note: options.history.note,
+        changedByUserId: options.history.changedByUserId ?? null,
+        changedBy: options.history.changedBy ?? null,
+      });
+    }
+    return result;
   });
 }
 
-/** ลบทรัพย์สิน */
-export async function deleteAsset(id: number) {
-  return executeStatement("DELETE FROM information_assets WHERE id = ?", [id]);
+/**
+ * ลบทรัพย์สิน (soft delete): the row stays so loans, repairs, transfers, disposals, status history and
+ * the audit trail keep pointing at it; it disappears from every list, count, report and lookup.
+ * Its registration number stays reserved (UNIQUE survey_id + asset_registration_no) — see validateAssetBusinessRules.
+ * Refused while work is still open on the asset, and before the migration (never a hard delete).
+ */
+export async function deleteAsset(id: number, actor: { userId?: number | null; userName: string }) {
+  if (!(await hasAssetSoftDelete())) throw new Error(ASSET_SOFT_DELETE_MIGRATION_MESSAGE);
+  return withTransaction(async () => {
+    const [asset] = await selectRows<RowDataPacket & { id: number; deleted_at: Date | string | null }>(
+      "SELECT id, deleted_at FROM information_assets WHERE id = ? FOR UPDATE",
+      [id]
+    );
+    if (!asset || asset.deleted_at) throw new Error("ไม่พบทรัพย์สิน หรือถูกลบไปแล้ว");
+    // The asset row lock above serialises this check with new repairs, loans and disposal requests.
+    await assertNoOpenAssetWork(id, "delete");
+    return executeStatement(
+      "UPDATE information_assets SET deleted_at = NOW(), deleted_by_user_id = ?, deleted_by = ? WHERE id = ? AND deleted_at IS NULL",
+      [actor.userId ?? null, actor.userName, id]
+    );
+  });
 }
 
 /** ดึง asset สำหรับ dropdown เลือก (จำกัดตาม facilityId หลายรายการ) */
@@ -703,13 +767,14 @@ export async function listAssetsForFacilityIds(facilityIds: number[]): Promise<A
   if (facilityIds.length === 0) return [];
   const placeholders = facilityIds.map(() => "?").join(",");
   try {
+    const notDeleted = await assetNotDeletedSql("a");
     const rows = await selectRows<RowDataPacket & AssetSelectOption>(
       `SELECT a.id, s.facility_id AS facilityId, a.asset_registration_no AS assetRegistrationNo,
               a.asset_name AS assetName, a.device_type AS deviceType, a.serial_number AS serialNumber,
               a.asset_class AS assetClass, a.asset_category AS assetCategory
        FROM information_assets a
        JOIN information_asset_surveys s ON s.id = a.survey_id
-       WHERE s.facility_id IN (${placeholders})
+       WHERE s.facility_id IN (${placeholders}) AND ${notDeleted}
        ORDER BY s.facility_id, a.row_no, a.id`,
       facilityIds
     );
@@ -758,19 +823,28 @@ export async function listAllFacilitiesForSelect(filter?: { facilityId?: number 
   }
 }
 
-/** หา survey ของหน่วยงาน หรือสร้างใหม่ถ้ายังไม่มี */
+/**
+ * หา survey ของหน่วยงาน หรือสร้างใหม่ถ้ายังไม่มี
+ * Two first-time saves for the same facility used to both insert a survey. Locking the facility row
+ * serialises them without needing a unique key on information_asset_surveys.facility_id; the lowest id
+ * is always the one reused, so facilities that already have duplicates stay consistent.
+ */
 export async function findOrCreateSurvey(facilityId: number): Promise<number> {
-  const rows = await selectRows<RowDataPacket & { id: number }>(
-    "SELECT id FROM information_asset_surveys WHERE facility_id = ? LIMIT 1",
-    [facilityId]
-  );
-  if (rows[0]) return rows[0].id;
+  return withTransaction(async () => {
+    await selectRows<RowDataPacket & { id: number }>("SELECT id FROM health_facilities WHERE id = ? FOR UPDATE", [facilityId]);
+    const lowest = () => selectRows<RowDataPacket & { id: number }>(
+      "SELECT id FROM information_asset_surveys WHERE facility_id = ? ORDER BY id LIMIT 1",
+      [facilityId]
+    );
+    const rows = await lowest();
+    if (rows[0]) return rows[0].id;
 
-  const result = await executeStatement(
-    "INSERT INTO information_asset_surveys (facility_id, survey_date) VALUES (?, CURDATE())",
-    [facilityId]
-  );
-  return result.insertId;
+    const result = await executeStatement(
+      "INSERT INTO information_asset_surveys (facility_id, survey_date) VALUES (?, CURDATE())",
+      [facilityId]
+    );
+    return result.insertId;
+  });
 }
 
 // ── Facilities ─────────────────────────────────────────────────────────────
@@ -802,6 +876,7 @@ export async function listFacilities(filter?: { facilityId?: number; facilityIds
         : "";
   const values = filter?.facilityId ? [filter.facilityId] : scopedFacilityIds;
   try {
+    const notDeleted = await assetNotDeletedSql("a");
     return await selectRows<FacilityRow>(`
       SELECT
         hf.id,
@@ -818,7 +893,7 @@ export async function listFacilities(filter?: { facilityId?: number; facilityIds
         COUNT(DISTINCT s.id)                                          AS has_survey
       FROM health_facilities hf
       LEFT JOIN information_asset_surveys s ON s.facility_id = hf.id
-      LEFT JOIN information_assets a        ON a.survey_id   = s.id
+      LEFT JOIN information_assets a        ON a.survey_id   = s.id AND ${notDeleted}
       WHERE hf.is_active = 1 ${facilityClause}
       GROUP BY hf.id
       ORDER BY hf.district_name, hf.typecode DESC, hf.name
@@ -830,6 +905,7 @@ export async function listFacilities(filter?: { facilityId?: number; facilityIds
 
 export async function getFacilityById(id: number): Promise<FacilityRow | null> {
   try {
+    const notDeleted = await assetNotDeletedSql("a");
     const rows = await selectRows<FacilityRow>(`
       SELECT
         hf.id,
@@ -846,7 +922,7 @@ export async function getFacilityById(id: number): Promise<FacilityRow | null> {
         COUNT(DISTINCT s.id)                                          AS has_survey
       FROM health_facilities hf
       LEFT JOIN information_asset_surveys s ON s.facility_id = hf.id
-      LEFT JOIN information_assets a        ON a.survey_id   = s.id
+      LEFT JOIN information_assets a        ON a.survey_id   = s.id AND ${notDeleted}
       WHERE hf.id = ?
       GROUP BY hf.id
       LIMIT 1
@@ -875,12 +951,13 @@ export type FacilityAdminRow = RowDataPacket & {
 export async function listFacilitiesAdmin(filter?: { facilityId?: number }): Promise<FacilityAdminRow[]> {
   const where = filter?.facilityId ? "WHERE hf.id = ?" : "";
   const values = filter?.facilityId ? [filter.facilityId] : [];
+  const notDeleted = await assetNotDeletedSql("a");
   const query = (extra: string) => selectRows<FacilityAdminRow>(`
       SELECT hf.id, hf.name, hf.typecode, hf.district_name, hf.tambon, hf.lat, hf.lon, hf.is_active,${extra}
              COUNT(DISTINCT a.id) AS asset_count
       FROM health_facilities hf
       LEFT JOIN information_asset_surveys s ON s.facility_id = hf.id
-      LEFT JOIN information_assets a        ON a.survey_id   = s.id
+      LEFT JOIN information_assets a        ON a.survey_id   = s.id AND ${notDeleted}
       ${where}
       GROUP BY hf.id
       ORDER BY hf.district_name, hf.typecode DESC, hf.name

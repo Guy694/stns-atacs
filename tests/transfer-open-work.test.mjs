@@ -8,7 +8,7 @@ function setup(openCounts) {
     "@/lib/mysql": {
       withTransaction: async (work) => work(),
       selectRows: async (sql) => {
-        if (sql.includes("WHERE a.id = ? FOR UPDATE")) return [{ id: 9, asset_name: "PC", survey_id: 1, facility_id: 1, facility_name: "A", work_group_id: null, current_status: "Active" }];
+        if (/WHERE a\.id = \?.* FOR UPDATE/.test(sql)) return [{ id: 9, asset_name: "PC", survey_id: 1, facility_id: 1, facility_name: "A", work_group_id: null, current_status: "Active" }];
         if (sql.includes("FROM information_asset_surveys s LEFT JOIN")) return [{ facility_id: 2, facility_name: "B" }];
         if (sql.includes("FROM facility_work_groups")) return [];
         if (sql.includes("AS open_repairs")) return [openCounts];

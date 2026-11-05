@@ -3,9 +3,9 @@ import "server-only";
 import { isTerminalAssetStatus, OPERATIONAL_ASSET_STATUSES } from "@/lib/asset-status";
 import { ensureAssetStatusHistoryTable, recordAssetStatusHistory } from "@/lib/asset-status-history";
 import { updateAsset } from "@/lib/assets";
-import { writeAuditLog } from "@/lib/audit";
+import { writeAuditLogSafe } from "@/lib/audit";
 import { listFacilityWorkGroups } from "@/lib/facility-work-groups";
-import { getInspectionById, getInspectionItemContext, updateInspectionItem } from "@/lib/inspection";
+import { getInspectionItemContext, lockInspectionRound, updateInspectionItem } from "@/lib/inspection";
 import { canManageFacility } from "@/lib/permissions";
 import { todayBangkok } from "@/lib/local-date";
 import { withTransaction } from "@/lib/mysql";
@@ -69,8 +69,10 @@ export async function recordInspectionResult(user: InspectionResultActor, input:
     if (!item || (input.inspectionId !== undefined && item.inspectionId !== input.inspectionId)) {
       throw new InspectionResultError("not-found", "ไม่พบรายการในรอบตรวจนับนี้");
     }
-    const round = await getInspectionById(item.inspectionId);
-    if (round?.roundStatus === "Closed") throw new InspectionResultError("closed", "รอบตรวจนับปิดแล้ว", item.inspectionId);
+    // Locking the round serialises this save with closing the round (setInspectionRoundStatus updates the same row).
+    const round = await lockInspectionRound(item.inspectionId);
+    if (!round) throw new InspectionResultError("not-found", "ไม่พบรอบตรวจนับ", item.inspectionId);
+    if (round.closed) throw new InspectionResultError("closed", "รอบตรวจนับปิดแล้ว", item.inspectionId);
     if (isTerminalAssetStatus(item.currentStatus)) throw new InspectionResultError("terminal", "ครุภัณฑ์จำหน่าย/สูญหายแล้ว", item.inspectionId);
     if (!canManageFacility(user, item.facilityId)) throw new InspectionResultError("forbidden", "ไม่มีสิทธิ์ตรวจนับของหน่วยงานนี้", item.inspectionId);
     if (item.assetFacilityId !== null && Number(item.assetFacilityId) !== Number(item.facilityId)) {
@@ -137,7 +139,8 @@ export async function recordInspectionResult(user: InspectionResultActor, input:
     return { item, moved, statusChanged, foundText };
   });
 
-  await writeAuditLog({
+  // The result has committed; an audit failure is logged rather than reported as a failed save.
+  await writeAuditLogSafe({
     userId: user.id,
     userName: user.fullName,
     action: "inspect",

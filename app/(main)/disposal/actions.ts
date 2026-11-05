@@ -5,11 +5,10 @@ import { redirect } from "next/navigation";
 
 import { cancelDisposalRequest, createDisposalRequest, decideDisposalRequest, getDisposalRequest, recordDisposalExecution } from "@/lib/asset-disposals";
 import { isTerminalAssetStatus } from "@/lib/asset-status";
-import { recordAssetStatusHistory } from "@/lib/asset-status-history";
 import { valueAsset } from "@/lib/asset-valuation";
 import { getCurrentUser } from "@/lib/auth";
 import { getAssetById, updateAsset } from "@/lib/assets";
-import { writeAuditLog } from "@/lib/audit";
+import { writeAuditLogSafe } from "@/lib/audit";
 import { canManageAsset, canMutateAssets } from "@/lib/permissions";
 import { hasPermission } from "@/lib/role-permissions";
 import { friendlyLifecycleError } from "@/lib/schema-errors";
@@ -73,7 +72,7 @@ export async function disposalAssetAction(_prev: string | null, fd: FormData): P
         userId: user.id,
         userName: user.fullName,
       });
-      await writeAuditLog({ userId: user.id, userName: user.fullName, action: "dispose", entity: "asset_disposal_requests", entityId: result.requestId, summary: result.note });
+      await writeAuditLogSafe({ userId: user.id, userName: user.fullName, action: "dispose", entity: "asset_disposal_requests", entityId: result.requestId, summary: result.note });
       await notifyTelegramSafe({
         category: "lifecycle",
         title: `คำขอ${DISPOSAL_REQUEST_TYPE_LABELS[disposalType]} #${result.requestId} รออนุมัติ`,
@@ -91,9 +90,13 @@ export async function disposalAssetAction(_prev: string | null, fd: FormData): P
       const label = disposalType === "Broken" ? "บันทึกชำรุด" : "ระงับการใช้งาน";
       const note = `[${label}] ${noteDate} — ${reason}`;
       // usage_description keeps the user's own description; the event is kept in status history.
-      await updateAsset(assetId, { currentStatus: disposalType, updatedBy: user.fullName, lastUpdatedAt: todayBangkok() });
-      await recordAssetStatusHistory({ assetId, fromStatus: asset.currentStatus, toStatus: disposalType, note, changedByUserId: user.id, changedBy: user.fullName });
-      await writeAuditLog({ userId: user.id, userName: user.fullName, action: "dispose", entity: "information_assets", entityId: assetId, summary: note });
+      // Status and history commit together; the audit entry after commit never fails the save.
+      await updateAsset(
+        assetId,
+        { currentStatus: disposalType, updatedBy: user.fullName, lastUpdatedAt: todayBangkok() },
+        { history: { fromStatus: asset.currentStatus, toStatus: disposalType, note, changedByUserId: user.id, changedBy: user.fullName } }
+      );
+      await writeAuditLogSafe({ userId: user.id, userName: user.fullName, action: "dispose", entity: "information_assets", entityId: assetId, summary: note });
     }
     revalidateAsset(assetId, asset.facilityId);
   } catch (err) {
@@ -129,7 +132,7 @@ export async function decideDisposalAction(_prev: string | null, fd: FormData): 
       userId: user.id,
       userName: user.fullName,
     });
-    await writeAuditLog({ userId: user.id, userName: user.fullName, action: "dispose", entity: "asset_disposal_requests", entityId: requestId, summary: result.note });
+    await writeAuditLogSafe({ userId: user.id, userName: user.fullName, action: "dispose", entity: "asset_disposal_requests", entityId: requestId, summary: result.note });
     revalidateAsset(result.assetId, result.facilityId);
     await notifyTelegramSafe({
       category: "lifecycle",
@@ -174,7 +177,7 @@ export async function recordExecutionAction(_prev: string | null, fd: FormData):
       userId: user.id,
       userName: user.fullName,
     });
-    await writeAuditLog({ userId: user.id, userName: user.fullName, action: "dispose", entity: "asset_disposal_requests", entityId: requestId, summary: result.note });
+    await writeAuditLogSafe({ userId: user.id, userName: user.fullName, action: "dispose", entity: "asset_disposal_requests", entityId: requestId, summary: result.note });
     revalidateAsset(result.assetId, result.facilityId);
   } catch (err) {
     return friendlyLifecycleError(err).replace("add_asset_lifecycle.sql", "add_registry_completeness.sql");
@@ -194,7 +197,7 @@ export async function cancelDisposalAction(_prev: string | null, fd: FormData): 
     if (!canManageAsset(user, request.facilityId)) return "คุณไม่มีสิทธิ์ยกเลิกคำขอของหน่วยงานนี้";
     const canCancelOthers = await hasPermission(user.role, "disposal.approve");
     const result = await cancelDisposalRequest({ requestId, userId: user.id, userName: user.fullName, canCancelOthers });
-    await writeAuditLog({ userId: user.id, userName: user.fullName, action: "dispose", entity: "asset_disposal_requests", entityId: requestId, summary: `ยกเลิกคำขอ #${requestId}` });
+    await writeAuditLogSafe({ userId: user.id, userName: user.fullName, action: "dispose", entity: "asset_disposal_requests", entityId: requestId, summary: `ยกเลิกคำขอ #${requestId}` });
     revalidateAsset(result.assetId, result.facilityId);
   } catch (err) {
     return friendlyLifecycleError(err);
@@ -254,7 +257,7 @@ export async function bulkDisposalFromInspectionAction(_prev: BulkDisposalResult
         userName: user.fullName,
       });
       created.push(result.requestId);
-      await writeAuditLog({ userId: user.id, userName: user.fullName, action: "dispose", entity: "asset_disposal_requests", entityId: result.requestId, summary: result.note });
+      await writeAuditLogSafe({ userId: user.id, userName: user.fullName, action: "dispose", entity: "asset_disposal_requests", entityId: result.requestId, summary: result.note });
       revalidatePath(`/assets/${item.assetId}`);
     } catch (error) {
       skipped.push(`${label}: ${friendlyLifecycleError(error)}`);

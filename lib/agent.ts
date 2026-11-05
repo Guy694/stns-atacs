@@ -10,6 +10,7 @@ import { createAsset, findOrCreateSurvey, updateAsset } from "@/lib/assets";
 import { findActiveFacilityWorkGroup, getActiveFacilityWorkGroupForFacility, getFacilityAgentContext, normalizeWorkGroupName } from "@/lib/facility-work-groups";
 import { cleanAgentReport, cleanFingerprint, cleanText, type CleanAgentReport } from "@/lib/agent-payload";
 import { executeStatement, selectRows } from "@/lib/mysql";
+import { formatThaiDateTime } from "@/lib/date-format";
 import { dbDateTime, todayBangkok } from "@/lib/local-date";
 
 type EnrollmentRow = RowDataPacket & {
@@ -62,6 +63,8 @@ type DeviceRow = RowDataPacket & {
   raw_payload_json: string | null;
   /** มีเมื่อรัน database/add_agent_health.sql แล้ว */
   health_json?: string | null;
+  /** มีเมื่อรัน database/add_agent_link_mode.sql แล้ว: 1 = ผู้ดูแลยกเลิกการผูก ห้ามผูก/สร้างทะเบียนอัตโนมัติ */
+  auto_link_disabled?: number | null;
   linked_asset_registration_no: string | null;
   linked_asset_name: string | null;
 };
@@ -117,6 +120,10 @@ export type AgentDevice = {
   firstSeenAt: string;
   lastSeenAt: string | null;
   lastReportedAt: string | null;
+  /** lastReportedAt (หรือ lastSeenAt) ในรูปแบบวันที่ไทย เวลา Asia/Bangkok พร้อมแสดงผล */
+  lastReportedLabel: string | null;
+  /** ผู้ดูแลยกเลิกการผูกเอง: Agent จะไม่ผูกหรือสร้างทะเบียนให้อัตโนมัติอีก */
+  autoLinkDisabled: boolean;
   /** ข้อมูลสุขภาพเครื่องจาก Agent 2.x (JSON ที่ผ่าน cleanAgentHealth แล้ว) */
   healthJson: string | null;
 };
@@ -154,12 +161,56 @@ function isDbError(error: unknown, code: string) {
   return typeof error === "object" && error !== null && (error as { code?: string }).code === code;
 }
 
-function toDateTime(value: Date | string | null | undefined) {
-  if (!value) return null;
-  if (value instanceof Date) {
-    return value.toISOString().slice(0, 19).replace("T", " ");
+/**
+ * DB DATETIME (เวลาไทยตาม NOW() ของ MySQL +07:00) -> ISO พร้อม offset เช่น "2026-11-02T09:30:00+07:00"
+ * ระบุ offset ชัดเจน จึงแปลงเวลาถูกทั้งบนเครื่องที่ TZ=UTC (Vercel) และ TZ=Asia/Bangkok (Docker)
+ * mysql2 คืน Date ตามเวลาท้องถิ่นของโปรเซส จึงอ่านค่าตามที่เก็บด้วย dbDateTime ห้ามใช้ toISOString
+ */
+export function agentTimestamp(value: Date | string | null | undefined) {
+  const text = dbDateTime(value);
+  if (!/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(text)) return null;
+  return `${text.replace(" ", "T")}+07:00`;
+}
+
+const toDateTime = agentTimestamp;
+
+function isMissingColumnError(error: unknown) {
+  return isDbError(error, "ER_BAD_FIELD_ERROR");
+}
+
+/** อธิบายว่าทำไมทะเบียนที่ผูกไว้ใช้กับ Agent ไม่ได้แล้ว (ย้ายหน่วยงาน/เปลี่ยนประเภท/ถูกลบ) */
+export class AgentLinkedAssetError extends Error {
+  linkedAssetId: number | null;
+  reason: string;
+  constructor(linkedAssetId: number | null, reason: string) {
+    super("LINKED_ASSET_INVALID");
+    this.name = "AgentLinkedAssetError";
+    this.linkedAssetId = linkedAssetId;
+    this.reason = reason;
   }
-  return String(value).replace("T", " ").slice(0, 19);
+}
+
+// information_assets.deleted_at มาจาก migration ของอีกส่วนหนึ่ง ตรวจจาก information_schema แล้ว cache
+// ถ้ายังไม่มีคอลัมน์ ตรวจซ้ำทุก 5 นาที (จะเห็นคอลัมน์ทันทีหลังรัน migration โดยไม่ต้องรีสตาร์ท)
+let deletedAtProbe: { present: boolean; checkedAt: number } | null = null;
+const DELETED_AT_RECHECK_MS = 5 * 60 * 1000;
+
+async function assetsHaveDeletedAt() {
+  if (deletedAtProbe && (deletedAtProbe.present || Date.now() - deletedAtProbe.checkedAt < DELETED_AT_RECHECK_MS)) {
+    return deletedAtProbe.present;
+  }
+  let present = false;
+  try {
+    const rows = await selectRows<RowDataPacket & { total: number }>(
+      `SELECT COUNT(*) AS total FROM information_schema.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'information_assets' AND COLUMN_NAME = 'deleted_at'`
+    );
+    present = Number(rows[0]?.total ?? 0) > 0;
+  } catch {
+    present = false;
+  }
+  deletedAtProbe = { present, checkedAt: Date.now() };
+  return present;
 }
 
 function hashSecret(value: string) {
@@ -220,6 +271,11 @@ function toDevice(row: DeviceRow): AgentDevice {
     firstSeenAt: toDateTime(row.first_seen_at) ?? "-",
     lastSeenAt: toDateTime(row.last_seen_at),
     lastReportedAt: toDateTime(row.last_reported_at),
+    lastReportedLabel: (() => {
+      const value = toDateTime(row.last_reported_at) ?? toDateTime(row.last_seen_at);
+      return value ? formatThaiDateTime(value) : null;
+    })(),
+    autoLinkDisabled: Number(row.auto_link_disabled ?? 0) === 1,
     healthJson: row.health_json ?? null,
   };
 }
@@ -245,25 +301,39 @@ type AgentAssetRow = AssetLinkRow & {
   asset_class: string | null;
   asset_category: string;
   device_type: string | null;
+  deleted_at?: Date | string | null;
 };
 
 function isAgentAssetRow(row: AgentAssetRow) {
   return supportsAgentAsset({ assetClass: row.asset_class, assetCategory: row.asset_category, deviceType: row.device_type });
 }
 
-async function requireAgentAsset(assetId: number, facilityId: number) {
+const AGENT_ASSET_RULE = "Agent เชื่อมได้เฉพาะคอมพิวเตอร์หรือเซิร์ฟเวอร์ IT Hardware ในหน่วยงานเดียวกัน";
+
+/** เหตุผลที่ทะเบียนใช้กับ Agent ไม่ได้ หรือ null ถ้าใช้ได้ */
+async function agentAssetProblem(assetId: number, facilityId: number): Promise<{ row: AgentAssetRow | null; problem: string | null }> {
+  const hasDeletedAt = await assetsHaveDeletedAt();
   const rows = await selectRows<AgentAssetRow>(
-    `SELECT a.id, a.survey_id, a.asset_class, a.asset_category, a.device_type, s.facility_id
+    `SELECT a.id, a.survey_id, a.asset_class, a.asset_category, a.device_type, s.facility_id${hasDeletedAt ? ", a.deleted_at" : ""}
      FROM information_assets a JOIN information_asset_surveys s ON s.id = a.survey_id
      WHERE a.id = ? LIMIT 1`, [assetId]
   );
-  if (!rows[0] || Number(rows[0].facility_id) !== Number(facilityId) || !isAgentAssetRow(rows[0])) {
-    throw new Error("Agent เชื่อมได้เฉพาะคอมพิวเตอร์หรือเซิร์ฟเวอร์ IT Hardware ในหน่วยงานเดียวกัน");
-  }
-  return rows[0];
+  const row = rows[0] ?? null;
+  if (!row) return { row, problem: "ไม่พบทะเบียนที่ผูกไว้ (อาจถูกลบ)" };
+  if (hasDeletedAt && row.deleted_at) return { row, problem: "ทะเบียนที่ผูกไว้ถูกลบแล้ว" };
+  if (Number(row.facility_id) !== Number(facilityId)) return { row, problem: "ทะเบียนที่ผูกไว้ถูกย้ายไปหน่วยงานอื่น" };
+  if (!isAgentAssetRow(row)) return { row, problem: "ทะเบียนที่ผูกไว้ไม่ใช่คอมพิวเตอร์/เซิร์ฟเวอร์ IT Hardware แล้ว" };
+  return { row, problem: null };
+}
+
+async function requireAgentAsset(assetId: number, facilityId: number) {
+  const { row, problem } = await agentAssetProblem(assetId, facilityId);
+  if (!row || problem) throw new Error(AGENT_ASSET_RULE);
+  return row;
 }
 
 async function findAssetCandidate(facilityId: number, serialNumber?: string | null, hostname?: string | null) {
+  const notDeleted = (await assetsHaveDeletedAt()) ? "\n         AND (a.deleted_at IS NULL)" : "";
   for (const [column, value] of [["serial_number", serialNumber], ["asset_name", hostname]] as const) {
     if (!value?.trim()) continue;
     const rows = await selectRows<AgentAssetRow>(
@@ -271,7 +341,7 @@ async function findAssetCandidate(facilityId: number, serialNumber?: string | nu
        FROM information_assets a JOIN information_asset_surveys s ON s.id = a.survey_id
        WHERE s.facility_id = ? AND a.${column} = ?
          AND COALESCE(NULLIF(TRIM(a.asset_class), ''), 'IT') = 'IT'
-         AND a.asset_category = 'Hardware'
+         AND a.asset_category = 'Hardware'${notDeleted}
          AND NOT EXISTS (SELECT 1 FROM agent_devices ad WHERE ad.linked_asset_id = a.id)
        ORDER BY a.id`, [facilityId, value.trim()]
     );
@@ -628,14 +698,12 @@ export async function reportAgentInventory(input: {
   const fingerprint = payload.fingerprint;
   const reportedStatus = payload.status;
 
-  let linkedAsset = deviceRow.linked_asset_id ? await requireAgentAsset(deviceRow.linked_asset_id, deviceRow.facility_id) : null;
   const reportedDeviceType = payload.deviceType || "Computer";
   if (!supportsAgentAsset({ assetClass: "IT", assetCategory: "Hardware", deviceType: reportedDeviceType })) {
     throw new Error("ประเภทอุปกรณ์ไม่รองรับ ATACS Agent");
   }
 
-  // ใช้เวลาของเซิร์ฟเวอร์เสมอ นาฬิกาเครื่องลูกข่ายอาจเพี้ยนหรือคนละ time zone
-  const lastReportedAt = new Date().toISOString().slice(0, 19).replace("T", " ");
+  // เวลาทั้งหมดใช้ NOW() ของฐานข้อมูล (+07:00) — ไม่สร้างเวลาใน JS (toISOString เป็น UTC ทำให้เพี้ยน 7 ชม.)
   const { health, ...inventory } = payload;
   const updateDevice = (deviceFingerprint: string) => executeStatement(
     `UPDATE agent_devices
@@ -660,7 +728,7 @@ export async function reportAgentInventory(input: {
          agent_version = ?,
          status = ?,
          last_seen_at = NOW(),
-         last_reported_at = ?,
+         last_reported_at = NOW(),
          raw_payload_json = ?
      WHERE id = ?`,
     [
@@ -684,7 +752,6 @@ export async function reportAgentInventory(input: {
       payload.locationDetail,
       payload.agentVersion,
       reportedStatus,
-      lastReportedAt,
       // เก็บเฉพาะข้อมูลที่ตรวจแล้ว ไม่เก็บ body ดิบ (เดิมรับได้หลาย MB)
       JSON.stringify(inventory),
       deviceRow.id,
@@ -697,17 +764,35 @@ export async function reportAgentInventory(input: {
     if (!isDbError(error, "ER_DUP_ENTRY")) throw error;
     await updateDevice(deviceRow.device_fingerprint);
   }
-  if (health) {
-    try {
-      await executeStatement("UPDATE agent_devices SET health_json = ? WHERE id = ?", [JSON.stringify(health), deviceRow.id]);
-    } catch (error) {
-      // ยังไม่ได้รัน database/add_agent_health.sql: ข้อมูลอื่นบันทึกแล้ว ข้ามเฉพาะส่วนสุขภาพเครื่อง
-      if (!isDbError(error, "ER_BAD_FIELD_ERROR")) throw error;
-    }
+  try {
+    // รายงานที่ไม่มีส่วนสุขภาพ (Agent รุ่นเก่า/อ่านไม่ได้) ต้องล้างค่าเดิม ไม่ให้หน้าติดตามแสดงข้อมูลค้าง
+    await executeStatement("UPDATE agent_devices SET health_json = ? WHERE id = ?", [health ? JSON.stringify(health) : null, deviceRow.id]);
+  } catch (error) {
+    // ยังไม่ได้รัน database/add_agent_health.sql: ข้อมูลอื่นบันทึกแล้ว ข้ามเฉพาะส่วนสุขภาพเครื่อง
+    if (!isMissingColumnError(error)) throw error;
   }
 
+  const recovered = deviceRow.status === "offline" && reportedStatus !== "offline";
+  const baseResult = {
+    deviceId: deviceRow.id,
+    recovered,
+    hostname: payload.hostname?.trim() || deviceRow.hostname,
+    facilityName: deviceRow.facility_name,
+    agentUuid: deviceRow.agent_uuid,
+  };
+
+  // G10: บันทึกว่าเครื่องยังออนไลน์ไปแล้วข้างบน จากนั้นจึงตรวจทะเบียนที่ผูกไว้
+  // ถ้าทะเบียนถูกย้าย/เปลี่ยนประเภท/ลบ ไม่แตะทะเบียนและแจ้ง 409 ให้ผู้ดูแลผูกใหม่หรือยกเลิกการผูก
+  let linkedAsset: AgentAssetRow | null = null;
   let linkedAssetId = deviceRow.linked_asset_id;
-  if (!linkedAssetId) {
+  if (linkedAssetId) {
+    const { row, problem } = await agentAssetProblem(linkedAssetId, deviceRow.facility_id);
+    if (!row || problem) throw new AgentLinkedAssetError(linkedAssetId, problem ?? AGENT_ASSET_RULE);
+    linkedAsset = row;
+  } else if (Number(deviceRow.auto_link_disabled ?? 0) === 1) {
+    // G7: ผู้ดูแลยกเลิกการผูกเอง — เก็บข้อมูลเครื่องอย่างเดียว ไม่ผูกหรือสร้างทะเบียนใหม่ให้อัตโนมัติ
+    return { ...baseResult, linkedAssetId: null, surveyId: null };
+  } else {
     linkedAssetId = await findAssetCandidate(deviceRow.facility_id, payload.serialNumber, payload.hostname);
     if (linkedAssetId) linkedAsset = await requireAgentAsset(linkedAssetId, deviceRow.facility_id);
   }
@@ -742,39 +827,56 @@ export async function reportAgentInventory(input: {
     lastUpdatedAt: todayBangkok(),
   };
 
-  if (linkedAssetId) {
+  const updateExistingAsset = async (assetId: number, surveyIdForAsset: number) => {
     // Disposed/Lost come from an approved request and Broken from staff/inspection/repairs;
     // an Agent report ("the machine is on") must not revert any of them.
     const [statusRow] = await selectRows<RowDataPacket & { current_status: string | null }>(
       "SELECT current_status FROM information_assets WHERE id = ? LIMIT 1",
-      [linkedAssetId]
+      [assetId]
     );
-    const { currentStatus, ...fieldsWithoutStatus } = commonAssetFields;
+    const { currentStatus, ...fieldsWithoutStatus } = { ...commonAssetFields, surveyId: surveyIdForAsset };
     const keepStatus = isTerminalAssetStatus(statusRow?.current_status) || statusRow?.current_status === "Broken";
-    await updateAsset(linkedAssetId, keepStatus ? fieldsWithoutStatus : { ...fieldsWithoutStatus, currentStatus });
+    await updateAsset(assetId, keepStatus ? fieldsWithoutStatus : { ...fieldsWithoutStatus, currentStatus });
+  };
+
+  if (linkedAssetId) {
+    await updateExistingAsset(linkedAssetId, surveyId);
   } else {
-    const result = await createAsset({
-      ...commonAssetFields,
-      assetClass: "IT",
-      assetRegistrationNo: autoRegistrationNo(deviceRow.facility_id, deviceRow.id),
-    });
-    linkedAssetId = result.insertId;
+    const registrationNo = autoRegistrationNo(deviceRow.facility_id, deviceRow.id);
+    try {
+      const result = await createAsset({ ...commonAssetFields, assetClass: "IT", assetRegistrationNo: registrationNo });
+      linkedAssetId = result.insertId;
+    } catch (error) {
+      // G7: ทะเบียน AGT-xxx ของเครื่องนี้มีอยู่แล้ว (เช่น เคยยกเลิกการผูกก่อนรัน migration) — ใช้ทะเบียนเดิม ไม่ 500
+      if (!isDbError(error, "ER_DUP_ENTRY")) throw error;
+      const existing = await findAgentRegistrationAsset(surveyId, registrationNo, deviceRow.id, deviceRow.facility_id);
+      if (!existing) throw new AgentLinkedAssetError(null, `เลขทะเบียน ${registrationNo} ถูกใช้กับรายการอื่นแล้ว`);
+      linkedAssetId = existing.id;
+      await updateExistingAsset(existing.id, existing.survey_id);
+    }
   }
 
   await executeStatement(
-    `UPDATE agent_devices SET linked_asset_id = ?, status = ?, last_seen_at = NOW(), last_reported_at = ? WHERE id = ?`,
-    [linkedAssetId, reportedStatus, lastReportedAt, deviceRow.id]
+    `UPDATE agent_devices SET linked_asset_id = ?, status = ?, last_seen_at = NOW(), last_reported_at = NOW() WHERE id = ?`,
+    [linkedAssetId, reportedStatus, deviceRow.id]
   );
 
-  return {
-    deviceId: deviceRow.id,
-    linkedAssetId,
-    surveyId,
-    recovered: deviceRow.status === "offline" && reportedStatus !== "offline",
-    hostname: payload.hostname?.trim() || deviceRow.hostname,
-    facilityName: deviceRow.facility_name,
-    agentUuid: deviceRow.agent_uuid,
-  };
+  return { ...baseResult, linkedAssetId, surveyId };
+}
+
+/** ทะเบียน AGT-xxx ที่มีอยู่แล้วของเครื่องนี้ ใช้ซ้ำได้เมื่อยังเป็นคอมพิวเตอร์ IT ในหน่วยงานเดียวกันและไม่ถูกผูกกับเครื่องอื่น */
+async function findAgentRegistrationAsset(surveyId: number, registrationNo: string, deviceId: number, facilityId: number) {
+  const rows = await selectRows<AgentAssetRow>(
+    `SELECT a.id
+     FROM information_assets a
+     WHERE a.survey_id = ? AND a.asset_registration_no = ?
+       AND NOT EXISTS (SELECT 1 FROM agent_devices ad WHERE ad.linked_asset_id = a.id AND ad.id <> ?)
+     LIMIT 1`,
+    [surveyId, registrationNo, deviceId]
+  );
+  if (!rows[0]) return null;
+  const { row, problem } = await agentAssetProblem(Number(rows[0].id), facilityId);
+  return row && !problem ? row : null;
 }
 
 export async function linkAgentDeviceToAsset(deviceId: number, assetId: number | null) {
@@ -782,10 +884,21 @@ export async function linkAgentDeviceToAsset(deviceId: number, assetId: number |
   const facilityId = await getAgentDeviceFacilityId(deviceId);
   if (!facilityId) throw new Error("ไม่พบ Agent Device");
   if (assetId !== null) await requireAgentAsset(assetId, facilityId);
-  await executeStatement(
-    `UPDATE agent_devices SET linked_asset_id = ? WHERE id = ?`,
-    [assetId ?? null, deviceId]
-  );
+  // G7: ยกเลิกการผูกโดยผู้ดูแลต้อง "ติด" — ห้ามรายงานถัดไปผูก/สร้างทะเบียนกลับอัตโนมัติ
+  // ผูกกับทะเบียนใหม่เมื่อไรก็เปิดการผูกอัตโนมัติคืน
+  try {
+    await executeStatement(
+      `UPDATE agent_devices SET linked_asset_id = ?, auto_link_disabled = ${assetId === null ? 1 : 0} WHERE id = ?`,
+      [assetId ?? null, deviceId]
+    );
+  } catch (error) {
+    // ยังไม่ได้รัน database/add_agent_link_mode.sql
+    if (!isMissingColumnError(error)) throw error;
+    await executeStatement(
+      `UPDATE agent_devices SET linked_asset_id = ? WHERE id = ?`,
+      [assetId ?? null, deviceId]
+    );
+  }
 }
 
 export async function getAgentDeviceFacilityId(deviceId: number) {

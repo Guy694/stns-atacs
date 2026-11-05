@@ -211,5 +211,25 @@
         "health_json"
       ]
     }
+  },
+  {
+    "file": "add_agent_link_mode.sql (ยกเลิกการผูก Agent แล้วไม่ผูกกลับอัตโนมัติ)",
+    "tables": [],
+    "columns": {
+      "agent_devices": [
+        "auto_link_disabled"
+      ]
+    }
+  },
+  {
+    "file": "add_asset_soft_delete.sql (ลบทรัพย์สินแบบเก็บประวัติ — ก่อนรัน ลบทรัพย์สินจากหน้าจอไม่ได้)",
+    "tables": [],
+    "columns": {
+      "information_assets": [
+        "deleted_at",
+        "deleted_by_user_id",
+        "deleted_by"
+      ]
+    }
   }
 ]

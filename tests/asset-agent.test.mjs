@@ -46,11 +46,15 @@ test("Agent updates eligible existing computers without purchasing, license or c
   }
 });
 
-test("invalid existing Agent links are rejected before any writes", async () => {
+// G10: เดิมปฏิเสธก่อนเขียนอะไรเลย ทำให้เครื่องที่ยังเปิดอยู่ถูกนับว่า offline และได้ 500
+// ตอนนี้บันทึกสถานะเครื่อง (last_seen_at/ข้อมูล inventory ใน agent_devices) ก่อน แล้วจึงตอบ 409
+// แต่ยังห้ามแตะทะเบียนครุภัณฑ์และห้ามเปลี่ยน linked_asset_id
+test("invalid existing Agent links record the device heartbeat but never touch the asset", async () => {
   for (const options of [{ candidateClass: "Vehicle" }, { candidateCategory: "Software" }, { candidateType: "Printer" }, { candidateFacility: 20 }]) {
     const ctx = setup({ linkedAssetId: 7, ...options });
-    await assert.rejects(ctx.report(), /Agent/);
-    assert.equal(ctx.writes.length, 0);
+    await assert.rejects(ctx.report(), (error) => error.message === "LINKED_ASSET_INVALID");
+    assert.ok(ctx.writes.every((write) => /UPDATE agent_devices/.test(write.sql)));
+    assert.ok(!ctx.writes.some((write) => write.sql.includes("linked_asset_id")));
     assert.equal(ctx.assetWrites.length, 0);
   }
 });

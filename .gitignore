@@ -22,6 +22,8 @@
 
 # misc
 .DS_Store
+__pycache__/
+*.py[cod]
 *.pem
 
 # debug
@@ -53,3 +55,4 @@ next-env.d.ts
 /database/stn_atacs.sql
 /.vscode/
 .env*.local
+database-check-report.txt

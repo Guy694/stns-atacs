@@ -11,7 +11,7 @@ import {
 } from "@/lib/auth";
 import { getThaiIdConfig } from "@/lib/thaiid";
 import { notifyTelegramSafe } from "@/lib/telegram";
-import { recordSecurityEvent } from "@/lib/security";
+import { readRequestIp, recordSecurityEvent } from "@/lib/security";
 import { withBasePath } from "@/lib/base-path";
 import { getPublicRequestOrigin, getPublicRequestUrl } from "@/lib/request-url";
 
@@ -44,7 +44,8 @@ function toRegisterUrl(req: NextRequest, search: Record<string, string>) {
 
 function requestDetails(req: NextRequest) {
   return {
-    IP: req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? req.headers.get("x-real-ip") ?? "unknown",
+    // SEC-08/B11: the first X-Forwarded-For entry is client-controlled; count trusted proxies instead.
+    IP: readRequestIp(req.headers),
     "User Agent": req.headers.get("user-agent") ?? "unknown",
   };
 }

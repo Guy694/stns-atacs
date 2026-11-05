@@ -2,6 +2,7 @@ import { createAssetQrSvg } from "@/lib/asset-qr";
 import { getCurrentUser } from "@/lib/auth";
 import { getAssetById } from "@/lib/assets";
 import { canAccessAssetFacility } from "@/lib/permissions";
+import { getPublicRequestOrigin } from "@/lib/request-url";
 
 type AssetQrRouteContext = {
   params: Promise<{ id: string }>;
@@ -25,7 +26,7 @@ export async function GET(request: Request, { params }: AssetQrRouteContext) {
   }
   if (!canAccessAssetFacility(user, asset.facilityId)) return new Response("Forbidden", { status: 403 });
 
-  const svg = await createAssetQrSvg(asset, request.url);
+  const svg = await createAssetQrSvg(asset, getPublicRequestOrigin(request));
 
   return new Response(svg, {
     headers: {

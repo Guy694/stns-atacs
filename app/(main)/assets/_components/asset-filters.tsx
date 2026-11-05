@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { withBasePath } from "@/lib/base-path";
 import { ASSET_CREATE_CLASS_OPTIONS, ASSET_CLASS_OPTIONS, assetClassLabel } from "@/lib/asset-classes";
 import type { AssetSubtype } from "@/lib/asset-details";
 import type { ColumnSortOption } from "@/lib/table-sort";
@@ -19,11 +20,20 @@ type Props = {
   columnSort?: ColumnSortOption | null;
 };
 const control = "filter-control w-full";
+
+/** Plain <form action>/<a href> are not prefixed by Next.js: add basePath and the trailing slash (trailingSlash: true). */
+function browserHref(path: string) {
+  const index = path.indexOf("?");
+  const pathname = index === -1 ? path : path.slice(0, index);
+  const query = index === -1 ? "" : path.slice(index);
+  return withBasePath(`${pathname.endsWith("/") ? pathname : `${pathname}/`}${query}`);
+}
 const label = "filter-label";
 
 // C4: แถวหลักแสดงตัวกรองที่ใช้บ่อย (คำค้น สถานะ ประเภท หน่วยงาน) ที่เหลืออยู่ใน "ตัวกรองเพิ่มเติม"
 export function AssetFilters({ values, resetHref, subtypes, deviceTypes, facilities, districts, workGroups = [], paginate = false, columnSort = null }: Props) {
   const text = (key: string) => String(values[key] ?? "");
+  const resetUrl = browserHref(resetHref);
   const [assetClass, setAssetClass] = useState(text("assetClass"));
   const [subtype, setSubtype] = useState(text("subtype"));
   const [deviceType, setDeviceType] = useState(text("deviceType"));
@@ -42,7 +52,7 @@ export function AssetFilters({ values, resetHref, subtypes, deviceTypes, facilit
     ? "lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1.3fr)_minmax(0,1.3fr)_auto]"
     : "lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1.3fr)_auto]";
 
-  return <form method="GET" action={resetHref} className="min-w-0 space-y-2 rounded-xl border border-[var(--line)] bg-white p-3" aria-label="ค้นหาและกรองครุภัณฑ์">
+  return <form method="GET" action={resetUrl} className="min-w-0 space-y-2 rounded-xl border border-[var(--line)] bg-white p-3" aria-label="ค้นหาและกรองครุภัณฑ์">
     {columnSort && <input type="hidden" name="dir" value={columnSort.dir} />}
     <div className={`grid grid-cols-2 gap-2 lg:items-end ${mainGrid}`}>
       <label className={`${label} col-span-2 lg:col-span-1`}>คำค้นหา<input className={control} type="search" name="search" defaultValue={text("search")} placeholder="ชื่อ เลขทะเบียน หรือ Serial Number" /></label>
@@ -55,7 +65,7 @@ export function AssetFilters({ values, resetHref, subtypes, deviceTypes, facilit
       {facilities && <label className={`${label} col-span-2 lg:col-span-1`}>หน่วยงาน<select aria-label="หน่วยงาน" className={control} name="facility" value={facility} onChange={event => {setFacility(event.target.value); setWorkGroup("");}}><option value="">ทุกหน่วยงาน</option>{availableFacilities?.map(item => <option key={item.id} value={item.id}>{item.facility_name}</option>)}</select></label>}
       <div className="col-span-2 flex items-center gap-2 lg:col-span-1">
         <button type="submit" className="filter-button min-h-11 flex-1 whitespace-nowrap bg-[var(--accent-strong)] px-5 text-white hover:bg-[var(--primary-hover)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] lg:min-h-9 lg:flex-none">ค้นหา</button>
-        {activeCount > 0 && <a href={resetHref} className="inline-flex min-h-11 items-center whitespace-nowrap px-2 text-xs text-[var(--primary-text)] underline underline-offset-4 lg:min-h-9">ล้างตัวกรอง ({activeCount})</a>}
+        {activeCount > 0 && <a href={resetUrl} className="inline-flex min-h-11 items-center whitespace-nowrap px-2 text-xs text-[var(--primary-text)] underline underline-offset-4 lg:min-h-9">ล้างตัวกรอง ({activeCount})</a>}
       </div>
     </div>
     <details open={advancedCount > 0 || (paginate && Boolean(values.perPage))}>

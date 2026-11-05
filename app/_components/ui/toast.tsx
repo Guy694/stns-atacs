@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useSyncExternalStore } from "react";
+import { Suspense, useEffect, useRef, useSyncExternalStore } from "react";
 
 import { AppIcon, type IconName } from "@/app/_components/ui/icon";
 
@@ -86,15 +86,26 @@ function UrlToast() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const key = searchParams.get("toast");
+  // StrictMode runs effects twice in dev; remember what we already showed for this URL.
+  const handledRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!key) return;
+    if (!key) {
+      handledRef.current = null;
+      return;
+    }
+    const marker = `${pathname}?${searchParams.toString()}`;
+    if (handledRef.current === marker) return;
+    handledRef.current = marker;
     const entry = URL_TOASTS[key];
     if (entry) push(entry.tone, entry.message);
     const url = new URL(window.location.href);
     url.searchParams.delete("toast");
-    window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
-  }, [key, pathname]);
+    // Pass `null` (not window.history.state): Next.js' patched replaceState skips syncing its router when the
+    // state already carries its internal markers, which would keep `?toast=` in the router and bring it back
+    // on the next router.refresh()/server action.
+    window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+  }, [key, pathname, searchParams]);
 
   return null;
 }
@@ -111,7 +122,7 @@ export function Toaster() {
       <div
         aria-live="polite"
         aria-atomic="false"
-        className="pointer-events-none fixed inset-x-3 bottom-[calc(5.5rem+env(safe-area-inset-bottom))] z-[45] flex flex-col items-center gap-2 sm:inset-x-auto sm:right-4 sm:items-end lg:bottom-6 lg:right-6"
+        className="pointer-events-none fixed inset-x-3 bottom-[calc(5.5rem+env(safe-area-inset-bottom))] z-[1050] flex flex-col items-center gap-2 sm:inset-x-auto sm:right-4 sm:items-end lg:bottom-6 lg:right-6"
       >
         {list.map((item) => (
           <div

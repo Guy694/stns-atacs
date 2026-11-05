@@ -9,7 +9,7 @@ test("export and template carry every specific column and only current class det
     "next/server": { NextResponse: Response },
     "@/lib/auth": { getCurrentUser: async () => ({ role: "admin" }) },
     "@/lib/assets": { listAssets: async () => assets },
-    "@/lib/facility-scope": { resolveFacilityFilter: () => 10 },
+    "@/lib/facility-scope": { resolveFacilityFilter: () => 10, resolveRequestedAssetFacility: () => ({ ok: true, facilityId: 10 }) },
     "@/lib/permissions": { canSeeSensitiveAssetNetwork: () => true },
     "@/lib/role-permissions": { hasPermission: async () => true },
     "@/lib/security": { readRequestIp: () => "test", recordSecurityEvent: async () => {} },
@@ -23,4 +23,20 @@ test("export and template carry every specific column and only current class det
     assert.equal(row.material, "");
     if (!query) { assert.equal(row.license_plate, 'กข,123"4'); assert.equal(String(row.subtype_id), "8"); }
   }
+});
+
+test("export honours a requested facility inside the scope and refuses one outside it", async () => {
+  const requests = [];
+  const { GET } = loadTs("app/api/export/assets/route.ts", {
+    "next/server": { NextResponse: Response },
+    "@/lib/auth": { getCurrentUser: async () => ({ role: "officer", facilityId: 10, managedAssetFacilityIds: [20] }) },
+    "@/lib/assets": { listAssets: async (filter) => { requests.push(filter.facilityId); return []; } },
+    "@/lib/permissions": { canSeeSensitiveAssetNetwork: () => true },
+    "@/lib/role-permissions": { hasPermission: async () => true },
+    "@/lib/security": { readRequestIp: () => "test", recordSecurityEvent: async () => {} },
+  });
+  assert.equal((await GET({ nextUrl: new URL("http://localhost/api/export/assets?facilityId=20") })).status, 200);
+  assert.deepEqual(requests, [20]);
+  assert.equal((await GET({ nextUrl: new URL("http://localhost/api/export/assets?facilityId=99") })).status, 403);
+  assert.deepEqual(requests, [20]);
 });

@@ -41,3 +41,26 @@ export function resolveFacilityFilter(
   }
   return getFacilityScopeId(user);
 }
+
+export type RequestedFacilityResult =
+  | { ok: true; facilityId: number | undefined }
+  | { ok: false; status: 403; error: string };
+
+/**
+ * Facility for list/export endpoints that accept ?facilityId=. A requested facility inside the user's
+ * asset scope (own + managed facilities) is honoured; one outside it is refused (403) instead of being
+ * silently replaced by the user's own facility. Without a request: admins get every facility (undefined),
+ * everyone else their own facility.
+ */
+export function resolveRequestedAssetFacility(
+  user: ScopedUser | null | undefined,
+  requestedFacilityId?: number | null
+): RequestedFacilityResult {
+  const requested = Number.isSafeInteger(requestedFacilityId) && Number(requestedFacilityId) > 0 ? Number(requestedFacilityId) : undefined;
+  const scopeIds = getAssetFacilityScopeIds(user);
+  if (scopeIds === null) return { ok: false, status: 403, error: "No facility scope" };
+  if (scopeIds === undefined) return { ok: true, facilityId: requested };
+  if (requested === undefined) return { ok: true, facilityId: getFacilityScopeId(user) ?? undefined };
+  if (!scopeIds.includes(requested)) return { ok: false, status: 403, error: "Facility outside your scope" };
+  return { ok: true, facilityId: requested };
+}

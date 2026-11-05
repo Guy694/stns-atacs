@@ -5,7 +5,7 @@ import { fiscalYearOf } from "@/lib/asset-valuation";
 import { getCurrentUser } from "@/lib/auth";
 import { toCsv } from "@/lib/csv";
 import { buildDepreciationRollup } from "@/lib/depreciation-rollup";
-import { resolveFacilityFilter } from "@/lib/facility-scope";
+import { resolveRequestedAssetFacility } from "@/lib/facility-scope";
 import { hasPermission } from "@/lib/role-permissions";
 import { readRequestIp, recordSecurityEvent } from "@/lib/security";
 import { todayBangkok } from "@/lib/local-date";
@@ -36,8 +36,9 @@ export async function GET(req: NextRequest) {
 
   const params = req.nextUrl.searchParams;
   const requestedFacilityId = params.get("facilityId") ? Number(params.get("facilityId")) : undefined;
-  const facilityId = resolveFacilityFilter(user, requestedFacilityId);
-  if (facilityId === null) return NextResponse.json({ error: "No facility scope" }, { status: 403 });
+  const scope = resolveRequestedAssetFacility(user, requestedFacilityId);
+  if (!scope.ok) return NextResponse.json({ error: scope.error }, { status: scope.status });
+  const facilityId = scope.facilityId;
 
   const fiscalYear = Number(params.get("fy")) || fiscalYearOf(todayBangkok());
   if (!Number.isInteger(fiscalYear) || fiscalYear < 2500 || fiscalYear > 2700) {

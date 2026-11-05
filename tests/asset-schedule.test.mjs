@@ -37,7 +37,7 @@ test("subtype filters are validated and shared by list and export queries", () =
 test("list and count constrain subtype to the current class and facility, using parameters", async () => {
   const calls = [];
   const repository = loadTs("lib/assets.ts", { "@/lib/mysql": {
-    selectRows: async (sql, values) => { calls.push({ sql, values }); return sql.includes("COUNT(*)") ? [{ total: 0 }] : []; },
+    selectRows: async (sql, values) => { if (sql.includes("information_schema")) return []; calls.push({ sql, values }); return sql.includes("COUNT(*)") ? [{ total: 0 }] : []; },
   } });
   const filter = { facilityId: 7, assetClass: "Electrical", subtypeId: 42 };
   await repository.listAssets(filter);

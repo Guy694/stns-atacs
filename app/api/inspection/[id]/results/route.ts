@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 
 import { getCurrentUser } from "@/lib/auth";
 import { getInspectionById, getInspectionItems } from "@/lib/inspection";
+import { offlineScanAuditNote } from "@/lib/input-guards";
 import { InspectionResultError, recordInspectionResult } from "@/lib/inspection-results";
 import { parseBatch, type SyncOutcome } from "@/lib/offline-inspection";
 import { canManageFacility, canMutateAssets } from "@/lib/permissions";
@@ -61,7 +62,8 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
         conditionNote: entry.conditionNote,
         foundWorkGroupId: entry.foundWorkGroupId,
         foundLocation: entry.foundLocation,
-        auditNote: `สแกนออฟไลน์ ${entry.scannedAt.slice(0, 19).replace("T", " ")}`,
+        // B7: the client sends UTC ISO; record Bangkok wall-clock time formatted on the server.
+        auditNote: offlineScanAuditNote(entry.scannedAt),
       });
       outcomes.push({ clientId: entry.clientId, itemId: entry.itemId, ok: true });
     } catch (error) {

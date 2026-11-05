@@ -768,6 +768,9 @@ export async function getCurrentUser() {
       [tokenHash, SESSION_TTL_DAYS]
     );
   } catch (error) {
+    // B14: the reduced query exists only for databases without users.facility_id yet.
+    // Any other failure (connection lost, timeout...) must surface, not be retried and masked.
+    if (!isMissingSchemaError(error)) throw error;
     try {
       rows = await selectRows<SessionUserRow>(
         `
@@ -791,6 +794,7 @@ export async function getCurrentUser() {
         [tokenHash, SESSION_TTL_DAYS]
       );
     } catch (fallbackError) {
+      if (!isMissingSchemaError(fallbackError)) throw fallbackError;
       console.error("Session lookup failed", fallbackError instanceof Error ? fallbackError.message : error);
       return null;
     }

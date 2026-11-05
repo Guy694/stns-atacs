@@ -131,7 +131,7 @@ function ComputerSpecPanel({ device }: { device: AgentDevice | null }) {
         <div>
           <p className="text-sm font-semibold text-[var(--primary-text)]">สเปคคอมพิวเตอร์จาก Agent</p>
           <p className="mt-0.5 text-xs text-[var(--muted)]">
-            รายงานล่าสุด {device.lastReportedAt ?? device.lastSeenAt ?? "–"}
+            รายงานล่าสุด {device.lastReportedLabel ?? "–"}
           </p>
         </div>
         <StatusBadge tone={device.status === "offline" ? "danger" : "success"}>
@@ -391,7 +391,7 @@ export default async function AssetDetailPage({ params, searchParams }: Props) {
                 <AppIcon name="printer" className="h-4 w-4" /> {link.label}
               </Link>
             ))}
-            {canMutateThisAsset && canDeleteThisAsset && <DeleteAssetButton assetId={asset.id} assetName={asset.assetName} />}
+            {canMutateThisAsset && canDeleteThisAsset && <DeleteAssetButton assetId={asset.id} assetName={asset.assetName} redirectTo={`/facilities/${asset.facilityId}/?toast=deleted`} />}
           </div>
           <details className="group rounded-xl border border-[var(--line)] bg-white/80 sm:hidden">
             <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-2 px-4 text-sm font-semibold text-[var(--accent-strong)] [&::-webkit-details-marker]:hidden">

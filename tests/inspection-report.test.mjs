@@ -87,3 +87,16 @@ test("items found in another work group are reported with the register first", (
   assert.match(text, /กลุ่มงานควบคุมโรค \(ห้อง 205\)/);
   assert.match(XLSX.utils.sheet_to_csv(wb.Sheets[wb.SheetNames[0]]), /พบต่างจากกลุ่มงาน\/สถานที่ในทะเบียน 1 รายการ/);
 });
+
+test("scanTarget turns QR text into an in-app destination (scan page)", () => {
+  assert.deepEqual(plain(scan.scanTarget("https://moph.example/stns-atacs/scan/assets/45/")), { kind: "asset", assetId: 45, href: "/assets/45/#check-in-heading" });
+  assert.deepEqual(plain(scan.scanTarget("https://x.example/q/7")), { kind: "asset", assetId: 7, href: "/assets/7/#check-in-heading" });
+  // Plain text on a sticker (registration number typed or encoded) becomes a search.
+  assert.deepEqual(plain(scan.scanTarget(" 7440-001-0001/66 ")), { kind: "search", query: "7440-001-0001/66", href: "/assets/?search=7440-001-0001%2F66" });
+  // Officers search inside their facility page.
+  assert.equal(scan.scanTarget("ABC-1", "/facilities/7/").href, "/facilities/7/?search=ABC-1");
+  // Foreign links are never followed.
+  assert.deepEqual(plain(scan.scanTarget("https://evil.example/login")), { kind: "unknown" });
+  assert.deepEqual(plain(scan.scanTarget("   ")), { kind: "unknown" });
+  assert.deepEqual(plain(scan.scanTarget("x".repeat(300))), { kind: "unknown" });
+});

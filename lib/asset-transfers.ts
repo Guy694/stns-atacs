@@ -2,6 +2,8 @@ import "server-only";
 
 import type { RowDataPacket } from "mysql2/promise";
 
+import { assertNoOpenAssetWork } from "@/lib/asset-open-work";
+import { assetNotDeletedSql } from "@/lib/asset-soft-delete";
 import { isTerminalAssetStatus } from "@/lib/asset-status";
 import { ensureAssetStatusHistoryTable, insertAssetStatusHistory } from "@/lib/asset-status-history";
 import { updateAsset } from "@/lib/assets";
@@ -60,45 +62,20 @@ type LockedAsset = RowDataPacket & {
 const dateOnly = (value: Date | string | null) => (value ? dbDate(value) : "");
 const dateTime = (value: Date | string | null) => (value ? dbDateTime(value) : "");
 
-/**
- * Repairs, loans and disposal requests keep the facility they were opened under, so moving an asset
- * with open work would hide that work from the new owner and leave the old one able to act on it.
- */
-async function assertNoOpenWork(assetId: number) {
-  let counts: { open_repairs: number; open_loans: number; pending_disposals: number } | undefined;
-  try {
-    [counts] = await selectRows<RowDataPacket & { open_repairs: number; open_loans: number; pending_disposals: number }>(
-      `SELECT
-         (SELECT COUNT(*) FROM asset_repairs WHERE asset_id = ? AND status IN ('Reported','InProgress','SentToVendor')) AS open_repairs,
-         (SELECT COUNT(*) FROM asset_loans WHERE asset_id = ? AND status = 'OnLoan') AS open_loans,
-         (SELECT COUNT(*) FROM asset_disposal_requests WHERE asset_id = ? AND status = 'Pending') AS pending_disposals`,
-      [assetId, assetId, assetId]
-    );
-  } catch (error) {
-    if (isMissingSchemaError(error)) return; // lifecycle tables not migrated yet: nothing can be open
-    throw error;
-  }
-  const open = [
-    Number(counts?.open_repairs ?? 0) > 0 ? `งานซ่อมที่ยังไม่ปิด ${Number(counts?.open_repairs)} รายการ` : "",
-    Number(counts?.open_loans ?? 0) > 0 ? `กำลังถูกยืม ${Number(counts?.open_loans)} รายการ` : "",
-    Number(counts?.pending_disposals ?? 0) > 0 ? `คำขอจำหน่ายที่รอพิจารณา ${Number(counts?.pending_disposals)} รายการ` : "",
-  ].filter(Boolean);
-  if (open.length) throw new Error(`โอนย้ายข้ามหน่วยงานไม่ได้ เพราะยังมี${open.join(", ")} กรุณาปิดงานเหล่านี้ก่อน`);
-}
-
 /** Moves an asset and records the transfer, status history and new placement atomically. */
 export async function transferAsset(input: TransferInput) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(input.transferDate)) throw new Error("วันที่โอนย้ายไม่ถูกต้อง");
   if (input.transferDate > todayBangkok()) throw new Error("วันที่โอนย้ายห้ามเกินวันที่ปัจจุบัน");
   await ensureAssetStatusHistoryTable();
 
+  const notDeleted = await assetNotDeletedSql("a");
   return withTransaction(async () => {
     const [asset] = await selectRows<LockedAsset>(
       `SELECT a.id, a.asset_name, a.survey_id, s.facility_id, hf.name AS facility_name, a.work_group_id, a.owner_name, a.location_detail, a.current_status
        FROM information_assets a
        JOIN information_asset_surveys s ON s.id = a.survey_id
        LEFT JOIN health_facilities hf ON hf.id = s.facility_id
-       WHERE a.id = ? FOR UPDATE`,
+       WHERE a.id = ? AND ${notDeleted} FOR UPDATE`,
       [input.assetId]
     );
     if (!asset) throw new Error("ไม่พบทรัพย์สิน");
@@ -112,7 +89,7 @@ export async function transferAsset(input: TransferInput) {
     );
     if (!destination) throw new Error("ไม่พบหน่วยงานปลายทาง");
     const facilityChanged = Number(destination.facility_id) !== Number(asset.facility_id);
-    if (facilityChanged) await assertNoOpenWork(asset.id);
+    if (facilityChanged) await assertNoOpenAssetWork(asset.id, "transfer");
 
     let toWorkGroupId = input.toWorkGroupId === undefined ? (facilityChanged ? null : asset.work_group_id) : input.toWorkGroupId;
     const activeGroups = await selectRows<RowDataPacket & { id: number }>(

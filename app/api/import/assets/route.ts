@@ -6,10 +6,10 @@ import type { RowDataPacket } from "mysql2/promise";
 import { IMPORT_HEADERS } from "@/lib/asset-import-columns";
 import { parseAssetFields, type AssetFields, type ExistingAssetFields } from "@/lib/asset-input";
 import { isItAsset, parseAssetClass } from "@/lib/asset-policy";
-import { writeAuditLog } from "@/lib/audit";
+import { writeAuditLogSafe } from "@/lib/audit";
 import { getCurrentUser } from "@/lib/auth";
 import { createAsset, findOrCreateSurvey, updateAsset, type AssetInput } from "@/lib/assets";
-import { recordAssetStatusHistory } from "@/lib/asset-status-history";
+import { assetNotDeletedSql, hasAssetSoftDelete } from "@/lib/asset-soft-delete";
 import { selectRows } from "@/lib/mysql";
 import { parseImportFile } from "@/lib/spreadsheet-parse";
 import { canManageAssetRecord, canMutateAssets } from "@/lib/permissions";
@@ -119,17 +119,26 @@ function buildInput(row: ImportRow, surveyId: number, workGroupId: number | unde
   };
 }
 
+/**
+ * A soft-deleted asset keeps its registration number (UNIQUE survey_id + asset_registration_no still covers
+ * the row and the trail must stay unambiguous), so re-importing that number is refused with a clear message.
+ * Serial numbers of deleted assets no longer count as duplicates.
+ */
 async function validateUniqueValues(input: AssetInput, facilityId: number, assetId?: number) {
   if (input.assetRegistrationNo) {
-    const duplicateRegistration = await selectRows<RowDataPacket & { id: number }>(
-      `SELECT a.id
+    const duplicateRegistration = await selectRows<RowDataPacket & { id: number; deleted: number }>(
+      `SELECT a.id, ${(await hasAssetSoftDelete()) ? "a.deleted_at IS NOT NULL" : "0"} AS deleted
        FROM information_assets a
        WHERE a.asset_registration_no = ?
          AND (? IS NULL OR a.id <> ?)
        LIMIT 1`,
       [input.assetRegistrationNo, assetId ?? null, assetId ?? null]
     );
-    if (duplicateRegistration.length > 0) throw new Error("เลขทะเบียนทรัพย์สินนี้มีในระบบแล้ว");
+    if (duplicateRegistration.length > 0) {
+      throw new Error(Number(duplicateRegistration[0].deleted)
+        ? "เลขทะเบียนทรัพย์สินนี้เคยใช้กับทรัพย์สินที่ถูกลบไปแล้ว จึงนำเข้าซ้ำไม่ได้ กรุณาใช้เลขทะเบียนอื่น หรือติดต่อผู้ดูแลระบบ"
+        : "เลขทะเบียนทรัพย์สินนี้มีในระบบแล้ว");
+    }
   }
 
   const serial = input.serialNumber?.trim();
@@ -141,6 +150,7 @@ async function validateUniqueValues(input: AssetInput, facilityId: number, asset
        WHERE s.facility_id = ?
          AND TRIM(a.serial_number) = ?
          AND (? IS NULL OR a.id <> ?)
+         AND ${await assetNotDeletedSql("a")}
        LIMIT 1`,
       [facilityId, serial, assetId ?? null, assetId ?? null]
     );
@@ -241,6 +251,7 @@ export async function POST(req: NextRequest) {
   );
   const workGroupNameList = activeWorkGroups.map((workGroup) => workGroup.work_group_name).join(", ");
   const surveyId = await findOrCreateSurvey(facilityId);
+  const notDeleted = await assetNotDeletedSql("a");
   let created = 0;
   let updated = 0;
   let skipped = 0;
@@ -257,7 +268,7 @@ export async function POST(req: NextRequest) {
           `SELECT a.*, s.facility_id
            FROM information_assets a
            JOIN information_asset_surveys s ON s.id = a.survey_id
-           WHERE a.id = ?
+           WHERE a.id = ? AND ${notDeleted}
            LIMIT 1`, [assetId]
         );
         existingAsset = existing[0];
@@ -285,16 +296,17 @@ export async function POST(req: NextRequest) {
       const input = buildInput(row, surveyId, workGroupId, user.fullName, existingAsset);
       if (assetId && existingAsset) {
         await validateUniqueValues(input, facilityId, assetId);
-        await updateAsset(assetId, input);
-        await recordAssetStatusHistory({
-          assetId,
-          fromStatus: existingAsset.current_status ?? "Active",
-          toStatus: input.currentStatus ?? existingAsset.current_status ?? "Active",
-          note: "นำเข้าข้อมูลจาก CSV",
-          changedByUserId: user.id,
-          changedBy: user.fullName,
+        // Row change + status history commit together; the audit entry after commit never fails the row.
+        await updateAsset(assetId, input, {
+          history: {
+            fromStatus: existingAsset.current_status ?? "Active",
+            toStatus: input.currentStatus ?? existingAsset.current_status ?? "Active",
+            note: "นำเข้าข้อมูลจาก CSV",
+            changedByUserId: user.id,
+            changedBy: user.fullName,
+          },
         });
-        await writeAuditLog({
+        await writeAuditLogSafe({
           userId: user.id,
           userName: user.fullName,
           action: "update",
@@ -307,16 +319,10 @@ export async function POST(req: NextRequest) {
       } else {
         if (!canCreate) throw new Error("บัญชีนี้ไม่มีสิทธิ์เพิ่มทรัพย์สิน");
         await validateUniqueValues(input, facilityId);
-        const result = await createAsset(input);
-        await recordAssetStatusHistory({
-          assetId: result.insertId,
-          fromStatus: null,
-          toStatus: input.currentStatus ?? "Active",
-          note: "นำเข้าข้อมูลจาก CSV",
-          changedByUserId: user.id,
-          changedBy: user.fullName,
+        const result = await createAsset(input, {
+          history: { fromStatus: null, toStatus: input.currentStatus ?? "Active", note: "นำเข้าข้อมูลจาก CSV", changedByUserId: user.id, changedBy: user.fullName },
         });
-        await writeAuditLog({
+        await writeAuditLogSafe({
           userId: user.id,
           userName: user.fullName,
           action: "create",

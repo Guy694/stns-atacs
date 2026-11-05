@@ -5,14 +5,15 @@ import { listDisposalReportRows } from "@/lib/asset-disposals";
 import { fiscalYearOf } from "@/lib/asset-valuation";
 import { getCurrentUser } from "@/lib/auth";
 import { buildDisposalWorkbook } from "@/lib/disposal-report";
-import { getFacilityScopeId } from "@/lib/facility-scope";
+import { resolveRequestedAssetFacility } from "@/lib/facility-scope";
 import { hasPermission } from "@/lib/role-permissions";
 import { readRequestIp, recordSecurityEvent } from "@/lib/security";
 import { todayBangkok } from "@/lib/local-date";
 
 /**
  * Disposal documents (.xlsx): ?type=pending (รายการขออนุมัติจำหน่าย) or ?type=annual&fy=2570 (รายงานการจำหน่ายประจำปี).
- * Officers get their own facility; admins may pass ?facility=ID or get every facility.
+ * ?facility=ID (or ?facilityId=ID) must be inside the user's asset scope (403 otherwise); without it officers get
+ * their own facility and admins every facility.
  */
 export async function GET(req: NextRequest) {
   const user = await getCurrentUser();
@@ -27,10 +28,10 @@ export async function GET(req: NextRequest) {
   ]);
   if (!canRequest && !canApprove && !canReport) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  const scopeId = getFacilityScopeId(user);
-  if (scopeId === null) return NextResponse.json({ error: "No facility scope" }, { status: 403 });
-  const requested = Number(req.nextUrl.searchParams.get("facility") ?? 0);
-  const facilityId = scopeId ?? (Number.isSafeInteger(requested) && requested > 0 ? requested : undefined);
+  const requested = Number(req.nextUrl.searchParams.get("facility") ?? req.nextUrl.searchParams.get("facilityId") ?? 0);
+  const facilityScope = resolveRequestedAssetFacility(user, requested || undefined);
+  if (!facilityScope.ok) return NextResponse.json({ error: facilityScope.error }, { status: facilityScope.status });
+  const facilityId = facilityScope.facilityId;
   const kind = req.nextUrl.searchParams.get("type") === "annual" ? "annual" : "pending";
   const fyParam = Number(req.nextUrl.searchParams.get("fy"));
   const fiscalYear = Number.isInteger(fyParam) && fyParam >= 2500 && fyParam <= 2700 ? fyParam : fiscalYearOf(todayBangkok());

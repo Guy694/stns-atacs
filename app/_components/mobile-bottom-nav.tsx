@@ -14,17 +14,6 @@ type Props = {
 };
 
 /** QR glyph for the scan button (AppIcon has no QR icon). */
-function QrIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
-      <rect x="3" y="3" width="7" height="7" rx="1" />
-      <rect x="14" y="3" width="7" height="7" rx="1" />
-      <rect x="3" y="14" width="7" height="7" rx="1" />
-      <path d="M14 14h3v3h-3zM20 14v.01M14 20h.01M17 20h4v-3" />
-    </svg>
-  );
-}
-
 function BarLink({ item, label, icon, active }: { item: NavItem; label: string; icon: IconName; active: boolean }) {
   return (
     <Link
@@ -45,7 +34,7 @@ function BarLink({ item, label, icon, active }: { item: NavItem; label: string; 
 /**
  * แถบนำทางด้านล่างสำหรับโทรศัพท์ (ซ่อนบนจอใหญ่ที่มี sidebar)
  * ใช้กฎการแสดงเมนูชุดเดียวกับ sidebar (buildNavItems) — เมนูที่ถูกปิดหรือไม่มีสิทธิ์จะไม่แสดงที่นี่เช่นกัน
- * ปุ่ม "สแกน" ไปที่หน้าตรวจนับ ซึ่งเป็นที่เดียวที่มีการสแกน QR ในระบบ (เลือกรอบตรวจนับแล้วสแกน)
+ * ปุ่มกลาง "สแกน" เปิดหน้า /scan (สแกนสติ๊กเกอร์ → หน้าครุภัณฑ์) ส่วน "ตรวจนับ" ไปหน้ารอบตรวจนับ
  */
 export function MobileBottomNav({ user, grantedPermissions, menuVisibility }: Props) {
   const pathname = usePathname();
@@ -57,6 +46,7 @@ export function MobileBottomNav({ user, grantedPermissions, menuVisibility }: Pr
   const dashboard = find("dashboard");
   const assets = find(user.role === "officer" ? "officer-assets" : "assets");
   const inspection = find("inspection");
+  const scan = find("scan");
 
   return (
     <nav
@@ -66,16 +56,17 @@ export function MobileBottomNav({ user, grantedPermissions, menuVisibility }: Pr
       <div className="mx-auto flex max-w-lg items-end gap-1">
         {dashboard && <BarLink item={dashboard} label="ภาพรวม" icon="activity" active={activeHref === dashboard.href} />}
         {assets && <BarLink item={assets} label="ทรัพย์สิน" icon="package" active={activeHref === assets.href} />}
-        {inspection && (
+        {scan && (
           <Link
-            href={inspection.href}
-            aria-label="สแกน QR ตรวจนับทรัพย์สิน"
+            href={scan.href}
+            aria-label="สแกน QR ครุภัณฑ์"
+            aria-current={activeHref === scan.href ? "page" : undefined}
             className="flex min-h-14 flex-1 flex-col items-center justify-end gap-0.5 pb-1 text-[11px] font-semibold text-[var(--accent-strong)]"
           >
             <span className="-mt-5 flex h-14 w-14 items-center justify-center rounded-full border-4 border-white bg-[var(--accent-strong)] text-white shadow-md">
-              <QrIcon className="h-6 w-6" />
+              <AppIcon name="qr" className="h-6 w-6" />
             </span>
-            <span aria-hidden="true">สแกน</span>
+            <span aria-hidden="true" className="max-w-full truncate">สแกน</span>
           </Link>
         )}
         {inspection && <BarLink item={inspection} label="ตรวจนับ" icon="clipboard-check" active={activeHref === inspection.href} />}

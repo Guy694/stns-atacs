@@ -5,6 +5,7 @@ import type { RowDataPacket } from "mysql2/promise";
 import { formatAssetNumber } from "@/lib/asset-number";
 import { inspectionDeadline } from "@/lib/inspection-progress";
 import { selectRows } from "@/lib/mysql";
+import { assetNotDeletedSql } from "@/lib/asset-soft-delete";
 import { isMissingSchemaError } from "@/lib/schema-errors";
 import type { DailySummaryData, DailySummaryThresholds, SummarySection } from "@/lib/daily-summary-format";
 import { dbDate } from "@/lib/local-date";
@@ -75,11 +76,12 @@ export async function collectDailySummary(today: string, thresholds: DailySummar
     const until = new Date(`${today}T00:00:00Z`);
     until.setUTCDate(until.getUTCDate() + thresholds.warrantyDays);
     const end = until.toISOString().slice(0, 10);
+    const notDeleted = await assetNotDeletedSql("a");
     const { total, rows } = await countAndRows<Row>(
       `FROM information_assets a
         LEFT JOIN information_asset_surveys s ON s.id = a.survey_id
         LEFT JOIN health_facilities hf ON hf.id = s.facility_id
-       WHERE COALESCE(a.current_status, '') NOT IN ('Disposed', 'Lost')
+       WHERE COALESCE(a.current_status, '') NOT IN ('Disposed', 'Lost') AND ${notDeleted}
          AND ((a.warranty_end_date BETWEEN ? AND ?) OR (a.maintenance_end_date BETWEEN ? AND ?))`,
       `${assetCols}, a.warranty_end_date, a.maintenance_end_date`,
       "LEAST(COALESCE(a.warranty_end_date, '9999-12-31'), COALESCE(a.maintenance_end_date, '9999-12-31'))",

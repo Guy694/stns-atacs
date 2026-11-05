@@ -88,7 +88,7 @@
 
 ### SEC-06 ☑ ฟีเจอร์ย้ายที่อยู่ Agent (`apiBaseUrl`) ไม่มีการตรวจสอบ
 - **แก้แล้ว:** 23 กันยายน 2569 — agent ยอมย้ายปลายทางเฉพาะ https และโฮสต์ใน allowlist (ฝังในสคริปต์ .py/.ps1) ฝั่งเซิร์ฟเวอร์ประกาศได้เฉพาะ https และโฮสต์ใน AGENT_API_BASE_ALLOWED_HOSTS
-- **ไฟล์:** `app/api/agent/report/route.ts` ~9–12, 58; `public/agent/linux/atacs-agent.py` ~367–371; `public/agent/windows/atacs-agent.ps1` ~265–277 (และสำเนาใน `scripts/agent/`)
+- **ไฟล์:** `app/api/agent/report/route.ts` ~9–12, 58; `public/agent/linux/atacs-agent.py` ~367–371; `public/agent/windows/atacs-agent.ps1` ~265–277 (สำเนาเก่าใน `scripts/agent/` ถูกลบแล้ว — ใช้ `public/agent/` ที่เดียว)
 - **ปัญหา:** Agent ยอมรับ `http://` หรือ `https://` ใด ๆ (รวมการลดจาก https เป็น http) และบันทึกถาวร ไม่มี allowlist หรือลายเซ็น
 - **สถานการณ์โจมตี:** ผู้ที่ยึดโปรเจกต์ Vercel เดิมได้ (บัญชีหลุด/ชื่อ `*.vercel.app` ถูกนำไปใช้ใหม่) หรือดักเครือข่ายเมื่อใช้ http → สั่ง Agent v1.1 ทุกเครื่องไปรายงานที่เซิร์ฟเวอร์ตนเอง ได้ agent key และข้อมูลเครื่องทั้งหมด
 - **แนวทางแก้:** รับเฉพาะ `https://`; ตรวจโดเมนปลายทางกับ allowlist ที่ฝังในสคริปต์ (เช่น โดเมนของ สสจ.) หรือใช้ประกาศที่ลงลายเซ็น; บันทึก log/แจ้งเตือนเมื่อ Agent ย้าย; เมื่อย้ายระบบเสร็จแล้วพิจารณาปิดฟีเจอร์นี้

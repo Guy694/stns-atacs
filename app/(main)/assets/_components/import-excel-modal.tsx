@@ -9,6 +9,7 @@ import { AppIcon } from "@/app/_components/ui/icon";
 import { withBasePath } from "@/lib/base-path";
 import type { FacilityWorkGroupOption } from "@/lib/facility-work-groups";
 import { useEscapeToClose } from "@/app/_components/ui/use-escape-to-close";
+import { useModalA11y } from "@/app/_components/ui/use-modal-a11y";
 
 type ImportResult = {
   created: number;
@@ -38,6 +39,7 @@ export default function ImportExcelModal({
   const [result, setResult] = useState<ImportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
 
   const byDistrict = facilities.reduce<Record<string, ImportFacility[]>>((acc, facility) => {
@@ -89,8 +91,10 @@ export default function ImportExcelModal({
     setError(null);
     setFacilityId(fixedFacilityId ? String(fixedFacilityId) : "");
     if (fileRef.current) fileRef.current.value = "";
-  }  useEscapeToClose(open && !loading, handleClose);
+  }
 
+  useEscapeToClose(open && !loading, handleClose);
+  useModalA11y(open, dialogRef);
 
   return (
     <>
@@ -105,6 +109,7 @@ export default function ImportExcelModal({
       {open && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(17,49,39,0.42)" }}>
           <div
+            ref={dialogRef}
             role="dialog"
             aria-modal="true"
             aria-labelledby={titleId}
@@ -143,6 +148,7 @@ export default function ImportExcelModal({
                   </label>
                   <select
                     id={`${titleId}-facility`}
+                    data-autofocus={fixedFacilityId === undefined ? "" : undefined}
                     disabled={loading || fixedFacilityId !== undefined}
                     value={facilityId}
                     onChange={(event) => setFacilityId(event.target.value)}
@@ -200,6 +206,7 @@ export default function ImportExcelModal({
                   </label>
                   <input
                     id={`${titleId}-file`}
+                    data-autofocus={fixedFacilityId === undefined ? undefined : ""}
                     disabled={loading}
                     ref={fileRef}
                     type="file"

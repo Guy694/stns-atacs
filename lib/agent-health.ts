@@ -60,10 +60,13 @@ export type HealthDeviceInput = {
 const DAY = 86_400_000;
 const gb = (value: number) => `${value.toLocaleString("th-TH", { maximumFractionDigits: 1 })} GB`;
 
-/** "YYYY-MM-DD HH:mm:ss" จากฐานข้อมูลเก็บเป็น UTC (ดู toDateTime ใน lib/agent.ts) */
+/**
+ * เวลาจาก lib/agent.ts มาเป็น ISO พร้อม offset (+07:00) อยู่แล้ว (ดู agentTimestamp)
+ * ค่าแบบไม่มี offset "YYYY-MM-DD HH:mm:ss" คือเวลาไทยตามที่ฐานข้อมูลเก็บ (NOW() ของ MySQL +07:00) ไม่ใช่ UTC
+ */
 export function parseDbDateTime(value: string | null | undefined) {
   if (!value) return null;
-  const time = Date.parse(/[zZ]|[+-]\d\d:?\d\d$/.test(value) ? value : `${value.replace(" ", "T")}Z`);
+  const time = Date.parse(/[zZ]|[+-]\d\d:?\d\d$/.test(value) ? value : `${value.trim().replace(" ", "T")}+07:00`);
   return Number.isFinite(time) ? time : null;
 }
 

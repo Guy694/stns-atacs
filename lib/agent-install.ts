@@ -28,8 +28,8 @@ export function buildWindowsAgentInstallCommand(enrollmentToken: string) {
     `$base=${baseUrl}`,
     '$dir=Join-Path $env:TEMP "atacs-agent"',
     "New-Item -ItemType Directory -Force -Path $dir | Out-Null",
-    'Invoke-WebRequest "$base/agent/windows/atacs-agent.ps1" -OutFile (Join-Path $dir "atacs-agent.ps1")',
-    'Invoke-WebRequest "$base/agent/windows/install-atacs-agent.ps1" -OutFile (Join-Path $dir "install-atacs-agent.ps1")',
+    'Invoke-WebRequest -UseBasicParsing "$base/agent/windows/atacs-agent.ps1" -OutFile (Join-Path $dir "atacs-agent.ps1")',
+    'Invoke-WebRequest -UseBasicParsing "$base/agent/windows/install-atacs-agent.ps1" -OutFile (Join-Path $dir "install-atacs-agent.ps1")',
     'powershell -ExecutionPolicy Bypass -File (Join-Path $dir "install-atacs-agent.ps1") -ApiBaseUrl $base -EnrollmentToken $token',
   ].join("; ");
 }
@@ -48,8 +48,8 @@ export function buildWindowsStaticAgentInstallCommand(input: StaticInstallInput)
     `$base=${baseUrl}`,
     '$dir=Join-Path $env:TEMP "atacs-agent"',
     "New-Item -ItemType Directory -Force -Path $dir | Out-Null",
-    'Invoke-WebRequest "$base/agent/windows/atacs-agent.ps1" -OutFile (Join-Path $dir "atacs-agent.ps1")',
-    'Invoke-WebRequest "$base/agent/windows/install-atacs-agent.ps1" -OutFile (Join-Path $dir "install-atacs-agent.ps1")',
+    'Invoke-WebRequest -UseBasicParsing "$base/agent/windows/atacs-agent.ps1" -OutFile (Join-Path $dir "atacs-agent.ps1")',
+    'Invoke-WebRequest -UseBasicParsing "$base/agent/windows/install-atacs-agent.ps1" -OutFile (Join-Path $dir "install-atacs-agent.ps1")',
     'powershell -ExecutionPolicy Bypass -File (Join-Path $dir "install-atacs-agent.ps1") -ApiBaseUrl $base -InstallKey $installKey -FacilityId $facilityId -WorkGroupId $workGroupId',
   ].join("; ");
 }

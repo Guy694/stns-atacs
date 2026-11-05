@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { reportAgentInventory, type AgentReportPayload } from "@/lib/agent";
+import { isPlainObject, readJsonBody } from "@/app/api/agent/_lib/request-body";
+import { AgentLinkedAssetError, reportAgentInventory, type AgentReportPayload } from "@/lib/agent";
 import { announcedApiBaseUrl } from "@/lib/agent-api-base";
 import { AGENT_REPORT_MAX_BYTES } from "@/lib/agent-payload";
 import { notifyTelegramSafe } from "@/lib/telegram";
@@ -25,23 +26,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Missing x-agent-id or x-agent-key" }, { status: 401 });
   }
 
-  // SEC-15: จำกัดขนาด body ก่อนแปลง JSON (รายงานปกติไม่เกินไม่กี่สิบ KB)
-  const declaredLength = Number(req.headers.get("content-length") ?? 0);
-  if (declaredLength > AGENT_REPORT_MAX_BYTES) {
-    return NextResponse.json({ error: "Payload too large" }, { status: 413 });
+  // SEC-15/G12: จำกัดขนาด body ขณะอ่านแบบ stream (รายงานปกติไม่เกินไม่กี่สิบ KB)
+  // ตรวจ content-length อย่างเดียวไม่พอ — chunked encoding ไม่มี header นี้
+  const parsed = await readJsonBody(req, AGENT_REPORT_MAX_BYTES);
+  if (!parsed.ok) {
+    return NextResponse.json({ error: parsed.error }, { status: parsed.status });
   }
-  let payload: AgentReportPayload;
-  try {
-    const text = await req.text();
-    if (Buffer.byteLength(text, "utf8") > AGENT_REPORT_MAX_BYTES) {
-      return NextResponse.json({ error: "Payload too large" }, { status: 413 });
-    }
-    payload = JSON.parse(text) as AgentReportPayload;
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
-  }
+  const payload = parsed.value as AgentReportPayload;
 
-  if (typeof payload !== "object" || payload === null || typeof payload.fingerprint !== "string" || !payload.fingerprint.trim()) {
+  if (!isPlainObject(payload) || typeof payload.fingerprint !== "string" || !payload.fingerprint.trim()) {
     return NextResponse.json({ error: "fingerprint is required" }, { status: 400 });
   }
 
@@ -79,6 +72,37 @@ export async function POST(req: NextRequest) {
     }
     if (message === "INVALID_FINGERPRINT") {
       return NextResponse.json({ error: "Fingerprint is invalid" }, { status: 400 });
+    }
+    if (error instanceof AgentLinkedAssetError) {
+      // G10: บันทึกว่าเครื่องออนไลน์แล้ว แต่ทะเบียนที่ผูกไว้ใช้ไม่ได้ (ย้าย/เปลี่ยนประเภท/ลบ) — ให้ผู้ดูแลแก้การผูก
+      const detail = error.linkedAssetId
+        ? `ทะเบียน #${error.linkedAssetId}: ${error.reason}`
+        : error.reason;
+      await recordSecurityEvent({
+        eventType: "agent_linked_asset_invalid",
+        ipAddress: readRequestIp(req.headers),
+        identity: agentId,
+        path: req.nextUrl.pathname,
+        detail,
+      });
+      await notifyTelegramSafe({
+        category: "agent",
+        title: "Agent ส่งข้อมูลได้ แต่ทะเบียนที่ผูกไว้ใช้ไม่ได้แล้ว",
+        eventKey: `agent-linked-asset-invalid:${agentId}:${error.linkedAssetId ?? "registration"}`,
+        details: {
+          "Agent ID": agentId,
+          ปัญหา: detail,
+          แก้ไข: "ผูกทะเบียนใหม่หรือยกเลิกการผูกที่ ตั้งค่าระบบ › Agent",
+        },
+      });
+      return NextResponse.json(
+        {
+          error: `Linked asset is no longer valid for this agent (${detail}). The heartbeat was recorded; an administrator must re-link or unlink the device. / ทะเบียนที่ผูกกับ Agent นี้ใช้ไม่ได้แล้ว (${detail}) บันทึกสถานะเครื่องแล้ว กรุณาให้ผู้ดูแลผูกทะเบียนใหม่หรือยกเลิกการผูก`,
+          code: "LINKED_ASSET_INVALID",
+          linkedAssetId: error.linkedAssetId,
+        },
+        { status: 409 }
+      );
     }
     if (process.env.NODE_ENV !== "production") {
       return NextResponse.json({ error: "Unable to process inventory report", detail: message }, { status: 500 });

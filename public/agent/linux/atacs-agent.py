@@ -3,9 +3,10 @@
 
 Collects hardware inventory, enrolls a device on first run, and reports the
 payload to the ATACS backend using the same API contract as the Windows agent.
-"""
 
-from __future__ import annotations
+Compatible with Python 3.6+ (CentOS/RHEL 7-8, Ubuntu 18.04): no PEP 585/604
+annotations, no dataclasses, no walrus, subprocess uses universal_newlines.
+"""
 
 import argparse
 import re
@@ -23,13 +24,13 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
-from typing import Any
+from typing import Any, Dict, List, Optional, Set
 
-AGENT_VERSION = "2.0.0"
+AGENT_VERSION = "2.1.0"
 DEFAULT_CONFIG_PATH = "/var/lib/atacs-agent/agent-config.json"
 
 
-def read_text_file(path: str) -> str | None:
+def read_text_file(path: str) -> Optional[str]:
     try:
         value = Path(path).read_text(encoding="utf-8", errors="ignore").strip()
         return value or None
@@ -37,9 +38,9 @@ def read_text_file(path: str) -> str | None:
         return None
 
 
-def run_command(*args: str) -> str | None:
+def run_command(*args: str) -> Optional[str]:
     try:
-        output = subprocess.check_output(args, stderr=subprocess.DEVNULL, text=True)
+        output = subprocess.check_output(args, stderr=subprocess.DEVNULL, universal_newlines=True)
     except (OSError, subprocess.CalledProcessError):
         return None
     return output.strip() or None
@@ -49,7 +50,7 @@ def sha256_hex(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
-def normalize(value: Any) -> str | None:
+def normalize(value: Any) -> Optional[str]:
     if value is None:
         return None
     text = str(value).strip()
@@ -85,7 +86,7 @@ def ensure_dir_for_file(path: str) -> None:
     Path(path).parent.mkdir(parents=True, exist_ok=True)
 
 
-def load_config(path: str) -> dict[str, Any] | None:
+def load_config(path: str) -> Optional[Dict[str, Any]]:
     try:
         with open(path, "r", encoding="utf-8") as handle:
             return json.load(handle)
@@ -95,18 +96,18 @@ def load_config(path: str) -> dict[str, Any] | None:
         raise RuntimeError(f"Invalid config file: {path}") from exc
 
 
-def save_config(path: str, config: dict[str, Any]) -> None:
+def save_config(path: str, config: Dict[str, Any]) -> None:
     ensure_dir_for_file(path)
     with open(path, "w", encoding="utf-8") as handle:
         json.dump(config, handle, ensure_ascii=False, indent=2, sort_keys=True)
         handle.write("\n")
 
 
-def get_machine_id() -> str | None:
+def get_machine_id() -> Optional[str]:
     return read_text_file("/etc/machine-id") or read_text_file("/var/lib/dbus/machine-id")
 
 
-def get_bios_uuid() -> str | None:
+def get_bios_uuid() -> Optional[str]:
     return read_text_file("/sys/class/dmi/id/product_uuid")
 
 
@@ -118,20 +119,20 @@ JUNK_SERIAL = re.compile(
 )
 
 
-def clean_serial(value: str | None) -> str | None:
+def clean_serial(value: Optional[str]) -> Optional[str]:
     text = normalize(value)
     if not text or len(text) < 3 or JUNK_SERIAL.match(text):
         return None
     return text
 
 
-def get_bios_serial() -> str | None:
+def get_bios_serial() -> Optional[str]:
     return clean_serial(read_text_file("/sys/class/dmi/id/product_serial")) or clean_serial(
         read_text_file("/sys/class/dmi/id/board_serial")
     )
 
 
-def get_primary_mac() -> str | None:
+def get_primary_mac() -> Optional[str]:
     for net_path in sorted(Path("/sys/class/net").glob("*")):
         name = net_path.name
         if name == "lo":
@@ -142,7 +143,7 @@ def get_primary_mac() -> str | None:
     return None
 
 
-def get_primary_ipv4() -> str | None:
+def get_primary_ipv4() -> Optional[str]:
     route = run_command("ip", "-4", "route", "get", "1.1.1.1")
     if route:
         tokens = route.split()
@@ -161,7 +162,7 @@ def get_primary_ipv4() -> str | None:
 
 def get_os_name() -> str:
     os_release = read_text_file("/etc/os-release") or ""
-    values: dict[str, str] = {}
+    values: Dict[str, str] = {}
     for line in os_release.splitlines():
         if "=" not in line:
             continue
@@ -173,15 +174,25 @@ def get_os_name() -> str:
     return platform.platform()
 
 
-def get_cpu_model() -> str | None:
+def get_cpu_model() -> Optional[str]:
     cpuinfo = read_text_file("/proc/cpuinfo") or ""
     for line in cpuinfo.splitlines():
         if line.lower().startswith("model name") and ":" in line:
-            return line.split(":", 1)[1].strip()
-    return run_command("lscpu")
+            return line.split(":", 1)[1].strip() or None
+    # ARM / some VMs have no "model name" in /proc/cpuinfo: take the single "Model name" line from
+    # lscpu (never the whole multi-line output, which would end up in the asset specification).
+    for line in (run_command("lscpu") or "").splitlines():
+        if line.lower().startswith("model name") and ":" in line:
+            return line.split(":", 1)[1].strip() or None
+    for line in cpuinfo.splitlines():
+        if line.lower().startswith(("hardware", "processor")) and ":" in line:
+            value = line.split(":", 1)[1].strip()
+            if value and not value.isdigit():
+                return value
+    return None
 
 
-def get_ram_mb() -> int | None:
+def get_ram_mb() -> Optional[int]:
     meminfo = read_text_file("/proc/meminfo") or ""
     for line in meminfo.splitlines():
         if line.startswith("MemTotal:"):
@@ -195,7 +206,7 @@ def get_ram_mb() -> int | None:
     return None
 
 
-def get_disk_usage_gb() -> dict[str, int | None]:
+def get_disk_usage_gb() -> Dict[str, Optional[int]]:
     try:
         usage = shutil.disk_usage("/")
     except OSError:
@@ -216,7 +227,7 @@ def get_device_type() -> str:
     return "Computer"
 
 
-def get_current_user() -> str | None:
+def get_current_user() -> Optional[str]:
     # Agent รันเป็น root ผ่าน systemd: ผู้ใช้ที่ต้องการคือคนที่ล็อกอินอยู่ที่เครื่อง ไม่ใช่ root
     output = run_command("who") or ""
     for line in output.splitlines():
@@ -238,20 +249,39 @@ def get_hostname() -> str:
     return socket.gethostname().strip() or platform.node().strip() or "unknown-host"
 
 
+# UUID ที่ผู้ผลิตเมนบอร์ดราคาถูกใส่เหมือนกันทุกเครื่อง: เลขเดียวกันทั้งหมด หรือค่าตัวอย่างของ AMI BIOS
+JUNK_UUIDS = {"03000200-0400-0500-0006-000700080009"}
+
+
+def is_junk_uuid(value: Optional[str]) -> bool:
+    text = (value or "").strip().lower()
+    if not text:
+        return True
+    digits = text.replace("-", "")
+    return len(set(digits)) <= 1 or text in JUNK_UUIDS
+
+
 def get_fingerprint() -> str:
     # ไม่ใช้ชื่อเครื่องและ MAC (เปลี่ยนได้ง่าย ทำให้เกิดเครื่องซ้ำในทะเบียน)
-    components = [get_machine_id(), get_bios_uuid(), get_bios_serial()]
+    machine_id = get_machine_id()
+    bios_uuid = get_bios_uuid()
+    bios_serial = get_bios_serial()
+    components = [machine_id, bios_uuid, bios_serial]
     if not any(components):
-        return sha256_hex(f"mac|{get_primary_mac() or ''}|{get_hostname()}")
+        return sha256_hex("mac|{}|{}".format(get_primary_mac() or "", get_hostname()))
+    if is_junk_uuid(bios_uuid) and not bios_serial:
+        # S4: UUID ขยะ + ไม่มี serial: machine-id อย่างเดียวชนกันได้ในเครื่องที่ clone image มา
+        # จึงเพิ่ม MAC เฉพาะกรณีนี้ — เครื่องที่มี UUID/serial ดีอยู่แล้วได้ fingerprint เดิมทุกประการ
+        components.append(get_primary_mac())
     return sha256_hex("v2|" + "|".join(component or "" for component in components))
 
 
 REAL_FILESYSTEMS = {"ext2", "ext3", "ext4", "xfs", "btrfs", "zfs", "f2fs", "jfs", "reiserfs", "ntfs", "ntfs3", "vfat", "exfat"}
 
 
-def get_volumes() -> list[dict[str, Any]]:
-    volumes: list[dict[str, Any]] = []
-    seen: set[str] = set()
+def get_volumes() -> List[Dict[str, Any]]:
+    volumes: List[Dict[str, Any]] = []
+    seen: Set[str] = set()
     for line in (read_text_file("/proc/mounts") or "").splitlines():
         parts = line.split()
         if len(parts) < 3 or parts[2] not in REAL_FILESYSTEMS or parts[0] in seen:
@@ -278,7 +308,7 @@ def get_volumes() -> list[dict[str, Any]]:
     return volumes[:26]
 
 
-def get_meminfo_mb(key: str) -> int | None:
+def get_meminfo_mb(key: str) -> Optional[int]:
     for line in (read_text_file("/proc/meminfo") or "").splitlines():
         if line.startswith(f"{key}:"):
             try:
@@ -288,7 +318,7 @@ def get_meminfo_mb(key: str) -> int | None:
     return None
 
 
-def get_cpu_load_percent() -> int | None:
+def get_cpu_load_percent() -> Optional[int]:
     try:
         load1 = os.getloadavg()[0]
         return min(100, round(load1 / max(os.cpu_count() or 1, 1) * 100))
@@ -296,7 +326,7 @@ def get_cpu_load_percent() -> int | None:
         return None
 
 
-def get_last_boot_at() -> str | None:
+def get_last_boot_at() -> Optional[str]:
     uptime = read_text_file("/proc/uptime")
     if not uptime:
         return None
@@ -305,7 +335,7 @@ def get_last_boot_at() -> str | None:
     return datetime.fromtimestamp(boot, timezone.utc).replace(microsecond=0).isoformat()
 
 
-def get_physical_disks() -> list[dict[str, Any]]:
+def get_physical_disks() -> List[Dict[str, Any]]:
     output = run_command("lsblk", "-J", "-d", "-b", "-o", "NAME,MODEL,ROTA,SIZE,TYPE")
     if not output:
         return []
@@ -337,7 +367,7 @@ def get_physical_disks() -> list[dict[str, Any]]:
     return disks[:16]
 
 
-def get_battery_health_percent() -> int | None:
+def get_battery_health_percent() -> Optional[int]:
     for battery in sorted(Path("/sys/class/power_supply").glob("BAT*")):
         for full_name, design_name in (("energy_full", "energy_full_design"), ("charge_full", "charge_full_design")):
             full = read_text_file(str(battery / full_name))
@@ -350,7 +380,7 @@ def get_battery_health_percent() -> int | None:
     return None
 
 
-def get_health() -> dict[str, Any]:
+def get_health() -> Dict[str, Any]:
     return {
         "volumes": get_volumes(),
         "memoryTotalMb": get_meminfo_mb("MemTotal"),
@@ -366,7 +396,7 @@ def get_health() -> dict[str, Any]:
     }
 
 
-def get_inventory_payload() -> dict[str, Any]:
+def get_inventory_payload() -> Dict[str, Any]:
     hostname = get_hostname()
     serial_number = get_bios_serial()
     bios_serial = get_bios_serial()
@@ -409,7 +439,13 @@ def time_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
 
-def post_json(url: str, body: dict[str, Any], headers: dict[str, str] | None = None) -> dict[str, Any]:
+class HttpError(RuntimeError):
+    def __init__(self, status: int, message: str) -> None:
+        RuntimeError.__init__(self, message)
+        self.status = status
+
+
+def post_json(url: str, body: Dict[str, Any], headers: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
     request = urllib.request.Request(
         url,
         data=json.dumps(body).encode("utf-8"),
@@ -422,20 +458,20 @@ def post_json(url: str, body: dict[str, Any], headers: dict[str, str] | None = N
             return json.loads(payload) if payload else {}
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="ignore")
-        raise RuntimeError(f"HTTP {exc.code}: {detail or exc.reason}") from exc
+        raise HttpError(exc.code, "HTTP {}: {}".format(exc.code, detail or exc.reason)) from exc
     except urllib.error.URLError as exc:
         raise RuntimeError(f"Request failed: {exc.reason}") from exc
 
 
 def enroll_agent(
     base_url: str,
-    token: str | None,
+    token: Optional[str],
     config_path: str,
-    facility_id: int | None = None,
-    work_group_id: int | None = None,
-    work_group_name: str | None = None,
-    install_key: str | None = None,
-) -> dict[str, Any]:
+    facility_id: Optional[int] = None,
+    work_group_id: Optional[int] = None,
+    work_group_name: Optional[str] = None,
+    install_key: Optional[str] = None,
+) -> Dict[str, Any]:
     if not base_url:
         raise RuntimeError("ApiBaseUrl is required for enrollment.")
     has_token = bool(token)
@@ -477,7 +513,7 @@ def enroll_agent(
     return config
 
 
-def send_inventory(config: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
+def send_inventory(config: Dict[str, Any], payload: Dict[str, Any]) -> Dict[str, Any]:
     headers = {
         "x-agent-id": str(config["agentId"]),
         "x-agent-key": str(config["agentKey"]),
@@ -503,9 +539,30 @@ def main() -> int:
     args = parse_args()
     config = load_config(args.config_path)
 
-    if not config:
-        has_token = bool(args.enrollment_token)
-        has_static_install = bool(args.install_key) and bool(args.facility_id)
+    has_token = bool(args.enrollment_token)
+    has_static_install = bool(args.install_key) and bool(args.facility_id)
+    # G8: ติดตั้งทับ (installer ส่ง --api-base-url + token/คีย์มา) ให้ลงทะเบียนใหม่ เหมือน Windows forceEnroll
+    force_enroll = bool(args.api_base_url) and (has_token or has_static_install)
+
+    if config and force_enroll and config.get("agentId") and config.get("agentKey") and (
+        str(config.get("apiBaseUrl", "")).rstrip("/") == str(args.api_base_url).rstrip("/")
+    ):
+        # ติดตั้งทับบนเซิร์ฟเวอร์เดิม: ลองกุญแจเดิมก่อน ถ้ายังใช้ได้ไม่ต้องลงทะเบียนใหม่ (กันเครื่องซ้ำ)
+        try:
+            upgrade_result = send_inventory(config, get_inventory_payload())
+            print("Existing enrollment is still valid (DeviceId={}); keeping it.".format(upgrade_result.get("deviceId")))
+            force_enroll = False
+        except HttpError as exc:
+            if exc.status != 401:
+                # เช่น 409 ทะเบียนที่ผูกไว้ใช้ไม่ได้: กุญแจยังใช้ได้ ไม่ต้องลงทะเบียนใหม่
+                print("Existing enrollment is valid but the report failed: {}".format(exc), file=sys.stderr)
+                force_enroll = False
+            else:
+                print("Existing enrollment was rejected ({}); enrolling again.".format(exc))
+        except RuntimeError as exc:
+            print("Existing enrollment check failed ({}); enrolling again.".format(exc))
+
+    if not config or force_enroll:
         if not args.api_base_url or (not has_token and not has_static_install):
             print(
                 "Enrollment requires --api-base-url and either --enrollment-token or --install-key + --facility-id on first run.",
@@ -521,17 +578,18 @@ def main() -> int:
             args.work_group_name,
             args.install_key,
         )
-        print(f"Enrolled device for facility: {config['facilityName']}")
+        print("Enrolled device for facility: {}".format(config["facilityName"]))
 
     if args.enroll_only:
-        print(f"Enrollment completed. Config saved to {args.config_path}")
+        print("Enrollment completed. Config saved to {}".format(args.config_path))
         return 0
 
     payload = get_inventory_payload()
     result = send_inventory(config, payload)
     print(
-        f"Inventory report sent successfully. DeviceId={result.get('deviceId')} "
-        f"AssetId={result.get('linkedAssetId')}"
+        "Inventory report sent successfully. DeviceId={} AssetId={}".format(
+            result.get("deviceId"), result.get("linkedAssetId")
+        )
     )
     # The server announces its current address after a move (e.g. Vercel -> own server); follow it once.
     new_base = normalize(result.get("apiBaseUrl"))
@@ -540,16 +598,20 @@ def main() -> int:
         if api_base_allowed(new_base, current_base):
             config["apiBaseUrl"] = new_base.rstrip("/")
             save_config(args.config_path, config)
-            print(f"Server address changed; apiBaseUrl updated to {config['apiBaseUrl']}")
+            print("Server address changed; apiBaseUrl updated to {}".format(config["apiBaseUrl"]))
         else:
             # SEC-06: refuse to follow an address outside the allowlist, and keep reporting to the old one.
             print(
-                f"Refused server address change to {new_base}: host is not allowed. "
-                f"Still reporting to {current_base}.",
+                "Refused server address change to {}: host is not allowed. "
+                "Still reporting to {}.".format(new_base, current_base),
                 file=sys.stderr,
             )
     return 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except RuntimeError as error:
+        print("ATACS agent error: {}".format(error), file=sys.stderr)
+        raise SystemExit(1)

@@ -25,16 +25,10 @@ import { notifyTelegramSafe } from "@/lib/telegram";
 import { readRequestIp, recordSecurityEvent } from "@/lib/security";
 import { checkLoginLock, loginLockMessage, LOGIN_SUCCESS_EVENT } from "@/lib/login-throttle";
 import { canBypassMaintenance, isMaintenanceEnabled } from "@/lib/maintenance";
+import { safeNextPath } from "@/lib/input-guards";
 
 function toQuery(message: string) {
   return encodeURIComponent(message);
-}
-
-function safeNextPath(value: FormDataEntryValue | string | null | undefined) {
-  if (typeof value !== "string" || !value) return "/dashboard";
-  if (!value.startsWith("/") || value.startsWith("//")) return "/dashboard";
-  if (value.includes("\\")) return "/dashboard";
-  return value;
 }
 
 async function requestDetails() {
@@ -254,7 +248,15 @@ export async function loginWithPasswordAction(formData: FormData) {
 
   // SEC-08: ปฏิเสธก่อนตรวจรหัสผ่าน เมื่อใส่ผิดหลายครั้งเกินไปในช่วงเวลาที่กำหนด
   const clientIp = readRequestIp(await headers());
-  const lock = await checkLoginLock(username, clientIp).catch(() => ({ locked: false, scope: null, retryAfterMinutes: 0 } as const));
+  // B14: fail closed — if the lock check itself fails (DB down etc.) refuse the attempt rather than
+  // allow unlimited password guessing. A missing security_events table is handled inside checkLoginLock.
+  let lock: Awaited<ReturnType<typeof checkLoginLock>>;
+  try {
+    lock = await checkLoginLock(username, clientIp);
+  } catch (error) {
+    console.error("Login lock check failed", error instanceof Error ? error.message : error);
+    redirect(`/login?tab=password&next=${encodeURIComponent(nextPath)}&error=${toQuery("ระบบตรวจสอบการเข้าสู่ระบบขัดข้อง ลองใหม่อีกครั้ง")}`);
+  }
   if (lock.locked) {
     await recordSecurityEvent({
       eventType: "login_locked_out",

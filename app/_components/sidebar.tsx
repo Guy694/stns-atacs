@@ -76,10 +76,28 @@ export function Sidebar({ user, grantedPermissions, pendingRegistrationCount, me
   const pathname = usePathname();
   const mobileOpen = useMobileMenuOpen();
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const drawerRef = useRef<HTMLDivElement>(null);
+
+  // Navigating (link click, back/forward) closes the drawer.
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [pathname]);
+
+  // The drawer only exists below lg; growing the window past it must not leave the page scroll-locked.
+  useEffect(() => {
+    const query = window.matchMedia("(min-width: 1024px)");
+    const onChange = () => {
+      if (query.matches) setMobileMenuOpen(false);
+    };
+    onChange();
+    query.addEventListener("change", onChange);
+    return () => query.removeEventListener("change", onChange);
+  }, []);
 
   useEffect(() => {
     if (!mobileOpen) return;
 
+    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     closeButtonRef.current?.focus();
     const originalOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -87,6 +105,26 @@ export function Sidebar({ user, grantedPermissions, pendingRegistrationCount, me
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
         setMobileMenuOpen(false);
+        return;
+      }
+      if (event.key !== "Tab" || !drawerRef.current) return;
+      // Keep keyboard focus inside the modal drawer.
+      const focusable = Array.from(
+        drawerRef.current.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])'),
+      ).filter((element) => element.offsetParent !== null || element === document.activeElement);
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement;
+      // Another layer on top (e.g. a SweetAlert dialog) owns focus: leave it alone.
+      if (active && active !== document.body && !drawerRef.current.contains(active)) return;
+      const outside = active === document.body;
+      if (event.shiftKey && (active === first || outside)) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && (active === last || outside)) {
+        event.preventDefault();
+        first.focus();
       }
     }
 
@@ -95,6 +133,7 @@ export function Sidebar({ user, grantedPermissions, pendingRegistrationCount, me
     return () => {
       document.body.style.overflow = originalOverflow;
       window.removeEventListener("keydown", handleKeyDown);
+      if (previouslyFocused?.isConnected) previouslyFocused.focus();
     };
   }, [mobileOpen]);
 
@@ -149,7 +188,7 @@ export function Sidebar({ user, grantedPermissions, pendingRegistrationCount, me
             <div className="my-3 h-px bg-[var(--line)]" />
 
             <Link
-              href="/"
+              href="/public"
               onClick={() => setMobileMenuOpen(false)}
               className="flex min-h-11 items-center gap-3 rounded-[10px] px-3 py-2.5 text-sm font-medium text-slate-500 transition hover:bg-slate-50 hover:text-slate-800"
             >
@@ -174,6 +213,7 @@ export function Sidebar({ user, grantedPermissions, pendingRegistrationCount, me
 
       {/* Mobile drawer */}
       <div
+        ref={drawerRef}
         id="mobile-navigation"
         role="dialog"
         aria-modal="true"

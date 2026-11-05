@@ -4,7 +4,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { listAssets } from "@/lib/assets";
 import { parseAssetListQuery } from "@/lib/asset-list-query";
 import { assetTypeLabel } from "@/lib/asset-policy";
-import { resolveFacilityFilter } from "@/lib/facility-scope";
+import { resolveRequestedAssetFacility } from "@/lib/facility-scope";
 import { readRequestIp, recordSecurityEvent } from "@/lib/security";
 import { hasPermission } from "@/lib/role-permissions";
 
@@ -27,10 +27,12 @@ export async function GET(req: NextRequest) {
   const requestedFacilityId = req.nextUrl.searchParams.get("facilityId")
     ? Number(req.nextUrl.searchParams.get("facilityId"))
     : undefined;
-  const facilityId = resolveFacilityFilter(user, requestedFacilityId);
-  if (facilityId === null) {
-    return NextResponse.json({ error: "No facility scope" }, { status: 403 });
+  // A facility outside the user's scope is refused rather than silently replaced by their own.
+  const scope = resolveRequestedAssetFacility(user, requestedFacilityId);
+  if (!scope.ok) {
+    return NextResponse.json({ error: scope.error }, { status: scope.status });
   }
+  const facilityId = scope.facilityId;
 
   let filter;
   try {

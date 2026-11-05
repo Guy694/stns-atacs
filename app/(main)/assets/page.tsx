@@ -92,7 +92,8 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
 
   if (user.role !== "admin") {
     if ((user.managedAssetFacilityIds?.length ?? 0) > 1) redirect("/facilities");
-    if (user.facilityId) redirect(`/facilities/${user.facilityId}`);
+    const ownFacilityId = user.facilityId ?? (user.managedAssetFacilityIds?.length === 1 ? user.managedAssetFacilityIds[0] : null);
+    if (ownFacilityId) redirect(`/facilities/${ownFacilityId}`);
     redirect("/profile");
   }
 

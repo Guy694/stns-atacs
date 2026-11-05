@@ -8,6 +8,7 @@ import { redirect } from "next/navigation";
 import type { RowDataPacket } from "mysql2/promise";
 
 import { getCurrentUser, hashPassword, splitDisplayName, verifyPassword, revokeUserSessions } from "@/lib/auth";
+import { isDuplicateEntryError, normalizeProfileEmail } from "@/lib/input-guards";
 import { executeStatement, selectRows } from "@/lib/mysql";
 
 async function getUser() {
@@ -20,13 +21,29 @@ export async function updateProfileAction(_prev: string | null, fd: FormData): P
   const user = await getUser();
 
   const fullName = (fd.get("fullName") as string | null)?.trim() ?? "";
-  const email = (fd.get("email") as string | null)?.trim() || null;
+  const { email, error: emailError } = normalizeProfileEmail(fd.get("email"));
   const { firstName, lastName } = splitDisplayName(fullName);
 
   if (!fullName) return "กรุณากรอกชื่อ-นามสกุล";
   if (!firstName || !lastName) return "กรุณากรอกชื่อและนามสกุลให้ครบ";
+  if (emailError) return emailError;
 
-  await executeStatement("UPDATE users SET first_name = ?, last_name = ?, email = ? WHERE id = ?", [firstName, lastName, email, user.id]);
+  // B6: the e-mail is how a Google identity is matched (lib/google-link.ts), so an address that
+  // already belongs to another account can never be taken over from the profile page.
+  if (email) {
+    const taken = await selectRows<RowDataPacket & { id: number }>(
+      "SELECT id FROM users WHERE LOWER(email) = ? AND id <> ? LIMIT 1",
+      [email, user.id]
+    );
+    if (taken.length > 0) return "อีเมลนี้ถูกใช้กับบัญชีอื่นแล้ว";
+  }
+
+  try {
+    await executeStatement("UPDATE users SET first_name = ?, last_name = ?, email = ? WHERE id = ?", [firstName, lastName, email, user.id]);
+  } catch (error) {
+    if (isDuplicateEntryError(error)) return "อีเมลนี้ถูกใช้กับบัญชีอื่นแล้ว";
+    throw error;
+  }
   revalidatePath("/profile");
   return null;
 }

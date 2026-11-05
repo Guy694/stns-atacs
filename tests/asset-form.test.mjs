@@ -4,7 +4,9 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { loadTs } from "./helpers/load-ts.mjs";
 
-function renderForm(assetClass) {
+const linkStub = { __esModule: true, default: ({ href, children, ...props }) => React.createElement("a", { href, ...props }, children) };
+
+function renderForm(assetClass, assetOverrides = {}) {
   let stateCalls = 0;
   const { AssetFormModal } = loadTs("app/(main)/assets/_components/asset-form-modal.tsx", {
     "@/app/(main)/assets/subtype-actions": { getAssetSubtypeEditor: async () => ({ items: [], canManage: false }) },
@@ -16,10 +18,11 @@ function renderForm(assetClass) {
     "react-dom": { createPortal: children => children },
     sweetalert2: { fire: async () => ({ isConfirmed: false }) },
     "@/app/(main)/assets/actions": { createAssetAction: async () => null, updateAssetAction: async () => null },
+    "next/link": linkStub,
   }, { document: { body: {} } });
   return renderToStaticMarkup(React.createElement(AssetFormModal, {
     facilities: [], fixedFacilityId: 10, mode: "edit", updaterName: "Tester",
-    asset: { id: 1, assetClass, assetGroup: "Hardware", deviceType: "Desktop", assetName: "Example", manufacturerBrand: "Brand", manufacturerModel: "Model", manufacturerSpecification: "Stored details", purchaseDate: "2025-01-01", windowsLicenseStatus: "Genuine" },
+    asset: { id: 1, assetClass, assetGroup: "Hardware", deviceType: "Desktop", assetName: "Example", manufacturerBrand: "Brand", manufacturerModel: "Model", manufacturerSpecification: "Stored details", purchaseDate: "2025-01-01", windowsLicenseStatus: "Genuine", ...assetOverrides },
   }, "Edit"));
 }
 
@@ -29,6 +32,14 @@ test("IT form retains category, device, license, OS and purchase inputs", () => 
   assert.match(html, /name="operatingSystem"/);
   assert.match(html, /name="purchaseDate"[^>]*value="2025-01-01"/);
   assert.ok(!html.includes('<fieldset hidden="" disabled=""'));
+});
+
+test("B1: edit mode keeps the facility read-only and points to the transfer menu", () => {
+  const html = renderForm("IT", { id: 42, facilityId: 7, facilityName: "รพ.สต. ตัวอย่าง" });
+  assert.match(html, /<input type="hidden" name="facilityId" value="7"\/>/);
+  assert.match(html, /<select[^>]*disabled=""[^>]*>\s*<option value="7"[^>]*>รพ.สต. ตัวอย่าง<\/option>/);
+  assert.match(html, /href="\/transfer\/\?assetId=42"[^>]*>ต้องการย้ายหน่วยงาน\? ใช้เมนูโอนย้าย/);
+  assert.equal((html.match(/name="facilityId"/g) ?? []).length, 1, "only the hidden current facility is submitted");
 });
 
 test("non-IT forms disable hidden IT fields and keep common data and image controls", () => {

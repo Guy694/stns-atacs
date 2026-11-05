@@ -44,6 +44,15 @@ export const APP_MENU_ITEMS: AppMenuItem[] = [
     permissionKey: "assets.view",
   },
   {
+    key: "scan",
+    href: "/scan",
+    label: "สแกน QR",
+    description: "เปิดกล้องสแกนสติ๊กเกอร์ QR เพื่อดูข้อมูลครุภัณฑ์ หรือบันทึกตรวจนับเมื่อมีรอบเปิดอยู่",
+    icon: "qr",
+    group: "overview",
+    permissionKey: "assets.view",
+  },
+  {
     key: "map",
     href: "/map",
     label: "แผนที่ทรัพย์สิน",

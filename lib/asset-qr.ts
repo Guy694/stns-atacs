@@ -3,8 +3,8 @@ import "server-only";
 import QRCode from "qrcode";
 
 import type { AssetWithFacility } from "@/lib/assets";
-import { withBasePath } from "@/lib/base-path";
-import { facilityLabelLines, wrapLabel } from "@/lib/qr-label";
+import { APP_BASE_PATH } from "@/lib/base-path";
+import { assetScanUrl, facilityLabelLines, wrapLabel } from "@/lib/qr-label";
 
 function escapeXml(value: string) {
   return value
@@ -21,8 +21,13 @@ function truncateLabel(value: string, maxLength: number) {
   return `${chars.slice(0, Math.max(0, maxLength - 3)).join("")}...`;
 }
 
-export async function createAssetQrSvg(asset: AssetWithFacility, requestUrl: string) {
-  const scanUrl = new URL(withBasePath(`/scan/assets/${asset.id}`), requestUrl).toString();
+/** `requestOrigin` must be the public origin (getPublicRequestOrigin), not request.url. */
+export async function createAssetQrSvg(asset: AssetWithFacility, requestOrigin: string) {
+  const scanUrl = assetScanUrl(asset.id, {
+    appUrl: process.env.NEXT_PUBLIC_APP_URL,
+    basePath: APP_BASE_PATH,
+    requestOrigin,
+  });
   const font = "Arial, 'Noto Sans Thai', 'Leelawadee UI', Tahoma, sans-serif";
   const canvasWidth = 240;
   const qrSize = 160;

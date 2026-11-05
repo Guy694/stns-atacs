@@ -5,7 +5,7 @@ import { toCsv } from "@/lib/csv";
 import { fiscalYearOf, summarizeValuation, VALUATION_STATUS_LABELS } from "@/lib/asset-valuation";
 import { getCurrentUser } from "@/lib/auth";
 import { listAssets } from "@/lib/assets";
-import { resolveFacilityFilter } from "@/lib/facility-scope";
+import { resolveRequestedAssetFacility } from "@/lib/facility-scope";
 import { filterValuationAssets } from "@/lib/valuation-sheet";
 import { hasPermission } from "@/lib/role-permissions";
 import { readRequestIp, recordSecurityEvent } from "@/lib/security";
@@ -25,8 +25,9 @@ export async function GET(req: NextRequest) {
   }
   const params = req.nextUrl.searchParams;
   const requestedFacilityId = params.get("facilityId") ? Number(params.get("facilityId")) : undefined;
-  const facilityId = resolveFacilityFilter(user, requestedFacilityId);
-  if (facilityId === null) return NextResponse.json({ error: "No facility scope" }, { status: 403 });
+  const scope = resolveRequestedAssetFacility(user, requestedFacilityId);
+  if (!scope.ok) return NextResponse.json({ error: scope.error }, { status: scope.status });
+  const facilityId = scope.facilityId;
   const today = todayBangkok();
   const fiscalYear = Number(params.get("fy")) || fiscalYearOf(today);
   if (!Number.isInteger(fiscalYear) || fiscalYear < 2500 || fiscalYear > 2700) return NextResponse.json({ error: "ปีงบประมาณไม่ถูกต้อง" }, { status: 400 });

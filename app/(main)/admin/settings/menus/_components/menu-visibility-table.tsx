@@ -29,7 +29,8 @@ export function MenuVisibilityTable({ rows }: { rows: MenuVisibilityRow[] }) {
       menu: (row) => row.label,
       group: (row) => row.groupRank,
       permission: (row) => row.permissionKey,
-      status: (row) => (checked[row.key] ? 0 : 1),
+      // Sort by the saved state: sorting by the live checkbox made rows jump away while being toggled.
+      status: (row) => (row.enabled ? 0 : 1),
     },
     { pageSize: Math.max(rows.length, 1) }
   );

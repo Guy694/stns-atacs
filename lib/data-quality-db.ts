@@ -6,9 +6,15 @@ import { formatAssetNumber } from "@/lib/asset-number";
 import { QUALITY_CHECKS, qualityCheck, SERIAL_PLACEHOLDERS, summarizeQuality, type FacilityQualityRow, type QualityCheck } from "@/lib/data-quality";
 import type { FacilityScope } from "@/lib/dashboard-work";
 import { selectRows } from "@/lib/mysql";
+import { assetNotDeletedSql } from "@/lib/asset-soft-delete";
 import { isMissingSchemaError } from "@/lib/schema-errors";
 
 const ON_REGISTER = "COALESCE(a.current_status, '') NOT IN ('Disposed', 'Lost')";
+
+/** Still on the register: not disposed/lost and not soft-deleted. */
+async function onRegisterSql() {
+  return `${ON_REGISTER} AND ${await assetNotDeletedSql("a")}`;
+}
 
 function scope(facilityIds: FacilityScope) {
   if (!facilityIds) return { sql: "", values: [] as unknown[] };
@@ -25,6 +31,7 @@ const LEVELS: Array<(check: QualityCheck) => boolean> = [
 export async function getDataQuality(facilities: Array<{ id: number; name: string; district: string }>, facilityIds: FacilityScope) {
   if (facilityIds && !facilityIds.length) return { ...summarizeQuality([], []), availableKeys: [] as string[], missingMigrations: false };
   const where = scope(facilityIds);
+  const onRegister = await onRegisterSql();
   for (const [level, include] of LEVELS.entries()) {
     const checks = QUALITY_CHECKS.filter(include);
     const columns = checks.flatMap((check) => [
@@ -36,7 +43,7 @@ export async function getDataQuality(facilities: Array<{ id: number; name: strin
         `SELECT s.facility_id, COUNT(a.id) AS assets, ${columns.join(", ")}
          FROM information_assets a
          JOIN information_asset_surveys s ON s.id = a.survey_id
-         WHERE ${ON_REGISTER}${where.sql}
+         WHERE ${onRegister}${where.sql}
          GROUP BY s.facility_id`,
         where.values
       );
@@ -72,12 +79,13 @@ export async function listIncompleteAssets(checkKey: string, facilityIds: Facili
   if (!check) return null;
   if (facilityIds && !facilityIds.length) return { rows: [], total: 0 };
   const where = scope(facilityIds);
+  const onRegister = await onRegisterSql();
   const from = `
     FROM information_assets a
     JOIN information_asset_surveys s ON s.id = a.survey_id
     LEFT JOIN health_facilities hf ON hf.id = s.facility_id
     LEFT JOIN facility_work_groups fwg ON fwg.id = a.work_group_id
-    WHERE ${ON_REGISTER}${where.sql} AND (${check.applies ?? "1 = 1"}) AND (${check.missing})`;
+    WHERE ${onRegister}${where.sql} AND (${check.applies ?? "1 = 1"}) AND (${check.missing})`;
   type Row = RowDataPacket & { id: number; asset_code_prefix?: string | null; asset_registration_no: string | null; asset_name: string; facility_name: string | null; work_group_name: string | null; purchase_price: string | number | null };
   try {
     const rows = await selectRows<Row>(
@@ -115,6 +123,7 @@ export type SerialDuplicate = {
 export async function listSerialDuplicates(facilityIds: FacilityScope, limit = 200): Promise<SerialDuplicate[]> {
   if (facilityIds && !facilityIds.length) return [];
   const placeholders = SERIAL_PLACEHOLDERS.map(() => "?").join(",");
+  const onRegister = await onRegisterSql();
   const meaningful = `CHAR_LENGTH(TRIM(a.serial_number)) >= 3 AND UPPER(TRIM(a.serial_number)) NOT IN (${placeholders})`;
   // Non-admins see duplicates that involve at least one of their facilities.
   const involvesScope = facilityIds ? ` AND SUM(CASE WHEN s.facility_id IN (${facilityIds.map(() => "?").join(",")}) THEN 1 ELSE 0 END) > 0` : "";
@@ -122,7 +131,7 @@ export async function listSerialDuplicates(facilityIds: FacilityScope, limit = 2
   const groups = await selectRows<GroupRow>(
     `SELECT TRIM(a.serial_number) AS serial
      FROM information_assets a JOIN information_asset_surveys s ON s.id = a.survey_id
-     WHERE ${ON_REGISTER} AND ${meaningful}
+     WHERE ${onRegister} AND ${meaningful}
      GROUP BY TRIM(a.serial_number)
      HAVING COUNT(*) > 1${involvesScope}
      ORDER BY serial
@@ -135,7 +144,7 @@ export async function listSerialDuplicates(facilityIds: FacilityScope, limit = 2
     `SELECT a.*, TRIM(a.serial_number) AS serial, s.facility_id, hf.name AS facility_name
      FROM information_assets a JOIN information_asset_surveys s ON s.id = a.survey_id
      LEFT JOIN health_facilities hf ON hf.id = s.facility_id
-     WHERE ${ON_REGISTER} AND TRIM(a.serial_number) IN (${groups.map(() => "?").join(",")})
+     WHERE ${onRegister} AND TRIM(a.serial_number) IN (${groups.map(() => "?").join(",")})
      ORDER BY serial, hf.name`,
     groups.map((group) => group.serial)
   );
@@ -160,11 +169,12 @@ export async function listSerialDuplicates(facilityIds: FacilityScope, limit = 2
 export async function findSerialTwins(assetId: number, serial: string) {
   const text = serial.trim();
   if (text.length < 3 || SERIAL_PLACEHOLDERS.includes(text.toUpperCase())) return [];
+  const onRegister = await onRegisterSql();
   const rows = await selectRows<RowDataPacket & { id: number; asset_name: string; facility_name: string | null }>(
     `SELECT a.id, a.asset_name, hf.name AS facility_name
      FROM information_assets a JOIN information_asset_surveys s ON s.id = a.survey_id
      LEFT JOIN health_facilities hf ON hf.id = s.facility_id
-     WHERE a.id <> ? AND TRIM(a.serial_number) = ? AND ${ON_REGISTER}
+     WHERE a.id <> ? AND TRIM(a.serial_number) = ? AND ${onRegister}
      LIMIT 5`,
     [assetId, text]
   );

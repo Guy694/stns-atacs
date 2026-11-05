@@ -75,3 +75,30 @@ export function shortFacilityName(name: string) {
   for (const [pattern, replacement] of ABBREVIATIONS) short = short.replace(pattern, replacement);
   return short.replace(/\s+(?:อำเภอ|อ\.|จังหวัด|จ\.)\S*.*$/u, "").trim();
 }
+
+/**
+ * S1: absolute URL encoded in a printed QR sticker. Printed stickers cannot be fixed later, so the
+ * public URL wins: NEXT_PUBLIC_APP_URL (may already include the base path) or else the public request
+ * origin (forwarded headers), never the internal host Next.js sees behind Nginx.
+ * The base path is included exactly once and the path ends with "/" (trailingSlash: true).
+ */
+export function assetScanUrl(
+  assetId: number,
+  options: { appUrl?: string | null; basePath?: string | null; requestOrigin: string },
+) {
+  const basePath = (options.basePath ?? "").trim().replace(/\/+$/, "");
+  let base: URL | null = null;
+  const configured = options.appUrl?.trim();
+  if (configured) {
+    try {
+      const parsed = new URL(configured);
+      if (parsed.protocol === "http:" || parsed.protocol === "https:") base = parsed;
+    } catch {
+      base = null;
+    }
+  }
+  if (!base) base = new URL(options.requestOrigin);
+  let prefix = base.pathname.replace(/\/+$/, "");
+  if (basePath && basePath !== "/" && prefix !== basePath && !prefix.endsWith(basePath)) prefix = `${prefix}${basePath}`;
+  return `${base.origin}${prefix}/scan/assets/${assetId}/`;
+}

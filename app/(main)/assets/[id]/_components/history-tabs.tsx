@@ -40,7 +40,8 @@ export function HistoryTabs({ tabs, initialKey, title }: { tabs: HistoryTab[]; i
     const url = new URL(window.location.href);
     url.searchParams.set("history", key);
     url.hash = "";
-    window.history.replaceState(window.history.state, "", url);
+    // `null` state lets Next.js sync its router to the new URL (it skips that when given its own state object).
+    window.history.replaceState(null, "", url);
     if (focus) tabRefs.current[tabs.findIndex((tab) => tab.key === key)]?.focus();
   }
 

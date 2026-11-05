@@ -19,8 +19,9 @@ function load(file, dependencies) {
 const permissions = load("../lib/permissions.ts", { "server-only": {} });
 const officer = { id: 1, fullName: "Officer", role: "officer", facilityId: 10, managedAssetFacilityIds: [20] };
 
-function setup({ user = officer, create = true, update = true, existingFacility = 10, existingAsset = {}, workGroups = [] } = {}) {
+function setup({ user = officer, create = true, update = true, existingFacility = 10, existingAsset = {}, workGroups = [], existingDeleted = false, deletedRegistration = false } = {}) {
   const writes = [];
+  const options = [];
   const alerts = [];
   const audits = [];
   const noop = async () => {};
@@ -37,11 +38,14 @@ function setup({ user = officer, create = true, update = true, existingFacility 
     "@/lib/permissions": permissions,
     "@/lib/role-permissions": { hasPermission: async (_, key) => key === "assets.create" ? create : update },
     "@/lib/security": { readRequestIp: () => "test", recordSecurityEvent: noop },
-    "@/lib/audit": { writeAuditLog: async (input) => audits.push(input) },
+    "@/lib/audit": { writeAuditLog: async (input) => audits.push(input), writeAuditLogSafe: async (input) => audits.push(input) },
+    "@/lib/asset-soft-delete": { hasAssetSoftDelete: async () => true, assetNotDeletedSql: async (alias) => `${alias}.deleted_at IS NULL` },
     "@/lib/telegram": { notifyTelegramSafe: async (input) => alerts.push(input) },
     "@/lib/asset-status-history": { recordAssetStatusHistory: noop },
     "@/lib/windows-license": { isComputerDeviceType: () => false, WINDOWS_LICENSE_STATUS_VALUES: ["Genuine", "Pirated"] },
     "@/lib/mysql": { selectRows: async (sql) => {
+      if (sql.includes("WHERE a.id = ?") && existingDeleted) return [];
+      if (sql.includes("WHERE a.asset_registration_no = ?")) return deletedRegistration ? [{ id: 3, deleted: 1 }] : [];
       if (sql.includes("WHERE a.id = ?")) {
         return [{ id: 7, facility_id: existingFacility, current_status: "Active", asset_class: "IT", asset_category: "Hardware", asset_name: "Existing printer", ...existingAsset }];
       }
@@ -50,8 +54,8 @@ function setup({ user = officer, create = true, update = true, existingFacility 
     } },
     "@/lib/assets": {
       findOrCreateSurvey: async (id) => { writes.push(["survey", id]); return 1; },
-      createAsset: async (input) => { writes.push(["create", input]); return { insertId: 8 }; },
-      updateAsset: async (id, input) => { writes.push(["update", id, input]); },
+      createAsset: async (input, option) => { writes.push(["create", input]); options.push(option); return { insertId: 8 }; },
+      updateAsset: async (id, input, option) => { writes.push(["update", id, input]); options.push(option); },
     },
   });
   async function request({ facility = 10, csv = "asset_name\nPrinter", invalidFile = false, malformed = false } = {}) {
@@ -62,7 +66,7 @@ function setup({ user = officer, create = true, update = true, existingFacility 
       formData: async () => { if (malformed) throw new Error("bad form"); return form; } });
     return { status: response.status, body: await response.json() };
   }
-  return { request, writes, alerts, audits };
+  return { request, writes, alerts, audits, options };
 }
 
 test("officer imports into own and additionally managed facilities", async () => {
@@ -245,4 +249,23 @@ test("SEC-11: ไฟล์ว่างถูกปฏิเสธพร้อม
   const result = await ctx.request({ csv: "" });
   assert.equal(result.status, 400);
   assert.match(result.body.error, /ไฟล์ว่าง/);
+});
+
+test("import writes the status history in the same repository call as the asset", async () => {
+  const ctx = setup();
+  await ctx.request({ csv: "id,asset_name\n,New printer\n7,Existing printer" });
+  assert.equal(ctx.options.length, 2);
+  for (const option of ctx.options) assert.equal(option.history.note, "นำเข้าข้อมูลจาก CSV");
+});
+
+test("a soft-deleted asset cannot be updated by id and its registration number is reported clearly", async () => {
+  const deleted = setup({ existingDeleted: true });
+  const byId = await deleted.request({ csv: "id,asset_name\n7,Existing printer" });
+  assert.equal(byId.body.updated, 0);
+  assert.match(byId.body.errors[0].message, /ไม่พบครุภัณฑ์/);
+
+  const reused = setup({ deletedRegistration: true });
+  const byNumber = await reused.request({ csv: "asset_name,asset_registration_no\nPrinter,REG-1" });
+  assert.equal(byNumber.body.created, 0);
+  assert.match(byNumber.body.errors[0].message, /ทรัพย์สินที่ถูกลบไปแล้ว/);
 });

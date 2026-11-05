@@ -8,6 +8,7 @@ import { AppIcon } from "@/app/_components/ui/icon";
 import { APP_NAME, APP_SCOPE, APP_TAGLINE } from "@/lib/app-brand";
 import { getCurrentUser } from "@/lib/auth";
 import { withBasePath } from "@/lib/base-path";
+import { safeNextPath } from "@/lib/input-guards";
 import { getGoogleAuthStatus } from "@/lib/google-auth";
 import { getThaiIdStatus } from "@/lib/thaiid";
 import { SubmitButton } from "@/app/_components/ui/submit-button";
@@ -19,12 +20,6 @@ type LoginPageProps = {
 function readQueryValue(value: string | string[] | undefined) {
   if (!value) return "";
   return Array.isArray(value) ? value[0] : value;
-}
-
-function safeNextPath(value: string) {
-  if (!value || !value.startsWith("/") || value.startsWith("//")) return "/dashboard";
-  if (value.includes("\\")) return "/dashboard";
-  return value;
 }
 
 export default async function LoginPage({ searchParams }: LoginPageProps) {

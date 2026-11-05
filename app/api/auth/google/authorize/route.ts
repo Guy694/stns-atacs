@@ -6,16 +6,10 @@ import { getGoogleAuthConfig } from "@/lib/google-auth";
 import { secureCookiesEnabled } from "@/lib/cookie-security";
 import { withBasePath } from "@/lib/base-path";
 import { getPublicRequestOrigin, getPublicRequestUrl } from "@/lib/request-url";
+import { safeNextPath } from "@/lib/input-guards";
 
 const STATE_COOKIE_NAME = "atacs_google_state";
 const NEXT_COOKIE_NAME = "atacs_google_next";
-
-function safeNextPath(value: string | null) {
-  if (!value) return "/dashboard";
-  if (!value.startsWith("/") || value.startsWith("//")) return "/dashboard";
-  if (value.includes("\\")) return "/dashboard";
-  return value;
-}
 
 export async function GET(req: NextRequest) {
   const config = getGoogleAuthConfig(getPublicRequestOrigin(req));

@@ -4,6 +4,7 @@ import type { RowDataPacket } from "mysql2/promise";
 
 import { formatAssetNumber } from "@/lib/asset-number";
 import { executeStatement, selectRows, withTransaction } from "@/lib/mysql";
+import { assetIdNotDeletedSql, assetNotDeletedSql } from "@/lib/asset-soft-delete";
 import { isMissingSchemaError } from "@/lib/schema-errors";
 import { dbDate, dbDateTime } from "@/lib/local-date";
 
@@ -247,6 +248,8 @@ const ORDER_COLUMNS = "ai.committee_order_no, ai.committee_order_date,";
 // ── Queries ───────────────────────────────────────────────────────────────
 
 export async function listInspections(facilityId?: number): Promise<Inspection[]> {
+  // Items of soft-deleted assets no longer count towards a round's progress.
+  const itemNotDeleted = await assetIdNotDeletedSql("aii.asset_id");
   const sql = `
     SELECT
       ai.id,
@@ -262,7 +265,7 @@ export async function listInspections(facilityId?: number): Promise<Inspection[]
       ${INSPECTION_SUMMARY_SELECT}
     FROM asset_inspections ai
     LEFT JOIN health_facilities hf ON hf.id = ai.facility_id
-    LEFT JOIN asset_inspection_items aii ON aii.inspection_id = ai.id
+    LEFT JOIN asset_inspection_items aii ON aii.inspection_id = ai.id AND ${itemNotDeleted}
     ${facilityId ? "WHERE ai.facility_id = ?" : ""}
     GROUP BY ai.id
     ORDER BY ai.inspected_at DESC
@@ -279,6 +282,7 @@ export async function listInspections(facilityId?: number): Promise<Inspection[]
 }
 
 export async function getInspectionById(id: number): Promise<Inspection | null> {
+  const itemNotDeleted = await assetIdNotDeletedSql("aii.asset_id");
   const query = (level: 0 | 1 | 2 | 3) => selectRows<InspectionRow>(
     `SELECT ai.id, ai.facility_id,
        COALESCE(hf.name,'') AS facility_name,
@@ -288,7 +292,7 @@ export async function getInspectionById(id: number): Promise<Inspection | null> 
        ${INSPECTION_SUMMARY_SELECT}
      FROM asset_inspections ai
      LEFT JOIN health_facilities hf ON hf.id = ai.facility_id${level >= 1 ? "\n     LEFT JOIN facility_work_groups fwg ON fwg.id = ai.work_group_id" : ""}
-     LEFT JOIN asset_inspection_items aii ON aii.inspection_id = ai.id
+     LEFT JOIN asset_inspection_items aii ON aii.inspection_id = ai.id AND ${itemNotDeleted}
      WHERE ai.id = ?
      GROUP BY ai.id`,
     [id]
@@ -302,6 +306,7 @@ export async function getInspectionById(id: number): Promise<Inspection | null> 
 }
 
 export async function getInspectionItems(inspectionId: number): Promise<InspectionItem[]> {
+  const notDeleted = await assetNotDeletedSql("ia");
   // level 2: asset codes + found location, 1: asset codes, 0: base schema.
   const query = (level: 0 | 1 | 2) => selectRows<InspectionItemRow>(
     `SELECT aii.id, aii.inspection_id, aii.asset_id,${level >= 1 ? " ia.asset_code_prefix, ia.asset_accounting_code," : ""}${level === 2 ? " aii.found_work_group_id, ffwg.work_group_name AS found_work_group_name, aii.found_location, aii.registered_work_group_id, rfwg.work_group_name AS registered_work_group_name," : ""}
@@ -321,7 +326,7 @@ export async function getInspectionItems(inspectionId: number): Promise<Inspecti
      LEFT JOIN facility_work_groups fwg ON fwg.id = ia.work_group_id${level === 2 ? `
      LEFT JOIN facility_work_groups ffwg ON ffwg.id = aii.found_work_group_id
      LEFT JOIN facility_work_groups rfwg ON rfwg.id = aii.registered_work_group_id` : ""}
-     WHERE aii.inspection_id = ?
+     WHERE aii.inspection_id = ? AND ${notDeleted}
      ORDER BY COALESCE(aii.inspection_status, 'Pending') = 'Pending' DESC, ia.asset_registration_no`,
     [inspectionId]
   );
@@ -446,13 +451,15 @@ export async function getInspectionCommittee(inspectionId: number): Promise<{ me
 
 /** `forUpdate` locks the item and asset rows; use it inside withTransaction before writing a result. */
 export async function getInspectionItemContext(itemId: number, options: { forUpdate?: boolean } = {}): Promise<InspectionItemContext | null> {
+  // A soft-deleted asset is gone from the register: its item can no longer be recorded.
+  const notDeleted = await assetNotDeletedSql("ia");
   const rows = await selectRows<InspectionItemContextRow>(
     `SELECT aii.id, aii.inspection_id, ai.facility_id, s.facility_id AS asset_facility_id, aii.asset_id, ia.current_status, ia.work_group_id, ia.location_detail
      FROM asset_inspection_items aii
      JOIN asset_inspections ai ON ai.id = aii.inspection_id
      JOIN information_assets ia ON ia.id = aii.asset_id
      LEFT JOIN information_asset_surveys s ON s.id = ia.survey_id
-     WHERE aii.id = ?
+     WHERE aii.id = ? AND ${notDeleted}
      LIMIT 1${options.forUpdate ? " FOR UPDATE" : ""}`,
     [itemId]
   );
@@ -516,6 +523,21 @@ export async function deleteInspection(inspectionId: number) {
     if (round.affectedRows !== 1) throw new Error("ไม่พบรอบตรวจนับ หรือถูกลบไปแล้ว");
     return { deletedItems: items.affectedRows };
   });
+}
+
+/**
+ * Locks the round row (inside withTransaction) so saving a result serialises with closing the round:
+ * a result is never written into a round that was closed meanwhile. null = no such round.
+ */
+export async function lockInspectionRound(inspectionId: number): Promise<{ id: number; closed: boolean } | null> {
+  type Row = RowDataPacket & { id: number; round_status?: string | null };
+  const rows = await withSchemaFallback(
+    () => selectRows<Row>("SELECT id, round_status FROM asset_inspections WHERE id = ? FOR UPDATE", [inspectionId]),
+    // Before add_inspection_close.sql a round cannot be closed.
+    () => selectRows<Row>("SELECT id FROM asset_inspections WHERE id = ? FOR UPDATE", [inspectionId])
+  );
+  if (!rows[0]) return null;
+  return { id: Number(rows[0].id), closed: rows[0].round_status === "Closed" };
 }
 
 /** Closing locks results; reopening is allowed for people who manage the round. */
