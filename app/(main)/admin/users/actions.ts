@@ -15,7 +15,7 @@ import {
 } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { executeStatement, selectRows } from "@/lib/mysql";
-import { isMissingSchemaError } from "@/lib/schema-errors";
+import { isMissingSchemaError, userFacingError } from "@/lib/schema-errors";
 import { roleChangeBlockReason } from "@/lib/role-permissions";
 import type { RowDataPacket } from "mysql2/promise";
 
@@ -340,7 +340,7 @@ export async function setThaidLinkEnabledAction(userId: number, enabled: boolean
     if (isMissingSchemaError(error)) {
       return "ฐานข้อมูลยังไม่มีคอลัมน์สำหรับฟังก์ชันนี้ กรุณาให้ผู้ดูแลระบบรัน database/add_thaid_link_approval.sql";
     }
-    return error instanceof Error ? error.message : "เกิดข้อผิดพลาด กรุณาลองใหม่";
+    return userFacingError(error);
   }
   await writeAuditLog({
     userId: actor.id,

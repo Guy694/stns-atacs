@@ -132,7 +132,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
 
-  if (!Array.isArray(body.ids)) {
+  // X3: `null`, numbers or arrays parse as valid JSON — reject anything that is not an object (400, not a 500).
+  if (!body || typeof body !== "object" || !Array.isArray(body.ids)) {
     return NextResponse.json({ error: "ids must be an array" }, { status: 400 });
   }
 

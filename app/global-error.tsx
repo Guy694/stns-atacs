@@ -38,7 +38,7 @@ export default function GlobalError({ error, reset }: { error: Error & { digest?
             onClick={reset}
             style={{
               marginTop: "1.25rem", minHeight: "2.75rem", padding: "0 1.25rem", borderRadius: "0.75rem",
-              border: "none", background: "#0f766e", color: "#fff", fontSize: "0.9rem", fontWeight: 600, cursor: "pointer",
+              border: "none", background: "#176c9e", color: "#fff", fontSize: "0.9rem", fontWeight: 600, cursor: "pointer",
             }}
           >
             ลองใหม่อีกครั้ง

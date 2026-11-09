@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { StatusBadge } from "@/app/_components/ui/status-badge";
+import { AppIcon } from "@/app/_components/ui/icon";
 import { getRepair, listRepairLogs } from "@/lib/asset-repairs";
 import { assetStatusLabel, assetStatusTone } from "@/lib/asset-status";
 import { getCurrentUser } from "@/lib/auth";
@@ -79,7 +80,7 @@ export default async function RepairDetailPage({ params }: Props) {
             {logs.map((log) => (
               <li key={log.id} className="relative">
                 <span className="absolute -left-[21px] top-1.5 h-2.5 w-2.5 rounded-full bg-[var(--primary)]" aria-hidden />
-                <p className="text-sm font-medium">{log.fromStatus && log.fromStatus !== log.toStatus ? `${REPAIR_STATUS_LABELS[log.fromStatus]} → ` : ""}{REPAIR_STATUS_LABELS[log.toStatus]}</p>
+                <p className="text-sm font-medium">{log.fromStatus && log.fromStatus !== log.toStatus ? <>{REPAIR_STATUS_LABELS[log.fromStatus]} <AppIcon name="arrow-right" className="inline h-3.5 w-3.5 align-[-2px] text-[var(--muted)]" /><span className="sr-only">เปลี่ยนเป็น</span>{" "}</> : ""}{REPAIR_STATUS_LABELS[log.toStatus]}</p>
                 <p className="text-xs text-[var(--muted)]">{formatThaiDateTime(log.changedAt)} · {log.changedBy || "system"}</p>
                 {log.note && <p className="mt-1 whitespace-pre-line text-xs">{log.note}</p>}
               </li>

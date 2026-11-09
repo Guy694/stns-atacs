@@ -4,7 +4,9 @@ import { isItAsset } from "@/lib/asset-policy";
 import Link from "next/link";
 
 import { ExpiringMaintenanceTable, type ExpiringMaintenanceRow } from "@/app/(main)/_components/expiring-maintenance-table";
+import { FacilitySelect } from "@/app/_components/ui/facility-select";
 import { AppIcon } from "@/app/_components/ui/icon";
+import { PhotoBackdrop, type BackdropImage } from "@/app/_components/ui/photo-backdrop";
 import { StatusBadge } from "@/app/_components/ui/status-badge";
 import { assetStatusLabel } from "@/lib/asset-status";
 import { getDashboardData } from "@/lib/atacs";
@@ -329,11 +331,11 @@ export default async function ItDashboard({ searchParams }: HomeProps) {
     <div className="mx-auto flex w-full max-w-[1600px] flex-1 flex-col gap-6">
 
         {/* ── Page heading ─────────────────────────────────────────────────── */}
-        <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <header className="relative isolate flex flex-col gap-3 overflow-hidden rounded-2xl border border-[var(--line)] bg-white p-4 sm:flex-row sm:items-end sm:justify-between sm:p-5 lg:p-6">
+          <PhotoBackdrop image="it-storage" opacity="opacity-[0.13]" fade="left" />
           <div className="min-w-0">
-            <p className="text-xs font-semibold text-[var(--accent-strong)]">ครุภัณฑ์คอมพิวเตอร์</p>
-            <h1 id="dashboard-heading" className="section-title mt-1 text-2xl font-semibold sm:text-3xl">ภาพรวมครุภัณฑ์คอมพิวเตอร์</h1>
-            <p className="mt-1 text-sm text-[var(--muted)]">
+            <h1 id="dashboard-heading" className="section-title text-2xl font-semibold sm:text-3xl">ภาพรวมครุภัณฑ์คอมพิวเตอร์</h1>
+            <p className="mt-1 text-sm text-[var(--neutral-text)]">
               {quickScopeLabel} · ข้อมูล ณ {renderedAt}
               <span className="ml-2 inline-flex items-center gap-1.5 align-middle text-xs">
                 <span className={`h-2 w-2 rounded-full ${dataSource === "database" ? "bg-emerald-500" : "bg-amber-500"}`} />
@@ -342,10 +344,10 @@ export default async function ItDashboard({ searchParams }: HomeProps) {
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Link href="/dashboard" className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[var(--line)] bg-white px-4 text-sm font-medium text-[var(--foreground)] transition hover:bg-[var(--primary-soft)]">
-              ← ภาพรวมครุภัณฑ์ทั้งหมด
+            <Link href="/dashboard" className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[var(--line)] bg-white px-4 text-sm font-medium text-[var(--foreground)] transition-colors duration-200 hover:bg-[var(--primary-soft)]">
+              <AppIcon name="arrow-left" className="h-4 w-4" /> ภาพรวมครุภัณฑ์ทั้งหมด
             </Link>
-            <Link href={assetQuickLink} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[var(--primary)] px-4 text-sm font-semibold text-white transition hover:bg-[var(--primary-hover)]">
+            <Link href={assetQuickLink} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[var(--primary)] px-4 text-sm font-semibold text-white transition-colors duration-200 hover:bg-[var(--primary-hover)]">
               <AppIcon name="package" className="h-4 w-4" /> ทะเบียนครุภัณฑ์
             </Link>
           </div>
@@ -377,9 +379,9 @@ export default async function ItDashboard({ searchParams }: HomeProps) {
               {activeFilterCount > 0 && (
                 <Link
                   href="/dashboard/it"
-                  className="rounded-lg border border-black/10 bg-white/80 px-3 py-1.5 text-xs font-medium text-[var(--muted)] transition hover:bg-white"
+                  className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-[var(--line)] bg-white px-3 text-xs font-medium text-[var(--primary-text)] transition-colors duration-200 hover:bg-[var(--primary-soft)]"
                 >
-                  ล้างตัวกรอง
+                  <AppIcon name="undo" className="h-3.5 w-3.5" /> ล้างตัวกรอง
                 </Link>
               )}
             </div>
@@ -417,27 +419,27 @@ export default async function ItDashboard({ searchParams }: HomeProps) {
                 </select>
               </label>
 
-              <label className="min-w-0">
+              <div className="min-w-0">
                 <span className="text-xs font-medium text-[var(--muted)]">หน่วยงาน</span>
-                <select
+                <FacilitySelect
                   name="facility"
                   defaultValue={selectedFacilityId?.toString() ?? ""}
-                  className="filter-control w-full"
-                >
-                  <option value="">ทุกหน่วยงาน</option>
-                  {facilityOptions.map((facility) => (
-                    <option key={facility.facilityId} value={facility.facilityId}>
-                      {facility.facilityName} · {facility.districtName}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                  emptyLabel="ทุกหน่วยงาน"
+                  aria-label="หน่วยงาน"
+                  facilities={facilityOptions.map((facility) => ({
+                    id: facility.facilityId,
+                    name: facility.facilityName,
+                    typecode: facility.facilityTypeCode,
+                    districtName: facility.districtName,
+                  }))}
+                />
+              </div>
 
               <button
                 type="submit"
-                className="min-h-9 rounded-[10px] bg-[var(--accent-strong)] px-4 py-2 text-xs font-semibold text-white transition hover:bg-[#125b86] md:mb-0"
+                className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-[10px] bg-[var(--accent-strong)] px-4 py-2 text-xs font-semibold text-white transition-colors duration-200 hover:bg-[#125b86] md:mb-0"
               >
-                กรองข้อมูล
+                <AppIcon name="filter" className="h-3.5 w-3.5" /> กรองข้อมูล
               </button>
             </div>
           </div>
@@ -453,14 +455,16 @@ export default async function ItDashboard({ searchParams }: HomeProps) {
 
 
         {isScopedUser && !missingFacilityAssignment && !hasScopedData && (
-          <div className="glass-panel rounded-2xl p-8 text-center">
+          <div className="relative isolate overflow-hidden rounded-2xl border border-[var(--line)] bg-white p-8 text-center">
+            <PhotoBackdrop image="office-desk" opacity="opacity-[0.10]" fade="bottom" />
+            <AppIcon name="database" className="mx-auto mb-3 h-8 w-8 text-[var(--primary-text)]" />
             <p className="text-lg font-semibold text-[var(--foreground)]">ยังไม่พบข้อมูลสำรวจของหน่วยงานนี้</p>
             <p className="mt-2 text-sm text-[var(--muted)]">
               คุณสามารถเพิ่มข้อมูลทรัพย์สินของหน่วยงานที่อยู่ในสิทธิ์การดูแลได้
             </p>
             <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
-              <Link href="/assets" className="rounded-xl bg-[var(--accent-strong)] px-5 py-2.5 text-sm font-semibold text-white transition hover:opacity-90">
-                ไปหน้าทรัพย์สิน
+              <Link href="/assets" className="primary-action">
+                <AppIcon name="package" className="h-4 w-4" /> ไปหน้าทรัพย์สิน
               </Link>
             </div>
           </div>
@@ -468,17 +472,16 @@ export default async function ItDashboard({ searchParams }: HomeProps) {
 
         {(!isScopedUser || hasScopedData) && (
           !hasFilteredData ? (
-            <div className="glass-panel rounded-2xl p-8 text-center">
+            <div className="relative isolate overflow-hidden rounded-2xl border border-[var(--line)] bg-white p-8 text-center">
+              <PhotoBackdrop image="office-desk" opacity="opacity-[0.10]" fade="bottom" />
+              <AppIcon name="search" className="mx-auto mb-3 h-8 w-8 text-[var(--primary-text)]" />
               <p className="text-lg font-semibold text-[var(--foreground)]">ไม่พบข้อมูลตามตัวกรองที่เลือก</p>
               <p className="mt-2 text-sm text-[var(--muted)]">
                 ลองเปลี่ยนกลุ่ม อำเภอ หรือหน่วยงาน เพื่อดูข้อมูลภาพรวมชุดอื่น
               </p>
               <div className="mt-5">
-                <Link
-                  href="/dashboard/it"
-                  className="inline-flex rounded-xl border border-black/10 bg-white/80 px-5 py-2.5 text-sm font-medium text-[var(--foreground)] transition hover:bg-white"
-                >
-                  ล้างตัวกรอง
+                <Link href="/dashboard/it" className="secondary-action">
+                  <AppIcon name="undo" className="h-4 w-4" /> ล้างตัวกรอง
                 </Link>
               </div>
             </div>
@@ -495,9 +498,11 @@ export default async function ItDashboard({ searchParams }: HomeProps) {
               : [{ label: "พร้อมใช้งาน", value: computerSummary.status.active, unit: "รายการ", detail: `${computerSummary.activeRate}% ของทั้งหมด`, href: activeQuickLink, tone: "text-emerald-700" }]),
             { label: "ชำรุด", value: computerSummary.status.broken, unit: "รายการ", detail: computerSummary.status.broken > 0 ? "ควรตรวจสอบหรือส่งซ่อม" : "ไม่มีรายการชำรุด", href: brokenQuickLink, tone: computerSummary.status.broken > 0 ? "text-rose-700" : "" },
             { label: "MA ใกล้หมดอายุ (45 วัน)", value: expiringSoon.length, unit: "รายการ", detail: expiringSoon.length > 0 ? `วิกฤต ${criticalExpiringCount} · เฝ้าระวัง ${warningExpiringCount}` : "ไม่มีแจ้งเตือน", href: "/reports?view=expiring", tone: expiringSoon.length > 0 ? "text-amber-700" : "" },
-          ].map((kpi) => {
+          ].map((kpi, index) => {
+            const backdrop: BackdropImage = (["it-storage", "office-desk", "meeting-room"] as const)[index % 3];
             const body = (
               <>
+                <PhotoBackdrop image={backdrop} opacity="opacity-[0.10]" fade="left" />
                 <p className="text-xs font-medium text-[var(--muted)]">{kpi.label}</p>
                 <p className="mt-2 flex items-baseline gap-1.5">
                   <span className={`text-3xl font-semibold tracking-tight tabular-nums ${kpi.tone || "text-[var(--foreground)]"}`}>{numberFormat.format(kpi.value)}</span>
@@ -506,9 +511,9 @@ export default async function ItDashboard({ searchParams }: HomeProps) {
                 <p className="mt-2 text-xs leading-5 text-[var(--muted)]">{kpi.detail}</p>
               </>
             );
-            const className = "block min-w-0 rounded-2xl border border-[var(--line)] bg-white p-5";
+            const className = "relative isolate block min-w-0 overflow-hidden rounded-2xl border border-[var(--line)] bg-white p-5";
             return "href" in kpi && kpi.href ? (
-              <Link key={kpi.label} href={kpi.href} className={`${className} transition hover:border-[var(--primary-soft-strong)] hover:bg-[var(--primary-soft)]/40`}>{body}</Link>
+              <Link key={kpi.label} href={kpi.href} className={`${className} transition-colors duration-200 hover:border-[var(--primary-soft-strong)] hover:bg-[var(--primary-soft)]/40`}>{body}</Link>
             ) : (
               <div key={kpi.label} className={className}>{body}</div>
             );
@@ -695,7 +700,7 @@ export default async function ItDashboard({ searchParams }: HomeProps) {
                               title={`ดูหน่วยงานในอำเภอ${row.districtName}`}
                             >
                               {row.label}
-                              <span aria-hidden="true" className="text-[var(--muted)] transition group-hover:translate-x-0.5">→</span>
+                              <AppIcon name="chevron-right" className="h-4 w-4 text-[var(--muted)] transition-transform duration-200 group-hover:translate-x-0.5" />
                             </Link>
                           ) : row.label}
                         </th>
@@ -724,8 +729,7 @@ export default async function ItDashboard({ searchParams }: HomeProps) {
         <div className="glass-panel rounded-2xl p-6 lg:p-7">
           <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <p className="text-xs font-medium text-[var(--muted)]">ภาพรวมจังหวัด</p>
-              <h2 className="section-title mt-1 text-xl font-semibold">ความครบถ้วนการสำรวจรายอำเภอ</h2>
+              <h2 className="section-title text-xl font-semibold">ความครบถ้วนการสำรวจรายอำเภอ (ภาพรวมจังหวัด)</h2>
             </div>
             <p className="text-xs text-[var(--muted)]">
               เขียว ≥ 85% · เหลือง ≥ 70% · แดง &lt; 70%

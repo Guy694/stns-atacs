@@ -6,6 +6,11 @@ import { AppIcon } from "@/app/_components/ui/icon";
 import { ASSET_CLASS_OPTIONS } from "@/lib/asset-classes";
 import { filterValuationAssets } from "@/lib/valuation-sheet";
 import { StatusBadge } from "@/app/_components/ui/status-badge";
+import { ActionIconLink } from "@/app/_components/ui/action-icon-button";
+import { TablePagination } from "@/app/_components/ui/data-table";
+import { FacilitySelect } from "@/app/_components/ui/facility-select";
+import { PhotoBackdrop } from "@/app/_components/ui/photo-backdrop";
+import { pageHref, paginate, readPage } from "@/lib/table-sort";
 import { assetStatusLabel, assetStatusTone } from "@/lib/asset-status";
 import { getCurrentUser } from "@/lib/auth";
 import { withBasePath } from "@/lib/base-path";
@@ -165,12 +170,26 @@ export default async function ReportsPage({ searchParams }: Props) {
   // ── broken / inactive ───────────────────────────────────────────────
   const brokenList = assets.filter((a) => a.currentStatus === "Broken" || a.currentStatus === "Inactive");
 
+  // Only one view renders at a time, so all report tables share the ?page= parameter.
+  const page = readPage(params);
+  const pageOf = <T,>(rows: readonly T[]) => paginate(rows, page);
+  const pager = (paged: ReturnType<typeof paginate>, label: string) =>
+    paged.total > 0 ? <TablePagination {...paged} hrefFor={(next) => pageHref("/reports", params, next)} label={label} className="border-t border-black/6" /> : null;
+  const facilityPage = pageOf(byFacility);
+  const expiringPage = pageOf(expiring);
+  const brokenPage = pageOf(brokenList);
+  const replacementPage = pageOf(replacementPlan?.items ?? []);
+  const repairPage = pageOf(repairList?.rows ?? []);
+  const transferPage = pageOf(transferList?.rows ?? []);
+  const disposalPage = pageOf(disposalList?.rows ?? []);
+
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6">
       {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+      <div className="relative isolate overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--surface-strong)] px-5 py-5 sm:px-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <PhotoBackdrop image="meeting-room" fade="left" />
         <div>
-          <h1 className="section-title text-3xl font-semibold">รายงาน</h1>
+          <h1 className="section-title flex items-center gap-2 text-3xl font-semibold"><AppIcon name="file-text" className="h-7 w-7 text-[var(--primary)]" /> รายงาน</h1>
           <p className="mt-1 text-sm text-[var(--muted)]">แสดงข้อมูล: {reportScopeLabel}</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -190,7 +209,8 @@ export default async function ReportsPage({ searchParams }: Props) {
           { label: "จำหน่าย / สูญหาย", value: terminalCount, color: "text-[var(--muted)]" },
           { label: "หน่วยงาน", value: facilities, color: "text-[var(--foreground)]" },
         ].map((k) => (
-          <div key={k.label} className={`glass-panel flex flex-col-reverse rounded-2xl p-4 text-center ${k.wide ? "col-span-2 sm:col-span-1" : ""}`}>
+          <div key={k.label} className={`glass-panel relative isolate flex flex-col-reverse overflow-hidden rounded-2xl p-4 text-center ${k.wide ? "col-span-2 sm:col-span-1" : ""}`}>
+            <PhotoBackdrop image="it-storage" opacity="opacity-[0.08]" fade="bottom" />
             <dt className="mt-0.5 text-xs text-[var(--muted)]">{k.label}</dt>
             <dd className={`text-2xl font-bold tabular-nums ${k.color}`}>{k.value.toLocaleString("th-TH")}</dd>
           </div>
@@ -243,7 +263,7 @@ export default async function ReportsPage({ searchParams }: Props) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-black/4">
-                {byFacility.map((f) => {
+                {facilityPage.rows.map((f) => {
                   const rate = Math.round((f.active / Math.max(f.total, 1)) * 100);
                   return (
                     <tr key={f.name} className="transition hover:bg-white/50">
@@ -270,6 +290,7 @@ export default async function ReportsPage({ searchParams }: Props) {
               </tbody>
             </table>
           </div>
+          {pager(facilityPage, "แบ่งหน้ารายงานแยกตามหน่วยงาน")}
         </div>
       )}
 
@@ -324,7 +345,11 @@ export default async function ReportsPage({ searchParams }: Props) {
             <span className="ml-2 text-sm font-normal text-[var(--muted)]">{expiring.length} รายการ</span>
           </div>
           {expiring.length === 0 ? (
-            <div className="p-10 text-center text-[var(--muted)]">ไม่มีทรัพย์สินใกล้หมดอายุ MA ในช่วง 90 วัน</div>
+            <div className="relative isolate overflow-hidden p-10 text-center text-[var(--muted)]">
+              <PhotoBackdrop image="office-desk" fade="bottom" />
+              <AppIcon name="check" className="mx-auto mb-2 h-8 w-8 text-[var(--primary)]" />
+              <p>ไม่มีทรัพย์สินใกล้หมดอายุ MA ในช่วง 90 วัน</p>
+            </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -339,9 +364,9 @@ export default async function ReportsPage({ searchParams }: Props) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-black/4">
-                  {expiring.map((a, rowIndex) => (
+                  {expiringPage.rows.map((a, rowIndex) => (
                     <tr key={a.id} className="transition hover:bg-white/50">
-                      <td className="px-4 py-3 text-right tabular-nums text-[var(--muted)]">{(rowIndex + 1).toLocaleString("th-TH")}</td>
+                      <td className="px-4 py-3 text-right tabular-nums text-[var(--muted)]">{(expiringPage.start + rowIndex).toLocaleString("th-TH")}</td>
                       <td className="px-4 py-3">
                         <Link href={`/assets/${a.id}`} className="font-medium hover:text-[var(--accent-strong)] hover:underline">{a.assetName}</Link>
                         <p className="font-mono text-xs text-[var(--muted)]">{a.assetNumber}</p>
@@ -358,6 +383,7 @@ export default async function ReportsPage({ searchParams }: Props) {
                   ))}
                 </tbody>
               </table>
+              {pager(expiringPage, "แบ่งหน้ารายการใกล้หมดอายุ MA")}
             </div>
           )}
         </div>
@@ -371,8 +397,10 @@ export default async function ReportsPage({ searchParams }: Props) {
             <span className="ml-2 text-sm font-normal text-[var(--muted)]">{brokenList.length} รายการ</span>
           </div>
           {brokenList.length === 0 ? (
-            <div className="flex items-center justify-center gap-2 p-10 text-center text-[var(--primary-text)]">
-              <AppIcon name="check" className="h-4 w-4" /> ไม่มีทรัพย์สินชำรุดหรือไม่ใช้งาน
+<div className="relative isolate overflow-hidden p-10 text-center text-[var(--muted)]">
+              <PhotoBackdrop image="office-desk" fade="bottom" />
+              <AppIcon name="check" className="mx-auto mb-2 h-8 w-8 text-[var(--primary)]" />
+              <p>ไม่มีทรัพย์สินชำรุดหรือไม่ใช้งาน</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -389,9 +417,9 @@ export default async function ReportsPage({ searchParams }: Props) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-black/4">
-                  {brokenList.map((a, rowIndex) => (
+                  {brokenPage.rows.map((a, rowIndex) => (
                     <tr key={a.id} className="transition hover:bg-white/50">
-                      <td className="px-4 py-3 text-right tabular-nums text-[var(--muted)]">{(rowIndex + 1).toLocaleString("th-TH")}</td>
+                      <td className="px-4 py-3 text-right tabular-nums text-[var(--muted)]">{(brokenPage.start + rowIndex).toLocaleString("th-TH")}</td>
                       <td className="px-4 py-3">
                         <Link href={`/assets/${a.id}`} className="font-medium hover:text-[var(--accent-strong)] hover:underline">{a.assetName}</Link>
                         <p className="font-mono text-xs text-[var(--muted)]">{a.assetNumber}</p>
@@ -408,9 +436,7 @@ export default async function ReportsPage({ searchParams }: Props) {
                       <td className="px-4 py-3 text-xs text-[var(--muted)]">{formatThaiDate(a.updatedAt)}</td>
                       <td className="px-4 py-3 text-right">
                         {canMutate ? (
-                          <Link href={`/disposal?assetId=${a.id}`} className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-medium text-rose-700 transition hover:bg-rose-100">
-                            ดำเนินการ
-                          </Link>
+                          <ActionIconLink href={`/disposal?assetId=${a.id}`} icon="archive" tone="danger" label={`ดำเนินการจำหน่าย/ชำรุด/สูญหาย ${a.assetName}`} className="ml-auto" />
                         ) : (
                           <span className="rounded-lg border border-stone-300 bg-stone-100 px-3 py-1 text-xs font-medium text-stone-500">
                             ดูข้อมูลเท่านั้น
@@ -421,6 +447,7 @@ export default async function ReportsPage({ searchParams }: Props) {
                   ))}
                 </tbody>
               </table>
+              {pager(brokenPage, "แบ่งหน้ารายการชำรุด / ไม่ใช้งาน")}
             </div>
           )}
         </div>
@@ -457,8 +484,10 @@ export default async function ReportsPage({ searchParams }: Props) {
             </p>
           </div>
           {replacementPlan.items.length === 0 ? (
-            <div className="flex items-center justify-center gap-2 p-10 text-center text-[var(--primary-text)]">
-              <AppIcon name="check" className="h-4 w-4" /> ยังไม่มีครุภัณฑ์ที่เข้าเกณฑ์จัดหาทดแทน
+<div className="relative isolate overflow-hidden p-10 text-center text-[var(--muted)]">
+              <PhotoBackdrop image="office-desk" fade="bottom" />
+              <AppIcon name="check" className="mx-auto mb-2 h-8 w-8 text-[var(--primary)]" />
+              <p>ยังไม่มีครุภัณฑ์ที่เข้าเกณฑ์จัดหาทดแทน</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -477,9 +506,9 @@ export default async function ReportsPage({ searchParams }: Props) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-black/4">
-                  {replacementPlan.items.slice(0, 500).map((item, rowIndex) => (
+                  {replacementPage.rows.map((item, rowIndex) => (
                     <tr key={item.asset.id} className="align-top transition hover:bg-white/50">
-                      <td className="px-4 py-3 text-right tabular-nums text-[var(--muted)]">{(rowIndex + 1).toLocaleString("th-TH")}</td>
+                      <td className="px-4 py-3 text-right tabular-nums text-[var(--muted)]">{(replacementPage.start + rowIndex).toLocaleString("th-TH")}</td>
                       <td className="px-4 py-3">
                         <StatusBadge tone={item.priority === "High" ? "danger" : item.priority === "Medium" ? "warning" : "neutral"}>{REPLACEMENT_PRIORITY_LABELS[item.priority]}</StatusBadge>
                       </td>
@@ -500,7 +529,7 @@ export default async function ReportsPage({ searchParams }: Props) {
                   ))}
                 </tbody>
               </table>
-              {replacementPlan.items.length > 500 && <p className="px-5 py-3 text-xs text-[var(--muted)]">แสดง 500 รายการแรก — ดาวน์โหลด Excel เพื่อดูทั้งหมด</p>}
+              {pager(replacementPage, "แบ่งหน้าแผนจัดหาทดแทน")}
             </div>
           )}
         </div>
@@ -522,15 +551,19 @@ export default async function ReportsPage({ searchParams }: Props) {
               {valuationFacilities.length > 1 && (
                 <>
                   <label htmlFor="report-facility" className="text-[var(--muted)]">หน่วยงาน</label>
-                  <select id="report-facility" name="facility" defaultValue={valuationFacility ?? ""} className="filter-control">
-                    <option value="">ทุกหน่วยงาน</option>
-                    {valuationFacilities.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
-                  </select>
+                  <FacilitySelect
+                    id="report-facility"
+                    name="facility"
+                    emptyLabel="ทุกหน่วยงาน"
+                    defaultValue={valuationFacility ? String(valuationFacility) : ""}
+                    facilities={valuationFacilities.map(([id, name]) => ({ id, name }))}
+                    className="w-full sm:w-72"
+                  />
                 </>
               )}
             </>
           )}
-          <button className="rounded-lg border border-[var(--line)] bg-white px-3 py-1">แสดง</button>
+          <button className="primary-action action-sm"><AppIcon name="search" className="h-4 w-4" /> แสดง</button>
           <span className="text-xs text-[var(--muted)]">{formatThaiDate(fyRange.start)} – {formatThaiDate(fyRange.end)}</span>
         </form>
       )}
@@ -554,7 +587,7 @@ export default async function ReportsPage({ searchParams }: Props) {
               { label: `ค่าเสื่อมราคาปีงบ ${fiscalYear} (บาท)`, value: baht(depreciationRollup.totals.depreciationThisYear) },
               { label: "มูลค่าสุทธิยกไป (บาท)", value: baht(depreciationRollup.totals.closingBookValue) },
             ].map((kpi) => (
-              <div key={kpi.label} className="glass-panel rounded-2xl p-4">
+              <div key={kpi.label} className="glass-panel relative isolate overflow-hidden rounded-2xl p-4"><PhotoBackdrop image="it-storage" opacity="opacity-[0.08]" fade="left" />
                 <p className="text-xs text-[var(--muted)]">{kpi.label}</p>
                 <p className="mt-1 text-xl font-semibold tabular-nums">{kpi.value}</p>
               </div>
@@ -636,7 +669,7 @@ export default async function ReportsPage({ searchParams }: Props) {
               { label: "ค่าเสื่อมสะสม (บาท)", value: baht(valuationReport.totals.accumulated) },
               { label: "มูลค่าสุทธิ (บาท)", value: baht(valuationReport.totals.bookValue) },
             ].map((kpi) => (
-              <div key={kpi.label} className="glass-panel rounded-2xl p-4">
+              <div key={kpi.label} className="glass-panel relative isolate overflow-hidden rounded-2xl p-4"><PhotoBackdrop image="it-storage" opacity="opacity-[0.08]" fade="left" />
                 <p className="text-xs text-[var(--muted)]">{kpi.label}</p>
                 <p className="mt-1 text-xl font-bold tabular-nums">{kpi.value}</p>
               </div>
@@ -648,7 +681,7 @@ export default async function ReportsPage({ searchParams }: Props) {
                 <p className="font-semibold">สรุปมูลค่าตามประเภททรัพย์สิน</p>
                 <p className="text-xs text-[var(--muted)]">ณ วันที่ {formatThaiDate(valuationReport.asOf)} · เส้นตรง ราคาซาก 1 บาท · ไม่รวมรายการจำหน่าย/สูญหาย {valuationReport.terminalCount} รายการ</p>
               </div>
-              <a href={withBasePath(`/print/assets/valuation?${valuationQuery}`)} target="_blank" rel="noopener" className="secondary-action gap-2">
+              <a href={withBasePath(`/print/assets/valuation/?${valuationQuery}`)} target="_blank" rel="noopener" className="secondary-action gap-2">
                 <AppIcon name="printer" className="h-4 w-4" /> พิมพ์ / PDF (A4)
               </a>
               <a href={withBasePath(`/api/export/valuation/?fy=${fiscalYear}${scopedFacilityId ? `&facilityId=${scopedFacilityId}` : valuationFacility ? `&facilityId=${valuationFacility}` : ""}${valuationClass ? `&assetClass=${valuationClass}` : ""}`)} className="secondary-action gap-2">
@@ -742,7 +775,7 @@ export default async function ReportsPage({ searchParams }: Props) {
                 { label: "เวลาเฉลี่ยจนซ่อมเสร็จ", value: repairSummary.averageDaysToComplete === null ? "-" : `${repairSummary.averageDaysToComplete} วัน` },
                 { label: "ค่าใช้จ่ายรวม (บาท)", value: baht(repairSummary.totalCost) },
               ].map((kpi) => (
-                <div key={kpi.label} className="glass-panel rounded-2xl p-4"><p className="text-xs text-[var(--muted)]">{kpi.label}</p><p className="mt-1 text-xl font-bold tabular-nums">{kpi.value}</p></div>
+                <div key={kpi.label} className="glass-panel relative isolate overflow-hidden rounded-2xl p-4"><PhotoBackdrop image="it-storage" opacity="opacity-[0.08]" fade="left" /><p className="text-xs text-[var(--muted)]">{kpi.label}</p><p className="mt-1 text-xl font-bold tabular-nums">{kpi.value}</p></div>
               ))}
             </div>
             <div className="glass-panel overflow-x-auto rounded-2xl">
@@ -753,9 +786,9 @@ export default async function ReportsPage({ searchParams }: Props) {
                   <th className="px-4 py-2.5 text-center font-medium">สถานะ</th><th className="px-4 py-2.5 text-left font-medium">ผู้ซ่อม</th><th className="px-4 py-2.5 text-right font-medium">ค่าใช้จ่าย</th>
                 </tr></thead>
                 <tbody className="divide-y divide-black/4">
-                  {repairList.rows.length === 0 ? <tr><td colSpan={7} className="px-4 py-8 text-center text-[var(--muted)]">ไม่มีงานซ่อมในปีงบประมาณนี้</td></tr> : repairList.rows.map((row, rowIndex) => (
+                  {repairList.rows.length === 0 ? <tr><td colSpan={7} className="px-4 py-8 text-center text-[var(--muted)]">ไม่มีงานซ่อมในปีงบประมาณนี้</td></tr> : repairPage.rows.map((row, rowIndex) => (
                     <tr key={row.id}>
-                      <td className="px-4 py-2.5 text-right tabular-nums text-[var(--muted)]">{(rowIndex + 1).toLocaleString("th-TH")}</td>
+                      <td className="px-4 py-2.5 text-right tabular-nums text-[var(--muted)]">{(repairPage.start + rowIndex).toLocaleString("th-TH")}</td>
                       <td className="px-4 py-2.5"><Link href={`/repairs/${row.id}`} className="font-mono text-xs font-semibold text-[var(--primary)] hover:underline">#{row.id}</Link><p className="text-xs text-[var(--muted)]">{formatThaiDate(row.reportedAt)}</p></td>
                       <td className="px-4 py-2.5"><Link href={`/assets/${row.assetId}`} className="hover:underline">{row.assetName}</Link><p className="font-mono text-xs text-[var(--muted)]">{row.assetRegistrationNo}</p></td>
                       <td className="px-4 py-2.5 text-xs text-[var(--muted)]">{row.facilityName}</td>
@@ -766,6 +799,7 @@ export default async function ReportsPage({ searchParams }: Props) {
                   ))}
                 </tbody>
               </table>
+              {pager(repairPage, "แบ่งหน้ารายงานงานซ่อม")}
             </div>
           </div>
         )
@@ -783,9 +817,9 @@ export default async function ReportsPage({ searchParams }: Props) {
                 <th className="px-4 py-2.5 text-left font-medium">ไป</th><th className="px-4 py-2.5 text-left font-medium">เอกสาร / เหตุผล</th><th className="px-4 py-2.5 text-left font-medium">ผู้บันทึก</th>
               </tr></thead>
               <tbody className="divide-y divide-black/4">
-                {transferList.rows.length === 0 ? <tr><td colSpan={7} className="px-4 py-8 text-center text-[var(--muted)]">ไม่มีการโอนย้ายในปีงบประมาณนี้</td></tr> : transferList.rows.map((row, rowIndex) => (
+                {transferList.rows.length === 0 ? <tr><td colSpan={7} className="px-4 py-8 text-center text-[var(--muted)]">ไม่มีการโอนย้ายในปีงบประมาณนี้</td></tr> : transferPage.rows.map((row, rowIndex) => (
                   <tr key={row.id} className="align-top">
-                    <td className="px-4 py-2.5 text-right tabular-nums text-[var(--muted)]">{(rowIndex + 1).toLocaleString("th-TH")}</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums text-[var(--muted)]">{(transferPage.start + rowIndex).toLocaleString("th-TH")}</td>
                     <td className="whitespace-nowrap px-4 py-2.5 text-xs">{formatThaiDate(row.transferDate)}</td>
                     <td className="px-4 py-2.5"><Link href={`/assets/${row.assetId}`} className="hover:underline">{row.assetName}</Link><p className="font-mono text-xs text-[var(--muted)]">{row.assetRegistrationNo}</p></td>
                     <td className="px-4 py-2.5 text-xs">{row.fromFacilityName}<p className="text-[var(--muted)]">{[row.fromOwnerName, row.fromLocationDetail].filter(Boolean).join(" · ")}</p></td>
@@ -796,6 +830,7 @@ export default async function ReportsPage({ searchParams }: Props) {
                 ))}
               </tbody>
             </table>
+            {pager(transferPage, "แบ่งหน้ารายงานการโอนย้าย")}
           </div>
         )
       )}
@@ -814,7 +849,7 @@ export default async function ReportsPage({ searchParams }: Props) {
                   { label: "มูลค่าสุทธิที่ตัดจำหน่าย (บาท)", value: baht(sum(approved, (row) => row.bookValue)) },
                   { label: "เงินที่ได้รับจากการจำหน่าย (บาท)", value: baht(sum(approved, (row) => row.proceedsAmount)) },
                 ].map((kpi) => (
-                  <div key={kpi.label} className="glass-panel rounded-2xl p-4"><p className="text-xs text-[var(--muted)]">{kpi.label}</p><p className="mt-1 text-xl font-bold tabular-nums">{kpi.value}</p></div>
+                  <div key={kpi.label} className="glass-panel relative isolate overflow-hidden rounded-2xl p-4"><PhotoBackdrop image="it-storage" opacity="opacity-[0.08]" fade="left" /><p className="text-xs text-[var(--muted)]">{kpi.label}</p><p className="mt-1 text-xl font-bold tabular-nums">{kpi.value}</p></div>
                 ))}
               </div>
               <div className="glass-panel overflow-x-auto rounded-2xl">
@@ -825,9 +860,9 @@ export default async function ReportsPage({ searchParams }: Props) {
                     <th className="px-4 py-2.5 text-right font-medium">ราคาทุน</th><th className="px-4 py-2.5 text-right font-medium">มูลค่าสุทธิ</th><th className="px-4 py-2.5 text-center font-medium">สถานะ</th><th className="px-4 py-2.5 text-left font-medium">หนังสืออนุมัติ</th>
                   </tr></thead>
                   <tbody className="divide-y divide-black/4">
-                    {disposalList.rows.length === 0 ? <tr><td colSpan={8} className="px-4 py-8 text-center text-[var(--muted)]">ไม่มีคำขอในปีงบประมาณนี้</td></tr> : disposalList.rows.map((row, rowIndex) => (
+                    {disposalList.rows.length === 0 ? <tr><td colSpan={8} className="px-4 py-8 text-center text-[var(--muted)]">ไม่มีคำขอในปีงบประมาณนี้</td></tr> : disposalPage.rows.map((row, rowIndex) => (
                       <tr key={row.id}>
-                        <td className="px-4 py-2.5 text-right tabular-nums text-[var(--muted)]">{(rowIndex + 1).toLocaleString("th-TH")}</td>
+                        <td className="px-4 py-2.5 text-right tabular-nums text-[var(--muted)]">{(disposalPage.start + rowIndex).toLocaleString("th-TH")}</td>
                         <td className="px-4 py-2.5"><Link href={`/disposal?requestId=${row.id}`} className="font-mono text-xs font-semibold text-[var(--primary)] hover:underline">#{row.id}</Link><p className="text-xs text-[var(--muted)]">{formatThaiDate(row.requestedAt)}</p></td>
                         <td className="px-4 py-2.5"><Link href={`/assets/${row.assetId}`} className="hover:underline">{row.assetName}</Link><p className="font-mono text-xs text-[var(--muted)]">{row.assetRegistrationNo} · {row.facilityName}</p></td>
                         <td className="px-4 py-2.5 text-xs">{DISPOSAL_REQUEST_TYPE_LABELS[row.requestType]}{row.disposalMethod && <p className="text-[var(--muted)]">{disposalMethodLabel(row.disposalMethod)}</p>}</td>
@@ -839,6 +874,7 @@ export default async function ReportsPage({ searchParams }: Props) {
                     ))}
                   </tbody>
                 </table>
+                {pager(disposalPage, "แบ่งหน้ารายงานการจำหน่าย")}
               </div>
             </div>
           );

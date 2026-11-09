@@ -13,6 +13,7 @@ import { resolveRequestedAssetFacility } from "@/lib/facility-scope";
 import { hasPermission } from "@/lib/role-permissions";
 import { readRequestIp, recordSecurityEvent } from "@/lib/security";
 import { todayBangkok } from "@/lib/local-date";
+import { userFacingError } from "@/lib/schema-errors";
 
 
 
@@ -144,7 +145,7 @@ export async function GET(req: NextRequest) {
   try {
     filter = parseAssetListQuery(searchParams);
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "ตัวกรองไม่ถูกต้อง" }, { status: 400 });
+    return NextResponse.json({ error: userFacingError(error, "ตัวกรองไม่ถูกต้อง") }, { status: 400 });
   }
   const assets = await listAssets({ ...filter, facilityId });
   const canViewNetwork = await hasPermission(user.role, "assets.network.view");

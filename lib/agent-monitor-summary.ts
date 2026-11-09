@@ -42,6 +42,19 @@ export function agentConnectionState(
   return lastSeen < now.getTime() - thresholdMinutes * 60_000 ? "offline" : "online";
 }
 
+/**
+ * X1: สถานะที่แสดงในหน้าตั้งค่า Agent / หน้าครุภัณฑ์ — คำนวณจากเวลาที่ติดต่อล่าสุดทุกครั้ง
+ * ไม่เชื่อคอลัมน์ status = 'online' อย่างเดียว เพราะจะเปลี่ยนเป็น offline ได้ก็ต่อเมื่อ cron agent-health ทำงาน
+ */
+export function effectiveAgentStatus(
+  device: { lastSeenAt: string | null; status?: string | null; isActive: boolean },
+  now: Date,
+  thresholdMinutes: number
+): "online" | "offline" | "inactive" {
+  if (!device.isActive) return "inactive";
+  return agentConnectionState(device, now, thresholdMinutes) === "online" ? "online" : "offline";
+}
+
 export const OS_FAMILIES = [
   { key: "windows-11", label: "Windows 11", warning: false },
   { key: "windows-10", label: "Windows 10", warning: false },

@@ -81,10 +81,29 @@ textarea {
   a {
     color: inherit;
   }
+
+  /* Absolutely positioned children (sr-only labels in table headers, menus) must be clipped by the
+     scroll box they sit in; otherwise they widen the whole page on mobile. Base layer, so `fixed`/`sticky`
+     utilities on the same element still win. */
+  .overflow-x-auto,
+  .overflow-auto {
+    position: relative;
+  }
 }
 
 ::selection {
-  background: rgba(22, 163, 74, 0.22);
+  background: rgba(22, 135, 217, 0.2);
+}
+
+/* Theme the browser surfaces we did not draw (caret, scrollbars, numerals in data). */
+html {
+  accent-color: var(--accent-strong);
+  caret-color: var(--accent-strong);
+  scrollbar-color: #b9cddd transparent;
+}
+
+.app-shell :where(table) {
+  font-variant-numeric: tabular-nums;
 }
 
 .glass-panel {
@@ -285,6 +304,8 @@ body :where(input, textarea)[readonly] {
   color: var(--foreground);
 }
 .filter-control::placeholder { color: var(--muted); }
+/* .filter-control is unlayered, so Tailwind pl-9 alone loses; keep room for a leading icon. */
+.filter-control.pl-9 { padding-left: 2.25rem; }
 .filter-control:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .filter-control:disabled { background: var(--neutral-bg); color: var(--muted); }
 .filter-label {

@@ -53,7 +53,7 @@ export function LogoutConfirmForm({ buttonClassName, buttonContent, ariaLabel, t
         cache: "no-store",
       });
       if (response.type !== "opaqueredirect" && !response.ok) throw new Error(`logout failed: ${response.status}`);
-      window.location.replace(withBasePath(`/login?notice=${encodeURIComponent(LOGOUT_NOTICE)}`));
+      window.location.replace(withBasePath(`/login/?notice=${encodeURIComponent(LOGOUT_NOTICE)}`));
     } catch {
       // ถ้า fetch ใช้ไม่ได้ ให้ส่งฟอร์มแบบปกติ (เซิร์ฟเวอร์จะ redirect ไปหน้า login เอง)
       form.submit();

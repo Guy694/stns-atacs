@@ -1,7 +1,7 @@
 "use client";
 
 import { ACQUISITION_METHODS, FUNDING_SOURCES } from "@/lib/acquisition-options";
-import { useActionState, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useActionState, useId, useMemo, useRef, useState } from "react";
 
 import { formatAssetNumber } from "@/lib/asset-number";
 import { AssetSpecificFields } from "./asset-specific-fields";
@@ -19,9 +19,12 @@ import { submitWithoutReset } from "@/app/_components/ui/submit-without-reset";
 import { confirmAction } from "@/app/_components/ui/confirm";
 import { useEscapeToClose } from "@/app/_components/ui/use-escape-to-close";
 import { useModalA11y } from "@/app/_components/ui/use-modal-a11y";
+import { ActionIconButton } from "@/app/_components/ui/action-icon-button";
+import { FacilitySelect } from "@/app/_components/ui/facility-select";
+import { AppIcon } from "@/app/_components/ui/icon";
 import Link from "next/link";
 
-type FacilityOption = { id: number; facility_name: string | null; district_name: string | null; asset_code_prefix?: string | null };
+type FacilityOption = { id: number; facility_name: string | null; district_name: string | null; typecode?: string | null; asset_code_prefix?: string | null };
 type DeviceTypeOption = { name: string; category: string };
 type WorkGroupOption = { id: number; facilityId: number; facilityName: string; workGroupName: string };
 type LocationOption = { facilityId: number; location: string; usageCount?: number };
@@ -40,163 +43,6 @@ type Props = {
 };
 
 const INITIAL: string | null = null;
-
-function formatFacilityOption(facility: FacilityOption) {
-  const name = facility.facility_name?.trim() || `หน่วยงาน #${facility.id}`;
-  return `${name}${facility.district_name ? ` · อ.${facility.district_name}` : ""}`;
-}
-
-function FacilityCombobox({
-  facilities,
-  defaultFacilityId,
-  onSelectedFacilityIdChange,
-  inputId: externalInputId,
-}: {
-  /** Lets the field <label htmlFor> point at the visible input. */
-  inputId?: string;
-  facilities: FacilityOption[];
-  defaultFacilityId?: number | null;
-  onSelectedFacilityIdChange?: (facilityId: number | null) => void;
-}) {
-  const generatedInputId = useId();
-  const inputId = externalInputId ?? generatedInputId;
-  const listboxId = useId();
-  const inputRef = useRef<HTMLInputElement>(null);
-  const defaultFacility = facilities.find((facility) => facility.id === defaultFacilityId);
-  const [selectedId, setSelectedId] = useState(defaultFacility?.id.toString() ?? "");
-  const [query, setQuery] = useState(defaultFacility ? formatFacilityOption(defaultFacility) : "");
-  const [open, setOpen] = useState(false);
-  const [activeIndex, setActiveIndex] = useState(0);
-
-  const filteredFacilities = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
-    if (!normalizedQuery) return facilities;
-
-    return facilities.filter((facility) => {
-      const label = formatFacilityOption(facility).toLowerCase();
-      return (
-        label.includes(normalizedQuery) ||
-        facility.id.toString().includes(normalizedQuery) ||
-        (facility.facility_name ?? "").toLowerCase().includes(normalizedQuery) ||
-        (facility.district_name ?? "").toLowerCase().includes(normalizedQuery)
-      );
-    });
-  }, [facilities, query]);
-
-  const activeOptionIndex = Math.min(activeIndex, Math.max(filteredFacilities.length - 1, 0));
-  const activeFacility = filteredFacilities[activeOptionIndex];
-
-  useEffect(() => {
-    if (!inputRef.current) return;
-    if (!selectedId && query.trim()) {
-      inputRef.current.setCustomValidity("กรุณาเลือกหน่วยงานจากรายการ");
-    } else {
-      inputRef.current.setCustomValidity("");
-    }
-  }, [query, selectedId]);
-
-  useEffect(() => {
-    onSelectedFacilityIdChange?.(selectedId ? Number(selectedId) : null);
-  }, [onSelectedFacilityIdChange, selectedId]);
-
-  function selectFacility(facility: FacilityOption) {
-    setSelectedId(facility.id.toString());
-    setQuery(formatFacilityOption(facility));
-    setActiveIndex(0);
-    setOpen(false);
-  }
-
-  return (
-    <div className="mt-1">
-      <input type="hidden" name="facilityId" value={selectedId} />
-      <input
-        ref={inputRef}
-        id={inputId}
-        type="text"
-        role="combobox"
-        aria-autocomplete="list"
-        aria-controls={listboxId}
-        aria-expanded={open}
-        aria-activedescendant={open && activeFacility ? `${listboxId}-${activeFacility.id}` : undefined}
-        value={query}
-        required
-        placeholder="พิมพ์ชื่อหน่วยงานหรืออำเภอเพื่อค้นหา"
-        autoComplete="off"
-        onFocus={() => setOpen(true)}
-        onBlur={() => window.setTimeout(() => setOpen(false), 120)}
-        onChange={(event) => {
-          setQuery(event.target.value);
-          setSelectedId("");
-          setActiveIndex(0);
-          setOpen(true);
-        }}
-        onKeyDown={(event) => {
-          if (event.key === "ArrowDown") {
-            event.preventDefault();
-            setOpen(true);
-            setActiveIndex((index) => Math.min(index + 1, Math.max(filteredFacilities.length - 1, 0)));
-          }
-          if (event.key === "ArrowUp") {
-            event.preventDefault();
-            setOpen(true);
-            setActiveIndex((index) => Math.max(index - 1, 0));
-          }
-          if (event.key === "Enter" && open && activeFacility) {
-            event.preventDefault();
-            selectFacility(activeFacility);
-          }
-          if (event.key === "Escape" && open) {
-            // Close just the suggestion list; the modal's Esc handler skips prevented events.
-            event.preventDefault();
-            setOpen(false);
-          }
-        }}
-        className="w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
-      />
-
-      {open && (
-        <div id={listboxId} role="listbox" className="mt-2 max-h-60 overflow-y-auto rounded-xl border border-black/10 bg-white shadow-sm">
-          {filteredFacilities.length === 0 ? (
-            <p className="px-4 py-5 text-center text-sm text-[var(--muted)]">ไม่พบหน่วยงานที่ตรงกับคำค้น</p>
-          ) : (
-            filteredFacilities.map((facility, index) => {
-              const selected = selectedId === facility.id.toString();
-              const active = index === activeOptionIndex;
-
-              return (
-                <button
-                  key={facility.id}
-                  id={`${listboxId}-${facility.id}`}
-                  type="button"
-                  role="option"
-                  aria-selected={selected}
-                  onMouseEnter={() => setActiveIndex(index)}
-                  onMouseDown={(event) => {
-                    event.preventDefault();
-                    selectFacility(facility);
-                  }}
-                  className={`flex w-full items-start justify-between gap-3 border-b border-black/6 px-4 py-3 text-left text-sm transition last:border-0 ${
-                    active ? "bg-[var(--accent)]/8" : "hover:bg-[var(--accent)]/5"
-                  }`}
-                >
-                  <span className="min-w-0">
-                    <span className="block truncate font-medium text-[var(--foreground)]">
-                      {facility.facility_name?.trim() || `หน่วยงาน #${facility.id}`}
-                    </span>
-                    {facility.district_name && (
-                      <span className="mt-0.5 block text-xs text-[var(--muted)]">อ.{facility.district_name}</span>
-                    )}
-                  </span>
-                  {selected && <span className="shrink-0 text-xs font-medium text-[var(--accent)]">เลือกอยู่</span>}
-                </button>
-              );
-            })
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
 
 /**
  * ช่อง "กลุ่มงาน" แบบพิมพ์ได้และเลือกได้
@@ -524,6 +370,10 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
     () => deviceTypes.filter((t) => t.category === "Software"),
     [deviceTypes]
   );
+  const facilityChoices = useMemo(
+    () => facilities.map((facility) => ({ id: facility.id, name: facility.facility_name?.trim() || `หน่วยงาน #${facility.id}`, typecode: facility.typecode, districtName: facility.district_name })),
+    [facilities]
+  );
   const selectedWorkGroups = useMemo(
     () => (selectedFacilityId ? workGroups.filter((group) => group.facilityId === selectedFacilityId) : []),
     [selectedFacilityId, workGroups]
@@ -624,14 +474,7 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
             >
               <div className="flex items-start justify-between gap-3 colors-[var(--foreground)]">
                 <h2 id={titleId} className="section-title min-w-0 text-xl font-semibold leading-snug">{title}</h2>
-                <button
-                  type="button"
-                  onClick={() => setOpen(false)}
-                  aria-label="ปิดหน้าต่างทรัพย์สิน"
-                  className="min-h-11 min-w-11 rounded-xl text-[var(--muted)] hover:bg-stone-100 hover:text-[var(--foreground)]"
-                >
-                  ✕
-                </button>
+                <ActionIconButton icon="close" label="ปิดหน้าต่างทรัพย์สิน" onClick={() => setOpen(false)} className="border-transparent bg-transparent text-[var(--muted)] hover:bg-stone-100 hover:text-[var(--foreground)]" />
               </div>
 
               <nav aria-label="ไปยังส่วนของฟอร์ม" className="sticky -top-4 z-20 -mx-4 mt-2 sm:-top-6 border-b border-black/6 bg-[var(--surface-strong)] px-4 py-2 sm:-mx-6 sm:px-6">
@@ -664,20 +507,14 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
                   // B1: an existing asset changes facility only through a transfer (keeps the transfer history).
                   <>
                     <input type="hidden" name="facilityId" value={asset.facilityId} />
-                    <select
+                    <FacilitySelect
                       id={`${fieldId}-facility`}
+                      className="mt-1"
                       disabled
+                      facilities={facilityChoices.some((facility) => facility.id === asset.facilityId) ? facilityChoices : [{ id: asset.facilityId, name: asset.facilityName ?? `หน่วยงาน #${asset.facilityId}` }]}
                       value={String(asset.facilityId)}
                       aria-describedby={`${fieldId}-facility-note`}
-                      className="mt-1 w-full rounded-xl border border-black/10 bg-stone-100 px-3 py-2 text-sm text-[var(--muted)]"
-                    >
-                      <option value={String(asset.facilityId)}>
-                        {(() => {
-                          const current = facilities.find((facility) => facility.id === asset.facilityId);
-                          return current ? formatFacilityOption(current) : asset.facilityName ?? `หน่วยงาน #${asset.facilityId}`;
-                        })()}
-                      </option>
-                    </select>
+                    />
                     <p id={`${fieldId}-facility-note`} className="mt-1 text-xs text-[var(--muted)]">
                       แก้ไขหน่วยงานในฟอร์มนี้ไม่ได้ ·{" "}
                       <Link href={`/transfer/?assetId=${asset.id}`} className="font-medium text-[var(--primary-text)] underline underline-offset-2">
@@ -693,11 +530,15 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
                     </div>
                   </>
                 ) : (
-                  <FacilityCombobox
-                    inputId={`${fieldId}-facility`}
-                    facilities={facilities}
-                    defaultFacilityId={asset?.facilityId}
-                    onSelectedFacilityIdChange={(facilityId) => {
+                  <FacilitySelect
+                    id={`${fieldId}-facility`}
+                    className="mt-1"
+                    name="facilityId"
+                    required
+                    facilities={facilityChoices}
+                    defaultValue={asset?.facilityId ? String(asset.facilityId) : ""}
+                    onChange={(value) => {
+                      const facilityId = value ? Number(value) : null;
                       setSelectedFacilityId(facilityId);
                       setSelectedWorkGroupId("");
                       // New records take the facility's default unit code until the user edits it.
@@ -1126,6 +967,7 @@ export function AssetFormModal({ facilities, deviceTypes = [], workGroups = [], 
                     disabled={pending || subtypePending}
                     className="primary-action"
                   >
+                    <AppIcon name={pending ? "refresh" : "check"} size={16} className={pending ? "animate-spin motion-reduce:animate-none" : ""} />
                     {pending ? "กำลังบันทึก…" : mode === "create" ? "เพิ่มทรัพย์สิน" : "บันทึกการแก้ไข"}
                   </button>
                 </div>

@@ -1,9 +1,14 @@
 "use client";
 
-import { useActionState, useId, useRef, useState, useTransition } from "react";
+import { useActionState, useId, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
+import { ActionIconButton } from "@/app/_components/ui/action-icon-button";
 import { SortableTh, TablePagination } from "@/app/_components/ui/data-table";
+import { FacilitySelect } from "@/app/_components/ui/facility-select";
+import { AppIcon } from "@/app/_components/ui/icon";
+import { EmptyState, SummaryCard } from "@/app/(main)/admin/_components/page-hero";
+import { compareFacilities } from "@/lib/facility-order";
 import { StatusBadge, activeTone } from "@/app/_components/ui/status-badge";
 import {
   createFacilityWorkGroupAction,
@@ -70,14 +75,7 @@ function WorkGroupModal({
               ใช้ผูกกับหน่วยงานตอนสร้าง token ติดตั้ง ATACS Agent
             </p>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="ปิด"
-            className="flex min-h-11 min-w-11 items-center justify-center rounded-xl text-[var(--muted)] hover:bg-stone-100 hover:text-[var(--foreground)]"
-          >
-            x
-          </button>
+          <ActionIconButton icon="close" label="ปิด" onClick={onClose} className="-mr-2 -mt-2 border-transparent bg-transparent" />
         </div>
 
         {error ? (
@@ -94,21 +92,16 @@ function WorkGroupModal({
               <input type="hidden" name="facilityId" value={singleFacility.id} />
             </div>
           ) : (
-            <label className="block">
-              <span className="text-sm font-medium text-[var(--foreground)]">หน่วยงาน</span>
-              <select
+            <div>
+              <label htmlFor={`${titleId}-facility`} className="text-sm font-medium text-[var(--foreground)]">หน่วยงาน</label>
+              <FacilitySelect
+                id={`${titleId}-facility`}
                 name="facilityId"
+                facilities={facilities}
                 required
-                className="mt-1 w-full rounded-xl border border-black/10 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-[var(--accent)]"
-              >
-                <option value="">เลือกหน่วยงาน</option>
-                {facilities.map((facility) => (
-                  <option key={facility.id} value={facility.id}>
-                    {facility.name} · {facility.districtName ?? "-"} · {facility.typecode}
-                  </option>
-                ))}
-              </select>
-            </label>
+                className="mt-1"
+              />
+            </div>
           )}
 
           <label className="block">
@@ -128,15 +121,16 @@ function WorkGroupModal({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-xl border border-black/10 bg-white/80 px-5 py-2 text-sm font-medium text-[var(--foreground)] hover:bg-white"
+              className="secondary-action"
             >
               ยกเลิก
             </button>
             <button
               type="submit"
               disabled={pending}
-              className="rounded-xl bg-[var(--accent-strong)] px-6 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
+              className="primary-action"
             >
+              <AppIcon name="plus" size={16} />
               {pending ? "กำลังบันทึก..." : "สร้างกลุ่มงาน"}
             </button>
           </div>
@@ -151,7 +145,7 @@ function WorkGroupRow({ workGroup, seq }: { workGroup: FacilityWorkGroupManageRo
   const [pending, startTransition] = useTransition();
 
   return (
-    <tr className="border-b border-black/5 transition hover:bg-white/40">
+    <tr className="border-b border-black/5">
       <td className="px-4 py-3 text-right tabular-nums text-[var(--muted)]">{seq.toLocaleString("th-TH")}</td>
       <td className="px-4 py-3">
         <p className="font-medium text-[var(--foreground)]">{workGroup.workGroupName}</p>
@@ -168,8 +162,11 @@ function WorkGroupRow({ workGroup, seq }: { workGroup: FacilityWorkGroupManageRo
         </StatusBadge>
       </td>
       <td className="px-4 py-3 text-right">
-        <button
-          type="button"
+        <ActionIconButton
+          icon={workGroup.isActive ? "power-off" : "power-on"}
+          tone={workGroup.isActive ? "danger" : "primary"}
+          label={workGroup.isActive ? `ปิดใช้งานกลุ่มงาน ${workGroup.workGroupName}` : `เปิดใช้งานกลุ่มงาน ${workGroup.workGroupName}`}
+          aria-busy={pending}
           disabled={pending}
           onClick={() =>
             startTransition(async () => {
@@ -177,14 +174,7 @@ function WorkGroupRow({ workGroup, seq }: { workGroup: FacilityWorkGroupManageRo
               router.refresh();
             })
           }
-          className={`rounded-lg border px-3 py-1 text-xs font-medium transition disabled:opacity-50 ${
-            workGroup.isActive
-              ? "border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100"
-              : "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
-          }`}
-        >
-          {pending ? "..." : workGroup.isActive ? "ปิดใช้งาน" : "เปิดใช้งาน"}
-        </button>
+        />
       </td>
     </tr>
   );
@@ -193,7 +183,17 @@ function WorkGroupRow({ workGroup, seq }: { workGroup: FacilityWorkGroupManageRo
 export function WorkGroupsClient({ facilities, workGroups }: WorkGroupsClientProps) {
   const [createOpen, setCreateOpen] = useState(false);
   const activeCount = workGroups.filter((group) => group.isActive).length;
-  const t = useTableState(workGroups, {
+  // ลำดับเริ่มต้นตามหน่วยงาน: สสจ. → สสอ. → รพท. → รพช. → รพ.สต.
+  const ordered = useMemo(
+    () =>
+      [...workGroups].sort(
+        (a, b) =>
+          compareFacilities({ name: a.facilityName, typecode: a.facilityTypeCode }, { name: b.facilityName, typecode: b.facilityTypeCode }) ||
+          a.workGroupName.localeCompare(b.workGroupName, "th")
+      ),
+    [workGroups]
+  );
+  const t = useTableState(ordered, {
     name: (group) => group.workGroupName,
     facility: (group) => group.facilityName,
     status: (group) => (group.isActive ? 0 : 1),
@@ -202,18 +202,9 @@ export function WorkGroupsClient({ facilities, workGroups }: WorkGroupsClientPro
   return (
     <>
       <div className="grid gap-3 sm:grid-cols-3">
-        <div className="glass-panel rounded-2xl p-4">
-          <p className="text-xs text-[var(--muted)]">หน่วยงานที่จัดการได้</p>
-          <p className="mt-1 text-2xl font-semibold text-[var(--foreground)]">{facilities.length}</p>
-        </div>
-        <div className="glass-panel rounded-2xl p-4">
-          <p className="text-xs text-[var(--muted)]">กลุ่มงานทั้งหมด</p>
-          <p className="mt-1 text-2xl font-semibold text-[var(--foreground)]">{workGroups.length}</p>
-        </div>
-        <div className="glass-panel rounded-2xl p-4">
-          <p className="text-xs text-[var(--muted)]">เปิดใช้งาน</p>
-          <p className="mt-1 text-2xl font-semibold text-[var(--foreground)]">{activeCount}</p>
-        </div>
+        <SummaryCard icon="building" image="office-desk" label="หน่วยงานที่จัดการได้" value={facilities.length.toLocaleString("th-TH")} />
+        <SummaryCard icon="users" image="meeting-room" label="กลุ่มงานทั้งหมด" value={workGroups.length.toLocaleString("th-TH")} />
+        <SummaryCard icon="power-on" image="it-storage" label="เปิดใช้งาน" value={activeCount.toLocaleString("th-TH")} tone="success" />
       </div>
 
       <div className="flex justify-end">
@@ -223,7 +214,8 @@ export function WorkGroupsClient({ facilities, workGroups }: WorkGroupsClientPro
           disabled={facilities.length === 0}
           className="primary-action"
         >
-          + สร้างกลุ่มงาน
+          <AppIcon name="plus" size={16} />
+          สร้างกลุ่มงาน
         </button>
       </div>
 
@@ -237,7 +229,7 @@ export function WorkGroupsClient({ facilities, workGroups }: WorkGroupsClientPro
         <div className="overflow-x-auto">
           <table className="w-full min-w-[720px] text-sm">
             <thead>
-              <tr className="border-b border-black/6 bg-stone-50/60 text-xs text-[var(--muted)]">
+              <tr className="border-b border-black/6 text-xs text-[var(--muted)]">
                 <th className="w-14 px-4 py-3 text-right font-medium">ลำดับ</th>
                 <SortableTh label="กลุ่มงาน" sortKey="name" sort={t.sort} onSort={t.onSort} className="px-4 py-3 font-medium" />
                 <SortableTh label="หน่วยงาน" sortKey="facility" sort={t.sort} onSort={t.onSort} className="px-4 py-3 font-medium" />
@@ -251,8 +243,8 @@ export function WorkGroupsClient({ facilities, workGroups }: WorkGroupsClientPro
               ))}
               {workGroups.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-4 py-10 text-center text-sm text-[var(--muted)]">
-                    ยังไม่มีกลุ่มงาน กดสร้างกลุ่มงานเพื่อเริ่มใช้งาน
+                  <td colSpan={5} className="p-0">
+                    <EmptyState icon="users" image="meeting-room" title="ยังไม่มีกลุ่มงาน" description="กด “สร้างกลุ่มงาน” เพื่อเริ่มใช้งาน" />
                   </td>
                 </tr>
               ) : null}

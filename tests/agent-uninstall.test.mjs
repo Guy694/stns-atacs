@@ -62,7 +62,7 @@ test("UI version hint and confirmation rules", () => {
 function agentHarness({ device = {}, columns = true, previousRevoked = null, affectedRows = 1 } = {}) {
   const writes = [], reads = [], assetWrites = [];
   const row = {
-    id: 5, facility_id: 10, facility_name: "รพ.สต.A", agent_uuid: "agent-5", device_fingerprint: "fp-old", agent_key_hash: "h",
+    id: 5, facility_id: 10, facility_name: "รพ.สต.A", agent_uuid: "agent-5", device_fingerprint: "0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a", agent_key_hash: "h",
     hostname: "PC-5", agent_version: "2.2.0", linked_asset_id: 7, status: "online", is_active: 1,
     ...(columns ? { uninstall_requested_at: null, uninstall_requested_by: null, uninstalled_at: null } : {}),
     ...device,
@@ -326,7 +326,7 @@ function reportRoute(result, { retired = false } = {}) {
     "@/lib/security": { readRequestIp: () => "10.0.0.9", recordSecurityEvent: async (input) => { events.push(input); } },
   });
   const post = () => route.POST(routeRequest("https://stn.moph.go.th/stns-atacs/api/agent/report/", {
-    headers: creds, body: JSON.stringify({ fingerprint: "fp", capabilities: ["self-update", "self-uninstall"] }),
+    headers: creds, body: JSON.stringify({ fingerprint: "fafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafa", capabilities: ["self-update", "self-uninstall"] }),
   }));
   return { post, events, alerts, wasUpdateChecked: () => updateChecked };
 }

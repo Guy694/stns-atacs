@@ -9,6 +9,7 @@ import { normalizeAssetClass } from "@/lib/asset-classes";
 import { formatAssetNumber } from "@/lib/asset-number";
 import { isItAsset, parseAssetClass, supportsAgentAsset } from "@/lib/asset-policy";
 import { executeStatement, selectRows, withTransaction } from "@/lib/mysql";
+import { writeAuditLog } from "@/lib/audit";
 import { assertNoOpenAssetWork } from "@/lib/asset-open-work";
 import { ASSET_SOFT_DELETE_MIGRATION_MESSAGE, assetNotDeletedSql, hasAssetSoftDelete } from "@/lib/asset-soft-delete";
 import { ensureAssetStatusHistoryTable, insertAssetStatusHistory } from "@/lib/asset-status-history";
@@ -748,6 +749,162 @@ export async function deleteAsset(id: number, actor: { userId?: number | null; u
       "UPDATE information_assets SET deleted_at = NOW(), deleted_by_user_id = ?, deleted_by = ? WHERE id = ? AND deleted_at IS NULL",
       [actor.userId ?? null, actor.userName, id]
     );
+  });
+}
+
+/** A soft-deleted asset as shown in the trash (/assets/trash/). */
+export type DeletedAssetRow = {
+  id: number;
+  facilityId: number;
+  facilityName: string;
+  districtName: string;
+  assetRegistrationNo: string;
+  assetNumber: string;
+  assetName: string;
+  deletedAt: string;
+  deletedBy: string;
+};
+
+type DeletedAssetDbRow = RowDataPacket & {
+  id: number;
+  facility_id: number;
+  facility_name: string | null;
+  district_name: string | null;
+  asset_registration_no: string | null;
+  asset_code_prefix: string | null;
+  asset_name: string | null;
+  deleted_at: Date | string;
+  deleted_by: string | null;
+};
+
+/**
+ * ถังขยะครุภัณฑ์: soft-deleted assets, most recently deleted first. `facilityIds` is the caller's facility
+ * scope (undefined = every facility, [] = none). Empty before the soft-delete migration.
+ */
+export async function listDeletedAssets(filter: { facilityId?: number; facilityIds?: number[]; search?: string; limit?: number } = {}): Promise<DeletedAssetRow[]> {
+  if (!(await hasAssetSoftDelete())) return [];
+  if (filter.facilityIds && filter.facilityIds.length === 0) return [];
+  const conditions = ["a.deleted_at IS NOT NULL"];
+  const values: unknown[] = [];
+  if (filter.facilityId) {
+    conditions.push("s.facility_id = ?");
+    values.push(filter.facilityId);
+  }
+  if (filter.facilityIds) {
+    conditions.push(`s.facility_id IN (${filter.facilityIds.map(() => "?").join(",")})`);
+    values.push(...filter.facilityIds);
+  }
+  const search = filter.search?.trim();
+  if (search) {
+    const like = `%${search}%`;
+    conditions.push("(a.asset_name LIKE ? OR a.asset_registration_no LIKE ? OR CONCAT(COALESCE(a.asset_code_prefix, ''), COALESCE(a.asset_registration_no, '')) LIKE ? OR a.serial_number LIKE ? OR a.deleted_by LIKE ?)");
+    values.push(like, like, like, like, like);
+  }
+  const requested = Number(filter.limit);
+  const limit = Number.isFinite(requested) && requested > 0 ? Math.min(500, Math.floor(requested)) : 200;
+  const rows = await selectRows<DeletedAssetDbRow>(
+    `SELECT a.id, s.facility_id, hf.name AS facility_name, hf.district_name, a.asset_registration_no, a.asset_code_prefix,
+            a.asset_name, a.deleted_at, a.deleted_by
+     FROM information_assets a
+     JOIN information_asset_surveys s ON s.id = a.survey_id
+     JOIN health_facilities hf        ON hf.id = s.facility_id
+     WHERE ${conditions.join(" AND ")}
+     ORDER BY a.deleted_at DESC, a.id DESC
+     LIMIT ?`,
+    [...values, limit]
+  );
+  return rows.map((row) => ({
+    id: Number(row.id),
+    facilityId: Number(row.facility_id),
+    facilityName: row.facility_name ?? "",
+    districtName: row.district_name ?? "",
+    assetRegistrationNo: row.asset_registration_no ?? "",
+    assetNumber: formatAssetNumber(row.asset_code_prefix, row.asset_registration_no),
+    assetName: row.asset_name ?? "",
+    deletedAt: row.deleted_at instanceof Date ? row.deleted_at.toISOString() : String(row.deleted_at),
+    deletedBy: row.deleted_by ?? "",
+  }));
+}
+
+/**
+ * กู้คืนทรัพย์สินจากถังขยะ. Locks the row, refuses when an active asset in the same facility now carries the
+ * same registration number (or, for IT hardware, the same serial number) — a restored duplicate would break
+ * the registers — then clears the deletion and writes the audit row in the same transaction.
+ * `canAccessFacility` lets the caller enforce its facility scope against the locked row.
+ */
+export async function restoreAsset(
+  id: number,
+  actor: { userId?: number | null; userName: string; canAccessFacility?: (facilityId: number) => boolean }
+) {
+  if (!(await hasAssetSoftDelete())) throw new Error(ASSET_SOFT_DELETE_MIGRATION_MESSAGE);
+  return withTransaction(async () => {
+    const [asset] = await selectRows<RowDataPacket & {
+      id: number;
+      deleted_at: Date | string | null;
+      asset_registration_no: string | null;
+      asset_code_prefix: string | null;
+      asset_name: string | null;
+      serial_number: string | null;
+      asset_class: string | null;
+      asset_category: string | null;
+      facility_id: number;
+    }>(
+      `SELECT a.id, a.deleted_at, a.asset_registration_no, a.asset_code_prefix, a.asset_name, a.serial_number,
+              a.asset_class, a.asset_category, s.facility_id
+       FROM information_assets a
+       JOIN information_asset_surveys s ON s.id = a.survey_id
+       WHERE a.id = ? FOR UPDATE`,
+      [id]
+    );
+    if (!asset || !asset.deleted_at) throw new Error("ไม่พบทรัพย์สินในถังขยะ หรือถูกกู้คืนไปแล้ว");
+    const facilityId = Number(asset.facility_id);
+    if (actor.canAccessFacility && !actor.canAccessFacility(facilityId)) throw new Error("คุณไม่มีสิทธิ์กู้คืนทรัพย์สินของหน่วยงานนี้");
+
+    const registrationNo = asset.asset_registration_no?.trim() ?? "";
+    if (registrationNo) {
+      const [duplicate] = await selectRows<RowDataPacket & { id: number }>(
+        `SELECT a.id
+         FROM information_assets a
+         JOIN information_asset_surveys s ON s.id = a.survey_id
+         WHERE s.facility_id = ? AND a.asset_registration_no = ? AND a.id <> ? AND a.deleted_at IS NULL
+         LIMIT 1`,
+        [facilityId, registrationNo, id]
+      );
+      if (duplicate) {
+        throw new Error(`กู้คืนไม่ได้: เลขทะเบียน ${registrationNo} ถูกใช้กับทรัพย์สิน #${duplicate.id} ในหน่วยงานเดียวกันแล้ว กรุณาแก้ไขหรือลบรายการนั้นก่อน`);
+      }
+    }
+
+    const serial = asset.serial_number?.trim() ?? "";
+    if (serial && isItAsset({ assetClass: asset.asset_class }) && (asset.asset_category ?? "Hardware") === "Hardware") {
+      const [duplicate] = await selectRows<RowDataPacket & { id: number }>(
+        `SELECT a.id
+         FROM information_assets a
+         JOIN information_asset_surveys s ON s.id = a.survey_id
+         WHERE s.facility_id = ? AND TRIM(a.serial_number) = ? AND a.id <> ? AND a.deleted_at IS NULL
+         LIMIT 1`,
+        [facilityId, serial, id]
+      );
+      if (duplicate) {
+        throw new Error(`กู้คืนไม่ได้: Serial Number ${serial} ถูกใช้กับทรัพย์สิน #${duplicate.id} ในหน่วยงานเดียวกันแล้ว กรุณาแก้ไขหรือลบรายการนั้นก่อน`);
+      }
+    }
+
+    await executeStatement(
+      "UPDATE information_assets SET deleted_at = NULL, deleted_by_user_id = NULL, deleted_by = NULL WHERE id = ? AND deleted_at IS NOT NULL",
+      [id]
+    );
+    const assetNumber = formatAssetNumber(asset.asset_code_prefix, asset.asset_registration_no);
+    const assetName = asset.asset_name ?? "";
+    await writeAuditLog({
+      userId: actor.userId ?? null,
+      userName: actor.userName,
+      action: "update",
+      entity: "information_assets",
+      entityId: id,
+      summary: `กู้คืนทรัพย์สินที่ถูกลบ: #${id}${assetNumber ? ` ${assetNumber}` : ""} ${assetName}`.trim(),
+    });
+    return { id, facilityId, assetNumber, assetName };
   });
 }
 

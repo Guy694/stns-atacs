@@ -45,7 +45,8 @@ export function DashboardScopeToggle({ hasOwnFacility, currentScope }: Dashboard
       <button
         type="button"
         onClick={() => updateScope("mine")}
-        className={`rounded-lg px-4 py-1.5 transition ${currentScope === "mine" ? "bg-[var(--accent-strong)] text-white shadow" : "text-[var(--muted)] hover:text-[var(--foreground)]"}`}
+        aria-pressed={currentScope === "mine"}
+        className={`min-h-9 rounded-lg px-4 py-1.5 transition-colors duration-200 ${currentScope === "mine" ? "bg-[var(--accent-strong)] text-white shadow" : "text-[var(--muted)] hover:text-[var(--foreground)]"}`}
       >
         <span className="sm:hidden">ของฉัน</span>
         <span className="hidden sm:inline">รายการทรัพย์สิน</span>
@@ -53,7 +54,8 @@ export function DashboardScopeToggle({ hasOwnFacility, currentScope }: Dashboard
       <button
         type="button"
         onClick={() => updateScope("all")}
-        className={`rounded-lg px-4 py-1.5 transition ${currentScope === "all" ? "bg-[var(--accent-strong)] text-white shadow" : "text-[var(--muted)] hover:text-[var(--foreground)]"}`}
+        aria-pressed={currentScope === "all"}
+        className={`min-h-9 rounded-lg px-4 py-1.5 transition-colors duration-200 ${currentScope === "all" ? "bg-[var(--accent-strong)] text-white shadow" : "text-[var(--muted)] hover:text-[var(--foreground)]"}`}
       >
         ทุกหน่วยงาน
       </button>

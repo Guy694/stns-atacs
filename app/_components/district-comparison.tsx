@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Fragment, useState } from "react";
 
 import { baht, hrefWith, numberFormat, percent, Tip } from "@/app/_components/overview-format";
+import { AppIcon } from "@/app/_components/ui/icon";
 import type { DashboardSummary } from "@/lib/dashboard-summary";
 
 type Summary = DashboardSummary;
@@ -43,7 +44,8 @@ export function DistrictComparison({ summary, basePath }: { summary: Summary; ba
         </ul>
         {rows.length > 0 && (
           <button type="button" onClick={() => setExpanded(allExpanded ? new Set() : new Set(rows.map((row) => row.district)))}
-            className="min-h-9 rounded-lg border border-[var(--line)] px-3 text-xs font-medium text-[var(--primary-text)] transition hover:bg-[var(--primary-soft)]">
+            className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-[var(--line)] px-3 text-xs font-medium text-[var(--primary-text)] transition-colors duration-200 hover:bg-[var(--primary-soft)]">
+            <AppIcon name={allExpanded ? "chevrons-left-right" : "chevrons-up-down"} className="h-3.5 w-3.5" />
             {allExpanded ? "ย่อทั้งหมด" : "แสดงหน่วยงานทุกอำเภอ"}
           </button>
         )}
@@ -71,7 +73,7 @@ export function DistrictComparison({ summary, basePath }: { summary: Summary; ba
                     <th scope="row" className="py-2.5 pr-3 text-left font-medium">
                       <button type="button" onClick={() => toggle(row.district)} aria-expanded={open} aria-controls={panelId} disabled={row.facilityRows.length === 0}
                         className="-ml-1 inline-flex min-h-9 items-center gap-2 rounded px-1 text-left hover:text-[var(--primary-text)] focus-visible:outline-2 focus-visible:outline-[var(--primary)] disabled:cursor-default disabled:hover:text-inherit">
-                        <svg aria-hidden viewBox="0 0 16 16" className={`h-3.5 w-3.5 shrink-0 text-[var(--muted)] transition-transform ${open ? "rotate-90" : ""}`}><path d="M6 3l5 5-5 5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                        <AppIcon name="chevron-right" aria-hidden="true" className={`h-3.5 w-3.5 shrink-0 text-[var(--muted)] transition-transform duration-200 ${open ? "rotate-90" : ""}`} />
                         อ.{row.district}
                       </button>
                     </th>

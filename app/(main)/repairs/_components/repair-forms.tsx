@@ -1,7 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { useActionState, useState } from "react";
+
+import { ActionIconLink } from "@/app/_components/ui/action-icon-button";
+import { AppIcon } from "@/app/_components/ui/icon";
 
 import { createRepairAction, updateRepairAction } from "@/app/(main)/repairs/actions";
 import {
@@ -44,8 +46,9 @@ export function NewRepairForm({ assetId, assetStatus }: { assetId: number; asset
         </label>
       )}
       <div className="flex items-center justify-between pt-2">
-        <Link href={`/assets/${assetId}`} className="rounded-xl border border-[var(--line)] bg-white/80 px-5 py-2.5 text-sm font-medium text-[var(--muted)] hover:bg-white">ยกเลิก</Link>
-        <button disabled={pending} className="rounded-xl bg-[var(--primary)] px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-[var(--primary-hover)] disabled:opacity-60">
+        <ActionIconLink href={`/assets/${assetId}`} icon="close" label="ยกเลิก" />
+        <button disabled={pending} className="primary-action">
+          <AppIcon name="wrench" className="h-4 w-4" />
           {pending ? "กำลังบันทึก…" : "แจ้งซ่อม"}
         </button>
       </div>
@@ -107,7 +110,8 @@ export function UpdateRepairForm({ repair }: { repair: RepairFormValues }) {
       <label className="block text-sm font-medium">บันทึกเพิ่มเติมในไทม์ไลน์
         <input name="note" className={field} placeholder="เช่น รออะไหล่ 7 วัน" />
       </label>
-      <button disabled={pending} className="rounded-xl bg-[var(--primary)] px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-[var(--primary-hover)] disabled:opacity-60">
+      <button disabled={pending} className="primary-action">
+        <AppIcon name="check" className="h-4 w-4" />
         {pending ? "กำลังบันทึก…" : "บันทึกงานซ่อม"}
       </button>
     </form>

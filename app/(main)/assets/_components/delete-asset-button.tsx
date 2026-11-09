@@ -25,7 +25,7 @@ export function DeleteAssetButton({ assetId, assetName, redirectTo }: Props) {
   async function handleClick() {
     const confirmed = await confirmAction({
       title: `ลบ "${assetName}" ?`,
-      text: "รายการจะถูกนำออกจากทะเบียนและรายงาน แต่ประวัติการซ่อม ยืม โอน และจำหน่ายยังเก็บไว้ (กู้คืนได้โดยผู้ดูแลระบบผ่านฐานข้อมูล)",
+      text: "รายการจะถูกนำออกจากทะเบียนและรายงาน แต่ประวัติการซ่อม ยืม โอน และจำหน่ายยังเก็บไว้ (ผู้ดูแลระบบกู้คืนได้ที่ ทรัพย์สิน › ถังขยะ)",
       confirmText: "ลบทรัพย์สิน",
       danger: true,
     });

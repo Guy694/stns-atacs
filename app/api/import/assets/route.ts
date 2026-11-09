@@ -17,6 +17,7 @@ import { hasPermission } from "@/lib/role-permissions";
 import { readRequestIp, recordSecurityEvent } from "@/lib/security";
 import { notifyTelegramSafe } from "@/lib/telegram";
 import { dbDate, todayBangkok } from "@/lib/local-date";
+import { userFacingError } from "@/lib/schema-errors";
 
 type ImportRow = Record<string, unknown>;
 
@@ -337,7 +338,7 @@ export async function POST(req: NextRequest) {
       skipped += 1;
       errors.push({
         row: rowNumber,
-        message: error instanceof Error ? error.message : "เกิดข้อผิดพลาดที่ไม่ทราบสาเหตุ",
+        message: userFacingError(error, "เกิดข้อผิดพลาดที่ไม่ทราบสาเหตุ"),
       });
     }
   }

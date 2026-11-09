@@ -31,7 +31,7 @@ export function loadTs(file, dependencies = {}, globals = {}) {
           const path = id.slice(2);
           return load(fs.existsSync(new URL(`${path}.ts`, root)) ? `${path}.ts` : `${path}.tsx`);
         }
-        if (id.startsWith("node:") || ["react", "react/jsx-runtime", "react-dom", "xlsx"].includes(id)) return require(id);
+        if (id.startsWith("node:") || ["react", "react/jsx-runtime", "react-dom", "xlsx", "lucide-react"].includes(id)) return require(id);
         throw new Error(`Unexpected dependency: ${id}`);
       },
     }, { filename: relative });

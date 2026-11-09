@@ -5,6 +5,7 @@ import { buildDailySummaryDetails, dailySummaryEventKey, hasSummaryContent, summ
 import { readRequestIp, recordSecurityEvent } from "@/lib/security";
 import { notifyTelegramSafe } from "@/lib/telegram";
 import { isAuthorizedCronHeader } from "@/lib/cron-auth";
+import { recordCronRun } from "@/lib/cron-status";
 
 function isAuthorized(req: NextRequest) {
   return isAuthorizedCronHeader(req.headers.get("authorization"));
@@ -40,7 +41,10 @@ export async function GET(req: NextRequest) {
   };
 
   if (req.nextUrl.searchParams.get("dry") === "1") return NextResponse.json({ ok: true, date: today, counts, data });
-  if (!hasSummaryContent(data)) return NextResponse.json({ ok: true, date: today, counts, sent: false, reason: "nothing-to-report" });
+  if (!hasSummaryContent(data)) {
+    await recordCronRun("daily-summary", true, "ไม่มีงานค้าง");
+    return NextResponse.json({ ok: true, date: today, counts, sent: false, reason: "nothing-to-report" });
+  }
 
   const result = await notifyTelegramSafe({
     category: "lifecycle",
@@ -48,5 +52,6 @@ export async function GET(req: NextRequest) {
     eventKey: dailySummaryEventKey(today),
     details: buildDailySummaryDetails(data, thresholds),
   });
+  await recordCronRun("daily-summary", result.sent !== false, result.sent ? "ส่งสรุปทาง Telegram แล้ว" : "ส่ง Telegram ไม่สำเร็จ");
   return NextResponse.json({ ok: true, date: today, counts, sent: result.sent });
 }

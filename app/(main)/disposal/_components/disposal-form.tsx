@@ -1,7 +1,6 @@
 "use client";
 
 import { useActionState, useState, useId } from "react";
-import Link from "next/link";
 
 import { StatusBadge } from "@/app/_components/ui/status-badge";
 import { disposalAssetAction } from "@/app/(main)/disposal/actions";
@@ -10,6 +9,8 @@ import type { AssetWithFacility } from "@/lib/assets";
 import { DISPOSAL_METHODS } from "@/lib/disposal-options";
 import { todayBangkok } from "@/lib/local-date";
 import { submitWithoutReset } from "@/app/_components/ui/submit-without-reset";
+import { ActionIconLink } from "@/app/_components/ui/action-icon-button";
+import { AppIcon } from "@/app/_components/ui/icon";
 
 type Props = { asset: AssetWithFacility; defaultType?: string; hasPendingRequest?: boolean };
 
@@ -162,17 +163,13 @@ export function DisposalForm({ asset, defaultType = "", hasPendingRequest = fals
 
       {/* Actions */}
       <div className="flex items-center justify-between pt-2">
-        <Link
-          href={`/assets/${asset.id}`}
-          className="rounded-xl border border-[var(--line)] bg-white/80 px-5 py-2.5 text-sm font-medium text-[var(--muted)] transition hover:bg-white"
-        >
-          ยกเลิก
-        </Link>
+        <ActionIconLink href={`/assets/${asset.id}`} icon="close" label="ยกเลิก" />
         <button
           type="submit"
           disabled={pending}
-          className="rounded-xl bg-rose-600 px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:opacity-60"
+          className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-rose-600 px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:opacity-60"
         >
+          <AppIcon name="check" className="h-4 w-4" />
           {pending ? "กำลังบันทึก…" : needsApproval ? "ส่งคำขอเพื่ออนุมัติ" : "บันทึกการดำเนินการ"}
         </button>
       </div>

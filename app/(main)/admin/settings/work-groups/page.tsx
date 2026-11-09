@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { StatusBadge } from "@/app/_components/ui/status-badge";
@@ -9,6 +8,7 @@ import {
 } from "@/lib/facility-work-groups";
 import { hasPermission } from "@/lib/role-permissions";
 import { WorkGroupsClient } from "./_components/work-groups-client";
+import { PageHero, SettingsBreadcrumb } from "@/app/(main)/admin/_components/page-hero";
 
 export const dynamic = "force-dynamic";
 
@@ -39,24 +39,18 @@ export default async function WorkGroupsPage() {
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6">
-      <div className="flex items-center gap-2 text-xs text-[var(--muted)]">
-        <Link href="/admin/settings" className="hover:underline">ตั้งค่าระบบ</Link>
-        <span>›</span>
-        <span>จัดการกลุ่มงาน</span>
-      </div>
-
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <p className="text-xs font-semibold text-[var(--accent-strong)]">ตั้งค่าระบบ · กลุ่มงาน</p>
-          <h1 className="section-title mt-1 text-3xl font-semibold">จัดการกลุ่มงาน</h1>
-          <p className="mt-1 max-w-2xl text-sm text-[var(--muted)]">
-            สร้างกลุ่มงานของ สสจ, สสอ และโรงพยาบาล เพื่อใช้ระบุตอนติดตั้ง ATACS Agent
-          </p>
-        </div>
-        <StatusBadge tone={facilities.length > 0 ? "success" : "warning"}>
-          {facilities.length > 0 ? "พร้อมสร้างกลุ่มงาน" : "ไม่มีหน่วยงานที่ต้องระบุกลุ่มงาน"}
-        </StatusBadge>
-      </div>
+      <SettingsBreadcrumb current="จัดการกลุ่มงาน" />
+      <PageHero
+        icon="users"
+        image="meeting-room"
+        title="จัดการกลุ่มงาน"
+        description="สร้างกลุ่มงานของ สสจ, สสอ และโรงพยาบาล เพื่อใช้ระบุตอนติดตั้ง ATACS Agent"
+        actions={
+          <StatusBadge tone={facilities.length > 0 ? "success" : "warning"}>
+            {facilities.length > 0 ? "พร้อมสร้างกลุ่มงาน" : "ไม่มีหน่วยงานที่ต้องระบุกลุ่มงาน"}
+          </StatusBadge>
+        }
+      />
 
       {dbError ? (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-800">

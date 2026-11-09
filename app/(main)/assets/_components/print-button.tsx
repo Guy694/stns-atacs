@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-import { AppIcon } from "@/app/_components/ui/icon";
+import { ActionIconButton } from "@/app/_components/ui/action-icon-button";
 
 type QrDownloadButtonProps = {
   downloadUrl: string;
@@ -35,13 +35,13 @@ export function QrDownloadButton({ downloadUrl, filename }: QrDownloadButtonProp
   }
 
   return (
-    <button
-      type="button"
+    <ActionIconButton
+      icon={isDownloading ? "refresh" : "download"}
+      tone="primary"
+      label={isDownloading ? "กำลังดาวน์โหลด QR Code…" : "ดาวน์โหลด QR Code"}
       onClick={downloadQr}
       disabled={isDownloading}
-      className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--primary)] px-4 py-2 text-sm font-medium text-white transition hover:bg-[var(--primary-hover)] disabled:cursor-not-allowed disabled:opacity-60"
-    >
-      <AppIcon name="download" className="h-4 w-4" /> {isDownloading ? "กำลังดาวน์โหลด" : "ดาวน์โหลด QR Code"}
-    </button>
+      aria-busy={isDownloading}
+    />
   );
 }

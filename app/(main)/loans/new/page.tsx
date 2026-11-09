@@ -2,6 +2,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { StatusBadge } from "@/app/_components/ui/status-badge";
+import { AppIcon } from "@/app/_components/ui/icon";
+import { PhotoBackdrop } from "@/app/_components/ui/photo-backdrop";
 import { listLoans } from "@/lib/asset-loans";
 import { assetStatusLabel, assetStatusTone, isTerminalAssetStatus } from "@/lib/asset-status";
 import { getCurrentUser } from "@/lib/auth";
@@ -60,18 +62,26 @@ export default async function NewLoanPage({ searchParams }: Props) {
   const results = q ? await listAssets({ search: q, facilityId: facilityScopeId, limit: 50 }) : [];
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-6">
-      <div>{breadcrumb}
+      <div className="relative isolate overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--surface-strong)] px-5 py-5 sm:px-6">
+        <PhotoBackdrop image="office-desk" fade="left" />
+        {breadcrumb}
         <h1 className="section-title text-3xl font-semibold">บันทึกการยืม: เลือกครุภัณฑ์</h1>
         <p className="mt-1 text-sm text-[var(--muted)]">ค้นหาด้วยชื่อ เลขครุภัณฑ์ หรือ Serial Number หรือเปิดจากหน้าครุภัณฑ์แล้วเลือก “ให้ยืม”</p>
       </div>
       <form method="GET" className="glass-panel flex gap-3 rounded-2xl p-4">
         <label htmlFor="loan-search" className="sr-only">ค้นหาครุภัณฑ์</label>
         <input id="loan-search" name="q" defaultValue={q} autoFocus placeholder="ค้นหาชื่อ / เลขครุภัณฑ์ / Serial…" className="filter-control min-w-0 flex-1" />
-        <button className="rounded-xl bg-[var(--primary)] px-4 py-2.5 text-xs font-semibold text-white hover:bg-[var(--primary-hover)]">ค้นหา</button>
+        <button className="primary-action action-sm"><AppIcon name="search" className="h-4 w-4" /> ค้นหา</button>
       </form>
       {q && (
         <section className="glass-panel divide-y divide-black/5 overflow-hidden rounded-2xl">
-          {results.length === 0 ? <p className="p-8 text-center text-sm text-[var(--muted)]">ไม่พบครุภัณฑ์</p> : results.map((asset) => (
+          {results.length === 0 ? (
+            <div className="relative isolate overflow-hidden p-8 text-center text-sm text-[var(--muted)]">
+              <PhotoBackdrop image="it-storage" fade="bottom" />
+              <AppIcon name="search" className="mx-auto mb-2 h-8 w-8 text-[var(--primary)]" />
+              <p>ไม่พบครุภัณฑ์</p>
+            </div>
+          ) : results.map((asset) => (
             <div key={asset.id} className="flex items-center justify-between gap-3 px-5 py-3">
               <div>
                 <p className="text-sm font-medium">{asset.assetName}</p>
@@ -79,7 +89,7 @@ export default async function NewLoanPage({ searchParams }: Props) {
               </div>
               {isTerminalAssetStatus(asset.currentStatus) || asset.currentStatus === "Broken"
                 ? <StatusBadge tone={assetStatusTone(asset.currentStatus)}>{assetStatusLabel(asset.currentStatus)}</StatusBadge>
-                : <Link href={`/loans/new?assetId=${asset.id}`} className="whitespace-nowrap rounded-xl bg-[var(--primary)] px-4 py-2 text-xs font-semibold text-white hover:bg-[var(--primary-hover)]">ให้ยืม →</Link>}
+                : <Link href={`/loans/new?assetId=${asset.id}`} className="primary-action action-sm whitespace-nowrap">ให้ยืม <AppIcon name="arrow-right" className="h-4 w-4" /></Link>}
             </div>
           ))}
         </section>

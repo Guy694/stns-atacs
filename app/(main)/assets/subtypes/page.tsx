@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AppIcon } from "@/app/_components/ui/icon";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import { hasPermission } from "@/lib/role-permissions";
@@ -11,7 +12,7 @@ export default async function AssetSubtypesPage() {
   if (!(await hasPermission(user.role, "device-types.manage"))) redirect("/assets");
   const items = await listAssetSubtypes();
   return <main className="mx-auto max-w-4xl space-y-5 p-4 sm:p-6">
-    <Link href="/assets" className="text-sm underline">กลับทะเบียนทรัพย์สิน</Link>
+    <Link href="/assets" className="inline-flex items-center gap-1.5 text-sm text-[var(--primary-text)] underline underline-offset-4"><AppIcon name="arrow-left" size={16} /> กลับทะเบียนทรัพย์สิน</Link>
     <h1 className="text-2xl font-semibold">ประเภทย่อยครุภัณฑ์</h1>
     <p className="text-sm">ปิดใช้งานเพื่อหยุดการเลือกในรายการใหม่ โดยข้อมูลครุภัณฑ์เดิมยังคงอยู่</p>
     <section aria-label="เพิ่มประเภทย่อย"><SubtypeForm /></section>

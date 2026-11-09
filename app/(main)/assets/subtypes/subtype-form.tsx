@@ -1,5 +1,6 @@
 "use client";
 import { useActionState } from "react";
+import { AppIcon } from "@/app/_components/ui/icon";
 import { saveAssetSubtype } from "../subtype-actions";
 import { ASSET_CLASS_OPTIONS } from "@/lib/asset-classes";
 import type { AssetSubtype } from "@/lib/asset-details";
@@ -14,7 +15,7 @@ export function SubtypeForm({ item }: { item?: AssetSubtype }) {
     </label>
     <label className="grid flex-1 gap-1 text-sm">ชื่อประเภทย่อย<input name="name" defaultValue={item?.name ?? ""} maxLength={150} required className={control} /></label>
     {item && <label className="flex items-center gap-2 py-2 text-sm"><input type="checkbox" name="isActive" value="1" defaultChecked={item.isActive} />เปิดใช้งาน</label>}
-    <button disabled={pending} className="rounded-lg bg-[var(--accent-strong)] px-4 py-2 text-sm font-medium text-white disabled:opacity-50">{pending ? "กำลังบันทึก…" : item ? "บันทึก" : "เพิ่มประเภทย่อย"}</button>
+    <button disabled={pending} className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--accent-strong)] px-4 py-2 text-sm font-medium text-white transition-colors duration-200 hover:bg-[var(--primary-hover)] disabled:opacity-50"><AppIcon name={item ? "check" : "plus"} size={16} />{pending ? "กำลังบันทึก…" : item ? "บันทึก" : "เพิ่มประเภทย่อย"}</button>
     {error && <p role="alert" className="w-full text-sm text-red-700">{error}</p>}
   </form>;
 }

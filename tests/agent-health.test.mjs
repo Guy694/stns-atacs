@@ -21,7 +21,7 @@ test("ตัดค่าขยะจาก BIOS และตรวจรูป�
 
 test("รายงานจาก Agent: ตัดความยาว แปลงชนิด และตัดค่าที่เป็นไปไม่ได้", () => {
   const clean = payload.cleanAgentReport({
-    fingerprint: "ABCDEF0123456789",
+    fingerprint: "ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789",
     hostname: "PC-01\u0000" + "x".repeat(400),
     serialNumber: "To be filled by O.E.M.",
     biosSerial: "SN-REAL-1",
@@ -33,7 +33,7 @@ test("รายงานจาก Agent: ตัดความยาว แป�
     raw: "x".repeat(10_000),
     health: { volumes: [{ mount: "C:", totalGb: 100, freeGb: 3, isSystem: true }, { mount: "D:", totalGb: 10, freeGb: 50 }], cpuLoadPercent: 900 },
   }, NOW);
-  assert.equal(clean.fingerprint, "abcdef0123456789");
+  assert.equal(clean.fingerprint, "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789");
   assert.equal(clean.hostname.length, 255);
   assert.ok(!clean.hostname.includes("\u0000"));
   assert.equal(clean.serialNumber, "SN-REAL-1");
@@ -114,7 +114,7 @@ function agentWith(executeStatement) {
     "@/lib/mysql": {
       executeStatement,
       selectRows: async (sql) => {
-        if (sql.includes("WHERE ad.agent_uuid")) return [{ id: 1, facility_id: 10, agent_uuid: "agent-1", device_fingerprint: "oldfingerprint", linked_asset_id: null, status: "online" }];
+        if (sql.includes("WHERE ad.agent_uuid")) return [{ id: 1, facility_id: 10, agent_uuid: "agent-1", device_fingerprint: "abababababababababababababababababababababababababababababababab", linked_asset_id: null, status: "online" }];
         return [];
       },
     },
@@ -134,7 +134,7 @@ test("รายงานบันทึกเฉพาะข้อมูลท�
   });
   const result = await agent.reportAgentInventory({
     agentId: "agent-1", agentKey: "k",
-    payload: { fingerprint: "newfingerprint1", hostname: "PC-1", deviceType: "Desktop", raw: { huge: "x".repeat(5000) }, collectedAt: "1999-01-01T00:00:00", health: { volumes: [] } },
+    payload: { fingerprint: "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd", hostname: "PC-1", deviceType: "Desktop", raw: { huge: "x".repeat(5000) }, collectedAt: "1999-01-01T00:00:00", health: { volumes: [] } },
   });
   assert.equal(result.deviceId, 1);
   const update = writes.find((write) => write.sql.includes("raw_payload_json"));
@@ -148,7 +148,7 @@ test("fingerprint ใหม่ชนกับเครื่องอื่น �
   const agent = agentWith(async (sql, values) => {
     if (sql.includes("SET device_fingerprint")) {
       fingerprints.push(values[0]);
-      if (values[0] === "newfingerprint1") {
+      if (values[0] === "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd") {
         const error = new Error("Duplicate entry");
         error.code = "ER_DUP_ENTRY";
         throw error;
@@ -156,6 +156,6 @@ test("fingerprint ใหม่ชนกับเครื่องอื่น �
     }
     return { insertId: 1 };
   });
-  await agent.reportAgentInventory({ agentId: "agent-1", agentKey: "k", payload: { fingerprint: "newfingerprint1", hostname: "PC-1", deviceType: "Desktop" } });
-  assert.deepEqual([...fingerprints], ["newfingerprint1", "oldfingerprint"]);
+  await agent.reportAgentInventory({ agentId: "agent-1", agentKey: "k", payload: { fingerprint: "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd", hostname: "PC-1", deviceType: "Desktop" } });
+  assert.deepEqual([...fingerprints], ["cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd", "abababababababababababababababababababababababababababababababab"]);
 });

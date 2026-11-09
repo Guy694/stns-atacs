@@ -124,7 +124,7 @@ export function InspectionProgressPanel({ progress, coverageHref, limit = 12, va
         <Link href={coverageHref()} className="rounded-xl border border-[var(--line)] p-3 transition hover:bg-[var(--primary-soft)]">
           <p className="text-xs text-[var(--muted)]">ยังไม่อยู่ในรอบใดเลย</p>
           <p className={`mt-1 text-2xl font-bold tabular-nums ${totals.uncovered ? "text-[var(--state-warning-fg)]" : ""}`}>{numberFormat.format(totals.uncovered)}</p>
-          <p className="text-xs text-[var(--primary-text)] underline">ดูรายการ →</p>
+          <p className="inline-flex items-center gap-1 text-xs text-[var(--primary-text)] underline">ดูรายการ <AppIcon name="chevron-right" className="h-3.5 w-3.5" /></p>
         </Link>
         <div className="rounded-xl border border-[var(--line)] p-3">
           <p className="text-xs text-[var(--muted)]">หน่วยงาน</p>
@@ -148,7 +148,7 @@ export function InspectionProgressPanel({ progress, coverageHref, limit = 12, va
         {rest.length > 0 && (
           <details className="group mt-1 border-t border-[var(--line)]">
             <summary className="flex min-h-11 cursor-pointer list-none items-center gap-1.5 text-sm font-medium text-[var(--primary-text)] hover:underline [&::-webkit-details-marker]:hidden">
-              <AppIcon name="arrow-down" className="h-4 w-4 transition group-open:rotate-180" />
+              <AppIcon name="chevron-down" className="h-4 w-4 transition-transform duration-200 group-open:rotate-180" />
               <span className="group-open:hidden">ดูทั้งหมด ({numberFormat.format(rest.length)})</span>
               <span className="hidden group-open:inline">ซ่อนหน่วยงานอื่น ({numberFormat.format(rest.length)})</span>
             </summary>

@@ -1,6 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
+
+import { FacilitySelect } from "@/app/_components/ui/facility-select";
+import { AppIcon } from "@/app/_components/ui/icon";
 import { withBasePath } from "@/lib/base-path";
 import { ASSET_CREATE_CLASS_OPTIONS, ASSET_CLASS_OPTIONS, assetClassLabel } from "@/lib/asset-classes";
 import type { AssetSubtype } from "@/lib/asset-details";
@@ -12,7 +15,7 @@ type Props = {
   resetHref: string;
   subtypes: AssetSubtype[];
   deviceTypes: { name: string; category?: string }[];
-  facilities?: { id: number; facility_name: string; district_name?: string | null }[];
+  facilities?: { id: number; facility_name: string; district_name?: string | null; typecode?: string | null }[];
   districts?: string[];
   workGroups?: { id: number; workGroupName: string; facilityId: number; facilityName?: string }[];
   paginate?: boolean;
@@ -47,6 +50,9 @@ export function AssetFilters({ values, resetHref, subtypes, deviceTypes, facilit
   const itFields = !assetClass || assetClass === "IT";
   const availableSubtypes = subtypes.filter(item => item.assetClass === assetClass && (item.isActive || String(item.id) === subtype));
   const availableFacilities = facilities?.filter(item => !district || item.district_name === district);
+  // FacilitySelect sorts สสจ. → สสอ. → รพท. → รพช. → รพ.สต. itself and adds a search box.
+  const facilityOptions = availableFacilities?.map(item => ({ id: item.id, name: item.facility_name, typecode: item.typecode, districtName: item.district_name }));
+  const facilityInputId = `${useId()}-facility`;
   const availableWorkGroups = workGroups.filter(item => !facility || String(item.facilityId) === facility);
   const mainGrid = facilities
     ? "lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1.3fr)_minmax(0,1.3fr)_auto]"
@@ -62,15 +68,20 @@ export function AssetFilters({ values, resetHref, subtypes, deviceTypes, facilit
         <optgroup label="20 ประเภทตามเอกสาร">{ASSET_CREATE_CLASS_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.categoryId}. {option.label}</option>)}</optgroup>
         <optgroup label="กลุ่มเดิมที่ยังไม่ได้จำแนก">{ASSET_CLASS_OPTIONS.filter(option => !option.categoryId).map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</optgroup>
       </select></label>
-      {facilities && <label className={`${label} col-span-2 lg:col-span-1`}>หน่วยงาน<select aria-label="หน่วยงาน" className={control} name="facility" value={facility} onChange={event => {setFacility(event.target.value); setWorkGroup("");}}><option value="">ทุกหน่วยงาน</option>{availableFacilities?.map(item => <option key={item.id} value={item.id}>{item.facility_name}</option>)}</select></label>}
+      {facilityOptions && <div className={`${label} col-span-2 lg:col-span-1`}>
+        {/* A <div>, not a <label>: a wrapping label would re-open the list when an option is clicked. */}
+        <label htmlFor={facilityInputId}>หน่วยงาน</label>
+        <FacilitySelect id={facilityInputId} className="mt-1" name="facility" facilities={facilityOptions} value={facility} emptyLabel="ทุกหน่วยงาน" aria-label="หน่วยงาน" onChange={value => { setFacility(value); setWorkGroup(""); }} />
+      </div>}
       <div className="col-span-2 flex items-center gap-2 lg:col-span-1">
-        <button type="submit" className="filter-button min-h-11 flex-1 whitespace-nowrap bg-[var(--accent-strong)] px-5 text-white hover:bg-[var(--primary-hover)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] lg:min-h-9 lg:flex-none">ค้นหา</button>
-        {activeCount > 0 && <a href={resetUrl} className="inline-flex min-h-11 items-center whitespace-nowrap px-2 text-xs text-[var(--primary-text)] underline underline-offset-4 lg:min-h-9">ล้างตัวกรอง ({activeCount})</a>}
+        <button type="submit" className="filter-button min-h-11 flex-1 whitespace-nowrap bg-[var(--accent-strong)] px-5 text-white hover:bg-[var(--primary-hover)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] lg:min-h-9 lg:flex-none"><AppIcon name="search" size={16} aria-hidden="true" />ค้นหา</button>
+        {activeCount > 0 && <a href={resetUrl} className="inline-flex min-h-11 items-center gap-1 whitespace-nowrap px-2 text-xs text-[var(--primary-text)] underline underline-offset-4 lg:min-h-9"><AppIcon name="undo" size={14} aria-hidden="true" />ล้างตัวกรอง ({activeCount})</a>}
       </div>
     </div>
-    <details open={advancedCount > 0 || (paginate && Boolean(values.perPage))}>
-      <summary className="inline-flex min-h-9 w-fit cursor-pointer items-center py-1 text-xs font-medium text-[var(--primary-text)] focus-visible:outline-2 focus-visible:outline-[var(--accent)]">
-        ตัวกรองเพิ่มเติม<span className="md:hidden">และการเรียงลำดับ</span>{advancedCount > 0 ? ` · ใช้อยู่ ${advancedCount} เงื่อนไข` : ""}
+    <details className="group/more" open={advancedCount > 0 || (paginate && Boolean(values.perPage))}>
+      <summary className="inline-flex min-h-9 w-fit cursor-pointer list-none items-center gap-1.5 py-1 text-xs font-medium text-[var(--primary-text)] focus-visible:outline-2 focus-visible:outline-[var(--accent)] [&::-webkit-details-marker]:hidden">
+        <AppIcon name="filter" size={14} aria-hidden="true" />ตัวกรองเพิ่มเติม<span className="md:hidden">และการเรียงลำดับ</span>{advancedCount > 0 ? ` · ใช้อยู่ ${advancedCount} เงื่อนไข` : ""}
+        <AppIcon name="chevron-down" size={14} aria-hidden="true" className="transition-transform duration-200 group-open/more:rotate-180" />
       </summary>
       <div className="mt-2 grid gap-2 border-t border-[var(--line)] pt-3 sm:grid-cols-2 lg:grid-cols-4">
         {itFields ? <label className={label}>ประเภทอุปกรณ์ IT<select aria-label="ประเภทอุปกรณ์ IT" className={control} name="deviceType" value={deviceType} onChange={event => setDeviceType(event.target.value)}>

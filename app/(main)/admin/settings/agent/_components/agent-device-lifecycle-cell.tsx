@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 
 import {
   cancelAgentUninstallAction,
@@ -9,9 +9,12 @@ import {
   type AgentDeviceLifecycleActionResult,
 } from "@/app/(main)/admin/settings/agent/actions";
 import { AgentUninstallCommands } from "@/app/(main)/agent-download/_components/agent-uninstall-commands";
+import { ActionIconButton } from "@/app/_components/ui/action-icon-button";
 import { confirmAction } from "@/app/_components/ui/confirm";
 import { StatusBadge } from "@/app/_components/ui/status-badge";
 import { toast } from "@/app/_components/ui/toast";
+import { useEscapeToClose } from "@/app/_components/ui/use-escape-to-close";
+import { useModalA11y } from "@/app/_components/ui/use-modal-a11y";
 import {
   AGENT_LIFECYCLE_LABELS,
   AGENT_SELF_UNINSTALL_MIN_VERSION,
@@ -20,23 +23,80 @@ import {
 } from "@/lib/agent-uninstall";
 import { formatThaiDateTime } from "@/lib/date-format";
 
+export type AgentLifecycleDevice = {
+  id: number;
+  hostname: string | null;
+  agentVersion: string | null;
+  operatingSystem: string | null;
+  isActive: boolean;
+  uninstallRequestedAt: string | null;
+  uninstallRequestedBy: string | null;
+  uninstalledAt: string | null;
+};
+
 type Props = {
-  device: {
-    id: number;
-    hostname: string | null;
-    agentVersion: string | null;
-    operatingSystem: string | null;
-    isActive: boolean;
-    uninstallRequestedAt: string | null;
-    uninstallRequestedBy: string | null;
-    uninstalledAt: string | null;
-  };
+  device: AgentLifecycleDevice;
   /** ผู้ดูแลระบบส่วนกลางเท่านั้น */
   canManage: boolean;
 };
 
-const buttonClass = "whitespace-nowrap rounded-lg border px-2.5 py-1 text-xs font-medium transition disabled:opacity-50";
+/** สถานะวงจรชีวิตของเครื่อง (แสดงเฉพาะเมื่อไม่ใช่ "ใช้งานอยู่") ใช้ในคอลัมน์สถานะ */
+export function AgentLifecycleStatus({ device }: { device: AgentLifecycleDevice }) {
+  const state = agentLifecycleState(device);
+  const selfUninstall = agentVersionSupportsSelfUninstall(device.agentVersion);
+  if (state === "active") return null;
+  if (state === "uninstall-pending") {
+    return (
+      <div className="mt-1.5">
+        <StatusBadge tone="warning">{AGENT_LIFECYCLE_LABELS["uninstall-pending"]}</StatusBadge>
+        <p className="mt-1 text-xs text-[var(--muted)]">
+          สั่งเมื่อ {formatThaiDateTime(device.uninstallRequestedAt)}{device.uninstallRequestedBy ? ` โดย ${device.uninstallRequestedBy}` : ""}
+        </p>
+        {!selfUninstall && (
+          <p className="mt-1 text-xs font-medium text-[var(--state-warning-fg)]">รุ่นนี้ถอนเองไม่ได้ — ใช้คำสั่งถอนด้วยมือ หรือลบออกจากระบบ</p>
+        )}
+      </div>
+    );
+  }
+  if (state === "uninstalled") {
+    return (
+      <div className="mt-1.5">
+        <StatusBadge tone="neutral">{AGENT_LIFECYCLE_LABELS.uninstalled}</StatusBadge>
+        <p className="mt-1 text-xs text-[var(--muted)]">{formatThaiDateTime(device.uninstalledAt)}</p>
+      </div>
+    );
+  }
+  return (
+    <div className="mt-1.5">
+      <StatusBadge tone="neutral">{AGENT_LIFECYCLE_LABELS.retired}</StatusBadge>
+    </div>
+  );
+}
 
+function ManualUninstallDialog({ label, platform, onClose }: { label: string; platform?: "windows" | "linux"; onClose: () => void }) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useEscapeToClose(true, onClose);
+  useModalA11y(true, dialogRef);
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+      onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}
+    >
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label={`คำสั่งถอนการติดตั้งด้วยมือ ${label}`} className="glass-panel w-full max-w-2xl rounded-2xl p-5 text-left shadow-2xl">
+        <div className="mb-3 flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <h3 className="text-lg font-semibold">คำสั่งถอนการติดตั้งด้วยมือ</h3>
+            <p className="mt-0.5 text-sm text-[var(--muted)]">รันที่เครื่อง {label} ด้วยสิทธิ์ผู้ดูแลเครื่อง</p>
+          </div>
+          <ActionIconButton icon="close" label="ปิด" onClick={onClose} />
+        </div>
+        <AgentUninstallCommands compact only={platform} />
+      </div>
+    </div>
+  );
+}
+
+/** ปุ่มจัดการเครื่องแบบไอคอน (มีคำอธิบายเมื่อชี้/อ่านหน้าจอ): ถอนการติดตั้ง / ยกเลิกคำสั่ง / คำสั่งถอนด้วยมือ / ลบออกจากระบบ */
 export function AgentDeviceLifecycleCell({ device, canManage }: Props) {
   const [pending, startTransition] = useTransition();
   const [showManual, setShowManual] = useState(false);
@@ -90,55 +150,27 @@ export function AgentDeviceLifecycleCell({ device, canManage }: Props) {
     if (ok) run(retireAgentDeviceAction);
   }
 
-  return (
-    <td className="min-w-56 px-4 py-3 align-top">
-      {state === "active" && <StatusBadge tone="success">{AGENT_LIFECYCLE_LABELS.active}</StatusBadge>}
-      {state === "uninstall-pending" && (
-        <div>
-          <StatusBadge tone="warning">{AGENT_LIFECYCLE_LABELS["uninstall-pending"]}</StatusBadge>
-          <p className="mt-1 text-xs text-[var(--muted)]">
-            สั่งเมื่อ {formatThaiDateTime(device.uninstallRequestedAt)}{device.uninstallRequestedBy ? ` โดย ${device.uninstallRequestedBy}` : ""}
-          </p>
-          {!selfUninstall && (
-            <p className="mt-1 text-xs font-medium text-amber-800">agent รุ่นนี้ถอนเองไม่ได้ — ใช้คำสั่งถอนด้วยมือ หรือลบออกจากระบบ</p>
-          )}
-        </div>
-      )}
-      {state === "uninstalled" && (
-        <div>
-          <StatusBadge tone="neutral">{AGENT_LIFECYCLE_LABELS.uninstalled}</StatusBadge>
-          <p className="mt-1 text-xs text-[var(--muted)]">{formatThaiDateTime(device.uninstalledAt)}</p>
-        </div>
-      )}
-      {state === "retired" && <StatusBadge tone="neutral">{AGENT_LIFECYCLE_LABELS.retired}</StatusBadge>}
+  const manageable = canManage && (state === "active" || state === "uninstall-pending");
 
-      {canManage && (state === "active" || state === "uninstall-pending") && (
-        <div className="mt-2 flex flex-wrap gap-1.5">
+  return (
+    <td className="px-4 py-2 text-right align-middle">
+      {manageable ? (
+        <div className="inline-flex items-center justify-end gap-1.5">
           {state === "active" ? (
-            <button type="button" disabled={pending} onClick={requestUninstall} className={`${buttonClass} border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100`}>
-              ถอนการติดตั้ง
-            </button>
+            <ActionIconButton icon="power-off" tone="danger" label="ถอนการติดตั้ง" disabled={pending} onClick={requestUninstall} />
           ) : (
-            <button type="button" disabled={pending} onClick={cancelUninstall} className={`${buttonClass} border-black/10 bg-white/80 hover:bg-white`}>
-              ยกเลิกคำสั่ง
-            </button>
+            <ActionIconButton icon="undo" label="ยกเลิกคำสั่งถอนการติดตั้ง" disabled={pending} onClick={cancelUninstall} />
           )}
-          <button type="button" disabled={pending} onClick={retire} className={`${buttonClass} border-black/10 bg-white/80 text-rose-700 hover:bg-white`}>
-            ลบออกจากระบบ
-          </button>
           {(!selfUninstall || state === "uninstall-pending") && (
-            <button type="button" onClick={() => setShowManual((value) => !value)} className={`${buttonClass} border-transparent text-[var(--accent)] underline-offset-2 hover:underline`}>
-              {showManual ? "ซ่อนคำสั่งถอนด้วยมือ" : "คำสั่งถอนด้วยมือ"}
-            </button>
+            <ActionIconButton icon="file-text" label="คำสั่งถอนด้วยมือ" onClick={() => setShowManual(true)} />
           )}
+          <ActionIconButton icon="trash" tone="danger" label="ลบออกจากระบบ" disabled={pending} onClick={retire} />
         </div>
+      ) : (
+        <span className="text-xs text-[var(--muted)]">—</span>
       )}
-      {showManual && (
-        <div className="mt-2 w-[min(32rem,80vw)]">
-          <AgentUninstallCommands compact only={platform} />
-        </div>
-      )}
-      {pending && <p className="mt-1 text-xs text-[var(--muted)]">กำลังบันทึก...</p>}
+      {pending && <p className="mt-1 text-xs text-[var(--muted)]" aria-live="polite">กำลังบันทึก…</p>}
+      {showManual && <ManualUninstallDialog label={label} platform={platform} onClose={() => setShowManual(false)} />}
     </td>
   );
 }

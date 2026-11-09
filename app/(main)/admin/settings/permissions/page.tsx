@@ -1,8 +1,6 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import type { RowDataPacket } from "mysql2/promise";
 
-import { StatusBadge, activeTone } from "@/app/_components/ui/status-badge";
 import { getCurrentUser } from "@/lib/auth";
 import { selectRows } from "@/lib/mysql";
 import {
@@ -16,6 +14,8 @@ import { PermissionsMatrixClient } from "./_components/permissions-matrix-client
 import { withBasePath } from "@/lib/base-path";
 import { roleLabel } from "@/lib/app-brand";
 import { AppIcon } from "@/app/_components/ui/icon";
+import { PageHero, SettingsBreadcrumb, SummaryCard } from "@/app/(main)/admin/_components/page-hero";
+import { EffectivePermissionsTable } from "./_components/effective-permissions-table";
 
 export const dynamic = "force-dynamic";
 
@@ -41,37 +41,31 @@ export default async function AdminPermissionsPage() {
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6">
-      <div className="flex items-center gap-2 text-xs text-[var(--muted)]">
-        <Link href="/admin/settings" className="hover:underline">ตั้งค่าระบบ</Link>
-        <span>›</span>
-        <span>ตารางสิทธิ์</span>
-      </div>
-
-      <div>
-        <p className="text-xs font-semibold text-[var(--accent-strong)]">ตั้งค่าระบบ · สิทธิ์การใช้งาน</p>
-        <h1 className="section-title mt-1 text-3xl font-semibold">จัดการตารางสิทธิ์การใช้งาน</h1>
-        <p className="mt-1 text-sm text-[var(--muted)]">
-          ปรับสิทธิ์รายบทบาทแบบละเอียด โดยไม่ต้องยึดค่าตายตัวตาม role เดิม
-        </p>
-        <div className="mt-3">
-          <a
-            href={withBasePath("/api/export/permissions/")}
-            className="secondary-action"
-          >
-            <AppIcon name="download" className="h-4 w-4" /> ส่งออกนโยบายสิทธิ์ (JSON)
+      <SettingsBreadcrumb current="ตารางสิทธิ์" />
+      <PageHero
+        icon="shield"
+        image="meeting-room"
+        title="จัดการตารางสิทธิ์การใช้งาน"
+        description="ปรับสิทธิ์รายบทบาทแบบละเอียด โดยไม่ต้องยึดค่าตายตัวตาม role เดิม"
+        actions={
+          <a href={withBasePath("/api/export/permissions/")} className="secondary-action gap-2">
+            <AppIcon name="download" size={16} /> ส่งออกนโยบายสิทธิ์ (JSON)
           </a>
-        </div>
-      </div>
+        }
+      />
 
       <div className="grid gap-3 sm:grid-cols-3">
         {APP_ROLES.map((role) => {
           const allowCount = Object.values(matrix[role]).filter(Boolean).length;
           return (
-            <div key={role} className="glass-panel rounded-2xl p-4">
-              <p className="text-xs font-medium text-[var(--muted)]">{roleLabel(role)}</p>
-              <p className="mt-1 text-2xl font-semibold text-[var(--foreground)]">{allowCount}</p>
-              <p className="text-xs text-[var(--muted)]">สิทธิ์ที่อนุญาต</p>
-            </div>
+            <SummaryCard
+              key={role}
+              icon={role === "admin" ? "shield" : role === "officer" ? "user" : "eye"}
+              image={role === "admin" ? "it-storage" : role === "officer" ? "office-desk" : "meeting-room"}
+              label={roleLabel(role)}
+              value={`${allowCount.toLocaleString("th-TH")} / ${PERMISSION_DEFINITIONS.length.toLocaleString("th-TH")}`}
+              hint="สิทธิ์ที่อนุญาต"
+            />
           );
         })}
       </div>
@@ -85,71 +79,16 @@ export default async function AdminPermissionsPage() {
         matrix={matrix as Record<AppRole, Record<PermissionKey, boolean>>}
       />
 
-      <div className="glass-panel overflow-hidden rounded-2xl">
-        <div className="border-b border-black/6 px-5 py-4">
-          <h2 className="text-lg font-semibold">สิทธิ์ที่มีผลจริงรายผู้ใช้</h2>
-          <p className="mt-1 text-sm text-[var(--muted)]">
-            แสดงสิทธิ์ตามบทบาทปัจจุบันของผู้ใช้แต่ละบัญชี เพื่อช่วยตรวจสอบผลกระทบก่อนเปลี่ยนนโยบาย
-          </p>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-black/6 bg-stone-50/70 text-xs text-[var(--muted)]">
-                <th className="px-4 py-3 text-left font-medium">ผู้ใช้</th>
-                <th className="px-4 py-3 text-left font-medium">Role</th>
-                <th className="px-4 py-3 text-left font-medium">สถานะ</th>
-                <th className="px-4 py-3 text-left font-medium">Allowed</th>
-                <th className="px-4 py-3 text-left font-medium">สิทธิ์สำคัญ</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-black/4">
-              {users.map((account) => {
-                const granted = PERMISSION_DEFINITIONS.filter((permission) =>
-                  matrix[account.role][permission.key]
-                );
-                return (
-                  <tr key={account.id} className="transition hover:bg-white/50">
-                    <td className="px-4 py-3 font-medium">{account.full_name}</td>
-                    <td className="px-4 py-3">
-	                      <StatusBadge tone="info">
-	                        {account.role}
-	                      </StatusBadge>
-                    </td>
-                    <td className="px-4 py-3">
-                      {account.is_active ? (
-	                        <StatusBadge tone={activeTone(!!account.is_active)}>active</StatusBadge>
-	                      ) : (
-	                        <StatusBadge tone={activeTone(!!account.is_active)}>inactive</StatusBadge>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-sm font-semibold text-[var(--foreground)]">
-                      {granted.length} / {PERMISSION_DEFINITIONS.length}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-wrap gap-1.5">
-                        {granted.slice(0, 4).map((permission) => (
-                          <span
-                            key={permission.key}
-                            className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700"
-                          >
-                            {permission.key}
-                          </span>
-                        ))}
-                        {granted.length > 4 && (
-                          <span className="rounded-full bg-stone-100 px-2 py-0.5 text-[11px] font-medium text-stone-600">
-                            +{granted.length - 4}
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <EffectivePermissionsTable
+        total={PERMISSION_DEFINITIONS.length}
+        users={users.map((account) => ({
+          id: account.id,
+          fullName: account.full_name,
+          role: account.role,
+          isActive: !!account.is_active,
+          granted: PERMISSION_DEFINITIONS.filter((permission) => matrix[account.role][permission.key]).map((permission) => permission.key),
+        }))}
+      />
     </div>
   );
 }

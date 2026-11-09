@@ -1,12 +1,14 @@
 "use client";
 
-import Link from "next/link";
 import { startTransition, useActionState, useEffect, useState, type FormEvent, useId } from "react";
 
 import { SortableTh, TablePagination } from "@/app/_components/ui/data-table";
 import { useTableState } from "@/app/_components/ui/use-table-state";
 
 import { StatusBadge } from "@/app/_components/ui/status-badge";
+import { ActionIconLink } from "@/app/_components/ui/action-icon-button";
+import { FacilitySelect } from "@/app/_components/ui/facility-select";
+import { AppIcon } from "@/app/_components/ui/icon";
 import { assetClassLabel } from "@/lib/asset-classes";
 import { withBasePath } from "@/lib/base-path";
 import { assetStatusLabel, assetStatusTone } from "@/lib/asset-status";
@@ -82,13 +84,6 @@ export default function NewInspectionForm({ facilities, workGroups = [] }: { fac
     startTransition(() => formAction(formData));
   }
 
-  // Group facilities by district
-  const byDistrict = facilities.reduce<Record<string, FacilityRow[]>>((acc, f) => {
-    const d = f.district_name ?? "อื่นๆ";
-    (acc[d] ??= []).push(f);
-    return acc;
-  }, {});
-
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
       {error && (
@@ -103,14 +98,15 @@ export default function NewInspectionForm({ facilities, workGroups = [] }: { fac
           <label htmlFor={`${fieldId}-facilityId`} className="text-sm font-semibold" style={{ color: "var(--foreground)" }}>
             หน่วยบริการ <span className="text-red-500">*</span>
           </label>
-          <select id={`${fieldId}-facilityId`}
+          <FacilitySelect
+            id={`${fieldId}-facilityId`}
             name="facilityId"
             required
-            className="w-full rounded-lg border px-3 py-2 text-sm"
-            style={{ borderColor: "var(--line)", color: "var(--foreground)" }}
-            value={selectedFacilityId ?? ""}
-            onChange={(e) => {
-              const nextId = e.target.value ? Number(e.target.value) : null;
+            facilities={facilities}
+            placeholder="พิมพ์ค้นหาหน่วยบริการ…"
+            value={selectedFacilityId ? String(selectedFacilityId) : ""}
+            onChange={(next) => {
+              const nextId = next ? Number(next) : null;
               setSelectedFacilityId(nextId);
               setWorkGroupId("");
               table.resetPage();
@@ -118,18 +114,7 @@ export default function NewInspectionForm({ facilities, workGroups = [] }: { fac
                 setAssets([]);
               }
             }}
-          >
-            <option value="">-- เลือกหน่วยบริการ --</option>
-            {Object.entries(byDistrict).map(([district, facs]) => (
-              <optgroup key={district} label={`อ.${district}`}>
-                {facs.map((f) => (
-                  <option key={f.id} value={f.id}>
-                    {f.name}
-                  </option>
-                ))}
-              </optgroup>
-            ))}
-          </select>
+          />
         </div>
 
         {/* Work group */}
@@ -279,22 +264,16 @@ export default function NewInspectionForm({ facilities, workGroups = [] }: { fac
         </div>
       )}
 
-      <div className="flex gap-3">
+      <div className="flex items-center gap-3">
         <button
           type="submit"
           disabled={pending || !selectedFacilityId}
-          className="px-5 py-2 rounded-lg text-sm font-semibold text-white disabled:opacity-50"
-          style={{ background: "var(--accent)" }}
+          className="primary-action"
         >
+          <AppIcon name="check" className="h-4 w-4" />
           {pending ? "กำลังบันทึก..." : "บันทึกรอบตรวจนับ"}
         </button>
-        <Link
-          href="/inspection"
-          className="px-5 py-2 rounded-lg text-sm font-semibold border"
-          style={{ borderColor: "var(--line)", color: "var(--muted)" }}
-        >
-          ยกเลิก
-        </Link>
+        <ActionIconLink href="/inspection" icon="close" label="ยกเลิก" />
       </div>
     </form>
   );

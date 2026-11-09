@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 
+import { ActionIconButton, ActionIconLink } from "@/app/_components/ui/action-icon-button";
 import { AppIcon } from "@/app/_components/ui/icon";
 import { withBasePath } from "@/lib/base-path";
 
@@ -89,29 +90,16 @@ export function FacilityAssetQrActions({ assets, facilityId, facilityName }: Fac
 
   return (
     <>
-      <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
+      <div className="flex flex-wrap items-center gap-1.5">
+        <ActionIconButton
+          icon={isDownloading ? "refresh" : "download"}
+          label={isDownloading ? "กำลังดาวน์โหลด QR…" : `ดาวน์โหลด QR ทั้งหมด (${assets.length.toLocaleString("th-TH")} รายการ)`}
           onClick={() => downloadAssets(assets)}
           disabled={isDownloading}
-          className="secondary-action gap-2"
-        >
-          <AppIcon name="download" className="h-4 w-4" /> {isDownloading ? "กำลังดาวน์โหลด" : "ดาวน์โหลด QR ทั้งหมด"}
-        </button>
-        <button
-          type="button"
-          onClick={() => setIsPickerOpen(true)}
-          disabled={isDownloading}
-          className="secondary-action gap-2"
-        >
-          <AppIcon name="check" className="h-4 w-4" /> เลือกดาวน์โหลด QR
-        </button>
-        <a
-          href={`/print/stickers?facility=${facilityId}`}
-          className="secondary-action gap-2"
-        >
-          <AppIcon name="printer" className="h-4 w-4" /> พิมพ์สติ๊กเกอร์ A4 / PDF
-        </a>
+          aria-busy={isDownloading}
+        />
+        <ActionIconButton icon="qr" label="เลือกรายการเพื่อดาวน์โหลด QR" onClick={() => setIsPickerOpen(true)} disabled={isDownloading} />
+        <ActionIconLink href={`/print/stickers?facility=${facilityId}`} icon="printer" label="พิมพ์สติ๊กเกอร์ QR A4 / PDF" />
       </div>
 
       {isPickerOpen && (
@@ -131,30 +119,23 @@ export function FacilityAssetQrActions({ assets, facilityId, facilityName }: Fac
                   เลือกแล้ว {selectedAssets.length.toLocaleString("th-TH")} จาก {assets.length.toLocaleString("th-TH")} รายการ
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => setIsPickerOpen(false)}
-                className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-black/10 bg-white text-[var(--muted)] hover:bg-[var(--neutral-bg)]"
-                aria-label="ปิดหน้าต่างเลือก QR Code"
-              >
-                <AppIcon name="close" className="h-4 w-4" />
-              </button>
+              <ActionIconButton icon="close" label="ปิดหน้าต่างเลือก QR Code" onClick={() => setIsPickerOpen(false)} className="text-[var(--muted)]" />
             </div>
 
             <div className="flex flex-wrap gap-2 border-b border-black/8 bg-[var(--neutral-bg)]/70 px-5 py-3">
               <button
                 type="button"
                 onClick={() => setSelectedIds(assets.map((asset) => asset.id))}
-                className="rounded-lg border border-black/10 bg-white px-3 py-2 text-xs font-medium text-[var(--foreground)] hover:bg-white/80"
+                className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-black/10 bg-white px-3 text-xs font-medium text-[var(--foreground)] hover:bg-[var(--primary-soft)]"
               >
-                เลือกทั้งหมด
+                <AppIcon name="check" size={14} /> เลือกทั้งหมด
               </button>
               <button
                 type="button"
                 onClick={() => setSelectedIds([])}
-                className="rounded-lg border border-black/10 bg-white px-3 py-2 text-xs font-medium text-[var(--muted)] hover:bg-white/80"
+                className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-black/10 bg-white px-3 text-xs font-medium text-[var(--muted)] hover:bg-[var(--primary-soft)]"
               >
-                ล้างรายการ
+                <AppIcon name="undo" size={14} /> ล้างรายการ
               </button>
             </div>
 
@@ -188,7 +169,7 @@ export function FacilityAssetQrActions({ assets, facilityId, facilityName }: Fac
                 ยกเลิก
               </button>
               <a
-                href={`/print/stickers?ids=${selectedAssets.map((asset) => asset.id).join(",")}`}
+                href={withBasePath(`/print/stickers/?ids=${selectedAssets.map((asset) => asset.id).join(",")}`)}
                 aria-disabled={selectedAssets.length === 0}
                 onClick={(event) => { if (selectedAssets.length === 0) event.preventDefault(); }}
                 className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-[var(--primary-soft-strong)] bg-[var(--primary-soft)] px-4 py-2 text-sm font-semibold text-[var(--primary-text)] hover:bg-[var(--primary-soft-strong)] aria-disabled:pointer-events-none aria-disabled:opacity-50"

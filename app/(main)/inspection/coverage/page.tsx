@@ -4,6 +4,8 @@ import { redirect } from "next/navigation";
 import { InspectionProgressPanel } from "@/app/_components/work-panels";
 import { AppIcon } from "@/app/_components/ui/icon";
 import { StatusBadge } from "@/app/_components/ui/status-badge";
+import { FacilitySelect } from "@/app/_components/ui/facility-select";
+import { PhotoBackdrop } from "@/app/_components/ui/photo-backdrop";
 import { listFacilities } from "@/lib/assets";
 import { assetStatusLabel, assetStatusTone } from "@/lib/asset-status";
 import { fiscalYearOf } from "@/lib/asset-valuation";
@@ -57,13 +59,14 @@ export default async function InspectionCoveragePage({ searchParams }: Props) {
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-5">
-      <header className="flex flex-wrap items-end justify-between gap-3">
+      <header className="relative isolate flex flex-wrap items-end justify-between gap-3 overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--surface-strong)] px-5 py-5 sm:px-6">
+        <PhotoBackdrop image="it-storage" fade="left" />
         <div>
-          <Link href="/inspection" className="text-sm text-[var(--primary-text)] hover:underline">← ตรวจนับทรัพย์สิน</Link>
+          <Link href="/inspection" className="inline-flex items-center gap-1 text-sm text-[var(--primary-text)] hover:underline"><AppIcon name="arrow-left" className="h-4 w-4" /> ตรวจนับทรัพย์สิน</Link>
           <h1 className="mt-1 flex items-center gap-2 text-2xl font-bold"><AppIcon name="clipboard-check" className="h-6 w-6 text-[var(--primary)]" /> ความครอบคลุมการตรวจนับ ปีงบประมาณ {fiscalYear}</h1>
           <p className="mt-1 text-sm text-[var(--muted)]">{scopeLabel} · ครุภัณฑ์ที่ยังอยู่ในทะเบียน (ไม่รวมที่จำหน่าย/สูญหายแล้ว)</p>
         </div>
-        {canCreate && <Link href="/inspection?view=new" className="primary-action">+ เปิดรอบตรวจนับ</Link>}
+        {canCreate && <Link href="/inspection?view=new" className="primary-action"><AppIcon name="plus" className="h-4 w-4" /> เปิดรอบตรวจนับ</Link>}
       </header>
 
       <form method="GET" className="grid gap-3 rounded-2xl border border-[var(--line)] bg-white p-4 sm:grid-cols-[10rem_minmax(0,1fr)_minmax(0,1fr)_auto]">
@@ -80,14 +83,17 @@ export default async function InspectionCoveragePage({ searchParams }: Props) {
             {districts.map((name) => <option key={name} value={name ?? ""}>{name}</option>)}
           </select>
         </label>
-        <label className="text-xs">
-          <span className="mb-1 block text-xs text-[var(--muted)]">หน่วยงาน</span>
-          <select name="facility" defaultValue={facilityId ? String(facilityId) : ""} className="filter-control w-full">
-            <option value="">ทุกหน่วยงาน</option>
-            {facilities.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
-          </select>
-        </label>
-        <button type="submit" className="min-h-9 self-end rounded-xl bg-[var(--primary)] px-4 text-xs font-semibold text-white">แสดง</button>
+        <div className="text-xs">
+          <label htmlFor="coverage-facility" className="mb-1 block text-xs text-[var(--muted)]">หน่วยงาน</label>
+          <FacilitySelect
+            id="coverage-facility"
+            name="facility"
+            emptyLabel="ทุกหน่วยงาน"
+            defaultValue={facilityId ? String(facilityId) : ""}
+            facilities={facilities.map((f) => ({ id: f.id, name: f.name, typecode: f.typecode, districtName: f.district_name }))}
+          />
+        </div>
+        <button type="submit" className="primary-action action-sm self-end"><AppIcon name="search" className="h-4 w-4" /> แสดง</button>
       </form>
 
       <section aria-labelledby="progress-heading" className="rounded-2xl border border-[var(--line)] bg-white p-5">
@@ -101,7 +107,11 @@ export default async function InspectionCoveragePage({ searchParams }: Props) {
           <p className="mt-0.5 text-xs text-[var(--muted)]">เปิดรอบตรวจนับตามกลุ่มงานเพื่อให้ครอบคลุมรายการเหล่านี้{uncovered.total > uncovered.rows.length ? ` · แสดง ${uncovered.rows.length.toLocaleString("th-TH")} รายการแรก` : ""}</p>
         </div>
         {uncovered.rows.length === 0 ? (
-          <p className="px-5 py-10 text-center text-sm text-[var(--muted)]">ครุภัณฑ์ทุกรายการอยู่ในรอบตรวจนับของปีงบประมาณ {fiscalYear} แล้ว</p>
+          <div className="relative isolate overflow-hidden px-5 py-10 text-center text-sm text-[var(--muted)]">
+            <PhotoBackdrop image="office-desk" fade="bottom" />
+            <AppIcon name="check" className="mx-auto mb-2 h-8 w-8 text-[var(--primary)]" />
+            <p>ครุภัณฑ์ทุกรายการอยู่ในรอบตรวจนับของปีงบประมาณ {fiscalYear} แล้ว</p>
+          </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[760px] text-sm">

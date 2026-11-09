@@ -76,8 +76,8 @@ export function QrScannerPanel({ searchPath }: { searchPath: string }) {
 
         <div className="mt-4 flex flex-col items-center gap-2">
           {scanning ? (
-            <button type="button" onClick={() => setActive(false)} className="secondary-action w-full max-w-sm">
-              ปิดกล้อง
+            <button type="button" onClick={() => setActive(false)} className="secondary-action w-full max-w-sm gap-2">
+              <AppIcon name="power-off" aria-hidden="true" className="h-5 w-5" /> ปิดกล้อง
             </button>
           ) : (
             <button type="button" onClick={start} className="primary-action w-full max-w-sm" data-autofocus>
@@ -104,7 +104,7 @@ export function QrScannerPanel({ searchPath }: { searchPath: string }) {
               enterKeyHint="search"
             />
           </label>
-          <button type="submit" className="secondary-action">ค้นหา</button>
+          <button type="submit" className="primary-action gap-2"><AppIcon name="search" className="h-4 w-4" /> ค้นหา</button>
         </form>
         <p className="mt-2 text-xs text-[var(--muted)]">
           ใช้แอปกล้องของโทรศัพท์สแกนสติ๊กเกอร์ก็ได้ ระบบจะเปิดหน้าครุภัณฑ์เดียวกัน{" "}

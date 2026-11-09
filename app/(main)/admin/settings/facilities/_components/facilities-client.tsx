@@ -1,11 +1,14 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState, useTransition, useId } from "react";
+import { useActionState, useEffect, useMemo, useRef, useState, useTransition, useId } from "react";
 
 import { SortableTh, TablePagination } from "@/app/_components/ui/data-table";
 import { StatusBadge, activeTone } from "@/app/_components/ui/status-badge";
 import { ActionIconButton } from "@/app/_components/ui/action-icon-button";
+import { AppIcon } from "@/app/_components/ui/icon";
 import { useTableState } from "@/app/_components/ui/use-table-state";
+import { EmptyState } from "@/app/(main)/admin/_components/page-hero";
+import { facilityTypeRank, sortFacilities } from "@/lib/facility-order";
 import { createFacilityAction, toggleFacilityActiveAction, updateFacilityAction } from "../actions";
 import type { FacilityAdminRow } from "@/lib/assets";
 
@@ -41,12 +44,12 @@ function FacilityModal({
   }, [onClose]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-      <div role="dialog" aria-modal="true" aria-labelledby={`${fieldId}-title`} className="relative z-10 w-full max-w-lg overflow-y-auto rounded-2xl bg-[var(--surface-strong)] p-6 shadow-2xl">
+      <div role="dialog" aria-modal="true" aria-labelledby={`${fieldId}-title`} className="relative z-10 max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-[var(--surface-strong)] p-6 shadow-2xl">
         <div className="flex items-center justify-between">
           <h2 id={`${fieldId}-title`} className="text-lg font-semibold">{mode === "create" ? "เพิ่มหน่วยงานใหม่" : `แก้ไข: ${facility?.name}`}</h2>
-          <button type="button" onClick={onClose} aria-label="ปิดหน้าต่างหน่วยงาน" className="min-h-11 min-w-11 rounded-xl text-[var(--muted)] hover:bg-stone-100 hover:text-[var(--foreground)]">✕</button>
+          <ActionIconButton icon="close" label="ปิดหน้าต่างหน่วยงาน" onClick={onClose} className="-mr-2 border-transparent bg-transparent" />
         </div>
 
         {error && <div role="alert" className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</div>}
@@ -105,12 +108,11 @@ function FacilityModal({
           </div>
 
           <div className="flex justify-end gap-3 pt-2">
-            <button type="button" onClick={onClose}
-              className="rounded-xl border border-black/10 bg-white/80 px-5 py-2 text-sm font-medium hover:bg-white">
+            <button type="button" onClick={onClose} className="secondary-action">
               ยกเลิก
             </button>
-            <button type="submit" disabled={pending}
-              className="rounded-xl bg-[var(--accent-strong)] px-6 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">
+            <button type="submit" disabled={pending} className="primary-action">
+              <AppIcon name={mode === "create" ? "plus" : "check"} size={16} />
               {pending ? "กำลังบันทึก…" : mode === "create" ? "เพิ่มหน่วยงาน" : "บันทึก"}
             </button>
           </div>
@@ -126,7 +128,7 @@ function FacilityRow({ f, canToggleActive, seq }: { f: FacilityAdminRow; canTogg
 
   return (
     <>
-      <tr className="border-b border-black/5 transition hover:bg-white/40">
+      <tr className="border-b border-black/5">
         <td className="px-4 py-3 text-right tabular-nums text-[var(--muted)]">{seq.toLocaleString("th-TH")}</td>
         <td className="px-4 py-3">
           <p className="font-medium text-sm">{f.name}</p>
@@ -144,12 +146,14 @@ function FacilityRow({ f, canToggleActive, seq }: { f: FacilityAdminRow; canTogg
           <div className="inline-flex gap-2">
             <ActionIconButton icon="pencil" tone="primary" label={`แก้ไข ${f.name}`} onClick={() => setEditOpen(true)} />
             {canToggleActive && (
-              <button
-                onClick={() => startToggle(() => toggleFacilityActiveAction(f.id, !f.is_active))}
+              <ActionIconButton
+                icon={f.is_active ? "power-off" : "power-on"}
+                tone={f.is_active ? "danger" : "primary"}
+                label={f.is_active ? `ปิดใช้งาน ${f.name}` : `เปิดใช้งาน ${f.name}`}
+                aria-busy={togglePending}
                 disabled={togglePending}
-                className={`rounded-lg border px-3 py-1 text-xs font-medium transition disabled:opacity-50 ${f.is_active ? "border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100" : "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"}`}>
-                {togglePending ? "…" : f.is_active ? "ปิด" : "เปิด"}
-              </button>
+                onClick={() => startToggle(() => toggleFacilityActiveAction(f.id, !f.is_active))}
+              />
             )}
           </div>
         </td>
@@ -172,7 +176,9 @@ export function FacilitiesClient({
   const [search, setSearch] = useState("");
   const [districtFilter, setDistrictFilter] = useState("");
 
-  const filtered = facilities.filter((f) => {
+  // ลำดับเริ่มต้น: สสจ. → สสอ. → รพท. → รพช. → รพ.สต. (ก่อนผู้ใช้กดเรียงคอลัมน์)
+  const ordered = useMemo(() => sortFacilities(facilities), [facilities]);
+  const filtered = ordered.filter((f) => {
     const q = search.toLowerCase();
     const matchSearch = !q || f.name.toLowerCase().includes(q) || (f.tambon ?? "").toLowerCase().includes(q);
     const matchDistrict = !districtFilter || f.district_name === districtFilter;
@@ -181,7 +187,7 @@ export function FacilitiesClient({
 
   const t = useTableState(filtered, {
     name: (f) => f.name,
-    typecode: (f) => f.typecode,
+    typecode: (f) => facilityTypeRank(f),
     district: (f) => f.district_name,
     assets: (f) => Number(f.asset_count),
     status: (f) => (f.is_active ? 0 : 1),
@@ -190,30 +196,33 @@ export function FacilitiesClient({
   return (
     <>
       {/* Toolbar */}
-      <div className="flex flex-wrap items-center gap-3">
-        <input
-          type="text"
-          placeholder="ค้นหาชื่อหน่วยงาน..."
-          value={search}
-          onChange={(e) => { setSearch(e.target.value); t.resetPage(); }}
-          className="rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)] w-56"
-        />
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative w-full sm:w-64">
+          <AppIcon name="search" size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]" />
+          <input
+            type="search"
+            aria-label="ค้นหาชื่อหน่วยงานหรือตำบล"
+            placeholder="ค้นหาชื่อหน่วยงาน..."
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); t.resetPage(); }}
+            className="filter-control pl-9"
+          />
+        </div>
         <select
+          aria-label="กรองตามอำเภอ"
           value={districtFilter}
           onChange={(e) => { setDistrictFilter(e.target.value); t.resetPage(); }}
-          className="rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+          className="filter-control is-auto"
         >
           <option value="">ทุกอำเภอ</option>
           {DISTRICTS.map((d) => <option key={d} value={d}>{d}</option>)}
         </select>
-        <span className="text-sm text-[var(--muted)]">{filtered.length} หน่วยงาน</span>
+        <span className="text-sm text-[var(--muted)]">{filtered.length.toLocaleString("th-TH")} หน่วยงาน</span>
         {canCreate && (
           <div className="ml-auto">
-            <button
-              onClick={() => setCreateOpen(true)}
-              className="primary-action"
-            >
-              + เพิ่มหน่วยงาน
+            <button type="button" onClick={() => setCreateOpen(true)} className="primary-action">
+              <AppIcon name="plus" size={16} />
+              เพิ่มหน่วยงาน
             </button>
           </div>
         )}
@@ -224,7 +233,7 @@ export function FacilitiesClient({
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-black/6 bg-stone-50/60 text-xs text-[var(--muted)]">
+              <tr className="border-b border-black/6 text-xs text-[var(--muted)]">
                 <th className="w-14 px-4 py-2.5 text-right font-medium">ลำดับ</th>
                 <SortableTh label="ชื่อหน่วยงาน" sortKey="name" sort={t.sort} onSort={t.onSort} />
                 <SortableTh label="ประเภท" sortKey="typecode" sort={t.sort} onSort={t.onSort} />
@@ -237,7 +246,7 @@ export function FacilitiesClient({
             <tbody>
               {t.rows.map((f, rowIndex) => <FacilityRow key={f.id} f={f} canToggleActive={canToggleActive} seq={t.start + rowIndex} />)}
               {filtered.length === 0 && (
-                <tr><td colSpan={7} className="py-10 text-center text-sm text-[var(--muted)]">ไม่พบหน่วยงาน</td></tr>
+                <tr><td colSpan={7} className="p-0"><EmptyState icon="building" title="ไม่พบหน่วยงาน" description="ลองเปลี่ยนคำค้นหาหรืออำเภอ" /></td></tr>
               )}
             </tbody>
           </table>

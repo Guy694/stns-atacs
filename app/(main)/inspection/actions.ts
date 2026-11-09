@@ -17,7 +17,7 @@ import {
 } from "@/lib/inspection";
 import { listFacilityWorkGroups } from "@/lib/facility-work-groups";
 import { InspectionResultError, recordInspectionResult } from "@/lib/inspection-results";
-import { friendlyLifecycleError, isMissingSchemaError } from "@/lib/schema-errors";
+import { friendlyLifecycleError, isMissingSchemaError, userFacingError } from "@/lib/schema-errors";
 import { getCurrentUser } from "@/lib/auth";
 import { listAssets } from "@/lib/assets";
 import { canManageFacility, canMutateAssets } from "@/lib/permissions";
@@ -59,7 +59,7 @@ export async function createInspectionAction(
   try {
     committee = readCommittee(formData);
   } catch (error) {
-    return error instanceof Error ? error.message : "ข้อมูลคณะกรรมการไม่ถูกต้อง";
+    return userFacingError(error, "ข้อมูลคณะกรรมการไม่ถูกต้อง");
   }
 
   // Disposed/Lost assets are no longer on hand and are not counted in a new round.
@@ -207,7 +207,7 @@ export async function deleteInspectionAction(_prev: string | null, formData: For
       summary: `ลบรอบตรวจนับ "${inspection.roundName}" (${inspection.facilityName}) พร้อมผลตรวจ ${deletedItems} รายการ · ตรวจแล้ว ${inspection.checkedItems}/${inspection.totalItems}${reason ? ` — ${reason}` : ""}`,
     });
   } catch (error) {
-    return error instanceof Error ? error.message : "เกิดข้อผิดพลาด กรุณาลองใหม่";
+    return userFacingError(error);
   }
 
   revalidatePath("/inspection");

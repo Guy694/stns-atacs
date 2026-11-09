@@ -26,8 +26,9 @@ export function MobileMenuButton() {
     <button
       type="button"
       onClick={() => setMobileMenuOpen(true)}
-      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[var(--accent-strong)] text-white shadow-sm lg:hidden"
+      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[var(--accent-strong)] text-white shadow-sm transition-colors duration-200 hover:bg-[#125b86] lg:hidden"
       aria-label="เปิดเมนู"
+      title="เปิดเมนู"
       aria-expanded={mobileOpen}
       aria-controls="mobile-navigation"
     >
@@ -229,7 +230,8 @@ export function Sidebar({ user, grantedPermissions, pendingRegistrationCount, me
           type="button"
           onClick={() => setMobileMenuOpen(false)}
           aria-label="ปิดเมนู"
-          className="absolute right-3 top-3 flex h-10 w-10 items-center justify-center rounded-xl text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+          title="ปิดเมนู"
+          className="absolute right-3 top-3 flex h-11 w-11 items-center justify-center rounded-xl text-slate-500 transition-colors duration-200 hover:bg-slate-100 hover:text-slate-900"
         >
           <AppIcon name="close" />
         </button>

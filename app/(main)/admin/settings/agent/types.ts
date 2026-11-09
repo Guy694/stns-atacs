@@ -1,13 +1,15 @@
-export type AgentEnrollmentActionState = {
-  error: string | null;
-  createdToken: string | null;
-  facilityName: string | null;
-  enrollmentName: string | null;
+export type InstallOsChoice = "windows" | "linux";
+
+export type InstallCommandRequest = {
+  facilityId: number | string;
+  workGroupId?: number | string | null;
+  os: InstallOsChoice;
 };
 
-export const agentEnrollmentInitialState: AgentEnrollmentActionState = {
-  error: null,
-  createdToken: null,
-  facilityName: null,
-  enrollmentName: null,
-};
+export type InstallCommandResult =
+  | { ok: true; command: string; created: boolean; scopeLabel: string }
+  | { ok: false; error: string };
+
+export type RevokeInstallCommandResult = { ok: boolean; message: string };
+
+export type InstallCommandAction = (input: InstallCommandRequest) => Promise<InstallCommandResult>;

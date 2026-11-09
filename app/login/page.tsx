@@ -4,7 +4,9 @@ import { redirect } from "next/navigation";
 
 import { loginWithPasswordAction, registerOfficerWithPasswordAction } from "@/app/auth/actions";
 import { countAssets, listAllFacilitiesForSelect } from "@/lib/assets";
+import { FacilitySelect } from "@/app/_components/ui/facility-select";
 import { AppIcon } from "@/app/_components/ui/icon";
+import { PhotoBackdrop } from "@/app/_components/ui/photo-backdrop";
 import { APP_NAME, APP_SCOPE, APP_TAGLINE } from "@/lib/app-brand";
 import { getCurrentUser } from "@/lib/auth";
 import { withBasePath } from "@/lib/base-path";
@@ -51,17 +53,10 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
     <div className="min-h-screen flex" style={{ background: "var(--background)" }}>
 
       {/* ── Left panel (decorative) ─────────────────────────────────── */}
-      <div
-        className="hidden lg:flex flex-col justify-between w-[46%] p-12 relative overflow-hidden"
-        style={{ background: "linear-gradient(145deg, #0f3f6b 0%, #15548f 50%, #1689db 100%)" }}
-      >
-        {/* Floating circles */}
-        <div className="absolute -top-20 -left-20 w-80 h-80 rounded-full opacity-20"
-          style={{ background: "rgba(186,230,253,0.42)" }} />
-        <div className="absolute top-1/3 -right-16 w-64 h-64 rounded-full opacity-15"
-          style={{ background: "rgba(224,242,254,0.48)" }} />
-        <div className="absolute -bottom-10 left-1/4 w-48 h-48 rounded-full opacity-20"
-          style={{ background: "rgba(56,189,248,0.58)" }} />
+      {/* Full-bleed photo under a solid brand-blue veil: white text stays above 7:1 everywhere on the panel. */}
+      <div className="hidden lg:flex flex-col justify-between w-[46%] p-12 relative isolate overflow-hidden bg-[#0f3f6b]">
+        <PhotoBackdrop image="it-storage" opacity="opacity-60" fade="none" />
+        <div aria-hidden="true" className="absolute inset-0 -z-10 bg-[#0f3f6b]/80" />
 
         {/* Logo area */}
         <div className="relative z-10">
@@ -91,8 +86,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
             { label: "ทรัพย์สิน", value: loginStats.assets },
             { label: "อำเภอ", value: loginStats.districts },
           ].map((s) => (
-            <div key={s.label} className="rounded-2xl p-4 text-center"
-              style={{ background: "rgba(255,255,255,0.12)", backdropFilter: "blur(8px)" }}>
+            <div key={s.label} className="rounded-2xl border border-white/15 bg-[#0b3357]/70 p-4 text-center">
               <p className="text-white text-2xl font-bold">{s.value}</p>
               <p className="text-sky-100 text-xs mt-0.5">{s.label}</p>
             </div>
@@ -109,7 +103,11 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
       </div>
 
       {/* ── Right panel (form) ──────────────────────────────────────── */}
-      <div className="flex-1 flex flex-col items-center justify-center px-6 py-10 sm:px-12">
+      <div className="relative isolate flex-1 flex flex-col items-center justify-center overflow-hidden px-6 py-10 sm:px-12">
+        {/* Phones and tablets have no photo panel: a faint strip of the same photo behind the logo only. */}
+        <div aria-hidden="true" className="absolute inset-x-0 top-0 -z-10 h-56 overflow-hidden lg:hidden">
+          <PhotoBackdrop image="it-storage" opacity="opacity-[0.14]" fade="bottom" />
+        </div>
 
         {/* Mobile logo */}
         <div className="lg:hidden flex items-center gap-3 mb-8">
@@ -138,12 +136,12 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           {/* Alerts */}
           {notice && (
             <div className="mb-5 rounded-2xl px-4 py-3 text-sm text-[var(--state-info-fg)] bg-[var(--state-info-bg)] border border-[var(--state-info-border)] flex items-start gap-2">
-              <span>✓</span><span>{notice}</span>
+              <AppIcon name="check" className="mt-0.5 h-4 w-4 shrink-0" /><span>{notice}</span>
             </div>
           )}
           {error && (
             <div className="mb-5 rounded-2xl px-4 py-3 text-sm text-rose-700 bg-rose-50 border border-rose-200 flex items-start gap-2">
-              <span>⚠</span><span>{error}</span>
+              <AppIcon name="warning" className="mt-0.5 h-4 w-4 shrink-0" /><span>{error}</span>
             </div>
           )}
 
@@ -218,20 +216,18 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
                   </div>
                   <div className="space-y-1.5">
                     <label htmlFor="registerFacility" className="text-sm font-semibold">หน่วยงานที่สังกัด</label>
-                    <select
+                    <FacilitySelect
                       id="registerFacility"
                       name="facilityId"
                       required
-                      className="w-full rounded-2xl border bg-white px-4 py-3 text-sm outline-none transition focus:border-[var(--accent)]"
-                      style={{ borderColor: "var(--line)" }}
-                    >
-                      <option value="">— เลือกหน่วยงาน —</option>
-                      {facilities.map((facility) => (
-                        <option key={facility.id} value={facility.id}>
-                          {facility.facility_name}{facility.district_name ? ` · อ.${facility.district_name}` : ""}
-                        </option>
-                      ))}
-                    </select>
+                      className="[&_input]:min-h-12 [&_input]:rounded-2xl [&_input]:text-sm"
+                      facilities={facilities.map((facility) => ({
+                        id: facility.id,
+                        name: facility.facility_name,
+                        typecode: facility.typecode,
+                        districtName: facility.district_name ? `อ.${facility.district_name}` : "",
+                      }))}
+                    />
                   </div>
                   <div className="space-y-1.5">
                     <label htmlFor="registerUsername" className="text-sm font-semibold">ชื่อผู้ใช้</label>
@@ -281,14 +277,14 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
                     </div>
                   </div>
                   <SubmitButton pendingText="กำลังส่งคำขอ…"
-                    className="w-full rounded-2xl bg-[var(--accent-strong)] py-3 text-sm font-bold text-white transition hover:opacity-90 active:scale-[0.98]"
+                    className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[var(--accent-strong)] py-3 text-sm font-bold text-white transition-colors duration-200 hover:bg-[#125b86] disabled:opacity-60"
                   >
-                    ส่งคำขอลงทะเบียน
+                    <AppIcon name="check" className="h-4 w-4" /> ส่งคำขอลงทะเบียน
                   </SubmitButton>
                 </form>
                 <div className="text-center">
-                  <Link href="/login" className="text-sm font-semibold hover:underline" style={{ color: "var(--accent)" }}>
-                    ← กลับหน้าเข้าสู่ระบบ
+                  <Link href="/login" className="inline-flex min-h-11 items-center gap-1.5 text-sm font-semibold text-[var(--accent-strong)] hover:underline">
+                    <AppIcon name="arrow-left" className="h-4 w-4" /> กลับหน้าเข้าสู่ระบบ
                   </Link>
                 </div>
               </>
@@ -304,10 +300,9 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
                 <>
                   <a
                     href={withBasePath("/api/auth/thaiid/authorize/")}
-                    className="flex items-center justify-center gap-2 w-full rounded-2xl py-3 text-sm font-bold text-white transition hover:opacity-90 active:scale-[0.98]"
-                    style={{ background: "linear-gradient(135deg, var(--accent) 0%, var(--accent-strong) 100%)", boxShadow: "0 4px 16px rgba(22,135,217,0.28)" }}
+                    className="flex items-center justify-center gap-2 w-full rounded-2xl bg-[var(--accent-strong)] py-3 text-sm font-bold text-white transition-colors duration-200 hover:bg-[#125b86]"
                   >
-                    ดำเนินการผ่าน ThaiD →
+                    <AppIcon name="shield" className="h-4 w-4" /> ดำเนินการผ่าน ThaiD
                   </a>
                   <p className="text-xs text-center" style={{ color: "var(--muted)" }}>
                     หากไม่พบข้อมูลผู้ใช้งาน ระบบจะพาไปหน้าสมัครสมาชิกอัตโนมัติ
@@ -356,10 +351,9 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
                     </div>
                   </div>
                   <SubmitButton pendingText="กำลังเข้าสู่ระบบ…"
-                    className="w-full rounded-2xl py-3 text-sm font-bold text-white transition hover:opacity-90 active:scale-[0.98]"
-                    style={{ background: "linear-gradient(135deg, var(--accent) 0%, var(--accent-strong) 100%)", boxShadow: "0 4px 16px rgba(22,135,217,0.28)" }}
+                    className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[var(--accent-strong)] py-3 text-sm font-bold text-white transition-colors duration-200 hover:bg-[#125b86] disabled:opacity-60"
                   >
-                    เข้าสู่ระบบ →
+                    <AppIcon name="key" className="h-4 w-4" /> เข้าสู่ระบบ
                   </SubmitButton>
                 </form>
 
@@ -390,12 +384,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
                     {thaiIdStatus.enabled ? (
                       <Link
                         href={`/login?thaid=1${nextPath !== "/" ? `&next=${encodeURIComponent(nextPath)}` : ""}`}
-                        className="flex items-center justify-center gap-2 w-full rounded-2xl py-3 text-sm font-bold transition hover:opacity-80 active:scale-[0.98]"
-                        style={{
-                          border: "2px solid var(--accent)",
-                          color: "var(--accent)",
-                          background: "var(--primary-soft)",
-                        }}
+                        className="flex items-center justify-center gap-2 w-full rounded-2xl border border-[var(--primary-soft-strong)] bg-white py-3 text-sm font-bold text-[var(--accent-strong)] transition-colors duration-200 hover:bg-[var(--primary-soft)]"
                       >
                         <Image src={withBasePath("/thaid.png")} alt="ThaiD" width={32} height={32} className="h-8 w-8 rounded-full" /> เข้าสู่ระบบด้วย ThaiD
                       </Link>
@@ -404,7 +393,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
                     {googleAuthStatus.enabled ? (
                       <a
                         href={withBasePath(`/api/auth/google/authorize/${nextPath !== "/" ? `?next=${encodeURIComponent(nextPath)}` : ""}`)}
-                        className="flex items-center justify-center gap-3 w-full rounded-2xl border border-stone-300 bg-white py-3 text-sm font-bold text-stone-700 transition hover:bg-stone-50 active:scale-[0.98]"
+                        className="flex items-center justify-center gap-3 w-full rounded-2xl border border-stone-300 bg-white py-3 text-sm font-bold text-stone-700 transition-colors duration-200 hover:bg-stone-50"
                       >
                         <span className="text-lg font-bold text-blue-600">G</span>
                         เข้าสู่ระบบด้วย Gmail
@@ -419,9 +408,9 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
 
                 <Link
                   href={`/login?register=1${nextPath !== "/" ? `&next=${encodeURIComponent(nextPath)}` : ""}`}
-                  className="flex items-center justify-center gap-2 w-full rounded-2xl border border-[var(--primary-soft-strong)] bg-[var(--primary-soft)] py-3 text-sm font-bold text-[var(--primary-text)] transition hover:bg-[var(--primary-soft-strong)] active:scale-[0.98]"
+                  className="flex items-center justify-center gap-2 w-full rounded-2xl border border-[var(--primary-soft-strong)] bg-[var(--primary-soft)] py-3 text-sm font-bold text-[var(--primary-text)] transition-colors duration-200 hover:bg-[var(--primary-soft-strong)]"
                 >
-                  ลงทะเบียนเจ้าหน้าที่ใหม่ →
+                  <AppIcon name="user" className="h-4 w-4" /> ลงทะเบียนเจ้าหน้าที่ใหม่
                 </Link>
               </>
             )}
@@ -429,8 +418,8 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
 
           {/* Footer */}
           <div className="mt-6 text-center text-sm" style={{ color: "var(--muted)" }}>
-            <Link href="/" className="font-semibold hover:underline" style={{ color: "var(--accent)" }}>
-              ← กลับหน้าข้อมูลสาธารณะ
+            <Link href="/" className="inline-flex min-h-11 items-center gap-1.5 font-semibold text-[var(--accent-strong)] hover:underline">
+              <AppIcon name="arrow-left" className="h-4 w-4" /> กลับหน้าข้อมูลสาธารณะ
             </Link>
           </div>
         </div>

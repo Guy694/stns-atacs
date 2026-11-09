@@ -47,14 +47,14 @@ export function MainNavbar({ user }: MainNavbarProps) {
           <div className="flex items-center gap-2">
             <Link
               href="/profile"
-              aria-label="โปรไฟล์"
-              className="inline-flex min-h-11 min-w-11 items-center justify-center gap-1 rounded-xl border border-[var(--line)] bg-white px-3 py-1.5 text-xs font-semibold text-[var(--accent-strong)] transition hover:bg-[var(--primary-soft)] sm:px-4 sm:py-2"
+              aria-label="โปรไฟล์ของฉัน"
+              title="โปรไฟล์ของฉัน"
+              className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl border border-[var(--line)] bg-white text-[var(--accent-strong)] transition-colors duration-200 hover:bg-[var(--primary-soft)]"
             >
-              <AppIcon name="users" className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">โปรไฟล์</span>
+              <AppIcon name="user" className="h-4 w-4" />
             </Link>
             <LogoutConfirmForm
-              buttonClassName="inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl border border-[var(--line)] bg-white text-[var(--accent-strong)] transition hover:bg-[var(--primary-soft)]"
+              buttonClassName="inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl border border-[var(--line)] bg-white text-[var(--accent-strong)] transition-colors duration-200 hover:border-[var(--state-danger-border)] hover:bg-[var(--state-danger-bg)] hover:text-[var(--state-danger-fg)]"
               ariaLabel="ออกจากระบบ"
               title="ออกจากระบบ"
               buttonContent={

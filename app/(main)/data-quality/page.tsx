@@ -3,6 +3,9 @@ import { redirect } from "next/navigation";
 
 import { AppIcon } from "@/app/_components/ui/icon";
 import { StatusBadge } from "@/app/_components/ui/status-badge";
+import { ActionIconLink } from "@/app/_components/ui/action-icon-button";
+import { FacilitySelect } from "@/app/_components/ui/facility-select";
+import { PhotoBackdrop } from "@/app/_components/ui/photo-backdrop";
 import { numberFormat, percent } from "@/app/_components/overview-format";
 import { listFacilities } from "@/lib/assets";
 import { assetStatusLabel } from "@/lib/asset-status";
@@ -79,13 +82,15 @@ export default async function DataQualityPage({ searchParams }: Props) {
     score: (row) => row.score,
     ...Object.fromEntries(available.map((c) => [`check-${c.key}`, (row: (typeof quality.facilities)[number]) => row.checks[c.key]?.missing ?? 0])),
   });
+  const facilityPaged = paginate(facilityRows, readPage(params, "f"));
   const fth = (key: string, label: string, align: "left" | "right" = "right", className = "px-3 py-2.5 font-semibold") => (
     <SortableTh key={key} label={label} sortKey={key} sort={fsort} align={align} className={className} href={sortHref("/data-quality", params, key, fsort, "f", key === "facility" ? "asc" : "desc")} />
   );
 
   return (
     <div id="top" className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-5">
-      <header>
+      <header className="relative isolate overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--surface-strong)] px-5 py-5 sm:px-6">
+        <PhotoBackdrop image="office-desk" fade="left" />
         <h1 className="flex items-center gap-2 text-2xl font-bold"><AppIcon name="check" className="h-6 w-6 text-[var(--primary)]" /> ความครบถ้วนของข้อมูลครุภัณฑ์</h1>
         <p className="mt-1 text-sm text-[var(--muted)]">{scopeLabel} · นับเฉพาะครุภัณฑ์ที่ยังอยู่ในทะเบียน เลือกหัวข้อเพื่อดูรายการที่ต้องเติม</p>
       </header>
@@ -107,18 +112,22 @@ export default async function DataQualityPage({ searchParams }: Props) {
             {districts.map((name) => <option key={name} value={name ?? ""}>{name}</option>)}
           </select>
         </label>
-        <label className="text-xs">
-          <span className="mb-1 block text-xs text-[var(--muted)]">หน่วยงาน</span>
-          <select name="facility" defaultValue={facilityId ? String(facilityId) : ""} className="filter-control w-full">
-            <option value="">ทุกหน่วยงาน</option>
-            {facilities.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
-          </select>
-        </label>
-        <button type="submit" className="min-h-9 self-end rounded-xl bg-[var(--primary)] px-4 text-xs font-semibold text-white">แสดง</button>
+        <div className="text-xs">
+          <label htmlFor="quality-facility" className="mb-1 block text-xs text-[var(--muted)]">หน่วยงาน</label>
+          <FacilitySelect
+            id="quality-facility"
+            name="facility"
+            emptyLabel="ทุกหน่วยงาน"
+            defaultValue={facilityId ? String(facilityId) : ""}
+            facilities={facilities.map((f) => ({ id: f.id, name: f.name, typecode: f.typecode, districtName: f.district_name }))}
+          />
+        </div>
+        <button type="submit" className="primary-action action-sm self-end"><AppIcon name="search" className="h-4 w-4" /> แสดง</button>
       </form>
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
-        <section aria-labelledby="score-heading" className="rounded-2xl border border-[var(--line)] bg-white p-5">
+        <section aria-labelledby="score-heading" className="relative isolate overflow-hidden rounded-2xl border border-[var(--line)] bg-white p-5">
+          <PhotoBackdrop image="it-storage" fade="bottom" />
           <h2 id="score-heading" className="text-sm font-medium text-[var(--muted)]">คะแนนความครบถ้วนรวม</h2>
           <p className="mt-2 text-5xl font-bold tabular-nums">{percent(quality.total.score)}</p>
           <p className="mt-2 text-sm"><StatusBadge tone={GRADE_TONES[quality.total.grade]}>{QUALITY_GRADE_LABELS[quality.total.grade]}</StatusBadge></p>
@@ -156,10 +165,14 @@ export default async function DataQualityPage({ searchParams }: Props) {
               <h2 id="incomplete-heading" className="text-base font-semibold">รายการที่ยังไม่มี “{check.label}” ({numberFormat.format(incomplete.total)} รายการ)</h2>
               <p className="mt-0.5 text-xs text-[var(--muted)]">เปิดรายการเพื่อแก้ไข หรือเติมหลายรายการพร้อมกันด้วยการนำเข้า CSV{incomplete.total > incomplete.rows.length ? ` · แสดง ${numberFormat.format(incomplete.rows.length)} รายการแรก` : ""}</p>
             </div>
-            <Link href={hrefFor({ check: "" })} className="text-xs text-[var(--primary-text)] underline">ปิดรายการ</Link>
+            <ActionIconLink href={hrefFor({ check: "" })} icon="close" label="ปิดรายการ" />
           </div>
           {incomplete.rows.length === 0 ? (
-            <p className="px-5 py-8 text-center text-sm text-[var(--muted)]">ไม่มีรายการที่ขาดข้อมูลนี้</p>
+            <div className="relative isolate overflow-hidden px-5 py-10 text-center text-sm text-[var(--muted)]">
+            <PhotoBackdrop image="office-desk" fade="bottom" />
+            <AppIcon name="check" className="mx-auto mb-2 h-8 w-8 text-[var(--primary)]" />
+            <p>ไม่มีรายการที่ขาดข้อมูลนี้</p>
+          </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[720px] text-sm">
@@ -198,7 +211,11 @@ export default async function DataQualityPage({ searchParams }: Props) {
           <p className="mt-0.5 text-xs text-[var(--muted)]">{fsort ? "กดหัวตารางเพื่อเปลี่ยนการเรียง" : "เรียงจากคะแนนต่ำสุด"} · ตัวเลขในตารางคือจำนวนรายการที่ยังขาดข้อมูล</p>
         </div>
         {quality.facilities.length === 0 ? (
-          <p className="px-5 py-8 text-center text-sm text-[var(--muted)]">ไม่มีครุภัณฑ์ในขอบเขตที่เลือก</p>
+          <div className="relative isolate overflow-hidden px-5 py-10 text-center text-sm text-[var(--muted)]">
+            <PhotoBackdrop image="it-storage" fade="bottom" />
+            <AppIcon name="package" className="mx-auto mb-2 h-8 w-8 text-[var(--primary)]" />
+            <p>ไม่มีครุภัณฑ์ในขอบเขตที่เลือก</p>
+          </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[900px] text-sm">
@@ -212,9 +229,9 @@ export default async function DataQualityPage({ searchParams }: Props) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--line)]">
-                {facilityRows.map((row, rowIndex) => (
+                {facilityPaged.rows.map((row, rowIndex) => (
                   <tr key={row.facilityId}>
-                    <td className="px-3 py-2.5 text-right tabular-nums text-[var(--muted)]">{(rowIndex + 1).toLocaleString("th-TH")}</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums text-[var(--muted)]">{(facilityPaged.start + rowIndex).toLocaleString("th-TH")}</td>
                     <th scope="row" className="px-4 py-2.5 text-left font-medium">
                       <Link href={hrefFor({ facility: String(row.facilityId), district: "" })} className="hover:underline">{row.facilityName}</Link>
                       {row.districtName && <span className="block text-xs font-normal text-[var(--muted)]">อ.{row.districtName}</span>}
@@ -231,6 +248,9 @@ export default async function DataQualityPage({ searchParams }: Props) {
             </table>
           </div>
         )}
+        {quality.facilities.length > 0 && (
+          <TablePagination {...facilityPaged} hrefFor={(page) => pageHref("/data-quality", params, page, "f")} label="แบ่งหน้าคะแนนรายหน่วยงาน" className="border-t border-black/6" />
+        )}
       </section>
 
       <section aria-labelledby="serial-heading" className="overflow-hidden rounded-2xl border border-[var(--line)] bg-white">
@@ -239,7 +259,11 @@ export default async function DataQualityPage({ searchParams }: Props) {
           <p className="mt-0.5 text-xs text-[var(--muted)]">มักเกิดจากโอนย้ายแล้วลงทะเบียนใหม่ หรือนำเข้าซ้ำ ตรวจสอบแล้วโอนย้าย/แก้ไขรายการที่ถูกต้อง และลบรายการที่ซ้ำ</p>
         </div>
         {duplicates.length === 0 ? (
-          <p className="px-5 py-8 text-center text-sm text-[var(--muted)]">ไม่พบ Serial Number ซ้ำ</p>
+          <div className="relative isolate overflow-hidden px-5 py-10 text-center text-sm text-[var(--muted)]">
+            <PhotoBackdrop image="office-desk" fade="bottom" />
+            <AppIcon name="check" className="mx-auto mb-2 h-8 w-8 text-[var(--primary)]" />
+            <p>ไม่พบ Serial Number ซ้ำ</p>
+          </div>
         ) : (
           <ul className="divide-y divide-[var(--line)]">
             {duplicates.map((group) => (

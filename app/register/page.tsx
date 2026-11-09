@@ -5,6 +5,9 @@ import { registerFirstTimeAction } from "@/app/auth/actions";
 import { listAllFacilitiesForSelect } from "@/lib/assets";
 import { getCurrentUser, getPendingRegistrationClaim } from "@/lib/auth";
 import { SubmitButton } from "@/app/_components/ui/submit-button";
+import { FacilitySelect } from "@/app/_components/ui/facility-select";
+import { AppIcon } from "@/app/_components/ui/icon";
+import { PhotoBackdrop } from "@/app/_components/ui/photo-backdrop";
 
 type RegisterPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -52,21 +55,27 @@ export default async function RegisterPage({ searchParams }: RegisterPageProps) 
   return (
     <main className="mx-auto flex w-full max-w-xl flex-1 flex-col justify-center px-6 py-10 sm:px-8">
       <TopNavigation current="register" user={null} />
-      <section className="glass-panel rounded-[2rem] border border-black/10 p-6 sm:p-8">
-        <p className="text-sm text-[var(--muted)]">ลงทะเบียนครั้งแรก</p>
-        <h1 className="section-title mt-3 text-4xl font-semibold">สมัครสมาชิก ATACS</h1>
-        <p className="mt-4 text-sm leading-7 text-[var(--muted)]">
-          ยืนยันตัวตนผ่าน {claim.provider === "google" ? "Google" : "ThaiD"} แล้ว กรุณากรอกข้อมูลให้ครบเพื่อลงทะเบียนใช้งานครั้งแรก
-        </p>
+      <section className="mt-4 overflow-hidden rounded-[2rem] border border-[var(--line)] bg-white">
+        {/* Photo only behind the heading; the form below stays on a clean surface. */}
+        <div className="relative isolate overflow-hidden border-b border-[var(--line)] px-6 pb-5 pt-6 sm:px-8 sm:pt-8">
+          <PhotoBackdrop image="office-desk" opacity="opacity-[0.13]" fade="left" />
+          <h1 className="section-title text-3xl font-semibold sm:text-4xl">สมัครสมาชิก ATACS</h1>
+          <p className="mt-3 text-sm leading-7 text-[var(--neutral-text)]">
+            ลงทะเบียนครั้งแรก · ยืนยันตัวตนผ่าน {claim.provider === "google" ? "Google" : "ThaiD"} แล้ว กรุณากรอกข้อมูลให้ครบเพื่อลงทะเบียนใช้งาน
+          </p>
+        </div>
+        <div className="px-6 pb-6 sm:px-8 sm:pb-8">
 
         {notice ? (
-          <div className="mt-5 rounded-2xl border border-[var(--state-info-border)] bg-[var(--state-info-bg)] px-4 py-3 text-sm text-[var(--state-info-fg)]">
-            {notice}
+          <div className="mt-5 flex items-start gap-2 rounded-2xl border border-[var(--state-info-border)] bg-[var(--state-info-bg)] px-4 py-3 text-sm text-[var(--state-info-fg)]">
+            <AppIcon name="info" className="mt-0.5 h-4 w-4 shrink-0" /><span>{notice}</span>
           </div>
         ) : null}
 
         {error ? (
-          <div className="mt-5 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>
+          <div role="alert" className="mt-5 flex items-start gap-2 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+            <AppIcon name="warning" className="mt-0.5 h-4 w-4 shrink-0" /><span>{error}</span>
+          </div>
         ) : null}
 
         <form action={registerFirstTimeAction} className="mt-6 space-y-4">
@@ -167,28 +176,28 @@ export default async function RegisterPage({ searchParams }: RegisterPageProps) 
             <label htmlFor="facilityId" className="block text-sm font-medium">
               หน่วยงานที่สังกัด <span className="text-rose-500">*</span>
             </label>
-            <select
+            <FacilitySelect
               id="facilityId"
               name="facilityId"
               required
-              className="w-full rounded-2xl border border-black/10 bg-white/90 px-4 py-3 outline-none transition focus:border-[var(--accent)]"
-            >
-              <option value="">— เลือกหน่วยงาน —</option>
-              {facilities.map((f) => (
-                <option key={f.id} value={String(f.id)}>
-                  {f.facility_name}{f.district_name ? ` · อ.${f.district_name}` : ""}
-                </option>
-              ))}
-            </select>
+              className="[&_input]:min-h-12 [&_input]:rounded-2xl"
+              facilities={facilities.map((f) => ({
+                id: f.id,
+                name: f.facility_name,
+                typecode: f.typecode,
+                districtName: f.district_name ? `อ.${f.district_name}` : "",
+              }))}
+            />
             <p className="text-xs text-[var(--muted)]">ผู้ดูแลระบบจะอนุมัติการเข้าใช้งานหลังจากสมัครสมาชิก</p>
           </div>
 
           <SubmitButton pendingText="กำลังส่งข้อมูล…"
-            className="w-full rounded-2xl bg-[var(--accent-strong)] px-4 py-3 text-sm font-semibold text-white transition hover:opacity-90"
+            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[var(--accent-strong)] px-4 py-3 text-sm font-semibold text-white transition-colors duration-200 hover:bg-[#125b86] disabled:opacity-60"
           >
-            สมัครสมาชิก — รอการอนุมัติ
+            <AppIcon name="check" className="h-4 w-4" /> สมัครสมาชิก — รอการอนุมัติ
           </SubmitButton>
         </form>
+        </div>
       </section>
     </main>
   );

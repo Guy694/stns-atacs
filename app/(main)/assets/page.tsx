@@ -10,7 +10,8 @@ import { ActionIconButton } from "@/app/_components/ui/action-icon-button";
 import { assetClassLabel } from "@/lib/asset-classes";
 import { getCurrentUser } from "@/lib/auth";
 import { ASSET_SORT_KEYS, countAssets, listAssets, listAllFacilitiesForSelect, listFacilities, type AssetListFilter } from "@/lib/assets";
-import { SortableTh } from "@/app/_components/ui/data-table";
+import { SortableTh, TablePagination } from "@/app/_components/ui/data-table";
+import { PhotoBackdrop } from "@/app/_components/ui/photo-backdrop";
 import { columnSortOption, readSort, sortHref } from "@/lib/table-sort";
 import { formatThaiDate } from "@/lib/date-format";
 import { listActiveDeviceTypes } from "@/lib/device-types";
@@ -57,18 +58,6 @@ function buildAssetsHref(params: Record<string, string | number | undefined>, pa
 
   const queryString = query.toString();
   return queryString ? `/assets?${queryString}` : "/assets";
-}
-
-function buildPageNumbers(currentPage: number, totalPages: number) {
-  const pages = new Set([1, totalPages]);
-  const start = Math.max(1, currentPage - 2);
-  const end = Math.min(totalPages, currentPage + 2);
-
-  for (let page = start; page <= end; page += 1) {
-    pages.add(page);
-  }
-
-  return [...pages].sort((a, b) => a - b);
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -163,7 +152,6 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
     dir: columnSort?.dir,
     perPage: perPage === 25 ? undefined : perPage,
   };
-  const pageNumbers = buildPageNumbers(currentPage, totalPages);
 
   const districtOptions = [
     ...new Set(facilitiesForSelect.map((facility) => facility.district_name).filter((district): district is string => Boolean(district))),
@@ -194,20 +182,25 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6">
 
-      {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+      {/* Header: the only place on this page with a backdrop photo (never behind the table or filters) */}
+      <section className="glass-panel relative isolate flex flex-col gap-4 overflow-hidden rounded-2xl px-5 py-5 sm:flex-row sm:items-end sm:justify-between sm:px-6">
+        <PhotoBackdrop image="it-storage" opacity="opacity-[0.12]" fade="left" />
         <div>
-          <p className="text-xs font-semibold text-[var(--accent-strong)]">ทะเบียนทรัพย์สิน</p>
-          <h1 className="section-title mt-1 text-3xl font-semibold">รายการครุภัณฑ์และทรัพย์สิน</h1>
+          <h1 className="section-title text-2xl font-semibold sm:text-3xl">รายการครุภัณฑ์และทรัพย์สิน</h1>
           <p className="mt-1 text-sm text-[var(--muted)]">
-            {totalAssets.toLocaleString("th-TH")} รายการ
+            ทะเบียนทรัพย์สิน · {totalAssets.toLocaleString("th-TH")} รายการ
             {totalAssets > 0 && (
-              <span> · แสดง {pageStart.toLocaleString("th-TH")}-{pageEnd.toLocaleString("th-TH")}</span>
+              <span> · แสดง {pageStart.toLocaleString("th-TH")}–{pageEnd.toLocaleString("th-TH")}</span>
             )}
           </p>
         </div>
-        {(canManageSubtypes || canCreateAsset) && (
+        {(canManageSubtypes || canCreateAsset || isAdmin) && (
           <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+            {isAdmin && (
+              <Link href="/assets/trash/" className="secondary-action gap-2 whitespace-nowrap" title="ทรัพย์สินที่ถูกลบ — กู้คืนได้">
+                <AppIcon name="trash" className="h-4 w-4" /> ถังขยะ
+              </Link>
+            )}
             {canManageSubtypes && (
               <Link href="/assets/subtypes" className="secondary-action gap-2 whitespace-nowrap">
                 <AppIcon name="tag" className="h-4 w-4" /> จัดการประเภทย่อย
@@ -224,13 +217,13 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
                 mode="create"
               >
                 <button type="button" className="primary-action whitespace-nowrap">
-                  + เพิ่มทรัพย์สิน
+                  <AppIcon name="plus" className="h-4 w-4" /> เพิ่มทรัพย์สิน
                 </button>
               </AssetFormModal>
             )}
           </div>
         )}
-      </div>
+      </section>
 
       <AssetFilters key={JSON.stringify(pageQuery)} values={pageQuery} resetHref="/assets" subtypes={subtypes} deviceTypes={deviceTypes} facilities={facilitiesForSelect} districts={districtOptions} workGroups={workGroups} paginate columnSort={columnSortOption(columnSort, { reg: "เลขทะเบียน", name: "ชื่อทรัพย์สิน", facility: "หน่วยงาน", type: "ประเภท", status: "สถานะ", ...(canViewNetworkByPolicy ? { ip: "IP" } : {}), ma: "MA หมด" })} />
 
@@ -378,56 +371,25 @@ export default async function AssetsPage({ searchParams }: AssetsPageProps) {
       ))}
 
       {assets.length === 0 && (
-        <div className="glass-panel rounded-2xl p-12 text-center text-[var(--muted)]">
-          ไม่พบรายการทรัพย์สินที่ตรงกับเงื่อนไข
+        <div className="glass-panel relative isolate flex flex-col items-center overflow-hidden rounded-2xl px-6 py-14 text-center">
+          <PhotoBackdrop image="office-desk" opacity="opacity-[0.10]" fade="bottom" />
+          <AppIcon name="package" size={36} className="text-[var(--muted)]" />
+          <p className="mt-3 font-medium text-[var(--foreground)]">ไม่พบรายการทรัพย์สินที่ตรงกับเงื่อนไข</p>
+          <p className="mt-1 text-sm text-[var(--muted)]">ลองเปลี่ยนคำค้นหรือล้างตัวกรอง</p>
         </div>
       )}
 
       {totalAssets > 0 && (
-        <nav className="glass-panel flex flex-col gap-3 rounded-2xl px-4 py-3 sm:flex-row sm:items-center sm:justify-between" aria-label="Asset pagination">
-          <p className="text-sm text-[var(--muted)]">
-            หน้า {currentPage.toLocaleString("th-TH")} จาก {totalPages.toLocaleString("th-TH")}
-          </p>
-          <div className="flex flex-wrap items-center gap-2">
-            {currentPage > 1 ? (
-              <Link href={buildAssetsHref(pageQuery, currentPage - 1)} className="rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm font-medium hover:bg-white">
-                ก่อนหน้า
-              </Link>
-            ) : (
-              <span className="rounded-xl border border-black/6 bg-white/50 px-3 py-2 text-sm text-[var(--muted)] opacity-60">ก่อนหน้า</span>
-            )}
-
-            {pageNumbers.map((pageNumber, index) => {
-              const previous = pageNumbers[index - 1];
-              const showGap = previous !== undefined && pageNumber - previous > 1;
-
-              return (
-                <span key={pageNumber} className="inline-flex items-center gap-2">
-                  {showGap && <span className="px-1 text-sm text-[var(--muted)]">…</span>}
-                  <Link
-                    href={buildAssetsHref(pageQuery, pageNumber)}
-                    aria-current={pageNumber === currentPage ? "page" : undefined}
-                    className={`min-w-10 rounded-xl px-3 py-2 text-center text-sm font-medium transition ${
-                      pageNumber === currentPage
-                        ? "bg-[var(--accent-strong)] text-white"
-                        : "border border-black/10 bg-white/80 hover:bg-white"
-                    }`}
-                  >
-                    {pageNumber.toLocaleString("th-TH")}
-                  </Link>
-                </span>
-              );
-            })}
-
-            {currentPage < totalPages ? (
-              <Link href={buildAssetsHref(pageQuery, currentPage + 1)} className="rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm font-medium hover:bg-white">
-                ถัดไป
-              </Link>
-            ) : (
-              <span className="rounded-xl border border-black/6 bg-white/50 px-3 py-2 text-sm text-[var(--muted)] opacity-60">ถัดไป</span>
-            )}
-          </div>
-        </nav>
+        <TablePagination
+          page={currentPage}
+          totalPages={totalPages}
+          total={totalAssets}
+          start={pageStart}
+          end={pageEnd}
+          hrefFor={(page) => buildAssetsHref(pageQuery, page)}
+          label="แบ่งหน้ารายการทรัพย์สิน"
+          className="glass-panel rounded-2xl"
+        />
       )}
     </div>
   );

@@ -3,7 +3,11 @@ import { redirect } from "next/navigation";
 
 import { AppIcon, type IconName } from "@/app/_components/ui/icon";
 import { StatusBadge } from "@/app/_components/ui/status-badge";
+import { PageHero } from "@/app/(main)/admin/_components/page-hero";
 import { getCurrentUser } from "@/lib/auth";
+import { listCronStatus, type CronHealth } from "@/lib/cron-status";
+import { formatThaiDateTime } from "@/lib/date-format";
+import { getFacilityScopeId } from "@/lib/facility-scope";
 import { getFacilityAgentContext } from "@/lib/facility-work-groups";
 import { hasPermission, type PermissionKey } from "@/lib/role-permissions";
 
@@ -14,6 +18,9 @@ type Section = {
   href?: string;
   permissionKey?: PermissionKey;
 };
+
+const CRON_LABEL: Record<CronHealth, string> = { ok: "ปกติ", late: "ล่าช้า", failed: "มีปัญหา", never: "ไม่เคยรัน" };
+const CRON_TONE: Record<CronHealth, "success" | "warning" | "danger" | "neutral"> = { ok: "success", late: "warning", failed: "danger", never: "danger" };
 
 export default async function AdminSettingsPage() {
   const user = await getCurrentUser();
@@ -73,7 +80,7 @@ export default async function AdminSettingsPage() {
     },
     {
       title: "ATACS Agent",
-      desc: "สร้าง enrollment token ให้หน่วยงานติดตั้ง agent และรับ inventory อัตโนมัติ",
+      desc: "เลือกหน่วยงานแล้วคัดลอกคำสั่งติดตั้ง Agent ดูเครื่องที่รายงานเข้ามา",
       icon: "monitor",
       href: "/admin/settings/agent",
       permissionKey: "agent.manage",
@@ -127,6 +134,11 @@ export default async function AdminSettingsPage() {
     { title: "ตั้งค่า QR Code", desc: "รูปแบบ QR, ขนาด, โลโก้", icon: "package" },
   ];
 
+  // M15: งานตั้งเวลา (cron) — แสดงเฉพาะผู้ดูแลระบบส่วนกลาง
+  const isCentralAdmin = user.role === "admin" && getFacilityScopeId(user) === undefined;
+  const cronJobs = isCentralAdmin ? await listCronStatus() : [];
+  const cronProblem = cronJobs.some((job) => job.health !== "ok");
+
   const grantedPermissionKeys = user.role === "admin"
     ? new Set<PermissionKey>()
     : new Set(
@@ -142,10 +154,47 @@ export default async function AdminSettingsPage() {
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6">
-      <div>
-        <p className="text-xs font-semibold text-[var(--accent-strong)]">ตั้งค่าระบบ</p>
-        <h1 className="section-title mt-1 text-3xl font-semibold">ตั้งค่าระบบ</h1>
-      </div>
+      <PageHero
+        icon="settings"
+        image="it-storage"
+        title="ตั้งค่าระบบ"
+        description="จัดการผู้ใช้งาน หน่วยงาน สิทธิ์ และการตั้งค่าทั่วไปของระบบ ATACS"
+      />
+
+      {isCentralAdmin && (
+        <section aria-labelledby="cron-status-heading" className="glass-panel rounded-2xl">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--line)] px-5 py-3">
+            <h2 id="cron-status-heading" className="inline-flex items-center gap-2 text-sm font-semibold">
+              <AppIcon name="history" size={16} className="text-[var(--muted)]" />
+              งานตั้งเวลา (cron)
+            </h2>
+            {cronProblem ? (
+              <span className="text-xs text-[var(--state-warning-fg)]">
+                มีงานที่ไม่ได้รันตามรอบ ตรวจ CRON_SECRET และตัวเรียก cron บนเซิร์ฟเวอร์
+              </span>
+            ) : (
+              <span className="text-xs text-[var(--muted)]">ทำงานตามรอบทุกงาน</span>
+            )}
+          </div>
+          <ul className="divide-y divide-[var(--line)]">
+            {cronJobs.map((job) => (
+              <li key={job.key} className="flex flex-col gap-1 px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium">{job.label}</p>
+                  <p className="text-xs text-[var(--muted)]">
+                    <code className="font-mono">/api/cron/{job.key}</code> · ควรรันทุก {job.everyMinutes >= 1440 ? "วัน" : `${job.everyMinutes} นาที`}
+                    {job.run?.detail ? ` · ${job.run.detail}` : ""}
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-3">
+                  <span className="text-xs tabular-nums text-[var(--muted)]">{job.run ? formatThaiDateTime(job.run.at) : "ไม่เคยรัน"}</span>
+                  <StatusBadge tone={CRON_TONE[job.health]}>{CRON_LABEL[job.health]}</StatusBadge>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {allowedSections.map((s) =>
@@ -153,18 +202,16 @@ export default async function AdminSettingsPage() {
             <Link
               key={s.title}
               href={s.href}
-              className="glass-panel flex items-start gap-4 rounded-2xl p-5 transition hover:shadow-md hover:-translate-y-0.5"
+              className="glass-panel group flex items-start gap-4 rounded-2xl p-5 transition duration-200 hover:-translate-y-0.5 hover:border-[var(--primary-soft-strong)] hover:shadow-md"
             >
               <span className="rounded-xl bg-[var(--primary-soft)] p-2 text-[var(--primary-text)]">
                 <AppIcon name={s.icon} />
               </span>
-              <div>
+              <div className="min-w-0 flex-1">
                 <p className="font-semibold text-sm">{s.title}</p>
                 <p className="mt-0.5 text-xs text-[var(--muted)]">{s.desc}</p>
-                <StatusBadge tone="success" className="mt-2 text-[10px]">
-                  พร้อมใช้งาน →
-                </StatusBadge>
               </div>
+              <AppIcon name="chevron-right" size={18} className="mt-0.5 shrink-0 text-[var(--muted)] transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-[var(--primary)]" />
             </Link>
           ) : (
             <div key={s.title} className="glass-panel flex items-start gap-4 rounded-2xl p-5 opacity-60">

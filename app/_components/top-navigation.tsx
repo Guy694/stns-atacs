@@ -17,8 +17,8 @@ type TopNavigationProps = {
 
 function navItemClass(isActive: boolean) {
   return [
-    "inline-flex min-h-11 items-center rounded-full px-4 text-sm font-medium transition",
-    isActive ? "bg-[var(--accent-strong)] text-white" : "bg-white/70 text-[var(--accent-strong)] hover:bg-white",
+    "inline-flex min-h-11 items-center rounded-full px-4 text-sm font-medium transition-colors duration-200",
+    isActive ? "bg-[var(--accent-strong)] text-white" : "bg-white text-[var(--accent-strong)] hover:bg-[var(--primary-soft)]",
   ].join(" ");
 }
 
@@ -55,15 +55,21 @@ export function TopNavigation({ current, user }: TopNavigationProps) {
                 จัดการผู้ใช้
               </Link>
             )}
-            <div className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-white/70 px-3 py-2 text-xs text-[var(--muted)]">
+            <div className="inline-flex items-center gap-2 rounded-full border border-[var(--line)] bg-white px-3 py-2 text-xs text-[var(--muted)]">
               <span className="font-semibold text-[var(--accent-strong)]">{user.fullName}</span>
-              <span className="rounded-full bg-stone-100 px-2 py-0.5">{roleLabel(user.role)}</span>
+              <span className="rounded-full bg-[var(--primary-soft)] px-2 py-0.5 text-[var(--primary-text)]">{roleLabel(user.role)}</span>
             </div>
-            <Link href="/profile" aria-current={current === "profile" ? "page" : undefined} className={navItemClass(current === "profile")}>
-              โปรไฟล์
+            <Link
+              href="/profile"
+              aria-current={current === "profile" ? "page" : undefined}
+              aria-label="โปรไฟล์ของฉัน"
+              title="โปรไฟล์ของฉัน"
+              className={`inline-flex min-h-11 min-w-11 items-center justify-center rounded-full border transition-colors duration-200 ${current === "profile" ? "border-transparent bg-[var(--accent-strong)] text-white" : "border-[var(--line)] bg-white text-[var(--accent-strong)] hover:bg-[var(--primary-soft)]"}`}
+            >
+              <AppIcon name="user" className="h-4 w-4" />
             </Link>
             <LogoutConfirmForm
-              buttonClassName="inline-flex min-h-11 min-w-11 items-center justify-center rounded-full border border-black/12 bg-white/75 text-[var(--accent-strong)] transition hover:bg-white"
+              buttonClassName="inline-flex min-h-11 min-w-11 items-center justify-center rounded-full border border-[var(--line)] bg-white text-[var(--accent-strong)] transition-colors duration-200 hover:border-[var(--state-danger-border)] hover:bg-[var(--state-danger-bg)] hover:text-[var(--state-danger-fg)]"
               ariaLabel="ออกจากระบบ"
               title="ออกจากระบบ"
               buttonContent={<AppIcon name="logout" className="h-4 w-4" />}

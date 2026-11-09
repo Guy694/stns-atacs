@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 
 import { AppIcon } from "@/app/_components/ui/icon";
 import { StatusBadge } from "@/app/_components/ui/status-badge";
+import { PhotoBackdrop } from "@/app/_components/ui/photo-backdrop";
 import { assetStatusLabel, assetStatusTone } from "@/lib/asset-status";
 import { getCurrentUser } from "@/lib/auth";
 import { getAssetById, listAssets, listSurveys } from "@/lib/assets";
@@ -82,8 +83,7 @@ export default async function TransferPage({ searchParams }: Props) {
       return (
         <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-6">
           <div>
-            <p className="text-xs font-semibold text-[var(--accent-strong)]">โอนย้ายทรัพย์สิน</p>
-            <h1 className="section-title mt-1 text-3xl font-semibold">โอนย้ายทรัพย์สิน</h1>
+            <h1 className="section-title text-3xl font-semibold">โอนย้ายทรัพย์สิน</h1>
           </div>
           <div className="glass-panel rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-800">
             บัญชี Viewer ไม่มีสิทธิ์โอนย้ายทรัพย์สิน
@@ -100,8 +100,7 @@ export default async function TransferPage({ searchParams }: Props) {
             <span>/</span>
             <span>{asset.assetNumber}</span>
           </nav>
-          <p className="text-xs font-semibold text-[var(--accent-strong)]">โอนย้ายทรัพย์สิน</p>
-          <h1 className="section-title mt-1 text-3xl font-semibold">โอนย้ายทรัพย์สิน</h1>
+          <h1 className="section-title flex items-center gap-2 text-3xl font-semibold"><AppIcon name="repeat" className="h-7 w-7 text-[var(--primary)]" /> โอนย้ายทรัพย์สิน</h1>
         </div>
         <div className="glass-panel rounded-2xl p-6">
           <TransferForm asset={asset} surveys={scopedSurveys} workGroups={workGroups} />
@@ -130,28 +129,32 @@ export default async function TransferPage({ searchParams }: Props) {
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6">
-      <div>
-        <p className="text-xs font-semibold text-[var(--accent-strong)]">โอนย้ายทรัพย์สิน</p>
-        <h1 className="section-title mt-1 text-3xl font-semibold">โอนย้ายทรัพย์สิน</h1>
+      <div className="relative isolate overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--surface-strong)] px-5 py-5 sm:px-6">
+        <PhotoBackdrop image="it-storage" fade="left" />
+        <h1 className="section-title flex items-center gap-2 text-3xl font-semibold"><AppIcon name="repeat" className="h-7 w-7 text-[var(--primary)]" /> โอนย้ายทรัพย์สิน</h1>
         <p className="mt-1 text-sm text-[var(--muted)]">ค้นหาทรัพย์สินที่ต้องการโอนย้าย แล้วระบุหน่วยงานปลายทาง</p>
       </div>
 
       <form method="GET" className="glass-panel flex gap-3 rounded-2xl p-4">
+        <label htmlFor="transfer-search" className="sr-only">ค้นหาทรัพย์สิน</label>
         <input
+          id="transfer-search"
           name="q"
           defaultValue={q}
           autoFocus
           placeholder="ค้นหาชื่อ / เลขทะเบียน / ประเภท…"
           className="filter-control min-w-0 flex-1"
         />
-        <button type="submit" className="rounded-xl bg-[var(--primary)] px-4 py-2.5 text-xs font-semibold text-white transition hover:bg-[var(--primary-hover)]">
-          ค้นหา
+        <button type="submit" className="primary-action action-sm">
+          <AppIcon name="search" className="h-4 w-4" /> ค้นหา
         </button>
       </form>
 
       {q && results.length === 0 && (
-        <div className="glass-panel rounded-2xl p-10 text-center text-[var(--muted)]">
-          ไม่พบทรัพย์สินที่ตรงกับ &quot;{q}&quot;
+        <div className="glass-panel relative isolate overflow-hidden rounded-2xl p-10 text-center text-[var(--muted)]">
+          <PhotoBackdrop image="it-storage" fade="bottom" />
+          <AppIcon name="search" className="mx-auto mb-3 h-8 w-8 text-[var(--primary)]" />
+          <p>ไม่พบทรัพย์สินที่ตรงกับ &quot;{q}&quot;</p>
         </div>
       )}
 
@@ -176,9 +179,9 @@ export default async function TransferPage({ searchParams }: Props) {
                   {canMutate ? (
                     <Link
                       href={`/transfer?assetId=${asset.id}`}
-                      className="whitespace-nowrap rounded-xl bg-[var(--primary)] px-4 py-2 text-xs font-semibold text-white transition hover:bg-[var(--primary-hover)]"
+                      className="primary-action action-sm whitespace-nowrap"
                     >
-                      โอนย้ายทรัพย์สินนี้ →
+                      โอนย้ายทรัพย์สินนี้ <AppIcon name="arrow-right" className="h-4 w-4" />
                     </Link>
                   ) : (
                     <span className="rounded-xl border border-stone-300 bg-stone-100 px-4 py-2 text-xs font-medium text-stone-500">
@@ -193,7 +196,8 @@ export default async function TransferPage({ searchParams }: Props) {
       )}
 
       {!q && (
-        <div className="glass-panel rounded-2xl p-10 text-center text-[var(--muted)]">
+        <div className="glass-panel relative isolate overflow-hidden rounded-2xl p-10 text-center text-[var(--muted)]">
+          <PhotoBackdrop image="office-desk" fade="bottom" />
           <AppIcon name="package" className="mx-auto mb-3 h-10 w-10 text-[var(--primary)]" />
           <p className="text-sm">ป้อนชื่อหรือรหัสทรัพย์สินเพื่อเริ่มต้น</p>
         </div>
@@ -202,12 +206,16 @@ export default async function TransferPage({ searchParams }: Props) {
       <section className="glass-panel overflow-hidden rounded-2xl">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-black/6 px-5 py-3">
           <h2 className="font-semibold">ประวัติการโอนย้ายล่าสุด</h2>
-          <Link href="/reports?view=transfers" className="text-xs font-medium text-[var(--primary)] hover:underline">ดูรายงานทั้งหมด</Link>
+          <Link href="/reports?view=transfers" className="inline-flex items-center gap-1 text-xs font-medium text-[var(--primary)] hover:underline">ดูรายงานทั้งหมด <AppIcon name="arrow-right" className="h-3.5 w-3.5" /></Link>
         </div>
         {!recent.schemaReady ? (
           <p className="px-5 py-6 text-sm text-amber-700">ยังไม่ได้เปิดใช้ประวัติการโอนย้าย (ต้องรัน database/add_asset_lifecycle.sql)</p>
         ) : recent.rows.length === 0 ? (
-          <p className="px-5 py-6 text-center text-sm text-[var(--muted)]">ยังไม่มีการโอนย้าย</p>
+          <div className="relative isolate overflow-hidden px-5 py-10 text-center text-sm text-[var(--muted)]">
+            <PhotoBackdrop image="office-desk" fade="bottom" />
+            <AppIcon name="history" className="mx-auto mb-2 h-8 w-8 text-[var(--primary)]" />
+            <p>ยังไม่มีการโอนย้าย</p>
+          </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[720px] text-sm">

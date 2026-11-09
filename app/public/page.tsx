@@ -20,6 +20,7 @@ import { SplashScreen } from "@/app/_components/splash-screen";
 import { SPLASH_SEEN_SCRIPT } from "@/lib/splash";
 import { TopNavigation } from "@/app/_components/top-navigation";
 import { AppIcon } from "@/app/_components/ui/icon";
+import { PhotoBackdrop } from "@/app/_components/ui/photo-backdrop";
 import { getDashboardData } from "@/lib/atacs";
 import { buildDashboardSummary, readDashboardFilters } from "@/lib/dashboard-summary";
 import { formatThaiDateTime } from "@/lib/date-format";
@@ -50,6 +51,8 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
   const categoryLabel = summary.categoryOptions.find((category) => category.key === filters.category)?.label.replace(/^\d+\.\s*/, "");
   const describe = [filters.fy && `ได้มาในปีงบประมาณ ${filters.fy}`, categoryLabel].filter(Boolean).join(" · ");
   const cost = compactBaht(summary.totalCost);
+  const typeById = new Map(facilitySurveys.map((survey) => [survey.facilityId, survey.facilityTypeCode]));
+  const facilityFilterOptions = summary.facilityOptions.map((facility) => ({ ...facility, typecode: typeById.get(facility.id) || null }));
   const broken = summary.statuses.find((status) => status.value === "Broken")?.count ?? 0;
 
   return (
@@ -59,11 +62,11 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
       <script dangerouslySetInnerHTML={{ __html: SPLASH_SEEN_SCRIPT }} />
       <TopNavigation current="public" user={null} />
 
-      <section aria-labelledby="public-heading" className="rounded-2xl bg-[linear-gradient(135deg,#0f3d5e_0%,#15548f_60%,#1687d9_100%)] px-6 py-8 text-white sm:px-10">
+      <section aria-labelledby="public-heading" className="relative isolate overflow-hidden rounded-2xl bg-[#14507f] px-6 py-8 text-white sm:px-10">
+        <PhotoBackdrop image="meeting-room" opacity="opacity-[0.14]" fade="left" />
         <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-2xl">
-            <p className="text-xs font-semibold text-sky-100">ATACS · สำนักงานสาธารณสุขจังหวัดสตูล</p>
-            <h1 id="public-heading" className="section-title mt-3 text-3xl font-semibold leading-tight sm:text-4xl">
+            <h1 id="public-heading" className="section-title text-3xl font-semibold leading-tight sm:text-4xl">
               {summary.categoryLabel ? summary.categoryLabel.replace(/^\d+\.\s*/, "") : "ทะเบียนทรัพย์สินและครุภัณฑ์ จ.สตูล"}
             </h1>
             <p className="mt-3 text-sm leading-7 text-sky-50">
@@ -73,11 +76,11 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
             </p>
           </div>
           <div className="flex flex-wrap gap-3">
-            <Link href="/login" className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-white px-5 text-sm font-semibold text-[#15548f] transition hover:bg-sky-50">
+            <Link href="/login" className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-white px-5 text-sm font-semibold text-[#14507f] transition-colors duration-200 hover:bg-sky-50">
               <AppIcon name="key" className="h-4 w-4" /> เข้าสู่ระบบสำหรับเจ้าหน้าที่
             </Link>
-            <Link href="/register" className="inline-flex min-h-11 items-center rounded-xl border border-white/50 px-5 text-sm font-semibold text-white transition hover:bg-white/10">
-              ลงทะเบียนผู้ใช้งาน
+            <Link href="/register" className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-white/60 px-5 text-sm font-semibold text-white transition-colors duration-200 hover:bg-white/10">
+              <AppIcon name="user" className="h-4 w-4" /> ลงทะเบียนผู้ใช้งาน
             </Link>
           </div>
         </div>
@@ -94,7 +97,7 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
         values={filters}
         fiscalYears={summary.fiscalYearOptions}
         districts={summary.districtOptions}
-        facilities={summary.facilityOptions}
+        facilities={facilityFilterOptions}
         categories={summary.categoryOptions}
       />
 
@@ -106,6 +109,7 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
           label={summary.categoryLabel ? summary.categoryLabel.replace(/^\d+\.\s*/, "") : "ครุภัณฑ์ทั้งหมด"}
           value={numberFormat.format(summary.total)}
           unit="รายการ"
+          backdrop="it-storage"
           detail={<>
             {numberFormat.format(summary.facilityCount)} หน่วยงาน · {numberFormat.format(summary.districtCount)} อำเภอ
             {summary.categoryLabel ? null : <> · {numberFormat.format(summary.categoryCount)} ประเภท</>}
@@ -116,12 +120,14 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
           label="พร้อมใช้งาน"
           value={numberFormat.format(summary.active)}
           unit="รายการ"
+          backdrop="office-desk"
           detail={<><span className="font-semibold text-[#006300]">{percent(summary.activeRate)}</span> ของครุภัณฑ์ตามตัวกรอง · ชำรุด {numberFormat.format(broken)} รายการ</>}
         />
         <StatTile
           label="มูลค่ารวม (ราคาทุน)"
           value={cost.value}
           unit={cost.unit}
+          backdrop="meeting-room"
           detail={<>{baht(summary.totalCost)} บาท · มีราคา {numberFormat.format(summary.priced)} จาก {numberFormat.format(summary.total)} รายการ</>}
         />
       </div>

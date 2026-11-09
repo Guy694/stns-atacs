@@ -1,12 +1,13 @@
 "use client";
 
 import { useActionState, useState, useId } from "react";
-import Link from "next/link";
-
 import { transferAssetAction } from "@/app/(main)/transfer/actions";
 import type { AssetWithFacility } from "@/lib/assets";
 import { todayBangkok } from "@/lib/local-date";
 import { submitWithoutReset } from "@/app/_components/ui/submit-without-reset";
+import { ActionIconLink } from "@/app/_components/ui/action-icon-button";
+import { FacilitySelect } from "@/app/_components/ui/facility-select";
+import { AppIcon } from "@/app/_components/ui/icon";
 
 type SurveyOption = {
   id: number;
@@ -33,12 +34,8 @@ export function TransferForm({ asset, surveys, workGroups }: Props) {
   const destinationGroups = workGroups.filter((group) => group.facilityId === destinationFacilityId);
   const today = todayBangkok();
 
-  // Group surveys by district for the dropdown
-  const grouped = surveys.reduce<Record<string, SurveyOption[]>>((acc, s) => {
-    const d = s.district_name ?? "อื่นๆ";
-    (acc[d] ??= []).push(s);
-    return acc;
-  }, {});
+  // One survey per facility: the option value is the survey id, shown by facility name.
+  const destinations = surveys.map((s) => ({ id: s.id, name: s.facility_name ?? `หน่วยงาน #${s.facility_id}`, districtName: s.district_name }));
 
   return (
     <form onSubmit={submitWithoutReset(formAction)} className="space-y-5">
@@ -80,24 +77,15 @@ export function TransferForm({ asset, surveys, workGroups }: Props) {
         <label htmlFor={`${fieldId}-newSurveyId`} className="block text-sm font-medium mb-1">
           หน่วยงานปลายทาง <span className="text-rose-500">*</span>
         </label>
-        <select id={`${fieldId}-newSurveyId`}
+        <FacilitySelect
+          id={`${fieldId}-newSurveyId`}
           name="newSurveyId"
           required
+          facilities={destinations}
+          placeholder="พิมพ์ค้นหาหน่วยงานปลายทาง…"
           value={surveyId}
-          onChange={(event) => setSurveyId(event.target.value)}
-          className="w-full rounded-xl border border-[var(--line)] bg-white/80 px-3 py-2.5 text-sm outline-none focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/15"
-        >
-          <option value="" disabled>-- เลือกหน่วยงานปลายทาง --</option>
-          {Object.entries(grouped).sort().map(([district, items]) => (
-            <optgroup key={district} label={`อ.${district}`}>
-              {items.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.facility_name}
-                </option>
-              ))}
-            </optgroup>
-          ))}
-        </select>
+          onChange={setSurveyId}
+        />
       </div>
 
       {/* Work group of the destination facility */}
@@ -176,17 +164,13 @@ export function TransferForm({ asset, surveys, workGroups }: Props) {
 
       {/* Actions */}
       <div className="flex items-center justify-between pt-2">
-        <Link
-          href={`/assets/${asset.id}`}
-          className="rounded-xl border border-[var(--line)] bg-white/80 px-5 py-2.5 text-sm font-medium text-[var(--muted)] transition hover:bg-white"
-        >
-          ยกเลิก
-        </Link>
+        <ActionIconLink href={`/assets/${asset.id}`} icon="close" label="ยกเลิก" />
         <button
           type="submit"
           disabled={pending}
-          className="rounded-xl bg-[var(--primary)] px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-[var(--primary-hover)] disabled:opacity-60"
+          className="primary-action"
         >
+          <AppIcon name="repeat" className="h-4 w-4" />
           {pending ? "กำลังบันทึก…" : "บันทึกการโอนย้าย"}
         </button>
       </div>

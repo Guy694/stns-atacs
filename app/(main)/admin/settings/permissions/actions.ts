@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { type AppRole, type PermissionKey, isValidRolePermission, upsertRolePermission } from "@/lib/role-permissions";
+import { userFacingError } from "@/lib/schema-errors";
 
 async function requirePermissionManager() {
   const user = await getCurrentUser();
@@ -48,7 +49,7 @@ export async function updateRolePermissionAction(_prev: string | null, formData:
     revalidatePath("/admin/settings/permissions");
     revalidatePath("/");
   } catch (error) {
-    return error instanceof Error ? error.message : "เกิดข้อผิดพลาด";
+    return userFacingError(error, "เกิดข้อผิดพลาด");
   }
 
   return null;

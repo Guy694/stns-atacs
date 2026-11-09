@@ -54,7 +54,7 @@ export function MenuVisibilityTable({ rows }: { rows: MenuVisibilityRow[] }) {
           const enabled = checked[item.key];
           const changed = enabled !== item.enabled;
           return (
-            <tr key={item.key} className="align-middle hover:bg-[var(--primary-soft)]/30">
+            <tr key={item.key} className="align-middle">
               <td className="px-5 py-4">
                 <div className="flex min-w-0 items-start gap-3">
                   <span className="rounded-xl bg-[var(--primary-soft)] p-2 text-[var(--primary-text)]">
@@ -80,15 +80,23 @@ export function MenuVisibilityTable({ rows }: { rows: MenuVisibilityRow[] }) {
                 {changed && <p className="mt-1 text-[11px] font-medium text-[var(--state-warning-fg)]">ยังไม่บันทึก</p>}
               </td>
               <td className="px-5 py-4 text-right">
-                <label className="inline-flex cursor-pointer items-center justify-end gap-2">
+                <label className="inline-flex min-h-11 cursor-pointer items-center justify-end gap-2" title={enabled ? "แสดงในเมนู — กดเพื่อซ่อน" : "ซ่อนจากเมนู — กดเพื่อแสดง"}>
                   <span className="sr-only">เปิดใช้งานเมนู {item.label}</span>
-                  <input
-                    type="checkbox"
-                    name={`menu:${item.key}`}
-                    checked={enabled}
-                    onChange={(event) => setChecked((current) => ({ ...current, [item.key]: event.target.checked }))}
-                    className="h-5 w-5 rounded border-black/20 text-[var(--accent)] accent-[var(--accent)]"
-                  />
+                  <span className="relative inline-flex h-6 w-11 shrink-0">
+                    <input
+                      type="checkbox"
+                      role="switch"
+                      name={`menu:${item.key}`}
+                      checked={enabled}
+                      onChange={(event) => setChecked((current) => ({ ...current, [item.key]: event.target.checked }))}
+                      className="peer sr-only"
+                    />
+                    <span
+                      aria-hidden="true"
+                      className="absolute inset-0 rounded-full border border-[var(--state-neutral-border)] bg-[var(--state-neutral-bg)] transition-colors duration-200 peer-checked:border-[var(--accent-strong)] peer-checked:bg-[var(--accent-strong)] peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-[var(--accent)]"
+                    />
+                    <span aria-hidden="true" className="absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform duration-200 peer-checked:translate-x-5" />
+                  </span>
                 </label>
               </td>
             </tr>

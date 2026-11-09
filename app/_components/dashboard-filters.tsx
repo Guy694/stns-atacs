@@ -3,14 +3,15 @@
 import { usePathname, useRouter } from "next/navigation";
 import { useId, useState, useTransition } from "react";
 
+import { FacilitySelect } from "@/app/_components/ui/facility-select";
 import { AppIcon } from "@/app/_components/ui/icon";
 
-type Option = { value: string; label: string };
 type Props = {
   values: { fy: string; district: string; facility: string; category: string };
   fiscalYears: number[];
   districts: string[];
-  facilities: Array<{ id: number; name: string; district: string }>;
+  /** `typecode` lets the facility dropdown group สสจ. → สสอ. → รพท. → รพช. → รพ.สต.; without it names are used. */
+  facilities: Array<{ id: number; name: string; district: string; typecode?: string | null }>;
   categories: Array<{ key: string; label: string }>;
   lockedFacility?: boolean;
 };
@@ -50,9 +51,9 @@ export function DashboardFilters({ values, fiscalYears, districts, facilities, c
     navigate(next);
   }
 
-  const facilityOptions: Option[] = facilities
+  const facilityOptions = facilities
     .filter((facility) => !current.district || facility.district === current.district)
-    .map((facility) => ({ value: String(facility.id), label: current.district ? facility.name : `${facility.name} · อ.${facility.district}` }));
+    .map((facility) => ({ id: facility.id, name: facility.name, typecode: facility.typecode, districtName: current.district ? "" : `อ.${facility.district}` }));
   const activeCount = Object.values(current).filter(Boolean).length;
 
   return (
@@ -64,10 +65,10 @@ export function DashboardFilters({ values, fiscalYears, districts, facilities, c
         onClick={() => setOpen((value) => !value)}
         className="flex min-h-11 w-full items-center gap-2 rounded-xl px-2 text-sm font-semibold text-[var(--primary-text)] sm:hidden"
       >
-        <AppIcon name="layers" className="h-4 w-4" />
+        <AppIcon name="filter" className="h-4 w-4" />
         ตัวกรอง{activeCount ? ` (${activeCount} ที่เลือก)` : ""}
         {pending && <span className="text-xs font-normal text-[var(--muted)]">กำลังอัปเดต…</span>}
-        <AppIcon name="arrow-down" className={`ml-auto h-4 w-4 transition ${open ? "rotate-180" : ""}`} />
+        <AppIcon name="chevron-down" className={`ml-auto h-4 w-4 transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
       </button>
       <div id={panelId} className={`${open ? "grid" : "hidden"} gap-3 p-1 pt-2 sm:grid sm:grid-cols-2 sm:p-0 xl:grid-cols-[repeat(4,minmax(0,1fr))_auto] xl:items-end`}>
         <label className="filter-label">ปีงบประมาณ (ที่ได้มา)
@@ -82,12 +83,18 @@ export function DashboardFilters({ values, fiscalYears, districts, facilities, c
             {districts.map((district) => <option key={district} value={district}>อ.{district}</option>)}
           </select>
         </label>
-        <label className="filter-label">หน่วยงาน
-          <select className={control} value={current.facility} disabled={lockedFacility || facilityOptions.length <= 1} onChange={(event) => apply({ facility: event.target.value })}>
-            <option value="">ทุกหน่วยงาน{current.district ? `ใน อ.${current.district}` : ""}</option>
-            {facilityOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-          </select>
-        </label>
+        <div className="filter-label">
+          <span>หน่วยงาน</span>
+          <FacilitySelect
+            className="mt-1"
+            facilities={facilityOptions}
+            value={current.facility}
+            onChange={(facility) => apply({ facility })}
+            emptyLabel={`ทุกหน่วยงาน${current.district ? `ใน อ.${current.district}` : ""}`}
+            disabled={lockedFacility || facilityOptions.length <= 1}
+            aria-label="หน่วยงาน"
+          />
+        </div>
         <label className="filter-label">ประเภทครุภัณฑ์
           <select className={control} value={current.category} onChange={(event) => apply({ category: event.target.value })}>
             <option value="">ทุกประเภท</option>
@@ -99,8 +106,9 @@ export function DashboardFilters({ values, fiscalYears, districts, facilities, c
             type="button"
             disabled={activeCount === 0 || pending}
             onClick={() => navigate({ fy: "", district: "", facility: "", category: "" })}
-            className="filter-button border border-[var(--line)] font-medium text-[var(--primary-text)] transition hover:bg-[var(--primary-soft)] disabled:cursor-not-allowed disabled:text-[var(--muted)] disabled:hover:bg-transparent"
+            className="filter-button border border-[var(--line)] font-medium text-[var(--primary-text)] transition-colors duration-200 hover:bg-[var(--primary-soft)] disabled:cursor-not-allowed disabled:text-[var(--muted)] disabled:hover:bg-transparent"
           >
+            <AppIcon name="undo" className="h-4 w-4" />
             ล้างตัวกรอง{activeCount ? ` (${activeCount})` : ""}
           </button>
           <span role="status" className="text-xs text-[var(--muted)]">{pending ? "กำลังอัปเดต…" : ""}</span>

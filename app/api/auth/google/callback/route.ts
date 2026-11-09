@@ -15,6 +15,7 @@ import { readRequestIp, recordSecurityEvent } from "@/lib/security";
 import { safeNextPath } from "@/lib/input-guards";
 import { withBasePath } from "@/lib/base-path";
 import { getPublicRequestOrigin, getPublicRequestUrl } from "@/lib/request-url";
+import { userFacingError } from "@/lib/schema-errors";
 
 const STATE_COOKIE_NAME = "atacs_google_state";
 const NEXT_COOKIE_NAME = "atacs_google_next";
@@ -178,6 +179,6 @@ export async function GET(req: NextRequest) {
       title: "Google login ไม่สำเร็จ",
       details: { สาเหตุ: message, ...context },
     });
-    return redirectWithDeletedState(loginUrl(req, message, nextPath));
+    return redirectWithDeletedState(loginUrl(req, userFacingError(error, "ไม่สามารถเข้าสู่ระบบด้วย Google ได้"), nextPath));
   }
 }

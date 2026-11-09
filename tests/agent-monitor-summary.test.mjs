@@ -148,3 +148,14 @@ test("ร้อยละปัดเป็นจำนวนเต็มแล�
   assert.equal(summary.percentOf(2, 3), 67);
   assert.equal(summary.percentOf(0, 0), 0);
 });
+
+test("X1: effective status ignores a stale 'online' in the DB when the cron did not run", () => {
+  const now = new Date("2026-11-09T12:00:00+07:00");
+  const stale = { lastSeenAt: "2026-06-26T10:00:00+07:00", status: "online", isActive: true };
+  const fresh = { lastSeenAt: "2026-11-09T11:30:00+07:00", status: "online", isActive: true };
+  assert.equal(summary.effectiveAgentStatus(stale, now, 300), "offline");
+  assert.equal(summary.effectiveAgentStatus(fresh, now, 300), "online");
+  assert.equal(summary.effectiveAgentStatus({ ...fresh, status: "offline" }, now, 300), "offline", "trust an explicit offline");
+  assert.equal(summary.effectiveAgentStatus({ lastSeenAt: null, status: "online", isActive: true }, now, 300), "offline", "never reported is not online");
+  assert.equal(summary.effectiveAgentStatus({ ...fresh, isActive: false }, now, 300), "inactive");
+});

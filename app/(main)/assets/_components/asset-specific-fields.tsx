@@ -3,6 +3,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { createInlineAssetSubtype, getAssetSubtypeEditor } from "@/app/(main)/assets/subtype-actions";
 import { ASSET_DETAIL_FIELDS, type AssetExtensions, type AssetSubtype } from "@/lib/asset-details";
 import { assetClassLabel } from "@/lib/asset-classes";
+import { AppIcon } from "@/app/_components/ui/icon";
 
 function SubtypePicker({ assetClass, current, onBusyChange }: { assetClass: string; current?: AssetExtensions[string]; onBusyChange?: (busy: boolean) => void }) {
   const [options, setOptions] = useState<AssetSubtype[] | null>(null);
@@ -61,7 +62,7 @@ function SubtypePicker({ assetClass, current, onBusyChange }: { assetClass: stri
           {options.filter(o => o.assetClass === assetClass && (o.isActive || o.id === current?.subtypeId)).map(o => <option key={o.id} value={o.id}>{o.name}{o.isActive ? "" : " (ปิดใช้งานแล้ว)"}</option>)}
         </select>
       </label>
-      {canManage && <button ref={buttonRef} type="button" aria-expanded={adding} aria-controls={`${prefix}-add`} onClick={() => { setAdding(true); setSaveError(""); setNotice(""); }} className="rounded-xl border border-black/15 px-3 py-2 text-sm font-medium hover:bg-white">+ เพิ่มประเภทย่อย</button>}
+      {canManage && <button ref={buttonRef} type="button" aria-expanded={adding} aria-controls={`${prefix}-add`} onClick={() => { setAdding(true); setSaveError(""); setNotice(""); }} className="inline-flex min-h-10 items-center gap-1.5 rounded-xl border border-black/15 px-3 text-sm font-medium transition-colors duration-200 hover:bg-[var(--primary-soft)]"><AppIcon name="plus" size={16} /> เพิ่มประเภทย่อย</button>}
     </div>
     {!canManage && <p className="text-sm text-[var(--muted)]">หากต้องการเพิ่มประเภทย่อย กรุณาติดต่อผู้ดูแลระบบ</p>}
     {canManage && adding && <div id={`${prefix}-add`} className="space-y-2 rounded-xl border border-black/15 p-3">
@@ -71,7 +72,7 @@ function SubtypePicker({ assetClass, current, onBusyChange }: { assetClass: stri
       }} />
       {saveError && <p id={`${prefix}-error`} role="alert" className="text-sm text-red-700">{saveError}</p>}
       <div className="flex flex-wrap gap-2">
-        <button type="button" disabled={pending} onClick={() => void addSubtype()} className="rounded-lg bg-[var(--accent-strong)] px-3 py-2 text-sm font-medium text-white disabled:opacity-50">{pending ? "กำลังเพิ่ม…" : "เพิ่มและเลือกใช้"}</button>
+        <button type="button" disabled={pending} onClick={() => void addSubtype()} className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--accent-strong)] px-3 py-2 text-sm font-medium text-white disabled:opacity-50"><AppIcon name="plus" size={16} />{pending ? "กำลังเพิ่ม…" : "เพิ่มและเลือกใช้"}</button>
         <button type="button" disabled={pending} onClick={() => { setAdding(false); setName(""); setSaveError(""); buttonRef.current?.focus(); }} className="rounded-lg border border-black/15 px-3 py-2 text-sm disabled:opacity-50">ยกเลิก</button>
       </div>
     </div>}

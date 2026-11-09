@@ -12,7 +12,7 @@ const read = (file) => fs.readFileSync(new URL(`../${file}`, import.meta.url), "
  */
 function harness({ device = {}, asset = {}, hasDeletedAt = false, execute, createAsset } = {}) {
   const writes = [], assetWrites = [], reads = [];
-  const deviceRow = { id: 1, facility_id: 10, agent_uuid: "agent-1", device_fingerprint: "oldfingerprint", linked_asset_id: null, status: "online", ...device };
+  const deviceRow = { id: 1, facility_id: 10, agent_uuid: "agent-1", device_fingerprint: "abababababababababababababababababababababababababababababababab", linked_asset_id: null, status: "online", ...device };
   const assetRow = { id: 7, survey_id: 99, asset_class: "IT", asset_category: "Hardware", device_type: "Desktop", facility_id: 10, current_status: "Active", deleted_at: null, ...asset };
   const agent = loadTs("lib/agent.ts", {
     "@/lib/facility-work-groups": {},
@@ -43,7 +43,7 @@ function harness({ device = {}, asset = {}, hasDeletedAt = false, execute, creat
   });
   const report = (payload = {}) => agent.reportAgentInventory({
     agentId: "agent-1", agentKey: "secret",
-    payload: { fingerprint: "fingerprint-1", hostname: "PC-1", serialNumber: "SERIAL-1", deviceType: "Desktop", operatingSystem: "Windows", ...payload },
+    payload: { fingerprint: "f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1", hostname: "PC-1", serialNumber: "SERIAL-1", deviceType: "Desktop", operatingSystem: "Windows", ...payload },
   });
   return { agent, report, writes, assetWrites, reads };
 }
@@ -139,7 +139,7 @@ test("G7: a duplicate AGT registration number reuses the existing asset instead 
   });
   // nothing matches by serial/hostname, so the auto-create path runs
   const originalReads = ctx.reads;
-  const result = await ctx.agent.reportAgentInventory({ agentId: "agent-1", agentKey: "secret", payload: { fingerprint: "fingerprint-1", deviceType: "Desktop" } });
+  const result = await ctx.agent.reportAgentInventory({ agentId: "agent-1", agentKey: "secret", payload: { fingerprint: "f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1", deviceType: "Desktop" } });
   assert.equal(result.linkedAssetId, 55);
   assert.ok(originalReads.some((read) => read.sql.includes("a.asset_registration_no = ?") && read.values.includes("AGT-010-000001")));
   assert.equal(ctx.assetWrites[0][0], "update");

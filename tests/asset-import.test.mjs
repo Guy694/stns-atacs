@@ -28,6 +28,7 @@ function setup({ user = officer, create = true, update = true, existingFacility 
   const route = load("../app/api/import/assets/route.ts", {
     "@/lib/spreadsheet-parse": loadTs("lib/spreadsheet-parse.ts"),
     "@/lib/local-date": loadTs("lib/local-date.ts"),
+    "@/lib/schema-errors": loadTs("lib/schema-errors.ts"),
     "@/lib/asset-details": loadTs("lib/asset-details.ts"),
     "@/lib/asset-import-columns": loadTs("lib/asset-import-columns.ts"),
     "next/server": { NextResponse: Response },

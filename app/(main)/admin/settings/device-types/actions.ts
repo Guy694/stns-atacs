@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 
 import { getCurrentUser } from "@/lib/auth";
 import { createDeviceType, toggleDeviceTypeActive, updateDeviceType } from "@/lib/device-types";
+import { userFacingError } from "@/lib/schema-errors";
 
 async function requireAdmin() {
   const user = await getCurrentUser();
@@ -24,7 +25,7 @@ export async function createDeviceTypeAction(_prev: string | null, fd: FormData)
     await createDeviceType(name, category);
     REVALIDATE();
   } catch (err) {
-    return err instanceof Error ? err.message : "เกิดข้อผิดพลาด";
+    return userFacingError(err, "เกิดข้อผิดพลาด");
   }
   return null;
 }
@@ -41,7 +42,7 @@ export async function updateDeviceTypeAction(_prev: string | null, fd: FormData)
     await updateDeviceType(id, name, category);
     REVALIDATE();
   } catch (err) {
-    return err instanceof Error ? err.message : "เกิดข้อผิดพลาด";
+    return userFacingError(err, "เกิดข้อผิดพลาด");
   }
   return null;
 }

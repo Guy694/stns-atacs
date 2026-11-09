@@ -2,6 +2,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import QRCode from "qrcode";
 
+import { AppIcon } from "@/app/_components/ui/icon";
 import { PrintToolbar } from "@/app/print/_components/print-toolbar";
 import { isTerminalAssetStatus } from "@/lib/asset-status";
 import { listAssets, listAssetsByIds, type AssetWithFacility } from "@/lib/assets";
@@ -173,7 +174,7 @@ export default async function StickerSheetPage({ searchParams }: Props) {
           )}
         </div>
         <div className="flex flex-wrap items-center gap-3 sm:col-span-2">
-          <button type="submit" className="min-h-11 rounded-xl border border-stone-300 bg-stone-50 px-5 font-semibold hover:bg-stone-100">ปรับตัวอย่าง</button>
+          <button type="submit" className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-stone-300 bg-stone-50 px-5 font-semibold transition-colors duration-200 hover:bg-stone-100"><AppIcon name="refresh" size={16} /> ปรับตัวอย่าง</button>
           <p className="text-xs text-stone-600">
             ตอนพิมพ์: กระดาษ A4 · ขนาด (Scale) 100% / “ขนาดจริง” · ระยะขอบ “ไม่มี” · ปิดหัวกระดาษและท้ายกระดาษ · เลือกเครื่องพิมพ์ “บันทึกเป็น PDF” เพื่อได้ไฟล์ PDF
             ควรทดลองพิมพ์ 1 แผ่นบนกระดาษธรรมดาแล้วทาบกับแผ่นสติ๊กเกอร์ก่อน หากเลื่อนให้ปรับ “เลื่อนซ้าย–ขวา / ขึ้น–ลง”
@@ -182,7 +183,8 @@ export default async function StickerSheetPage({ searchParams }: Props) {
       </form>
 
       {!pages.length && (
-        <p className="mx-auto max-w-[210mm] rounded-2xl bg-white p-6 text-center text-sm text-stone-600 shadow print:hidden">
+        <p className="mx-auto flex max-w-[210mm] flex-col items-center gap-2 rounded-2xl bg-white p-6 text-center text-sm text-stone-600 shadow print:hidden">
+          <AppIcon name="qr" size={28} className="text-stone-400" />
           ไม่มีครุภัณฑ์ที่จะพิมพ์ — เปิดหน้านี้จากหน้าหน่วยงาน (พิมพ์สติ๊กเกอร์ A4) หรือหน้าครุภัณฑ์
         </p>
       )}

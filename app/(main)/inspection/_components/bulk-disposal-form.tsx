@@ -6,6 +6,7 @@ import { useActionState, useState } from "react";
 import { bulkDisposalFromInspectionAction, type BulkDisposalResult } from "@/app/(main)/disposal/actions";
 import { DISPOSAL_METHODS } from "@/lib/disposal-options";
 import { todayBangkok } from "@/lib/local-date";
+import { AppIcon } from "@/app/_components/ui/icon";
 
 type Row = { assetId: number; number: string; name: string; outcome: "broken" | "unused" | "missing"; outcomeLabel: string; pendingRequestId: number | null };
 
@@ -84,7 +85,8 @@ export function BulkDisposalForm({ inspectionId, roundName, rows }: { inspection
           )}
         </div>
       )}
-      <button disabled={pending || selected.size === 0} className="min-h-11 rounded-xl bg-rose-600 px-5 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-50">
+      <button disabled={pending || selected.size === 0} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-rose-600 px-5 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:opacity-50">
+        <AppIcon name="archive" className="h-4 w-4" />
         {pending ? "กำลังสร้างคำขอ…" : `เสนอจำหน่าย/สูญหาย ${selected.size} รายการ`}
       </button>
       <p className="text-xs text-[var(--muted)]">สถานะในทะเบียนยังไม่เปลี่ยนจนกว่าผู้มีสิทธิ์อนุมัติแต่ละคำขอ ผู้เสนออนุมัติคำขอของตนเองไม่ได้</p>

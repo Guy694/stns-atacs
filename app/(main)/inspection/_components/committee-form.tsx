@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 
 import { saveCommitteeAction } from "@/app/(main)/inspection/actions";
+import { AppIcon } from "@/app/_components/ui/icon";
 
 type Member = { seq: number; role: "chair" | "member"; fullName: string; position: string };
 const ROLE_LABELS = { chair: "ประธานกรรมการ", member: "กรรมการ" } as const;
@@ -52,7 +53,8 @@ export function CommitteeForm({ inspectionId, members, canEdit, orderNo = "", or
         );
       })}
       <div className="flex flex-wrap items-center gap-3 pt-1">
-        <button type="submit" disabled={pending} className="min-h-10 rounded-lg bg-[var(--accent-strong)] px-4 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60">
+        <button type="submit" disabled={pending} className="primary-action">
+          <AppIcon name="check" className="h-4 w-4" />
           {pending ? "กำลังบันทึก…" : "บันทึกคณะกรรมการ"}
         </button>
         <span role="status" className={`text-sm ${result && result !== "saved" ? "text-rose-700" : "text-[#006300]"}`}>

@@ -5,6 +5,8 @@ import { useActionState } from "react";
 import { cancelLoanAction, createLoanAction, returnLoanAction } from "@/app/(main)/loans/actions";
 import { todayBangkok } from "@/lib/local-date";
 import { SubmitButton } from "@/app/_components/ui/submit-button";
+import { actionIconClass } from "@/app/_components/ui/action-icon-button";
+import { AppIcon } from "@/app/_components/ui/icon";
 
 const field = "mt-1 w-full rounded-xl border border-[var(--line)] bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/15";
 
@@ -44,7 +46,8 @@ export function NewLoanForm({ assetId }: { assetId: number }) {
         <textarea name="purpose" required rows={3} maxLength={2000} className={field} placeholder="เช่น ใช้ออกหน่วยคัดกรองโรคที่ รพ.สต. ..." />
       </label>
       <p className="text-xs text-[var(--muted)]">การยืมไม่เปลี่ยนหน่วยงานเจ้าของ หากนำไปใช้ถาวรให้โอนย้ายแทน</p>
-      <button disabled={pending} className="rounded-xl bg-[var(--primary)] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[var(--primary-hover)] disabled:opacity-60">
+      <button disabled={pending} className="primary-action">
+        <AppIcon name="check" className="h-4 w-4" />
         {pending ? "กำลังบันทึก…" : "บันทึกการยืม"}
       </button>
     </form>
@@ -70,7 +73,7 @@ export function ReturnLoanForm({ loanId, loanedOn }: { loanId: number; loanedOn:
       <label className="text-xs text-[var(--muted)]">หมายเหตุ
         <input name="returnNote" maxLength={500} className={field} />
       </label>
-      <button disabled={pending} className="min-h-10 rounded-xl bg-emerald-600 px-4 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60">{pending ? "…" : "รับคืน"}</button>
+      <button disabled={pending} className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-4 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-60"><AppIcon name="undo" className="h-4 w-4" />{pending ? "…" : "รับคืน"}</button>
       {result && <p role="alert" className="text-xs text-rose-700 sm:col-span-4">{result}</p>}
     </form>
   );
@@ -80,14 +83,15 @@ export function CancelLoanButton({ loanId }: { loanId: number }) {
   const [result, formAction] = useActionState(cancelLoanAction, null);
   if (result === "saved") return <span className="text-xs text-[var(--muted)]">ยกเลิกแล้ว</span>;
   return (
-    <form action={formAction} className="inline">
+    <form action={formAction} className="inline-flex items-center" title="ยกเลิกรายการยืม (บันทึกผิด)">
       <input type="hidden" name="loanId" value={loanId} />
       <SubmitButton
-        pendingText="กำลังยกเลิก…"
+        ariaLabel="ยกเลิกรายการยืม (บันทึกผิด)"
+        pendingText={<AppIcon name="refresh" className="h-4 w-4 animate-spin" />}
         confirm={{ title: "ยกเลิกรายการยืมนี้?", text: "ใช้เมื่อบันทึกผิดเท่านั้น รายการจะถูกทำเครื่องหมายว่ายกเลิก", confirmText: "ยกเลิกรายการยืม", danger: true }}
-        className="text-xs text-rose-700 hover:underline"
+        className={actionIconClass("danger")}
       >
-        ยกเลิก (บันทึกผิด)
+        <AppIcon name="close" className="h-4 w-4" />
       </SubmitButton>
       {result && <span role="alert" className="ml-2 text-xs text-rose-700">{result}</span>}
     </form>

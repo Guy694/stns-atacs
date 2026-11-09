@@ -10,10 +10,11 @@ import type { RowDataPacket } from "mysql2/promise";
 
 import { parseAssetFields, type AssetFields } from "@/lib/asset-input";
 import { findActiveFacilityWorkGroup, findOrCreateFacilityWorkGroup } from "@/lib/facility-work-groups";
-import { isMissingSchemaError } from "@/lib/schema-errors";
+import { isMissingSchemaError, userFacingError } from "@/lib/schema-errors";
 import { getCurrentUser } from "@/lib/auth";
 import { detectImageExtension } from "@/lib/announcement-shared";
-import { createAsset, deleteAsset, findOrCreateSurvey, getAssetById, updateAsset, type AssetInput, type AssetWithFacility } from "@/lib/assets";
+import { createAsset, deleteAsset, findOrCreateSurvey, getAssetById, restoreAsset, updateAsset, type AssetInput, type AssetWithFacility } from "@/lib/assets";
+import { canAccessFacility } from "@/lib/facility-scope";
 import { writeAuditLogSafe } from "@/lib/audit";
 import { ASSET_IMAGE_URL_PREFIX, assetImageDir, assetImageUrl, safeAssetImageName } from "@/lib/upload-storage";
 import { selectRows } from "@/lib/mysql";
@@ -205,7 +206,7 @@ const DELETED_REGISTRATION_MESSAGE = "เลขทะเบียนทรัพ
 
 function assetErrorMessage(err: unknown) {
   if (isMissingSchemaError(err)) return "ฐานข้อมูลยังไม่รองรับข้อมูลบางช่อง (เช่น แหล่งเงิน วิธีได้มา ผู้ขาย ประกัน หน่วยนับ) กรุณาให้ผู้ดูแลระบบรัน database/add_registry_completeness.sql หรือเว้นช่องเหล่านี้ว่างไว้ก่อน";
-  return err instanceof Error ? err.message : "เกิดข้อผิดพลาด กรุณาลองใหม่";
+  return userFacingError(err, "เกิดข้อผิดพลาด กรุณาลองใหม่");
 }
 
 /** เพิ่มกลุ่มงานใหม่จากแบบฟอร์มได้เมื่อมีสิทธิ์จัดการกลุ่มงาน */
@@ -352,7 +353,34 @@ export async function deleteAssetAction(id: number): Promise<string | null> {
     revalidatePath(`/facilities/${asset.facilityId}`);
     revalidatePath("/");
   } catch (err) {
-    return err instanceof Error ? err.message : "เกิดข้อผิดพลาด กรุณาลองใหม่";
+    return userFacingError(err, "เกิดข้อผิดพลาด กรุณาลองใหม่");
+  }
+  return null;
+}
+
+/**
+ * กู้คืนทรัพย์สินจากถังขยะ (/assets/trash/). Admin only, and at least as strict as deleteAssetAction:
+ * needs the assets.delete permission and access to the asset's facility (checked on the locked row).
+ * Refused when an active asset now uses the same registration/serial number (see lib/assets.ts restoreAsset).
+ */
+export async function restoreAssetAction(id: number): Promise<string | null> {
+  const user = await requireAuth();
+  if (user.role !== "admin" || !canMutateAssets(user)) return "เฉพาะผู้ดูแลระบบเท่านั้นที่กู้คืนทรัพย์สินได้";
+  if (!(await hasPermission(user.role, "assets.delete"))) return "สิทธิ์การลบ/กู้คืนทรัพย์สินถูกปิดใช้งาน";
+  if (!Number.isSafeInteger(id) || id <= 0) return "ไม่พบทรัพย์สิน";
+
+  try {
+    const restored = await restoreAsset(id, {
+      userId: user.id,
+      userName: user.fullName,
+      canAccessFacility: (facilityId) => canAccessFacility(user, facilityId) && canManageAssetRecord(user, facilityId),
+    });
+    revalidatePath("/assets");
+    revalidatePath("/assets/trash");
+    revalidatePath(`/facilities/${restored.facilityId}`);
+    revalidatePath("/");
+  } catch (err) {
+    return userFacingError(err, "เกิดข้อผิดพลาด กรุณาลองใหม่");
   }
   return null;
 }

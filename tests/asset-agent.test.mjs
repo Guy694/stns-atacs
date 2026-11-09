@@ -22,7 +22,7 @@ function setup({ linkedAssetId = null, candidateClass = "IT", candidateType = "D
       },
     },
   });
-  const report = () => agent.reportAgentInventory({ agentId: "agent-1", agentKey: "secret", payload: { fingerprint: "fingerprint-1", hostname: "PC-1", serialNumber: "SERIAL-1", deviceType: "Desktop", operatingSystem: "Windows" } });
+  const report = () => agent.reportAgentInventory({ agentId: "agent-1", agentKey: "secret", payload: { fingerprint: "f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1", hostname: "PC-1", serialNumber: "SERIAL-1", deviceType: "Desktop", operatingSystem: "Windows" } });
   return { agent, report, writes, assetWrites, reads };
 }
 
@@ -109,7 +109,7 @@ test("re-enrolling an existing fingerprint reports the previous machine so the t
       },
     },
   });
-  const result = await agent.enrollAgentDevice({ enrollmentToken: "tok", fingerprint: "fingerprint-1", hostname: "PC-NEW" });
+  const result = await agent.enrollAgentDevice({ enrollmentToken: "tok", fingerprint: "f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1", hostname: "PC-NEW" });
   assert.equal(result.wasExisting, true);
   assert.deepEqual({ ...result.previous }, { hostname: "PC-OLD", status: "online", wasActive: true, lastSeenAt: "2026-11-02 09:30:00", agentVersion: "2.0" });
 });

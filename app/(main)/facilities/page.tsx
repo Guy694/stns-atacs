@@ -7,6 +7,8 @@ import { getAssetFacilityScopeIds } from "@/lib/facility-scope";
 import { SortableTh, TablePagination } from "@/app/_components/ui/data-table";
 import { pageHref, paginate, readPage, readSort, sortHref, sortRows } from "@/lib/table-sort";
 import { AppIcon } from "@/app/_components/ui/icon";
+import { PhotoBackdrop } from "@/app/_components/ui/photo-backdrop";
+import { sortFacilities } from "@/lib/facility-order";
 
 type Props = { searchParams: Promise<Record<string, string | string[] | undefined>> };
 
@@ -22,12 +24,13 @@ export default async function FacilitiesPage({ searchParams }: Props) {
     facilityScopeIds === undefined ? undefined : { facilityIds: facilityScopeIds }
   );
 
-  // Group by district
+  // Group by district (district order as before); inside each district list สสจ. → สสอ. → รพท. → รพช. → รพ.สต.
   const byDistrict = facilities.reduce<Record<string, typeof facilities>>((acc, f) => {
     const district = f.district_name ?? "ไม่ระบุอำเภอ";
     (acc[district] ??= []).push(f);
     return acc;
   }, {});
+  for (const district of Object.keys(byDistrict)) byDistrict[district] = sortFacilities(byDistrict[district]);
 
   // ค่าเริ่มต้นแสดงแยกตามอำเภอ เมื่อกดเรียงคอลัมน์จะแสดงเป็นตารางเดียวที่เรียงและแบ่งหน้า
   const params = await searchParams;
@@ -103,9 +106,10 @@ export default async function FacilitiesPage({ searchParams }: Props) {
               <td className="px-4 py-3 text-right">
                 <Link
                   href={`/facilities/${f.id}`}
-                  className="rounded-full bg-[var(--accent)]/10 px-3 py-1 text-xs font-medium text-[var(--accent)] transition hover:bg-[var(--accent)]/20"
+                  className="inline-flex min-h-8 items-center gap-1 whitespace-nowrap rounded-full bg-[var(--primary-soft)] px-3 text-xs font-medium text-[var(--primary-text)] transition-colors duration-200 hover:bg-[var(--primary-soft-strong)]"
                 >
-                  {f.has_survey > 0 ? "ดูรายละเอียด →" : "เริ่มกรอกข้อมูล →"}
+                  {f.has_survey > 0 ? "ดูรายละเอียด" : "เริ่มกรอกข้อมูล"}
+                  <AppIcon name="arrow-right" size={14} />
                 </Link>
               </td>
             </tr>
@@ -117,42 +121,40 @@ export default async function FacilitiesPage({ searchParams }: Props) {
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6">
-      {/* Header */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="text-xs font-semibold text-[var(--accent-strong)]">หน่วยบริการ</p>
-          <h1 className="section-title mt-1 text-3xl font-semibold">หน่วยบริการสาธารณสุข</h1>
+      {/* Header + summary numbers: one hero panel, the only place with a backdrop photo */}
+      <section className="glass-panel relative isolate overflow-hidden rounded-2xl">
+        <PhotoBackdrop image="meeting-room" opacity="opacity-[0.12]" fade="left" />
+        <div className="px-5 pb-4 pt-5 sm:px-6">
+          <h1 className="section-title text-2xl font-semibold sm:text-3xl">หน่วยบริการสาธารณสุข</h1>
           <p className="mt-1 text-sm text-[var(--muted)]">จังหวัดสตูล · {totalFacilities} หน่วยงาน</p>
         </div>
-      </div>
-
-      {/* KPI Strip */}
-      <div className="grid grid-cols-3 gap-4">
-        <div className="glass-panel rounded-2xl p-5">
-          <p className="text-xs font-medium text-[var(--muted)]">หน่วยบริการทั้งหมด</p>
-          <p className="mt-2 text-3xl font-bold text-[var(--accent)]">{totalFacilities}</p>
-          <p className="mt-0.5 text-xs text-[var(--muted)]">หน่วยงาน</p>
-        </div>
-        <div className="glass-panel rounded-2xl p-5">
-          <p className="text-xs font-medium text-[var(--muted)]">มีข้อมูลทรัพย์สิน</p>
-          <p className="mt-2 text-3xl font-bold text-[var(--accent)]">{surveyed}</p>
-          <p className="mt-0.5 text-xs text-[var(--muted)]">
-            จาก {totalFacilities} หน่วยงาน ({Math.round((surveyed / (totalFacilities || 1)) * 100)}%)
-          </p>
-        </div>
-        <div className="glass-panel rounded-2xl p-5">
-          <p className="text-xs font-medium text-[var(--muted)]">ทรัพย์สินรวม</p>
-          <p className="mt-2 text-3xl font-bold text-[var(--accent)]">{totalAssets.toLocaleString()}</p>
-          <p className="mt-0.5 text-xs text-[var(--muted)]">รายการ (ฮาร์ดแวร์ + ซอฟต์แวร์)</p>
-        </div>
-      </div>
+        <dl className="grid grid-cols-3 divide-x divide-[var(--line)] border-t border-[var(--line)]">
+          <div className="px-4 py-3 sm:px-6">
+            <dt className="text-xs font-medium text-[var(--muted)]">หน่วยบริการทั้งหมด</dt>
+            <dd className="mt-1 text-2xl font-bold tabular-nums text-[var(--accent-strong)] sm:text-3xl">{totalFacilities.toLocaleString("th-TH")}</dd>
+            <dd className="text-xs text-[var(--muted)]">หน่วยงาน</dd>
+          </div>
+          <div className="px-4 py-3 sm:px-6">
+            <dt className="text-xs font-medium text-[var(--muted)]">มีข้อมูลทรัพย์สิน</dt>
+            <dd className="mt-1 text-2xl font-bold tabular-nums text-[var(--accent-strong)] sm:text-3xl">{surveyed.toLocaleString("th-TH")}</dd>
+            <dd className="text-xs text-[var(--muted)]">
+              จาก {totalFacilities} หน่วยงาน ({Math.round((surveyed / (totalFacilities || 1)) * 100)}%)
+            </dd>
+          </div>
+          <div className="px-4 py-3 sm:px-6">
+            <dt className="text-xs font-medium text-[var(--muted)]">ทรัพย์สินรวม</dt>
+            <dd className="mt-1 text-2xl font-bold tabular-nums text-[var(--accent-strong)] sm:text-3xl">{totalAssets.toLocaleString("th-TH")}</dd>
+            <dd className="text-xs text-[var(--muted)]">รายการ (ฮาร์ดแวร์ + ซอฟต์แวร์)</dd>
+          </div>
+        </dl>
+      </section>
 
       {/* Facility table: grouped by district by default, one flat sorted table when a column sort is chosen */}
       {sort && facilities.length > 0 && (
         <section className="glass-panel overflow-hidden rounded-2xl">
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-black/5 bg-[var(--accent-strong)]/10 px-5 py-3">
             <h2 className="text-sm font-semibold text-[var(--accent-strong)]">หน่วยบริการทั้งหมด · {totalFacilities} หน่วยงาน</h2>
-            <Link href="/facilities" scroll={false} className="text-xs font-medium text-[var(--accent-strong)] hover:underline">แสดงแยกตามอำเภอ</Link>
+            <Link href="/facilities" scroll={false} className="inline-flex items-center gap-1 text-xs font-medium text-[var(--accent-strong)] hover:underline"><AppIcon name="layers" size={14} /> แสดงแยกตามอำเภอ</Link>
           </div>
           {renderTable(paged.rows, paged.start, true)}
           <TablePagination {...paged} hrefFor={(page) => pageHref("/facilities", params, page)} label="แบ่งหน้าหน่วยบริการ" className="border-t border-black/6" />
@@ -172,7 +174,8 @@ export default async function FacilitiesPage({ searchParams }: Props) {
       ))}
 
       {facilities.length === 0 && (
-        <div className="glass-panel flex flex-col items-center justify-center rounded-2xl py-20 text-center">
+        <div className="glass-panel relative isolate flex flex-col items-center justify-center overflow-hidden rounded-2xl py-20 text-center">
+          <PhotoBackdrop image="office-desk" opacity="opacity-[0.10]" fade="bottom" />
           <AppIcon name="building" aria-hidden="true" className="mx-auto h-10 w-10 text-[var(--muted)]" />
           <p className="mt-3 font-medium text-[var(--foreground)]">ยังไม่พบข้อมูลหน่วยบริการ</p>
           <p className="mt-1 text-sm text-[var(--muted)]">ไม่สามารถเชื่อมต่อฐานข้อมูลได้</p>

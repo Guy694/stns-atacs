@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { AppIcon } from "@/app/_components/ui/icon";
+import { PhotoBackdrop } from "@/app/_components/ui/photo-backdrop";
 import { getDashboardData } from "@/lib/atacs";
 import { getCurrentUser } from "@/lib/auth";
 import { getFacilityById } from "@/lib/assets";
@@ -13,7 +14,6 @@ import { InspectionProgressPanel, WorkQueuePanel } from "@/app/_components/work-
 import { fiscalYearOf } from "@/lib/asset-valuation";
 import { getInspectionProgress, getWorkQueue } from "@/lib/dashboard-work";
 import { todayBangkok } from "@/lib/local-date";
-import { APP_NAME } from "@/lib/app-brand";
 import { hasPermission } from "@/lib/role-permissions";
 
 type Props = { searchParams: Promise<Record<string, string | string[] | undefined>> };
@@ -66,17 +66,24 @@ export default async function DashboardPage({ searchParams }: Props) {
     return `/inspection/coverage?${query}`;
   };
 
+  // The summary has no facility type; take it from the surveys so the dropdown can group สสจ. → รพ.สต.
+  const typeById = new Map(scope.surveys.map((survey) => [survey.facilityId, survey.facilityTypeCode]));
+  const facilityFilterOptions = summary.facilityOptions.map((facility) => ({ ...facility, typecode: typeById.get(facility.id) || null }));
+
   const describe = [filters.fy && `ได้มาในปีงบประมาณ ${filters.fy}`, categoryLabel].filter(Boolean).join(" · ");
 
   // Mobile (< sm): title, KPI numbers, filter toggle, then shortcuts — via flex `order`. From sm up the
   // DOM order applies (title + shortcuts, filters, KPIs), i.e. the original desktop layout.
   return (
     <div className="mx-auto flex w-full max-w-[1400px] flex-1 flex-col gap-3 sm:gap-5">
-      <div className="contents sm:flex sm:flex-row sm:items-end sm:justify-between sm:gap-3">
+      {/* From sm up the heading sits on a hero card with a faint photo; on phones it stays plain text. */}
+      <div className="contents sm:relative sm:isolate sm:flex sm:flex-row sm:items-end sm:justify-between sm:gap-3 sm:overflow-hidden sm:rounded-2xl sm:border sm:border-[var(--line)] sm:bg-white sm:p-5 lg:p-6">
+        <span aria-hidden="true" className="hidden sm:block">
+          <PhotoBackdrop image="it-storage" opacity="opacity-[0.13]" fade="left" />
+        </span>
         <header className="min-w-0">
-          <p className="hidden text-xs font-semibold text-[var(--accent-strong)] sm:block">{APP_NAME}</p>
-          <h1 className="section-title text-2xl font-semibold sm:mt-1 sm:text-3xl">ภาพรวมครุภัณฑ์</h1>
-          <p className="mt-1 text-sm text-[var(--muted)]">{scopeLabel}{describe ? ` · ${describe}` : ""} · ข้อมูล ณ {formatThaiDateTime(new Date())}</p>
+          <h1 className="section-title text-2xl font-semibold sm:text-3xl">ภาพรวมครุภัณฑ์</h1>
+          <p className="mt-1 text-sm text-[var(--muted)] sm:text-[var(--neutral-text)]">{scopeLabel}{describe ? ` · ${describe}` : ""} · ข้อมูล ณ {formatThaiDateTime(new Date())}</p>
         </header>
         <nav aria-label="ทางลัดภาพรวม" className="order-3 flex flex-wrap gap-2 sm:order-none">
           <Link href={`/data-quality${filters.facility ? `?facility=${filters.facility}` : filters.district ? `?district=${encodeURIComponent(filters.district)}` : ""}`} className="secondary-action gap-2">
@@ -103,7 +110,7 @@ export default async function DashboardPage({ searchParams }: Props) {
           values={filters}
           fiscalYears={summary.fiscalYearOptions}
           districts={summary.districtOptions}
-          facilities={summary.facilityOptions}
+          facilities={facilityFilterOptions}
           categories={summary.categoryOptions}
           lockedFacility={Boolean(scope.lockedFacilityId)}
         />
@@ -115,6 +122,7 @@ export default async function DashboardPage({ searchParams }: Props) {
           value={numberFormat.format(summary.total)}
           unit="รายการ"
           href={assetsHref()}
+          backdrop="it-storage"
           detail={<>{numberFormat.format(summary.facilityCount)} หน่วยงาน · {numberFormat.format(summary.districtCount)} อำเภอ{summary.undated ? <><br />ไม่รวม {numberFormat.format(summary.undated)} รายการที่ไม่มีวันที่ได้มา</> : null}</>}
         />
         <StatTile
@@ -122,12 +130,14 @@ export default async function DashboardPage({ searchParams }: Props) {
           value={numberFormat.format(summary.active)}
           unit="รายการ"
           href={assetsHref("Active")}
+          backdrop="office-desk"
           detail={<><span className="font-semibold text-[#006300]">{percent(summary.activeRate)}</span> ของครุภัณฑ์ตามตัวกรอง · ชำรุด {numberFormat.format(summary.statuses.find((s) => s.value === "Broken")?.count ?? 0)} รายการ</>}
         />
         <StatTile
           label="มูลค่ารวม (ราคาทุน)"
           value={cost.value}
           unit={cost.unit}
+          backdrop="meeting-room"
           detail={<>{baht(summary.totalCost)} บาท · มีราคา {numberFormat.format(summary.priced)} จาก {numberFormat.format(summary.total)} รายการ</>}
         />
       </div>
@@ -157,8 +167,8 @@ export default async function DashboardPage({ searchParams }: Props) {
               { href: "/disposal", label: "คำขอจำหน่าย / สูญหาย", icon: "archive" as const },
               { href: assetsHref("Inactive"), label: "รายการไม่ใช้งาน", icon: "package" as const },
             ].map((item) => (
-              <Link key={item.label} href={item.href} className="flex min-h-11 items-center gap-2 rounded-lg border border-[var(--line)] px-3 text-[var(--foreground)] transition hover:bg-[var(--primary-soft)]">
-                <AppIcon name={item.icon} className="h-4 w-4 text-[var(--primary-text)]" /> {item.label} <span aria-hidden className="ml-auto text-[var(--muted)]">→</span>
+              <Link key={item.label} href={item.href} className="flex min-h-11 items-center gap-2 rounded-lg border border-[var(--line)] px-3 text-[var(--foreground)] transition-colors duration-200 hover:bg-[var(--primary-soft)]">
+                <AppIcon name={item.icon} className="h-4 w-4 text-[var(--primary-text)]" /> {item.label} <AppIcon name="chevron-right" className="ml-auto h-4 w-4 text-[var(--muted)]" />
               </Link>
             ))}
           </div>

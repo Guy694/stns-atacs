@@ -5,6 +5,8 @@ import { useActionState } from "react";
 import { cancelDisposalAction, decideDisposalAction, recordExecutionAction } from "@/app/(main)/disposal/actions";
 import { todayBangkok } from "@/lib/local-date";
 import { SubmitButton } from "@/app/_components/ui/submit-button";
+import { actionIconClass } from "@/app/_components/ui/action-icon-button";
+import { AppIcon } from "@/app/_components/ui/icon";
 
 const field = "w-full rounded-xl border border-[var(--line)] bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/15";
 
@@ -26,11 +28,11 @@ export function DisposalDecisionForm({ requestId, requestType }: { requestId: nu
         <textarea name="decisionNote" rows={2} className={`${field} mt-1`} />
       </label>
       <div className="flex flex-wrap gap-2">
-        <button name="decision" value="Approved" disabled={pending} className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-60">
-          อนุมัติ{requestType === "Lost" ? "บันทึกสูญหาย" : "จำหน่าย"}
+        <button name="decision" value="Approved" disabled={pending} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-60">
+          <AppIcon name="check" className="h-4 w-4" /> อนุมัติ{requestType === "Lost" ? "บันทึกสูญหาย" : "จำหน่าย"}
         </button>
-        <button name="decision" value="Rejected" disabled={pending} className="rounded-xl border border-rose-300 bg-white px-4 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-50 disabled:opacity-60">
-          ไม่อนุมัติ
+        <button name="decision" value="Rejected" disabled={pending} className="danger-action gap-2 disabled:opacity-60">
+          <AppIcon name="close" className="h-4 w-4" /> ไม่อนุมัติ
         </button>
       </div>
     </form>
@@ -40,14 +42,15 @@ export function DisposalDecisionForm({ requestId, requestType }: { requestId: nu
 export function CancelDisposalForm({ requestId }: { requestId: number }) {
   const [error, formAction] = useActionState(cancelDisposalAction, null);
   return (
-    <form action={formAction} className="inline-flex flex-col gap-1">
+    <form action={formAction} className="inline-flex flex-col gap-1" title="ยกเลิกคำขอ">
       <input type="hidden" name="requestId" value={requestId} />
       <SubmitButton
-        pendingText="กำลังยกเลิก…"
+        ariaLabel="ยกเลิกคำขอ"
+        pendingText={<AppIcon name="refresh" className="h-4 w-4 animate-spin" />}
         confirm={{ title: "ยกเลิกคำขอจำหน่ายนี้?", text: "คำขอจะถูกปิดและต้องยื่นใหม่หากต้องการจำหน่าย", confirmText: "ยกเลิกคำขอ", danger: true }}
-        className="rounded-xl border border-[var(--line)] bg-white px-4 py-2 text-sm font-medium text-[var(--muted)] transition hover:bg-stone-50"
+        className={actionIconClass("danger")}
       >
-        ยกเลิกคำขอ
+        <AppIcon name="close" className="h-4 w-4" />
       </SubmitButton>
       {error && <span role="alert" className="text-xs text-rose-700">{error}</span>}
     </form>
@@ -76,7 +79,8 @@ export function DisposalExecutionForm({ requestId, defaults }: { requestId: numb
       <label className="block text-sm font-medium">หมายเหตุ
         <textarea name="executionNote" rows={2} defaultValue={defaults?.note ?? ""} className={`${field} mt-1`} placeholder="เช่น ขายทอดตลาดให้ผู้เสนอราคาสูงสุด / ส่งมอบให้ ... / ทำลายโดยคณะกรรมการ" />
       </label>
-      <button disabled={pending} className="rounded-xl bg-[var(--primary)] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[var(--primary-hover)] disabled:opacity-60">
+      <button disabled={pending} className="primary-action">
+        <AppIcon name="check" className="h-4 w-4" />
         {pending ? "กำลังบันทึก…" : "บันทึกผลการจำหน่าย"}
       </button>
     </form>

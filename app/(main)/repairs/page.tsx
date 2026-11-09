@@ -2,6 +2,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { StatusBadge } from "@/app/_components/ui/status-badge";
+import { AppIcon } from "@/app/_components/ui/icon";
+import { PhotoBackdrop } from "@/app/_components/ui/photo-backdrop";
 import { listRepairs, summarizeRepairs } from "@/lib/asset-repairs";
 import { fiscalYearOf, fiscalYearRange } from "@/lib/asset-valuation";
 import { getCurrentUser } from "@/lib/auth";
@@ -72,15 +74,15 @@ export default async function RepairsPage({ searchParams }: Props) {
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+      <div className="relative isolate overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--surface-strong)] px-5 py-5 sm:px-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <PhotoBackdrop image="it-storage" fade="left" />
         <div>
-          <p className="text-xs font-semibold text-[var(--accent-strong)]">ซ่อมบำรุง</p>
-          <h1 className="section-title mt-1 text-3xl font-semibold">งานซ่อมบำรุง</h1>
+          <h1 className="section-title flex items-center gap-2 text-3xl font-semibold"><AppIcon name="wrench" className="h-7 w-7 text-[var(--primary)]" /> งานซ่อมบำรุง</h1>
           <p className="mt-1 text-sm text-[var(--muted)]">แจ้งซ่อม ติดตามสถานะ ค่าใช้จ่าย และทรัพย์สินที่เสียบ่อย</p>
         </div>
         {canManage && (
-          <Link href="/repairs/new" className="inline-flex items-center justify-center rounded-xl bg-[var(--primary)] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[var(--primary-hover)]">
-            + แจ้งซ่อม
+          <Link href="/repairs/new" className="primary-action">
+            <AppIcon name="plus" className="h-4 w-4" /> แจ้งซ่อม
           </Link>
         )}
       </div>
@@ -96,7 +98,7 @@ export default async function RepairsPage({ searchParams }: Props) {
               <select id="fy" name="fy" defaultValue={fiscalYear} className="filter-control">
                 {Array.from({ length: 6 }, (_, i) => currentFiscalYear - i).map((year) => <option key={year} value={year}>{year}</option>)}
               </select>
-              <button className="rounded-lg border border-[var(--line)] bg-white px-3 py-1">แสดง</button>
+              <button className="secondary-action action-sm gap-1.5"><AppIcon name="refresh" className="h-4 w-4" /> แสดง</button>
             </form>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
               {[
@@ -105,8 +107,9 @@ export default async function RepairsPage({ searchParams }: Props) {
                 { label: "ซ่อมเสร็จ", value: String(summary.completedCount) },
                 { label: "เวลาเฉลี่ยจนซ่อมเสร็จ", value: summary.averageDaysToComplete === null ? "-" : `${summary.averageDaysToComplete} วัน` },
                 { label: "ค่าใช้จ่ายรวม (บาท)", value: baht(summary.totalCost) },
-              ].map((kpi) => (
-                <div key={kpi.label} className="glass-panel rounded-2xl p-4">
+              ].map((kpi, index) => (
+                <div key={kpi.label} className="glass-panel relative isolate overflow-hidden rounded-2xl p-4">
+                  <PhotoBackdrop image={index % 2 ? "office-desk" : "it-storage"} opacity="opacity-[0.08]" fade="left" />
                   <p className="text-xs text-[var(--muted)]">{kpi.label}</p>
                   <p className="mt-1 text-2xl font-bold tabular-nums">{kpi.value}</p>
                 </div>
@@ -143,7 +146,11 @@ export default async function RepairsPage({ searchParams }: Props) {
 
           <section className="glass-panel overflow-hidden rounded-2xl">
             {list.rows.length === 0 ? (
-              <p className="p-10 text-center text-sm text-[var(--muted)]">ไม่มีงานซ่อมในสถานะนี้</p>
+              <div className="relative isolate overflow-hidden p-10 text-center text-sm text-[var(--muted)]">
+                <PhotoBackdrop image="it-storage" fade="bottom" />
+                <AppIcon name="wrench" className="mx-auto mb-2 h-8 w-8 text-[var(--primary)]" />
+                <p>ไม่มีงานซ่อมในสถานะนี้</p>
+              </div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[900px] text-sm">

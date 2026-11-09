@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect } from "react";
+import { AppIcon } from "@/app/_components/ui/icon";
+import { PhotoBackdrop } from "@/app/_components/ui/photo-backdrop";
 import { withBasePath } from "@/lib/base-path";
 
 /** ข้อผิดพลาดภายในหน้าใดหน้าหนึ่ง — เมนู/เลย์เอาต์ยังอยู่ ผู้ใช้ไปหน้าอื่นต่อได้ */
@@ -20,18 +22,20 @@ export default function MainSegmentError({ error, reset }: { error: Error & { di
   }, [error]);
 
   return (
-    <div className="mx-auto w-full max-w-2xl rounded-2xl border border-[var(--line)] bg-white p-6 text-center">
+    <div role="alert" className="relative isolate mx-auto w-full max-w-2xl overflow-hidden rounded-2xl border border-[var(--line)] bg-white p-6 text-center">
+      <PhotoBackdrop image="it-storage" opacity="opacity-[0.10]" fade="bottom" />
+      <AppIcon name="warning" className="mx-auto mb-2 h-8 w-8 text-[var(--state-warning-fg)]" />
       <h1 className="text-lg font-semibold">เปิดหน้านี้ไม่สำเร็จ</h1>
       <p className="mt-2 text-sm text-[var(--muted)]">
         ระบบบันทึกข้อผิดพลาดให้ผู้ดูแลแล้ว ลองใหม่อีกครั้ง หรือกลับไปหน้าอื่นก่อนได้
       </p>
       {error.digest && <p className="mt-2 text-xs text-[var(--muted)]">รหัสอ้างอิง: {error.digest}</p>}
       <div className="mt-5 flex flex-wrap justify-center gap-2">
-        <button type="button" onClick={reset} className="filter-button bg-[var(--accent-strong)] text-white">
-          ลองใหม่อีกครั้ง
+        <button type="button" onClick={reset} className="primary-action">
+          <AppIcon name="refresh" className="h-4 w-4" /> ลองใหม่อีกครั้ง
         </button>
-        <a href={withBasePath("/dashboard")} className="filter-button border border-[var(--line)] text-[var(--primary-text)]">
-          ไปหน้าแดชบอร์ด
+        <a href={withBasePath("/dashboard/")} className="secondary-action gap-2">
+          <AppIcon name="dashboard" className="h-4 w-4" /> ไปหน้าแดชบอร์ด
         </a>
       </div>
     </div>

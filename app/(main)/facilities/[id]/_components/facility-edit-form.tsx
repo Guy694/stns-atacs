@@ -2,6 +2,7 @@
 
 import { useActionState, useId } from "react";
 
+import { AppIcon } from "@/app/_components/ui/icon";
 import type { FacilityRow } from "@/lib/assets";
 import { updateFacilitySelfAction } from "../actions";
 
@@ -78,7 +79,8 @@ export function FacilityEditForm({ facility, canManageScope = false }: Props) {
         </div>
 
         <div className="sm:col-span-2 flex justify-end">
-          <button type="submit" disabled={pending} className="rounded-xl bg-[var(--accent-strong)] px-5 py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50">
+          <button type="submit" disabled={pending} className="primary-action">
+            <AppIcon name="check" size={16} />
             {pending ? "กำลังบันทึก…" : "บันทึกข้อมูลหน่วยงาน"}
           </button>
         </div>

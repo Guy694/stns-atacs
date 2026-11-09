@@ -1,10 +1,10 @@
 import { redirect } from "next/navigation";
-import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth";
 import { listFacilitiesAdmin } from "@/lib/assets";
 import { getFacilityScopeId } from "@/lib/facility-scope";
 import { hasPermission } from "@/lib/role-permissions";
 import { FacilitiesClient } from "./_components/facilities-client";
+import { PageHero, SettingsBreadcrumb } from "@/app/(main)/admin/_components/page-hero";
 
 export const dynamic = "force-dynamic";
 
@@ -20,17 +20,13 @@ export default async function AdminFacilitiesPage() {
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6">
-      <div className="flex items-center gap-2 text-xs text-[var(--muted)]">
-        <Link href="/admin/settings" className="hover:underline">ตั้งค่าระบบ</Link>
-        <span>›</span>
-        <span>จัดการหน่วยงาน</span>
-      </div>
-
-      <div>
-        <p className="text-xs font-semibold text-[var(--accent-strong)]">ตั้งค่าระบบ</p>
-        <h1 className="section-title mt-1 text-3xl font-semibold">จัดการหน่วยงาน</h1>
-        <p className="mt-1 text-sm text-[var(--muted)]">เพิ่ม/แก้ไข/ปิดใช้งาน หน่วยบริการสาธารณสุขในจังหวัดสตูล</p>
-      </div>
+      <SettingsBreadcrumb current="จัดการหน่วยงาน" />
+      <PageHero
+        icon="building"
+        image="office-desk"
+        title="จัดการหน่วยงาน"
+        description="เพิ่ม/แก้ไข/ปิดใช้งาน หน่วยบริการสาธารณสุขในจังหวัดสตูล"
+      />
 
       <FacilitiesClient facilities={facilities} canCreate={user.role === "admin"} canToggleActive={user.role === "admin"} />
     </div>

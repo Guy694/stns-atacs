@@ -14,6 +14,7 @@ import { notifyTelegramSafe } from "@/lib/telegram";
 import { readRequestIp, recordSecurityEvent } from "@/lib/security";
 import { withBasePath } from "@/lib/base-path";
 import { getPublicRequestOrigin, getPublicRequestUrl } from "@/lib/request-url";
+import { userFacingError } from "@/lib/schema-errors";
 
 const STATE_COOKIE_NAME = "atacs_thaid_state";
 
@@ -246,7 +247,7 @@ export async function GET(req: NextRequest) {
       toLoginUrl(req, {
         error: isTimeout
           ? "การเชื่อมต่อ ThaiD หมดเวลา ระบบสลับไปใช้ Username/Password ให้แล้ว"
-          : `${message} กรุณาเข้าสู่ระบบด้วย Username/Password ชั่วคราว`,
+          : `${userFacingError(error, "ไม่สามารถเข้าสู่ระบบด้วย ThaiD ได้")} กรุณาเข้าสู่ระบบด้วย Username/Password ชั่วคราว`,
         tab: "password",
       })
     );

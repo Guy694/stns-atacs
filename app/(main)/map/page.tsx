@@ -3,16 +3,18 @@ import { StatusBadge } from "@/app/_components/ui/status-badge";
 import { getCurrentUser } from "@/lib/auth";
 import { listFacilities } from "@/lib/assets";
 import { getFacilityScopeId } from "@/lib/facility-scope";
+import { PhotoBackdrop } from "@/app/_components/ui/photo-backdrop";
 import { MapClient } from "./_components/map-client";
 
+// Legend follows the provincial order: สสจ. → สสอ. → รพ.ทั่วไป → รพ.ชุมชน → รพ.สต. → สอน. → ศสช.
 const TYPE_COLOR: Record<string, string> = {
+  "สสจ.": "#0f766e",
+  "สสอ.": "#64748b",
   "รพ.ทั่วไป": "#14532d",
   "รพ.ชุมชน": "#2563eb",
   "รพ.สต.": "#059669",
-  "ศสช.": "#b45309",
-  "สสจ.": "#0f766e",
-  "สสอ.": "#64748b",
   "สอน.": "#475569",
+  "ศสช.": "#b45309",
 };
 
 export default async function MapPage() {
@@ -32,10 +34,11 @@ export default async function MapPage() {
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6">
-      <div>
-        <p className="text-xs font-semibold text-[var(--accent-strong)]">แผนที่ทรัพย์สิน</p>
-        <h1 className="section-title mt-1 text-3xl font-semibold">แผนที่หน่วยบริการ จ.สตูล</h1>
-      </div>
+      <header className="relative isolate overflow-hidden rounded-2xl border border-[var(--line)] bg-white p-5 lg:p-6">
+        <PhotoBackdrop image="meeting-room" opacity="opacity-[0.12]" fade="left" />
+        <h1 className="section-title text-2xl font-semibold sm:text-3xl">แผนที่หน่วยบริการ จ.สตูล</h1>
+        <p className="mt-1 text-sm text-[var(--neutral-text)]">ตำแหน่งหน่วยบริการและจำนวนทรัพย์สินที่บันทึกในทะเบียน</p>
+      </header>
 
       <div className="flex flex-wrap gap-3 text-xs">
         {Object.entries(TYPE_COLOR).map(([type, color]) => {

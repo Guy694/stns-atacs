@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 
 import { AppIcon } from "@/app/_components/ui/icon";
 import { StatusBadge } from "@/app/_components/ui/status-badge";
+import { PhotoBackdrop } from "@/app/_components/ui/photo-backdrop";
 import { listLoans, type AssetLoan } from "@/lib/asset-loans";
 import { getCurrentUser } from "@/lib/auth";
 import { formatThaiDate } from "@/lib/date-format";
@@ -60,13 +61,13 @@ export default async function LoansPage({ searchParams }: Props) {
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+      <div className="relative isolate overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--surface-strong)] px-5 py-5 sm:px-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <PhotoBackdrop image="office-desk" fade="left" />
         <div>
-          <p className="text-xs font-semibold text-[var(--accent-strong)]">ยืม-คืน</p>
-          <h1 className="section-title mt-1 flex items-center gap-2 text-3xl font-semibold"><AppIcon name="repeat" className="h-7 w-7 text-[var(--primary)]" /> ยืม-คืนครุภัณฑ์</h1>
+          <h1 className="section-title flex items-center gap-2 text-3xl font-semibold"><AppIcon name="repeat" className="h-7 w-7 text-[var(--primary)]" /> ยืม-คืนครุภัณฑ์</h1>
           <p className="mt-1 text-sm text-[var(--muted)]">ครุภัณฑ์ที่ให้หน่วยงานหรือบุคคลอื่นยืมใช้ชั่วคราว กำหนดคืน และสภาพเมื่อรับคืน</p>
         </div>
-        {canManage && <Link href="/loans/new" className="inline-flex items-center justify-center rounded-xl bg-[var(--primary)] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[var(--primary-hover)]">+ บันทึกการยืม</Link>}
+        {canManage && <Link href="/loans/new" className="primary-action"><AppIcon name="plus" className="h-4 w-4" /> บันทึกการยืม</Link>}
       </div>
 
       {!active.schemaReady ? (
@@ -78,7 +79,11 @@ export default async function LoansPage({ searchParams }: Props) {
               <h2 id="active-heading" className="font-semibold">กำลังถูกยืม <span className="ml-1 text-sm font-normal text-[var(--muted)]">{active.rows.length} รายการ{overdue ? ` · เกินกำหนด ${overdue}` : ""}</span></h2>
             </div>
             {active.rows.length === 0 ? (
-              <p className="px-5 py-8 text-center text-sm text-[var(--muted)]">ไม่มีครุภัณฑ์ที่ถูกยืมอยู่</p>
+              <div className="relative isolate overflow-hidden px-5 py-10 text-center text-sm text-[var(--muted)]">
+                <PhotoBackdrop image="office-desk" fade="bottom" />
+                <AppIcon name="repeat" className="mx-auto mb-2 h-8 w-8 text-[var(--primary)]" />
+                <p>ไม่มีครุภัณฑ์ที่ถูกยืมอยู่</p>
+              </div>
             ) : (
               <ul className="divide-y divide-black/5">
                 {activePaged.rows.map((loan) => (
@@ -109,7 +114,11 @@ export default async function LoansPage({ searchParams }: Props) {
           <section className="glass-panel overflow-hidden rounded-2xl" aria-labelledby="history-heading">
             <div className="border-b border-black/6 px-5 py-3"><h2 id="history-heading" className="font-semibold">คืนแล้วล่าสุด</h2></div>
             {returned.length === 0 ? (
-              <p className="px-5 py-8 text-center text-sm text-[var(--muted)]">ยังไม่มีประวัติการคืน</p>
+              <div className="relative isolate overflow-hidden px-5 py-10 text-center text-sm text-[var(--muted)]">
+                <PhotoBackdrop image="office-desk" fade="bottom" />
+                <AppIcon name="history" className="mx-auto mb-2 h-8 w-8 text-[var(--primary)]" />
+                <p>ยังไม่มีประวัติการคืน</p>
+              </div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[760px] text-sm">

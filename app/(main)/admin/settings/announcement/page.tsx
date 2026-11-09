@@ -16,6 +16,8 @@ import { APP_VERSION } from "@/lib/app-version";
 import { getCurrentUser } from "@/lib/auth";
 import { formatThaiDateTime } from "@/lib/date-format";
 import { SubmitButton } from "@/app/_components/ui/submit-button";
+import { AppIcon } from "@/app/_components/ui/icon";
+import { PageHero, SettingsBreadcrumb } from "@/app/(main)/admin/_components/page-hero";
 
 type Props = { searchParams: Promise<Record<string, string | string[] | undefined>> };
 
@@ -37,13 +39,13 @@ export default async function AnnouncementSettingsPage({ searchParams }: Props) 
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6">
-      <div>
-        <p className="text-xs font-semibold text-[var(--accent-strong)]">ตั้งค่าระบบ · ประกาศ</p>
-        <h1 className="section-title mt-1 text-3xl font-semibold">ประกาศ / ประชาสัมพันธ์ (popup)</h1>
-        <p className="mt-1 text-sm text-[var(--muted)]">
-          แสดงหน้าต่างประกาศหลังผู้ใช้เข้าสู่ระบบ ใช้แจ้งข่าวหรือการอัปเดตเวอร์ชัน เปิด/ปิดได้ตลอดเวลา
-        </p>
-      </div>
+      <SettingsBreadcrumb current="ประกาศ / ประชาสัมพันธ์" />
+      <PageHero
+        icon="file-text"
+        image="meeting-room"
+        title="ประกาศ / ประชาสัมพันธ์ (popup)"
+        description="แสดงหน้าต่างประกาศหลังผู้ใช้เข้าสู่ระบบ ใช้แจ้งข่าวหรือการอัปเดตเวอร์ชัน เปิด/ปิดได้ตลอดเวลา"
+      />
 
       {notice && <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{notice}</div>}
       {error && <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{error}</div>}
@@ -106,10 +108,12 @@ export default async function AnnouncementSettingsPage({ searchParams }: Props) 
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          <SubmitButton pendingText="กำลังบันทึก…" className="rounded-xl bg-[var(--primary)] px-5 py-2.5 text-sm font-semibold text-white transition hover:opacity-90">
+          <SubmitButton pendingText="กำลังบันทึก…" className="primary-action">
+            <AppIcon name="check" size={16} />
             บันทึก
           </SubmitButton>
-          <Link href="/admin/settings/announcement?preview=1" className="text-sm font-semibold text-[var(--primary)] hover:underline">
+          <Link href="/admin/settings/announcement?preview=1" className="inline-flex items-center gap-1.5 text-sm font-semibold text-[var(--primary-text)] hover:underline">
+            <AppIcon name="eye" size={15} />
             ดูตัวอย่างประกาศที่บันทึกไว้
           </Link>
         </div>
@@ -130,7 +134,10 @@ export default async function AnnouncementSettingsPage({ searchParams }: Props) 
       )}
 
       <div>
-        <Link href="/admin/settings" className="text-sm font-semibold text-[var(--primary)] hover:underline">← กลับหน้าตั้งค่าระบบ</Link>
+        <Link href="/admin/settings" className="inline-flex items-center gap-1.5 text-sm font-semibold text-[var(--primary-text)] hover:underline">
+          <AppIcon name="arrow-left" size={15} />
+          กลับหน้าตั้งค่าระบบ
+        </Link>
       </div>
     </div>
   );

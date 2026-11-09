@@ -5,6 +5,7 @@ import { formatThaiDateTime } from "@/lib/date-format";
 import { notifyTelegramSafe } from "@/lib/telegram";
 import { readRequestIp, recordSecurityEvent } from "@/lib/security";
 import { isAuthorizedCronHeader } from "@/lib/cron-auth";
+import { recordCronRun } from "@/lib/cron-status";
 
 function isAuthorized(req: NextRequest) {
   return isAuthorizedCronHeader(req.headers.get("authorization"));
@@ -43,6 +44,7 @@ export async function GET(req: NextRequest) {
     )
   );
 
+  await recordCronRun("agent-health", true, `ขาดการติดต่อ ${devices.length} เครื่อง`);
   return NextResponse.json({
     ok: true,
     offlineDevices: devices.length,

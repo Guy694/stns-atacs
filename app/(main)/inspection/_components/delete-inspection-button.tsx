@@ -3,6 +3,8 @@
 import { useActionState, useState } from "react";
 
 import { deleteInspectionAction } from "@/app/(main)/inspection/actions";
+import { ActionIconButton } from "@/app/_components/ui/action-icon-button";
+import { AppIcon } from "@/app/_components/ui/icon";
 
 type Props = { inspectionId: number; roundName: string; totalItems: number; checkedItems: number; defaultOpen?: boolean };
 
@@ -15,10 +17,7 @@ export function DeleteInspectionButton({ inspectionId, roundName, totalItems, ch
 
   if (!open) {
     return (
-      <button type="button" onClick={() => setOpen(true)}
-        className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-rose-200 bg-white px-4 text-sm font-semibold text-rose-700 transition hover:bg-rose-50">
-        ยกเลิกและลบรอบตรวจนับนี้
-      </button>
+      <ActionIconButton icon="trash" tone="danger" label="ยกเลิกและลบรอบตรวจนับนี้" onClick={() => setOpen(true)} />
     );
   }
 
@@ -40,12 +39,11 @@ export function DeleteInspectionButton({ inspectionId, roundName, totalItems, ch
       </label>
       {error && <p role="alert" className="rounded-lg border border-rose-300 bg-white px-3 py-2 text-rose-700">{error}</p>}
       <div className="flex flex-wrap gap-2">
-        <button type="submit" disabled={pending || !matches} className="min-h-11 rounded-lg bg-rose-600 px-4 font-semibold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50">
+        <button type="submit" disabled={pending || !matches} className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-rose-600 px-4 font-semibold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50">
+          <AppIcon name="trash" className="h-4 w-4" />
           {pending ? "กำลังลบ…" : "ลบรอบตรวจนับถาวร"}
         </button>
-        <button type="button" onClick={() => { setOpen(false); setTyped(""); }} disabled={pending} className="min-h-11 rounded-lg border border-[var(--line)] bg-white px-4 text-[var(--foreground)] hover:bg-stone-50">
-          ไม่ลบ
-        </button>
+        <ActionIconButton icon="close" label="ไม่ลบ (ปิดหน้ายืนยัน)" onClick={() => { setOpen(false); setTyped(""); }} disabled={pending} />
       </div>
     </form>
   );

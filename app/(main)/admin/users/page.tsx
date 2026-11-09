@@ -6,6 +6,8 @@ import { listAllFacilitiesForSelect } from "@/lib/assets";
 import { selectRows } from "@/lib/mysql";
 import { isMissingSchemaError } from "@/lib/schema-errors";
 import type { RowDataPacket } from "mysql2/promise";
+import { AppIcon } from "@/app/_components/ui/icon";
+import { PageHero } from "@/app/(main)/admin/_components/page-hero";
 import { CreateUserModal } from "./_components/create-user-modal";
 import { UsersManagementClient } from "./_components/users-management-client";
 
@@ -80,20 +82,31 @@ export default async function AdminUsersPage() {
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6">
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="text-sm font-medium text-[var(--accent-strong)]">ระบบและความปลอดภัย</p>
-          <h1 className="mt-1 text-3xl font-semibold tracking-tight">จัดการผู้ใช้งาน</h1>
-          <p className="mt-1 text-sm text-[var(--muted)]">
-            {systemUserCount} ผู้ใช้งาน · {pendingRegistrationCount} รายการรออนุมัติ
-          </p>
-        </div>
-        <CreateUserModal facilities={facilities}>
-          <button className="primary-action">
-            + เพิ่มผู้ใช้งาน
-          </button>
-        </CreateUserModal>
-      </div>
+      <PageHero
+        icon="users"
+        title="จัดการผู้ใช้งาน"
+        description="อนุมัติผู้ลงทะเบียน กำหนดสิทธิ์ หน่วยงาน และเปิด/ปิดบัญชีผู้ใช้งาน"
+        image="meeting-room"
+        actions={
+          <CreateUserModal facilities={facilities}>
+            <button type="button" className="primary-action">
+              <AppIcon name="plus" size={16} />
+              เพิ่มผู้ใช้งาน
+            </button>
+          </CreateUserModal>
+        }
+      >
+        <dl className="mt-4 flex flex-wrap gap-2 text-sm">
+          <div className="flex items-baseline gap-1.5 rounded-lg border border-[var(--line)] bg-white/85 px-3 py-1.5">
+            <dt className="text-[var(--muted)]">ผู้ใช้งาน</dt>
+            <dd className="font-semibold tabular-nums">{systemUserCount.toLocaleString("th-TH")}</dd>
+          </div>
+          <div className="flex items-baseline gap-1.5 rounded-lg border border-[var(--line)] bg-white/85 px-3 py-1.5">
+            <dt className="text-[var(--muted)]">รออนุมัติ</dt>
+            <dd className={`font-semibold tabular-nums ${pendingRegistrationCount > 0 ? "text-[var(--state-warning-fg)]" : ""}`}>{pendingRegistrationCount.toLocaleString("th-TH")}</dd>
+          </div>
+        </dl>
+      </PageHero>
 
       {dbError && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-5 py-3 text-sm text-amber-800">
@@ -108,6 +121,7 @@ export default async function AdminUsersPage() {
             id: facility.id,
             facility_name: facility.facility_name,
             district_name: facility.district_name,
+            typecode: facility.typecode,
           }))}
           currentUserId={Number(user.id)}
           thaidLinkColumnAvailable={thaidLinkColumnAvailable}

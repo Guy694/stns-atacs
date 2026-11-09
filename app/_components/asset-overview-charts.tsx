@@ -2,6 +2,8 @@ import Link from "next/link";
 
 import { DASHBOARD_STATUSES, type DashboardSummary } from "@/lib/dashboard-summary";
 import { baht, hrefWith, numberFormat, percent, Tip } from "@/app/_components/overview-format";
+import { AppIcon } from "@/app/_components/ui/icon";
+import { PhotoBackdrop, type BackdropImage } from "@/app/_components/ui/photo-backdrop";
 
 export { baht, compactBaht, hrefWith, numberFormat, percent } from "@/app/_components/overview-format";
 export { DistrictComparison } from "@/app/_components/district-comparison";
@@ -28,9 +30,18 @@ export function Panel({ id, title, subtitle, children, action }: { id: string; t
   );
 }
 
-export function StatTile({ label, value, unit, detail, href }: { label: string; value: string; unit: string; detail: React.ReactNode; href?: string }) {
+export function StatTile({ label, value, unit, detail, href, backdrop }: {
+  label: string;
+  value: string;
+  unit: string;
+  detail: React.ReactNode;
+  href?: string;
+  /** Faint photo on the right side of the card (number-summary cards only). */
+  backdrop?: BackdropImage;
+}) {
   const body = (
     <>
+      {backdrop && <PhotoBackdrop image={backdrop} opacity="opacity-[0.12]" fade="left" />}
       <p className="text-sm font-medium text-[var(--muted)]">{label}</p>
       <p className="mt-1.5 flex flex-wrap items-baseline gap-x-2 sm:mt-2">
         <span className="text-3xl font-bold leading-none text-[var(--foreground)] sm:text-4xl">{value}</span>
@@ -39,9 +50,9 @@ export function StatTile({ label, value, unit, detail, href }: { label: string; 
       <p className="mt-2 text-xs leading-5 text-[var(--muted)] sm:mt-3">{detail}</p>
     </>
   );
-  const className = "block min-w-0 rounded-2xl border border-[var(--line)] bg-white p-4 sm:p-5";
+  const className = "relative isolate block min-w-0 overflow-hidden rounded-2xl border border-[var(--line)] bg-white p-4 sm:p-5";
   return href
-    ? <Link href={href} className={`${className} transition hover:border-[var(--primary-soft-strong)] hover:bg-[var(--primary-soft)]/40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]`}>{body}</Link>
+    ? <Link href={href} className={`${className} transition-colors duration-200 hover:border-[var(--primary-soft-strong)] hover:bg-[var(--primary-soft)]/40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]`}>{body}</Link>
     : <div className={className}>{body}</div>;
 }
 
@@ -123,7 +134,10 @@ export function CategoryChips({ summary, basePath, visible = 6 }: { summary: Das
       ))}
       {rest.length > 0 && (
         <details className="relative">
-          <summary className={`${chip(false)} cursor-pointer list-none`}>+ ประเภทอื่น ({rest.length})</summary>
+          <summary className={`${chip(false)} cursor-pointer list-none [&::-webkit-details-marker]:hidden`}>
+            ประเภทอื่น ({rest.length})
+            <AppIcon name="chevron-down" className="h-3.5 w-3.5" />
+          </summary>
           <div className="absolute right-0 z-20 mt-2 max-h-72 w-64 overflow-y-auto rounded-xl border border-[var(--line)] bg-white p-1 shadow-lg">
             {rest.map((item) => (
               <Link

@@ -3,6 +3,8 @@ import { notFound, redirect } from "next/navigation";
 
 import { AppIcon } from "@/app/_components/ui/icon";
 import { StatusBadge } from "@/app/_components/ui/status-badge";
+import { ActionIconLink } from "@/app/_components/ui/action-icon-button";
+import { PhotoBackdrop } from "@/app/_components/ui/photo-backdrop";
 import { updateInspectionItemAction } from "@/app/(main)/inspection/actions";
 import { DeleteInspectionButton } from "@/app/(main)/inspection/_components/delete-inspection-button";
 import { CommitteeForm } from "@/app/(main)/inspection/_components/committee-form";
@@ -116,14 +118,14 @@ function InspectionItemForm({ item, canMutate, workGroups }: { item: InspectionI
           className="min-h-10 min-w-0 rounded-xl border border-black/10 bg-white/85 px-3 py-2 text-xs outline-none focus:border-[var(--accent)]"
         />
         <SubmitButton pendingText="กำลังบันทึก…"
-          className="min-h-10 rounded-xl bg-[var(--accent-strong)] px-3 py-2 text-xs font-semibold text-white transition hover:opacity-90"
+          className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-xl bg-[var(--accent-strong)] px-3 py-2 text-xs font-semibold text-white transition hover:opacity-90"
         >
-          บันทึก
+          <AppIcon name="check" className="h-3.5 w-3.5" /> บันทึก
         </SubmitButton>
       </form>
       {item.inspectionStatus === "Missing" && (
-        <Link href={`/disposal?assetId=${item.assetId}&type=Lost`} className="mt-1 inline-block text-xs font-medium text-rose-700 hover:underline">
-          ไม่พบครุภัณฑ์ → เสนอบันทึกสูญหาย
+        <Link href={`/disposal?assetId=${item.assetId}&type=Lost`} className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-rose-700 hover:underline">
+          ไม่พบครุภัณฑ์ <AppIcon name="arrow-right" className="h-3.5 w-3.5" /> เสนอบันทึกสูญหาย
         </Link>
       )}
       {item.checkedAt && (
@@ -196,7 +198,9 @@ export default async function InspectionDetailPage({ params, searchParams }: Ins
         <span className="text-[var(--foreground)]">{inspection.roundName}</span>
       </nav>
 
-      <div className="glass-panel rounded-2xl p-5 sm:p-6">
+      <div className="glass-panel overflow-hidden rounded-2xl">
+        <div className="relative isolate overflow-hidden p-5 sm:p-6">
+        <PhotoBackdrop image="it-storage" fade="left" />
         <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
@@ -239,7 +243,7 @@ export default async function InspectionDetailPage({ params, searchParams }: Ins
               { label: "พบ", value: inspection.foundItems, tone: "text-[var(--accent-strong)]" },
               { label: "ไม่พบ", value: inspection.missingItems, tone: "text-rose-600" },
             ].map((metric) => (
-              <div key={metric.label} className="rounded-xl border border-black/10 bg-white/70 px-3 py-2">
+              <div key={metric.label} className="rounded-xl border border-black/10 bg-white/85 px-3 py-2">
                 <p className="text-xs text-[var(--muted)]">{metric.label}</p>
                 <p className={`mt-1 text-xl font-semibold ${metric.tone}`}>{metric.value.toLocaleString("th-TH")}</p>
               </div>
@@ -256,13 +260,14 @@ export default async function InspectionDetailPage({ params, searchParams }: Ins
           </div>
           <p className="mt-1 text-xs text-[var(--muted)]">ความคืบหน้า {pct}% จากรายการทั้งหมด {inspection.totalItems.toLocaleString("th-TH")} รายการ</p>
         </div>
+        </div>
         {canMutate ? (
-          <div className="mt-5 flex flex-col gap-3 border-t border-black/6 pt-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex flex-col gap-3 border-t border-black/6 px-5 py-4 sm:flex-row sm:items-start sm:justify-between sm:px-6">
             <RoundStatusControl inspectionId={inspection.id} status={inspection.roundStatus} remainingItems={inspection.remainingItems} closedBy={inspection.closedBy} closedAtLabel={inspection.closedAt ? formatThaiDateTime(inspection.closedAt) : ""} />
             {!closed && <DeleteInspectionButton inspectionId={inspection.id} roundName={inspection.roundName} totalItems={inspection.totalItems} checkedItems={inspection.checkedItems} defaultOpen={openDelete} />}
           </div>
         ) : (
-          <p className="mt-5 border-t border-black/6 pt-4 text-xs text-[var(--muted)]">
+          <p className="border-t border-black/6 px-5 py-4 text-xs text-[var(--muted)] sm:px-6">
             การยกเลิกและลบรอบตรวจนับทำได้เฉพาะผู้มีสิทธิ์ “สร้างรอบตรวจนับ” ของหน่วยงานนี้
           </p>
         )}
@@ -291,13 +296,14 @@ export default async function InspectionDetailPage({ params, searchParams }: Ins
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <a href={withBasePath(`/api/export/inspection/${inspection.id}/?type=report`)} className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl border border-[var(--primary-soft-strong)] bg-[var(--primary-soft)] px-4 text-sm font-semibold text-[var(--primary-text)] hover:bg-[var(--primary-soft-strong)]">
+            <a href={withBasePath(`/api/export/inspection/${inspection.id}/?type=report`)} title="ดาวน์โหลดรายงานผลการตรวจสอบพัสดุ (Excel)" className="secondary-action shrink-0 gap-2">
               <AppIcon name="download" className="h-4 w-4" /> รายงานผล Excel{closed ? "" : " (ร่าง)"}
             </a>
             {/* ใบตรวจสอบพัสดุประจำปี (A4 แนวนอน) พร้อมช่องลงนามจากคณะกรรมการของรอบนี้ */}
             <a
-              href={`/print/assets/audit?facility=${inspection.facilityId}${inspection.workGroupId ? `&workGroup=${inspection.workGroupId}` : ""}&inspection=${inspection.id}`}
-              className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl border border-[var(--line)] bg-white px-4 text-sm font-semibold text-[var(--foreground)] hover:bg-[var(--primary-soft)]"
+              href={withBasePath(`/print/assets/audit/?facility=${inspection.facilityId}${inspection.workGroupId ? `&workGroup=${inspection.workGroupId}` : ""}&inspection=${inspection.id}`)}
+              title="พิมพ์ใบตรวจสอบพัสดุประจำปี (A4 แนวนอน)"
+              className="secondary-action shrink-0 gap-2"
             >
               <AppIcon name="printer" className="h-4 w-4" /> ใบตรวจสอบพัสดุประจำปี (PDF)
             </a>
@@ -398,7 +404,7 @@ export default async function InspectionDetailPage({ params, searchParams }: Ins
               บันทึกผลตรวจรายรายการ และเลือกสถานะครุภัณฑ์ล่าสุดเพื่ออัปเดตข้อมูลอุปกรณ์
             </p>
           </div>
-          <a href={withBasePath(exportHref)} className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl bg-[var(--primary)] px-4 text-sm font-semibold text-white transition hover:bg-[var(--primary-hover)]">
+          <a href={withBasePath(exportHref)} title="ดาวน์โหลดใบตรวจนับ (Excel)" className="primary-action shrink-0">
             <AppIcon name="download" className="h-4 w-4" /> ใบตรวจนับ Excel{activeFilterCount ? " (ตามตัวกรอง)" : ""}
           </a>
         </div>
@@ -421,9 +427,9 @@ export default async function InspectionDetailPage({ params, searchParams }: Ins
               {RESULT_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             </select>
           </label>
-          <div className="flex min-h-9 items-center gap-3">
-            <button type="submit" className="min-h-9 rounded-lg bg-[var(--accent-strong)] px-4 text-xs font-semibold text-white hover:opacity-90">กรอง</button>
-            {activeFilterCount > 0 && <Link href={`/inspection/${inspection.id}#items`} className="text-xs text-[var(--primary-text)] underline underline-offset-4">ล้าง</Link>}
+          <div className="flex min-h-11 items-center gap-2">
+            <button type="submit" className="primary-action action-sm"><AppIcon name="filter" className="h-4 w-4" /> กรอง</button>
+            {activeFilterCount > 0 && <ActionIconLink href={`/inspection/${inspection.id}#items`} icon="close" label="ล้างตัวกรอง" />}
           </div>
         </form>
         <div className="overflow-x-auto">

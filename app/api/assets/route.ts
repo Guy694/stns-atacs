@@ -7,6 +7,7 @@ import { assetTypeLabel } from "@/lib/asset-policy";
 import { resolveRequestedAssetFacility } from "@/lib/facility-scope";
 import { readRequestIp, recordSecurityEvent } from "@/lib/security";
 import { hasPermission } from "@/lib/role-permissions";
+import { userFacingError } from "@/lib/schema-errors";
 
 export async function GET(req: NextRequest) {
   const user = await getCurrentUser();
@@ -38,7 +39,7 @@ export async function GET(req: NextRequest) {
   try {
     filter = parseAssetListQuery(req.nextUrl.searchParams);
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "ตัวกรองไม่ถูกต้อง" }, { status: 400 });
+    return NextResponse.json({ error: userFacingError(error, "ตัวกรองไม่ถูกต้อง") }, { status: 400 });
   }
   const assets = await listAssets({ ...filter, facilityId });
 

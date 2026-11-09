@@ -6,7 +6,8 @@ import { notFound, redirect } from "next/navigation";
 
 import { AppIcon } from "@/app/_components/ui/icon";
 import { StatusBadge } from "@/app/_components/ui/status-badge";
-import { ActionIconButton } from "@/app/_components/ui/action-icon-button";
+import { ActionIconButton, ActionIconLink } from "@/app/_components/ui/action-icon-button";
+import { PhotoBackdrop } from "@/app/_components/ui/photo-backdrop";
 import { assetClassLabel } from "@/lib/asset-classes";
 import { getCurrentUser } from "@/lib/auth";
 import { getFacilityById, listAssets, listAllFacilitiesForSelect } from "@/lib/assets";
@@ -161,23 +162,26 @@ export default async function FacilityDetailPage({ params, searchParams }: Props
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6">
       {/* Breadcrumb */}
-      <div className="flex items-center gap-2 text-sm text-[var(--muted)]">
+      <nav aria-label="เส้นทางนำทาง" className="flex items-center gap-1.5 text-sm text-[var(--muted)]">
         {user.role === "officer" ? (
           <span>รายการทรัพย์สิน</span>
         ) : (
           <Link href="/assets" className="hover:text-[var(--accent)]">ทะเบียนทรัพย์สิน</Link>
         )}
-        <span>/</span>
+        <AppIcon name="chevron-right" size={14} />
         <span className="text-[var(--foreground)]">{facilityName}</span>
-      </div>
+      </nav>
 
       {/* Hero */}
-      <div className="glass-panel overflow-hidden rounded-2xl">
-        <div className="bg-[linear-gradient(135deg,#0a4f47,#0d6f63)] px-6 py-8 text-white sm:px-8">
-          <p className="text-xs font-medium text-white/60">หน่วยบริการ · อ.{districtName}</p>
-          <h1 className="section-title mt-2 text-3xl font-semibold sm:text-4xl">{facilityName}</h1>
+      <div className="glass-panel relative isolate overflow-hidden rounded-2xl">
+        <PhotoBackdrop image="meeting-room" opacity="opacity-[0.12]" fade="left" />
+        <div className="px-5 py-6 sm:px-6">
+          <h1 className="section-title text-2xl font-semibold sm:text-3xl">{facilityName}</h1>
+          <p className="mt-1 flex items-center gap-1.5 text-sm text-[var(--muted)]">
+            <AppIcon name="building" size={15} /> หน่วยบริการ{districtName ? ` · อ.${districtName}` : ""}
+          </p>
         </div>
-        <div className="grid grid-cols-2 divide-x divide-black/6 sm:grid-cols-4">
+        <div className="grid grid-cols-2 divide-x divide-[var(--line)] border-t border-[var(--line)] sm:grid-cols-4">
           {[
             { label: "ทรัพย์สินรวม", value: totalAssets },
             { label: "พร้อมใช้งาน", value: activeCount, green: true },
@@ -186,7 +190,7 @@ export default async function FacilityDetailPage({ params, searchParams }: Props
           ].map((kpi) => (
             <div key={kpi.label} className="px-5 py-4">
               <p className="text-xs text-[var(--muted)]">{kpi.label}</p>
-              <p className={`mt-1 text-2xl font-semibold ${kpi.green ? "text-[var(--accent-strong)]" : ""}`}>{kpi.value}</p>
+              <p className={`mt-1 text-2xl font-semibold tabular-nums ${kpi.green ? "text-[var(--accent-strong)]" : ""}`}>{kpi.value.toLocaleString("th-TH")}</p>
             </div>
           ))}
         </div>
@@ -219,7 +223,7 @@ export default async function FacilityDetailPage({ params, searchParams }: Props
               แสดง {assets.length.toLocaleString("th-TH")} จาก {totalAssets.toLocaleString("th-TH")} รายการ
             </p>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {canManageAssets && (canCreateAsset || canUpdateAsset) && (
               <ImportExcelModal
                 facilities={[{ id: facilityId, name: facilityName, district_name: currentFacility.district_name }]}
@@ -227,18 +231,8 @@ export default async function FacilityDetailPage({ params, searchParams }: Props
                 fixedFacilityId={facilityId}
               />
             )}
-            <a
-              href={`/print/assets/register?facility=${facilityId}`}
-              className="secondary-action gap-2"
-            >
-              <AppIcon name="printer" className="h-4 w-4" /> พิมพ์ทะเบียนคุมทรัพย์สิน (A4 แนวนอน)
-            </a>
-            <a
-              href={`/print/assets/audit?facility=${facilityId}`}
-              className="secondary-action gap-2"
-            >
-              <AppIcon name="printer" className="h-4 w-4" /> พิมพ์ใบตรวจสอบพัสดุประจำปี (A4 แนวนอน)
-            </a>
+            <ActionIconLink href={`/print/assets/register?facility=${facilityId}`} icon="file-text" label="พิมพ์ทะเบียนคุมทรัพย์สิน (A4 แนวนอน)" />
+            <ActionIconLink href={`/print/assets/audit?facility=${facilityId}`} icon="clipboard-check" label="พิมพ์ใบตรวจสอบพัสดุประจำปี (A4 แนวนอน)" />
             <FacilityAssetQrActions
               facilityId={facilityId}
               facilityName={facilityName}
@@ -259,7 +253,7 @@ export default async function FacilityDetailPage({ params, searchParams }: Props
                 mode="create"
               >
                 <button type="button" className="primary-action whitespace-nowrap">
-                  + เพิ่มทรัพย์สิน
+                  <AppIcon name="plus" className="h-4 w-4" /> เพิ่มทรัพย์สิน
                 </button>
               </AssetFormModal>
             )}
@@ -271,7 +265,12 @@ export default async function FacilityDetailPage({ params, searchParams }: Props
         </div>
 
         {assets.length === 0 ? (
-          <div className="p-10 text-center text-sm text-[var(--muted)]">ไม่พบรายการทรัพย์สินที่ตรงกับเงื่อนไข</div>
+          <div className="relative isolate flex flex-col items-center overflow-hidden border-t border-black/6 px-6 py-12 text-center">
+            <PhotoBackdrop image="office-desk" opacity="opacity-[0.10]" fade="bottom" />
+            <AppIcon name="package" size={32} className="text-[var(--muted)]" />
+            <p className="mt-2 text-sm font-medium text-[var(--foreground)]">ไม่พบรายการทรัพย์สินที่ตรงกับเงื่อนไข</p>
+            <p className="mt-1 text-xs text-[var(--muted)]">ลองเปลี่ยนคำค้นหรือล้างตัวกรอง</p>
+          </div>
         ) : (
           <>
             {/* D2: มือถือแสดงเป็นการ์ด ตารางแสดงตั้งแต่ md ขึ้นไป (เรียงลำดับบนมือถือใช้ตัวเลือกในตัวกรองเพิ่มเติม) */}

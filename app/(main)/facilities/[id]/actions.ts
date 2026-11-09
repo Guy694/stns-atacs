@@ -7,6 +7,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { getFacilityById, updateFacility } from "@/lib/assets";
 import { writeAuditLog } from "@/lib/audit";
 import { hasPermission } from "@/lib/role-permissions";
+import { userFacingError } from "@/lib/schema-errors";
 
 function parseNumber(value: FormDataEntryValue | null) {
   const raw = typeof value === "string" ? value.trim() : "";
@@ -84,7 +85,7 @@ export async function updateFacilitySelfAction(_prev: string | null, fd: FormDat
     revalidatePath("/reports");
     revalidatePath("/admin/settings/facilities");
   } catch (error) {
-    return error instanceof Error ? error.message : "เกิดข้อผิดพลาด กรุณาลองใหม่";
+    return userFacingError(error);
   }
 
   return null;

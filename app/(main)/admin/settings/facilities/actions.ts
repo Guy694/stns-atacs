@@ -7,6 +7,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { createFacility, toggleFacilityActive, updateFacility } from "@/lib/assets";
 import { canAccessFacility } from "@/lib/facility-scope";
 import { hasPermission } from "@/lib/role-permissions";
+import { userFacingError } from "@/lib/schema-errors";
 
 async function requireAdmin() {
   const user = await getCurrentUser();
@@ -57,7 +58,7 @@ export async function createFacilityAction(_prev: string | null, fd: FormData): 
     });
     REVALIDATE();
   } catch (err) {
-    return err instanceof Error ? err.message : "เกิดข้อผิดพลาด";
+    return userFacingError(err, "เกิดข้อผิดพลาด");
   }
   return null;
 }
@@ -90,7 +91,7 @@ export async function updateFacilityAction(_prev: string | null, fd: FormData): 
     });
     REVALIDATE();
   } catch (err) {
-    return err instanceof Error ? err.message : "เกิดข้อผิดพลาด";
+    return userFacingError(err, "เกิดข้อผิดพลาด");
   }
   return null;
 }

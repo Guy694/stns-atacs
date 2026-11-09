@@ -16,6 +16,8 @@ import {
   type SyncOutcome,
 } from "@/lib/offline-inspection";
 import { confirmAction } from "@/app/_components/ui/confirm";
+import { ActionIconButton } from "@/app/_components/ui/action-icon-button";
+import { AppIcon } from "@/app/_components/ui/icon";
 import { QR_SCANNER_MESSAGES, cameraAvailable, useQrScanner } from "@/app/_components/ui/use-qr-scanner";
 
 type Item = { itemId: number; assetId: number; number: string; name: string; status: "Pending" | "Found" | "Missing"; currentStatus: string };
@@ -229,12 +231,12 @@ export function ScanCheckIn({ inspectionId, items, workGroups }: { inspectionId:
           </span>
           <span className="rounded-full bg-[var(--neutral-bg)] px-2.5 py-1">รอส่ง {queue.length.toLocaleString("th-TH")} รายการ</span>
           {queue.length > 0 && online && (
-            <button type="button" onClick={() => void sync()} className="min-h-9 rounded-lg border border-[var(--line)] bg-white px-3 font-semibold hover:bg-[var(--primary-soft)]">
-              ส่งตอนนี้
+            <button type="button" onClick={() => void sync()} className="secondary-action action-sm gap-1.5">
+              <AppIcon name="upload" className="h-4 w-4" /> ส่งตอนนี้
             </button>
           )}
           {blocked && queue.length > 0 && (
-            <button type="button" onClick={async () => {
+            <ActionIconButton icon="trash" tone="danger" label="ล้างรายการที่รอส่ง" onClick={async () => {
               const confirmed = await confirmAction({
                 title: `ล้างรายการที่รอส่ง ${queue.length.toLocaleString("th-TH")} รายการ?`,
                 text: "ผลสแกนที่ยังไม่ได้ส่งเข้าระบบจะหายไป ต้องสแกนใหม่",
@@ -243,10 +245,7 @@ export function ScanCheckIn({ inspectionId, items, workGroups }: { inspectionId:
               });
               if (!confirmed) return;
               writeQueue(inspectionId, []); setQueue([]); setBlocked(false); setMessage("ล้างรายการที่รอส่งแล้ว");
-            }}
-              className="min-h-9 rounded-lg border border-red-200 bg-white px-3 font-semibold text-red-700">
-              ล้างรายการที่รอส่ง
-            </button>
+            }} />
           )}
           {!stored && <span className="text-red-700">เบราว์เซอร์นี้เก็บข้อมูลในเครื่องไม่ได้ (โหมดส่วนตัว?) ต้องมีสัญญาณขณะสแกน</span>}
         </div>
@@ -273,10 +272,13 @@ export function ScanCheckIn({ inspectionId, items, workGroups }: { inspectionId:
 
       <div className="mt-3 flex flex-col gap-3 sm:flex-row">
         {supported && (
-          <button type="button" onClick={() => { setMessage(""); setScanning((value) => !value); }}
-            className="min-h-11 shrink-0 rounded-xl bg-[var(--accent-strong)] px-4 text-sm font-semibold text-white hover:opacity-90">
-            {scanning ? "ปิดกล้อง" : "สแกนด้วยกล้องในหน้านี้"}
-          </button>
+          scanning ? (
+            <ActionIconButton icon="close" label="ปิดกล้อง" onClick={() => { setMessage(""); setScanning(false); }} />
+          ) : (
+            <button type="button" onClick={() => { setMessage(""); setScanning(true); }} className="primary-action shrink-0">
+              <AppIcon name="qr" className="h-4 w-4" /> สแกนด้วยกล้องในหน้านี้
+            </button>
+          )
         )}
         <label className="min-w-0 flex-1 text-sm">
           <span className="sr-only">ค้นหาเลขครุภัณฑ์หรือชื่อ</span>
@@ -298,7 +300,7 @@ export function ScanCheckIn({ inspectionId, items, workGroups }: { inspectionId:
                   <span className="min-w-0"><span className="font-mono text-xs text-[var(--muted)]">{item.number || "-"}</span> <span className="block truncate">{item.name}</span></span>
                   <span className="flex shrink-0 items-center gap-2">
                     <span className="text-xs text-[var(--muted)]">{statusText(item)}</span>
-                    <button type="button" onClick={() => record(item)} className="min-h-10 rounded-lg bg-emerald-700 px-3 text-xs font-semibold text-white hover:bg-emerald-800">พบ</button>
+                    <button type="button" onClick={() => record(item)} className="inline-flex min-h-10 items-center gap-1 rounded-lg bg-emerald-700 px-3 text-xs font-semibold text-white transition hover:bg-emerald-800"><AppIcon name="check" className="h-3.5 w-3.5" /> พบ</button>
                   </span>
                 </>
               ) : (
@@ -319,7 +321,7 @@ export function ScanCheckIn({ inspectionId, items, workGroups }: { inspectionId:
           <ul className="mt-1 list-disc pl-5 text-xs">
             {failed.slice(0, 10).map((entry) => <li key={entry.clientId}>{entry.label}: {entry.error}</li>)}
           </ul>
-          <button type="button" onClick={() => setFailed([])} className="mt-2 min-h-9 rounded-lg border border-red-200 bg-white px-3 text-xs font-semibold">ปิด</button>
+          <ActionIconButton icon="close" label="ปิดรายการที่บันทึกไม่ได้" onClick={() => setFailed([])} className="mt-2" />
         </div>
       )}
     </section>

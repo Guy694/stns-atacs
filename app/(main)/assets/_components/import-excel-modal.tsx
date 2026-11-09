@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
+import { ActionIconButton } from "@/app/_components/ui/action-icon-button";
+import { FacilitySelect } from "@/app/_components/ui/facility-select";
 import { AppIcon } from "@/app/_components/ui/icon";
 import { withBasePath } from "@/lib/base-path";
 import type { FacilityWorkGroupOption } from "@/lib/facility-work-groups";
@@ -20,7 +22,7 @@ type ImportResult = {
   unknownColumns?: string[];
 };
 
-type ImportFacility = { id: number; name: string; district_name: string | null };
+type ImportFacility = { id: number; name: string; district_name: string | null; typecode?: string | null };
 
 export default function ImportExcelModal({
   facilities,
@@ -42,11 +44,6 @@ export default function ImportExcelModal({
   const dialogRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
 
-  const byDistrict = facilities.reduce<Record<string, ImportFacility[]>>((acc, facility) => {
-    const district = facility.district_name ?? "อื่นๆ";
-    (acc[district] ??= []).push(facility);
-    return acc;
-  }, {});
   const selectedFacility = facilities.find((facility) => String(facility.id) === facilityId);
   const selectedWorkGroups = facilityId
     ? workGroups.filter((workGroup) => String(workGroup.facilityId) === facilityId)
@@ -107,7 +104,7 @@ export default function ImportExcelModal({
       </button>
 
       {open && createPortal(
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(17,49,39,0.42)" }}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
           <div
             ref={dialogRef}
             role="dialog"
@@ -121,15 +118,13 @@ export default function ImportExcelModal({
                 <h2 id={titleId} className="text-lg font-bold" style={{ color: "var(--foreground)" }}>นำเข้าครุภัณฑ์จาก CSV</h2>
                 <p className="mt-1 text-xs" style={{ color: "var(--muted)" }}>รองรับ CSV เป็นหลัก และรองรับ Excel (.xlsx, .xls) เพื่อใช้งานกับไฟล์เดิม</p>
               </div>
-              <button
-                type="button"
+              <ActionIconButton
+                icon="close"
+                label="ปิดหน้าต่างนำเข้า CSV"
                 onClick={handleClose}
                 disabled={loading}
-                aria-label="ปิดหน้าต่างนำเข้า CSV"
-                className="min-h-11 min-w-11 rounded-xl text-xl text-gray-500 hover:bg-stone-100 hover:text-gray-700"
-              >
-                ✕
-              </button>
+                className="border-transparent bg-transparent text-[var(--muted)] hover:bg-stone-100 hover:text-[var(--foreground)]"
+              />
             </div>
 
             {!result ? (
@@ -146,23 +141,15 @@ export default function ImportExcelModal({
                   <label htmlFor={`${titleId}-facility`} className="text-sm font-semibold" style={{ color: "var(--foreground)" }}>
                     หน่วยบริการ <span className="text-red-500">*</span>
                   </label>
-                  <select
+                  <FacilitySelect
                     id={`${titleId}-facility`}
-                    data-autofocus={fixedFacilityId === undefined ? "" : undefined}
                     disabled={loading || fixedFacilityId !== undefined}
                     value={facilityId}
-                    onChange={(event) => setFacilityId(event.target.value)}
-                    className="w-full rounded-lg border px-3 py-2 text-sm"
-                    style={{ borderColor: "var(--line)" }}
+                    onChange={setFacilityId}
+                    facilities={facilities.map((facility) => ({ id: facility.id, name: facility.name, typecode: facility.typecode, districtName: facility.district_name }))}
+                    placeholder="พิมพ์ค้นหาหน่วยบริการ…"
                     required
-                  >
-                    <option value="">-- เลือกหน่วยบริการ --</option>
-                    {Object.entries(byDistrict).map(([district, facilityRows]) => (
-                      <optgroup key={district} label={`อ.${district}`}>
-                        {facilityRows.map((facility) => <option key={facility.id} value={facility.id}>{facility.name}</option>)}
-                      </optgroup>
-                    ))}
-                  </select>
+                  />
                 </div>
 
                 {facilityId && (
@@ -236,7 +223,7 @@ export default function ImportExcelModal({
                     </a>
                   )}
                   <Link href="/assets/import-guide" className="inline-flex items-center gap-1.5" style={{ color: "var(--accent)" }}>
-                    อ่านคู่มือและคำอธิบายคอลัมน์ทั้งหมด
+                    <AppIcon name="file-text" className="h-3.5 w-3.5" /> อ่านคู่มือและคำอธิบายคอลัมน์ทั้งหมด
                   </Link>
                 </div>
 
@@ -244,17 +231,16 @@ export default function ImportExcelModal({
                   <button
                     type="submit"
                     disabled={loading}
-                    className="rounded-lg px-5 py-2 text-sm font-semibold text-white disabled:opacity-50"
-                    style={{ background: "var(--accent)" }}
+                    className="primary-action"
                   >
-                    {loading ? "กำลังนำเข้า..." : "นำเข้าข้อมูล"}
+                    <AppIcon name={loading ? "refresh" : "upload"} size={16} className={loading ? "animate-spin motion-reduce:animate-none" : ""} />
+                    {loading ? "กำลังนำเข้า…" : "นำเข้าข้อมูล"}
                   </button>
                   <button
                     type="button"
                     onClick={handleClose}
                     disabled={loading}
-                    className="rounded-lg border px-5 py-2 text-sm font-semibold"
-                    style={{ borderColor: "var(--line)", color: "var(--muted)" }}
+                    className="secondary-action"
                   >
                     ยกเลิก
                   </button>
@@ -286,12 +272,8 @@ export default function ImportExcelModal({
                     </ul>
                   </div>
                 )}
-                <button
-                  onClick={handleClose}
-                  className="rounded-lg px-5 py-2 text-sm font-semibold text-white"
-                  style={{ background: "var(--accent)" }}
-                >
-                  ปิด
+                <button type="button" onClick={handleClose} className="secondary-action gap-2">
+                  <AppIcon name="check" size={16} /> เสร็จสิ้น
                 </button>
               </div>
             )}

@@ -4,6 +4,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+import { AppIcon } from "@/app/_components/ui/icon";
 import { pageWindow, type SortState } from "@/lib/table-sort";
 
 type Align = "left" | "right" | "center";
@@ -35,14 +36,16 @@ export function SortableTh({
   const content = (
     <>
       <span>{label}</span>
-      <span aria-hidden="true" className={`text-[10px] leading-none ${dir ? "opacity-100" : "opacity-30 group-hover:opacity-70"}`}>
-        {dir === "asc" ? "▲" : dir === "desc" ? "▼" : "↕"}
-      </span>
+      <AppIcon
+        name={dir === "asc" ? "chevron-down" : dir === "desc" ? "chevron-down" : "chevrons-up-down"}
+        size={13}
+        className={`shrink-0 transition ${dir === "asc" ? "rotate-180" : ""} ${dir ? "opacity-100" : "opacity-35 group-hover:opacity-70"}`}
+      />
       <span className="sr-only">{dir === "asc" ? "(เรียงจากน้อยไปมาก)" : dir === "desc" ? "(เรียงจากมากไปน้อย)" : "(กดเพื่อเรียง)"}</span>
     </>
   );
   return (
-    <th aria-sort={ariaSort} className={`${className} ${alignClass[align]}`}>
+    <th aria-sort={ariaSort} className={`relative ${className} ${alignClass[align]}`}>
       {href ? (
         <Link href={href} scroll={false} className={control}>{content}</Link>
       ) : (
@@ -52,10 +55,11 @@ export function SortableTh({
   );
 }
 
-const buttonBase = "min-w-10 rounded-xl px-3 py-2 text-center text-sm font-medium transition";
-const idle = `${buttonBase} border border-black/10 bg-white/80 hover:bg-white`;
+// Compact on purpose: 32px targets (≥24px WCAG 2.2 minimum) so the bar never dominates the table.
+const buttonBase = "inline-flex h-8 min-w-8 items-center justify-center rounded-lg px-2 text-xs font-medium tabular-nums transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]";
+const idle = `${buttonBase} border border-black/10 bg-white/80 text-[var(--foreground)] hover:border-[var(--primary-soft-strong)] hover:bg-[var(--primary-soft)]`;
 const current = `${buttonBase} bg-[var(--accent-strong)] text-white`;
-const disabled = `${buttonBase} border border-black/6 bg-white/50 text-[var(--muted)] opacity-60`;
+const disabled = `${buttonBase} border border-black/6 bg-white/40 text-[var(--muted)] opacity-50`;
 
 export function TablePagination({
   page,
@@ -92,22 +96,22 @@ export function TablePagination({
     );
 
   return (
-    <nav aria-label={label} className={`flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between ${className}`}>
-      <p className="text-sm text-[var(--muted)]" aria-live="polite">
+    <nav aria-label={label} className={`flex flex-col gap-2 px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between ${className}`}>
+      <p className="text-xs text-[var(--muted)] tabular-nums" aria-live="polite">
         แสดง {start.toLocaleString("th-TH")}–{end.toLocaleString("th-TH")} จาก {total.toLocaleString("th-TH")} รายการ
         {totalPages > 1 && <> · หน้า {page.toLocaleString("th-TH")} จาก {totalPages.toLocaleString("th-TH")}</>}
       </p>
       {totalPages > 1 && (
-        <div className="flex flex-wrap items-center gap-2">
-          {page > 1 ? go(page - 1, "ก่อนหน้า") : <span aria-disabled="true" className={disabled}>ก่อนหน้า</span>}
+        <div className="flex flex-wrap items-center gap-1">
+          {page > 1 ? go(page - 1, <AppIcon name="chevron-left" size={16} />, "หน้าก่อนหน้า") : <span aria-disabled="true" className={disabled}><AppIcon name="chevron-left" size={16} /></span>}
           {pageWindow(page, totalPages).map((value, index) =>
             value === 0 ? (
-              <span key={`gap-${index}`} aria-hidden="true" className="px-1 text-sm text-[var(--muted)]">…</span>
+              <span key={`gap-${index}`} aria-hidden="true" className="px-0.5 text-xs text-[var(--muted)]">…</span>
             ) : (
-              <span key={value}>{go(value, value.toLocaleString("th-TH"), `หน้า ${value}`, value === page)}</span>
+              <span key={value} className="contents">{go(value, value.toLocaleString("th-TH"), `หน้า ${value}`, value === page)}</span>
             )
           )}
-          {page < totalPages ? go(page + 1, "ถัดไป") : <span aria-disabled="true" className={disabled}>ถัดไป</span>}
+          {page < totalPages ? go(page + 1, <AppIcon name="chevron-right" size={16} />, "หน้าถัดไป") : <span aria-disabled="true" className={disabled}><AppIcon name="chevron-right" size={16} /></span>}
         </div>
       )}
     </nav>

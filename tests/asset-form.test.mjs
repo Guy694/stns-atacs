@@ -37,7 +37,8 @@ test("IT form retains category, device, license, OS and purchase inputs", () => 
 test("B1: edit mode keeps the facility read-only and points to the transfer menu", () => {
   const html = renderForm("IT", { id: 42, facilityId: 7, facilityName: "รพ.สต. ตัวอย่าง" });
   assert.match(html, /<input type="hidden" name="facilityId" value="7"\/>/);
-  assert.match(html, /<select[^>]*disabled=""[^>]*>\s*<option value="7"[^>]*>รพ.สต. ตัวอย่าง<\/option>/);
+  // The facility picker (searchable combobox) is shown locked with the current facility.
+  assert.match(html, /role="combobox"[^>]*disabled=""[^>]*value="รพ.สต. ตัวอย่าง"/);
   assert.match(html, /href="\/transfer\/\?assetId=42"[^>]*>ต้องการย้ายหน่วยงาน\? ใช้เมนูโอนย้าย/);
   assert.equal((html.match(/name="facilityId"/g) ?? []).length, 1, "only the hidden current facility is submitted");
 });
@@ -67,7 +68,7 @@ test("specific fields offer inline creation only to managers without nesting a f
       } },
     });
     const html = renderToStaticMarkup(React.createElement(AssetSpecificFields, { assetClass: "Office" }));
-    assert.equal(html.includes("+ เพิ่มประเภทย่อย"), canManage);
+    assert.equal(html.includes("เพิ่มประเภทย่อย</button>"), canManage);
     assert.equal(html.includes("เพิ่มและเลือกใช้"), canManage);
     assert.equal(html.includes("ติดต่อผู้ดูแลระบบ"), !canManage);
     assert.ok(!html.includes("<form"));

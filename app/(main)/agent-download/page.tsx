@@ -1,59 +1,67 @@
 import { redirect } from "next/navigation";
 
-import { getCurrentUser } from "@/lib/auth";
-import { getFacilityAgentContext, listFacilityWorkGroups } from "@/lib/facility-work-groups";
-import { hasPermission } from "@/lib/role-permissions";
-import { AgentDownloadPanel } from "./_components/agent-download-panel";
 import { AppIcon } from "@/app/_components/ui/icon";
+import { PhotoBackdrop } from "@/app/_components/ui/photo-backdrop";
+import { InstallCommandPanel } from "@/app/(main)/admin/settings/agent/_components/install-command-panel";
+import { getCurrentUser } from "@/lib/auth";
+import { listAllFacilitiesForSelect } from "@/lib/assets";
+import { getFacilityScopeId } from "@/lib/facility-scope";
+import { listFacilityWorkGroups, requiresAgentWorkGroup } from "@/lib/facility-work-groups";
+import { hasPermission } from "@/lib/role-permissions";
+
+import { AgentUninstallCommands } from "./_components/agent-uninstall-commands";
+import { getDownloadInstallCommand } from "./actions";
 
 export default async function AgentDownloadPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
-  // SEC-03: หน้านี้เคยตรวจแค่ "ล็อกอินแล้ว" ทั้งที่เมนูซ่อนด้วย agent.manage
+  // SEC-03: ต้องมีสิทธิ์ agent.manage (เมนูซ่อนด้วยสิทธิ์นี้อยู่แล้ว)
   if (user.role === "viewer" || !(user.role === "admin" || (await hasPermission(user.role, "agent.manage")))) {
     redirect("/dashboard");
   }
 
-  let facilityName = "–";
-  let requiresWorkGroup = false;
-  let workGroups: Awaited<ReturnType<typeof listFacilityWorkGroups>> = [];
-  if (user.facilityId) {
-    try {
-      const facility = await getFacilityAgentContext(user.facilityId);
-      if (facility) {
-        facilityName = facility.name;
-        requiresWorkGroup = facility.requiresWorkGroup;
-      }
-      workGroups = await listFacilityWorkGroups(user.facilityId);
-    } catch {
-      // ignore
-    }
-  }
+  const facilityScopeId = getFacilityScopeId(user);
+  const facilities = facilityScopeId === null ? [] : await listAllFacilitiesForSelect(facilityScopeId ? { facilityId: facilityScopeId } : undefined);
+  const workGroups = facilityScopeId === null ? [] : await listFacilityWorkGroups(facilityScopeId || undefined).catch(() => []);
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6">
-      <div>
-        <p className="text-xs font-semibold text-[var(--accent-strong)]">ATACS Agent</p>
-        <h1 className="section-title mt-1 text-3xl font-semibold">ดาวน์โหลด Agent</h1>
-        <p className="mt-1 text-sm text-[var(--muted)]">
-          ติดตั้ง ATACS Agent บนเครื่องคอมพิวเตอร์ของหน่วยงาน เพื่อรายงาน inventory อัตโนมัติ
+    <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-6">
+      <header className="glass-panel relative isolate overflow-hidden rounded-2xl px-5 py-5 sm:px-6">
+        <PhotoBackdrop image="it-storage" fade="left" opacity="opacity-[0.12]" />
+        <h1 className="section-title text-2xl font-semibold sm:text-3xl">ติดตั้ง ATACS Agent</h1>
+        <p className="mt-1.5 max-w-xl text-sm text-[var(--muted)]">
+          เลือกหน่วยงานและระบบปฏิบัติการ คัดลอกคำสั่ง แล้วนำไปวางที่เครื่องคอมพิวเตอร์ของหน่วยงาน เครื่องจะรายงานข้อมูลฮาร์ดแวร์เข้าระบบอัตโนมัติ
         </p>
-      </div>
+      </header>
 
-      {!user.facilityId ? (
-        <div className="glass-panel rounded-2xl px-6 py-8 text-center">
-          <AppIcon name="building" aria-hidden="true" className="mx-auto mb-2 h-8 w-8 text-[var(--muted)]" />
+      {facilities.length === 0 ? (
+        <div className="glass-panel relative isolate overflow-hidden rounded-2xl px-6 py-10 text-center">
+          <PhotoBackdrop image="office-desk" fade="bottom" opacity="opacity-[0.08]" />
+          <AppIcon name="building" className="mx-auto mb-2 h-8 w-8 text-[var(--muted)]" />
           <p className="font-medium">บัญชีของคุณยังไม่ได้ผูกกับหน่วยงาน</p>
           <p className="mt-1 text-sm text-[var(--muted)]">กรุณาติดต่อผู้ดูแลระบบเพื่อกำหนดหน่วยงานที่สังกัดก่อน</p>
         </div>
       ) : (
-        <AgentDownloadPanel
-          facilityId={user.facilityId}
-          facilityName={facilityName}
-          requiresWorkGroup={requiresWorkGroup}
-          workGroups={workGroups}
+        <InstallCommandPanel
+          facilities={facilities.map((facility) => ({
+            id: facility.id,
+            name: facility.facility_name,
+            typecode: facility.typecode,
+            districtName: facility.district_name,
+            requiresWorkGroup: requiresAgentWorkGroup(facility.typecode),
+          }))}
+          workGroups={workGroups.map((group) => ({ id: group.id, facilityId: group.facilityId, workGroupName: group.workGroupName }))}
+          getCommand={getDownloadInstallCommand}
         />
       )}
+
+      <section className="glass-panel rounded-2xl px-5 py-4">
+        <h2 className="text-base font-semibold">ถอนการติดตั้ง</h2>
+        <p className="mt-1 text-sm text-[var(--muted)]">ใช้กับเครื่องที่ต้องการเอา Agent ออกเอง หรือ Agent รุ่นเก่าที่ถอนจากระยะไกลไม่ได้</p>
+        <div className="mt-3">
+          <AgentUninstallCommands compact />
+        </div>
+      </section>
     </div>
   );
 }

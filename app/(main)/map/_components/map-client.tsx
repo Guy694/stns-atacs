@@ -96,7 +96,7 @@ export function MapClient({ facilities }: { facilities: Facility[] }) {
         if (!f.has_survey) {
           const warn = document.createElement("p");
           warn.style.cssText = "margin:4px 0 0;font-size:11px;color:#f59e0b";
-          warn.textContent = "⚠ ยังไม่มีข้อมูล";
+          warn.textContent = "ยังไม่มีข้อมูลสำรวจ";
           popup.appendChild(warn);
         }
 

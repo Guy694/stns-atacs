@@ -122,9 +122,10 @@ export function cleanMac(value: unknown): string | null {
 }
 
 export function cleanFingerprint(value: unknown): string | null {
+  // Every agent version sends SHA-256 hex of hardware IDs; anything else is forged or corrupt.
   // ไม่ตัดความยาว: fingerprint ที่ยาวเกินคือค่าผิด ไม่ใช่ค่าที่ตัดแล้วใช้ได้
   const text = cleanText(value, 200)?.toLowerCase() ?? null;
-  return text && /^[0-9a-z._:-]{8,64}$/.test(text) ? text : null;
+  return text && /^[0-9a-f]{64}$/.test(text) && !/^0+$/.test(text) ? text : null;
 }
 
 /** วันที่ ISO ที่อยู่ในช่วงสมเหตุสมผล (2000 – อนาคตไม่เกิน 1 วัน) คืนเป็น ISO UTC */

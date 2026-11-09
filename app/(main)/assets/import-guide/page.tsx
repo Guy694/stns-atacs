@@ -2,6 +2,8 @@ import { ASSET_DETAIL_FIELDS } from "@/lib/asset-details";
 import { ACQUISITION_METHODS, FUNDING_SOURCES } from "@/lib/acquisition-options";
 import { listAssetSubtypes } from "@/lib/asset-extensions";
 import Link from "next/link";
+
+import { AppIcon } from "@/app/_components/ui/icon";
 import { redirect } from "next/navigation";
 
 import { ASSET_CLASS_OPTIONS } from "@/lib/asset-classes";
@@ -48,18 +50,17 @@ export default async function AssetImportGuidePage() {
     <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 pb-10">
       <nav className="flex flex-wrap items-center gap-2 text-xs text-[var(--muted)]" aria-label="เส้นทางนำทาง">
         <Link href="/assets" className="hover:text-[var(--foreground)]">รายการทรัพย์สิน</Link>
-        <span>/</span>
+        <AppIcon name="chevron-right" size={14} />
         <span className="text-[var(--foreground)]">คู่มือนำเข้า CSV</span>
       </nav>
 
       <header className="dashboard-hero overflow-hidden rounded-[18px] px-6 py-8 text-white sm:px-8">
-        <p className="text-xs font-semibold text-sky-100">ทะเบียนทรัพย์สิน · นำเข้าข้อมูล</p>
-        <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">คู่มือนำเข้าครุภัณฑ์ด้วย CSV</h1>
+        <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">คู่มือนำเข้าครุภัณฑ์ด้วย CSV</h1>
         <p className="mt-3 max-w-3xl text-sm leading-6 text-sky-50 sm:text-base">ใช้หน้านี้เพื่อเตรียมไฟล์ CSV สำหรับเพิ่มหรือแก้ไขครุภัณฑ์ ตรวจสอบการใช้ <Code>id</Code> และค้นหา <Code>work_group_id</Code> ของแต่ละหน่วยบริการก่อนนำเข้า</p>
         <div className="mt-5 flex flex-wrap gap-3">
-          <a href={withBasePath("/api/export/assets/?template=xlsx")} className="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-[#15548f] transition hover:bg-sky-50">ดาวน์โหลดไฟล์ Excel ต้นแบบ (มีคำอธิบายคอลัมน์)</a>
-          <a href={withBasePath("/api/export/assets/?template=csv")} className="rounded-xl border border-white/40 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/10">ไฟล์ CSV ตัวอย่าง</a>
-          <Link href="/assets" className="rounded-xl border border-white/40 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/10">กลับไปรายการทรัพย์สิน</Link>
+          <a href={withBasePath("/api/export/assets/?template=xlsx")} className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2 text-sm font-semibold text-[#15548f] transition hover:bg-sky-50"><AppIcon name="download" size={16} /> ดาวน์โหลดไฟล์ Excel ต้นแบบ (มีคำอธิบายคอลัมน์)</a>
+          <a href={withBasePath("/api/export/assets/?template=csv")} className="inline-flex items-center gap-2 rounded-xl border border-white/40 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/10"><AppIcon name="download" size={16} /> ไฟล์ CSV ตัวอย่าง</a>
+          <Link href="/assets" className="inline-flex items-center gap-2 rounded-xl border border-white/40 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/10"><AppIcon name="arrow-left" size={16} /> กลับไปรายการทรัพย์สิน</Link>
         </div>
       </header>
 

@@ -2,6 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { ActionIconButton } from "@/app/_components/ui/action-icon-button";
+import { AppIcon } from "@/app/_components/ui/icon";
+
 type Props = {
   revision: string;
   title: string;
@@ -78,13 +81,14 @@ export function AnnouncementPopup({ revision, title, version, message, imageUrl,
         role="dialog"
         aria-modal="true"
         aria-labelledby="announcement-title"
-        className="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-[var(--surface,#fff)] shadow-2xl"
+        className="relative flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-[var(--surface,#fff)] shadow-2xl"
       >
+        <ActionIconButton icon="close" label={preview ? "ปิดตัวอย่าง" : "ปิดประกาศ"} onClick={close} className="absolute right-3 top-3 z-10 bg-white" />
         {imageUrl && (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={imageUrl} alt={title || "ประกาศ"} className="max-h-[45vh] w-full bg-black/5 object-contain" />
         )}
-        <div className="flex-1 overflow-y-auto px-6 py-5">
+        <div className="flex-1 overflow-y-auto px-6 py-5 pr-16">
           {version && (
             <span className="inline-block rounded-full bg-[var(--primary-soft)] px-3 py-1 text-xs font-semibold text-[var(--primary-text)]">
               อัปเดตเวอร์ชัน v.{version.replace(/^v\.?/i, "")}
@@ -108,8 +112,9 @@ export function AnnouncementPopup({ revision, title, version, message, imageUrl,
             ref={closeRef}
             type="button"
             onClick={close}
-            className="rounded-xl bg-[var(--primary)] px-5 py-2 text-sm font-semibold text-white hover:opacity-90"
+            className="primary-action"
           >
+            <AppIcon name="check" className="h-4 w-4" />
             {preview ? "ปิดตัวอย่าง" : "รับทราบ"}
           </button>
         </div>

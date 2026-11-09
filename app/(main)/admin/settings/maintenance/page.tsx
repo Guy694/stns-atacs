@@ -7,6 +7,8 @@ import { getCurrentUser } from "@/lib/auth";
 import { formatThaiDateTime } from "@/lib/date-format";
 import { DEFAULT_MAINTENANCE_MESSAGE, MAINTENANCE_MESSAGE_MAX, getMaintenanceState } from "@/lib/maintenance";
 import { SubmitButton } from "@/app/_components/ui/submit-button";
+import { AppIcon } from "@/app/_components/ui/icon";
+import { PageHero, SettingsBreadcrumb } from "@/app/(main)/admin/_components/page-hero";
 
 type Props = { searchParams: Promise<Record<string, string | string[] | undefined>> };
 
@@ -22,13 +24,13 @@ export default async function MaintenanceSettingsPage({ searchParams }: Props) {
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6">
-      <div>
-        <p className="text-xs font-semibold text-[var(--accent-strong)]">ตั้งค่าระบบ · ปิดปรับปรุง</p>
-        <h1 className="section-title mt-1 text-3xl font-semibold">ปิดปรับปรุงระบบ</h1>
-        <p className="mt-1 text-sm text-[var(--muted)]">
-          เมื่อเปิดโหมดนี้ ผู้ใช้ทั่วไปจะเห็นหน้าแจ้งปิดปรับปรุงและเข้าสู่ระบบไม่ได้ ส่วนผู้ดูแลระบบยังใช้งานได้ตามปกติ
-        </p>
-      </div>
+      <SettingsBreadcrumb current="ปิดปรับปรุงระบบ" />
+      <PageHero
+        icon="wrench"
+        image="it-storage"
+        title="ปิดปรับปรุงระบบ"
+        description="เมื่อเปิดโหมดนี้ ผู้ใช้ทั่วไปจะเห็นหน้าแจ้งปิดปรับปรุงและเข้าสู่ระบบไม่ได้ ส่วนผู้ดูแลระบบยังใช้งานได้ตามปกติ"
+      />
 
       {notice && (
         <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{notice}</div>
@@ -89,14 +91,12 @@ export default async function MaintenanceSettingsPage({ searchParams }: Props) {
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          <SubmitButton pendingText="กำลังบันทึก…"
-            className={`rounded-xl px-5 py-2.5 text-sm font-semibold text-white transition hover:opacity-90 ${
-              state.enabled ? "bg-emerald-600" : "bg-amber-600"
-            }`}
-          >
+          <SubmitButton pendingText="กำลังบันทึก…" className={state.enabled ? "primary-action" : "danger-action"}>
+            <AppIcon name={state.enabled ? "power-on" : "wrench"} size={16} />
             {state.enabled ? "เปิดระบบให้ใช้งานตามปกติ" : "เปิดโหมดปิดปรับปรุงระบบ"}
           </SubmitButton>
-          <Link href="/maintenance" className="text-sm font-semibold text-[var(--primary)] hover:underline">
+          <Link href="/maintenance" className="inline-flex items-center gap-1.5 text-sm font-semibold text-[var(--primary-text)] hover:underline">
+            <AppIcon name="eye" size={15} />
             ดูหน้าที่ผู้ใช้จะเห็น
           </Link>
         </div>
@@ -110,8 +110,9 @@ export default async function MaintenanceSettingsPage({ searchParams }: Props) {
       </form>
 
       <div>
-        <Link href="/admin/settings" className="text-sm font-semibold text-[var(--primary)] hover:underline">
-          ← กลับหน้าตั้งค่าระบบ
+        <Link href="/admin/settings" className="inline-flex items-center gap-1.5 text-sm font-semibold text-[var(--primary-text)] hover:underline">
+          <AppIcon name="arrow-left" size={15} />
+          กลับหน้าตั้งค่าระบบ
         </Link>
       </div>
     </div>

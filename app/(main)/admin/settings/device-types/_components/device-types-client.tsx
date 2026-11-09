@@ -5,7 +5,9 @@ import { useActionState, useId, useRef, useState, useTransition } from "react";
 import { SortableTh, TablePagination } from "@/app/_components/ui/data-table";
 import { StatusBadge, activeTone } from "@/app/_components/ui/status-badge";
 import { ActionIconButton } from "@/app/_components/ui/action-icon-button";
+import { AppIcon } from "@/app/_components/ui/icon";
 import { useTableState } from "@/app/_components/ui/use-table-state";
+import { EmptyState } from "@/app/(main)/admin/_components/page-hero";
 import { createDeviceTypeAction, toggleDeviceTypeActiveAction, updateDeviceTypeAction } from "../actions";
 import type { DeviceTypeRow } from "@/lib/device-types";
 import { useEscapeToClose } from "@/app/_components/ui/use-escape-to-close";
@@ -36,7 +38,7 @@ function DeviceTypeModal({
   useEscapeToClose(!pending, onClose);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
       <div
         role="dialog"
@@ -46,14 +48,7 @@ function DeviceTypeModal({
       >
         <div className="flex items-center justify-between">
           <h2 id={titleId} className="text-lg font-semibold">{title}</h2>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="ปิดหน้าต่างประเภทอุปกรณ์"
-            className="min-h-11 min-w-11 rounded-xl text-[var(--muted)] hover:bg-stone-100 hover:text-[var(--foreground)]"
-          >
-            ✕
-          </button>
+          <ActionIconButton icon="close" label="ปิดหน้าต่างประเภทอุปกรณ์" onClick={onClose} className="-mr-2 border-transparent bg-transparent" />
         </div>
 
         {error && <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</div>}
@@ -77,12 +72,11 @@ function DeviceTypeModal({
           </div>
 
           <div className="flex justify-end gap-3 pt-2">
-            <button type="button" onClick={onClose}
-              className="rounded-xl border border-black/10 bg-white/80 px-5 py-2 text-sm font-medium hover:bg-white">
+            <button type="button" onClick={onClose} className="secondary-action">
               ยกเลิก
             </button>
-            <button type="submit" disabled={pending}
-              className="rounded-xl bg-[var(--accent-strong)] px-6 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">
+            <button type="submit" disabled={pending} className="primary-action">
+              <AppIcon name={mode === "create" ? "plus" : "check"} size={16} />
               {pending ? "กำลังบันทึก…" : mode === "create" ? "เพิ่ม" : "บันทึก"}
             </button>
           </div>
@@ -98,7 +92,7 @@ function DeviceTypeItem({ item, seq }: { item: DeviceTypeRow; seq: number }) {
 
   return (
     <>
-      <tr className="border-b border-black/5 transition hover:bg-white/40">
+      <tr className="border-b border-black/5">
         <td className="px-4 py-3 text-right tabular-nums text-[var(--muted)]">{seq.toLocaleString("th-TH")}</td>
         <td className="px-4 py-3">
           <p className="text-sm font-medium">{item.name}</p>
@@ -116,12 +110,14 @@ function DeviceTypeItem({ item, seq }: { item: DeviceTypeRow; seq: number }) {
         <td className="px-4 py-3 text-right">
           <div className="inline-flex gap-2">
             <ActionIconButton icon="pencil" tone="primary" label={`แก้ไข ${item.name}`} onClick={() => setEditOpen(true)} />
-            <button
-              onClick={() => startToggle(() => toggleDeviceTypeActiveAction(item.id, !item.is_active))}
+            <ActionIconButton
+              icon={item.is_active ? "power-off" : "power-on"}
+              tone={item.is_active ? "danger" : "primary"}
+              label={item.is_active ? `ปิดใช้งาน ${item.name}` : `เปิดใช้งาน ${item.name}`}
+              aria-busy={togglePending}
               disabled={togglePending}
-              className={`rounded-lg border px-3 py-1 text-xs font-medium transition disabled:opacity-50 ${item.is_active ? "border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100" : "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"}`}>
-              {togglePending ? "…" : item.is_active ? "ปิด" : "เปิด"}
-            </button>
+              onClick={() => startToggle(() => toggleDeviceTypeActiveAction(item.id, !item.is_active))}
+            />
           </div>
         </td>
       </tr>
@@ -141,7 +137,7 @@ function DeviceTypeTable({ label, data }: { label: string; data: DeviceTypeRow[]
 
   return (
     <div className="glass-panel overflow-hidden rounded-2xl">
-      <div className="border-b border-black/6 bg-stone-50/60 px-4 py-2.5">
+      <div className="border-b border-black/6 px-4 py-2.5">
         <h2 className="text-xs font-semibold text-[var(--muted)]">{label}</h2>
       </div>
       <div className="overflow-x-auto">
@@ -158,7 +154,7 @@ function DeviceTypeTable({ label, data }: { label: string; data: DeviceTypeRow[]
           <tbody>
             {t.rows.map((item, rowIndex) => <DeviceTypeItem key={item.id} item={item} seq={t.start + rowIndex} />)}
             {data.length === 0 && (
-              <tr><td colSpan={5} className="py-6 text-center text-sm text-[var(--muted)]">ยังไม่มีข้อมูล</td></tr>
+              <tr><td colSpan={5} className="p-0"><EmptyState icon="layers" image="it-storage" title="ยังไม่มีประเภทอุปกรณ์ในหมวดนี้" className="py-8" /></td></tr>
             )}
           </tbody>
         </table>
@@ -176,9 +172,9 @@ export function DeviceTypesClient({ items }: { items: DeviceTypeRow[] }) {
   return (
     <>
       <div className="flex justify-end">
-        <button onClick={() => setCreateOpen(true)}
-          className="primary-action">
-          + เพิ่มประเภทอุปกรณ์
+        <button type="button" onClick={() => setCreateOpen(true)} className="primary-action">
+          <AppIcon name="plus" size={16} />
+          เพิ่มประเภทอุปกรณ์
         </button>
       </div>
 

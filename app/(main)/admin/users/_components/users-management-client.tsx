@@ -2,7 +2,11 @@
 
 import { useMemo, useState, useTransition } from "react";
 
+import { ActionIconButton } from "@/app/_components/ui/action-icon-button";
 import { SortableTh, TablePagination } from "@/app/_components/ui/data-table";
+import { FacilitySelect } from "@/app/_components/ui/facility-select";
+import { AppIcon } from "@/app/_components/ui/icon";
+import { EmptyState } from "@/app/(main)/admin/_components/page-hero";
 import { StatusBadge, activeTone } from "@/app/_components/ui/status-badge";
 import { approveUsersAction } from "@/app/(main)/admin/users/actions";
 import { UserRowActions } from "@/app/(main)/admin/users/_components/user-row-actions";
@@ -28,6 +32,7 @@ type FacilityOption = {
   id: number;
   facility_name: string;
   district_name: string | null;
+  typecode?: string | null;
 };
 
 type Props = {
@@ -80,10 +85,15 @@ function UserActions({ user, facilities, currentUserId, thaidLinkColumnAvailable
 export function UsersManagementClient({ users, facilities, currentUserId, thaidLinkColumnAvailable = false }: Props) {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<"all" | "active" | "inactive">("all");
+  const [facilityFilter, setFacilityFilter] = useState("");
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [successMessage, setSuccessMessage] = useState("");
   const [approvePending, startApprove] = useTransition();
 
+  const facilityOptions = useMemo(
+    () => facilities.map((facility) => ({ id: facility.id, name: facility.facility_name, typecode: facility.typecode, districtName: facility.district_name })),
+    [facilities]
+  );
   const pendingRegistrations = users.filter((user) => !user.is_active && !user.last_login_at);
   const systemUsers = users.filter((user) => user.is_active || user.last_login_at);
   const facilityNameById = new Map(
@@ -99,12 +109,13 @@ export function UsersManagementClient({ users, facilities, currentUserId, thaidL
       const matchesStatus =
         status === "all" || (status === "active" ? !!user.is_active : !user.is_active);
       if (!matchesStatus) return false;
+      if (facilityFilter && String(user.facility_id ?? "") !== facilityFilter) return false;
       if (!normalizedQuery) return true;
       return [user.full_name, user.officer_position, user.email, user.username, user.thaid_cid]
         .filter(Boolean)
         .some((value) => String(value).toLocaleLowerCase("th").includes(normalizedQuery));
     });
-  }, [query, status, systemUsers]);
+  }, [query, status, facilityFilter, systemUsers]);
 
   function facilityLabel(user: ManagedUser) {
     return user.facility_id ? facilityNameById.get(user.facility_id) ?? `หน่วยงาน #${user.facility_id}` : null;
@@ -155,7 +166,7 @@ export function UsersManagementClient({ users, facilities, currentUserId, thaidL
             <p className="mt-1 text-sm text-[var(--muted)]">ตรวจสอบข้อมูลและเลือกอนุมัติรายคนหรือหลายรายการพร้อมกัน</p>
           </div>
           <div className="flex items-center gap-2">
-            <span className="rounded-full bg-amber-100 px-3 py-1 text-sm font-semibold text-amber-800">
+            <span className="rounded-full bg-[var(--state-warning-bg)] px-3 py-1 text-sm font-semibold text-[var(--state-warning-fg)]">
               {pendingRegistrations.length} รายการ
             </span>
             {selectedIds.length > 0 && (
@@ -163,8 +174,9 @@ export function UsersManagementClient({ users, facilities, currentUserId, thaidL
                 type="button"
                 disabled={approvePending}
                 onClick={() => approveSelected(selectedIds)}
-                className="min-h-11 rounded-xl bg-[var(--accent-strong)] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[var(--accent)] disabled:opacity-50"
+                className="primary-action action-sm"
               >
+                <AppIcon name="check" size={16} />
                 {approvePending ? "กำลังอนุมัติ..." : `อนุมัติที่เลือก (${selectedIds.length})`}
               </button>
             )}
@@ -172,15 +184,18 @@ export function UsersManagementClient({ users, facilities, currentUserId, thaidL
         </div>
 
         {pendingRegistrations.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-emerald-200 bg-emerald-50/60 px-6 py-10 text-center">
-            <p className="font-semibold text-emerald-900">ไม่มีผู้ลงทะเบียนที่รออนุมัติ</p>
-            <p className="mt-1 text-sm text-emerald-800">รายการใหม่จะแสดงที่นี่และแจ้งจำนวนใน Sidebar</p>
-          </div>
+          <EmptyState
+            icon="check"
+            tone="success"
+            title="ไม่มีผู้ลงทะเบียนที่รออนุมัติ"
+            description="รายการใหม่จะแสดงที่นี่และแจ้งจำนวนใน Sidebar"
+            className="rounded-2xl border border-[var(--line)] bg-white py-10"
+          />
         ) : (
-          <div className="overflow-hidden rounded-2xl border border-amber-200 bg-white">
+          <div className="overflow-hidden rounded-2xl border border-[var(--line)] bg-white">
             <div className="hidden overflow-x-auto lg:block">
               <table className="w-full text-sm">
-                <thead className="bg-amber-50 text-xs text-amber-950">
+                <thead className="text-xs">
                   <tr>
                     <th className="px-4 py-3 w-14 text-right font-medium">ลำดับ</th>
                     <th className="w-12 px-4 py-3 text-left">
@@ -200,7 +215,7 @@ export function UsersManagementClient({ users, facilities, currentUserId, thaidL
                 </thead>
                 <tbody className="divide-y divide-stone-100">
                   {pendingTable.rows.map((user, rowIndex) => (
-                    <tr key={user.id} className="hover:bg-amber-50/40">
+                    <tr key={user.id}>
                       <td className="px-4 py-4 text-right tabular-nums text-[var(--muted)]">{(pendingTable.start + rowIndex).toLocaleString("th-TH")}</td>
                       <td className="px-4 py-4">
                         <input
@@ -223,14 +238,13 @@ export function UsersManagementClient({ users, facilities, currentUserId, thaidL
                         {facilityLabel(user) ?? "ยังไม่ระบุ"}
                       </td>
                       <td className="px-4 py-4 text-right">
-                        <button
-                          type="button"
+                        <ActionIconButton
+                          icon="check"
+                          tone="primary"
+                          label={`อนุมัติ ${user.full_name}`}
                           disabled={approvePending}
                           onClick={() => approveSelected([user.id])}
-                          className="min-h-11 rounded-xl bg-[var(--accent-strong)] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[var(--accent)] disabled:opacity-50"
-                        >
-                          อนุมัติ
-                        </button>
+                        />
                       </td>
                     </tr>
                   ))}
@@ -262,8 +276,9 @@ export function UsersManagementClient({ users, facilities, currentUserId, thaidL
                     type="button"
                     disabled={approvePending}
                     onClick={() => approveSelected([user.id])}
-                    className="min-h-11 w-full rounded-xl bg-[var(--accent-strong)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                    className="primary-action w-full"
                   >
+                    <AppIcon name="check" size={16} />
                     อนุมัติผู้ลงทะเบียนรายนี้
                   </button>
                 </article>
@@ -281,21 +296,32 @@ export function UsersManagementClient({ users, facilities, currentUserId, thaidL
             <h2 id="system-users-heading" className="text-xl font-semibold">ผู้ใช้งานระบบ</h2>
             <p className="mt-1 text-sm text-[var(--muted)]">บัญชีที่อนุมัติแล้วและบัญชีที่ถูกปิดใช้งาน</p>
           </div>
-          <div className="flex flex-col gap-2 sm:flex-row">
+          <div className="grid gap-2 sm:grid-cols-[minmax(0,16rem)_minmax(0,16rem)_auto]">
             <label className="sr-only" htmlFor="user-search">ค้นหาผู้ใช้งาน</label>
-            <input
-              id="user-search"
-              value={query}
-              onChange={(event) => { setQuery(event.target.value); usersTable.resetPage(); }}
-              placeholder="ค้นหาชื่อ อีเมล Username หรือ ThaiD"
-              className="filter-control is-narrow"
+            <div className="relative">
+              <AppIcon name="search" size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]" />
+              <input
+                id="user-search"
+                type="search"
+                value={query}
+                onChange={(event) => { setQuery(event.target.value); usersTable.resetPage(); }}
+                placeholder="ค้นหาชื่อ อีเมล Username หรือ ThaiD"
+                className="filter-control pl-9"
+              />
+            </div>
+            <FacilitySelect
+              facilities={facilityOptions}
+              value={facilityFilter}
+              onChange={(next) => { setFacilityFilter(next); usersTable.resetPage(); }}
+              emptyLabel="ทุกหน่วยงาน"
+              aria-label="กรองตามหน่วยงาน"
             />
             <label className="sr-only" htmlFor="user-status">กรองสถานะผู้ใช้งาน</label>
             <select
               id="user-status"
               value={status}
               onChange={(event) => { setStatus(event.target.value as typeof status); usersTable.resetPage(); }}
-              className="filter-control is-auto"
+              className="filter-control sm:w-auto"
             >
               <option value="all">ทุกสถานะ</option>
               <option value="active">ใช้งานอยู่</option>
@@ -304,10 +330,10 @@ export function UsersManagementClient({ users, facilities, currentUserId, thaidL
           </div>
         </div>
 
-        <div className="overflow-hidden rounded-2xl border border-stone-200 bg-white">
+        <div className="overflow-hidden rounded-2xl border border-[var(--line)] bg-white">
           <div className="hidden overflow-x-auto xl:block">
             <table className="w-full text-sm">
-              <thead className="bg-stone-50 text-xs text-stone-700">
+              <thead className="text-xs">
                 <tr>
                   <th className="px-4 py-3 w-14 text-right font-medium">ลำดับ</th>
                   <SortableTh label="ผู้ใช้งาน" sortKey="name" sort={usersTable.sort} onSort={usersTable.onSort} className="px-4 py-3 font-semibold" />
@@ -373,12 +399,12 @@ export function UsersManagementClient({ users, facilities, currentUserId, thaidL
           </div>
 
           {filteredUsers.length === 0 && (
-            <div className="px-6 py-12 text-center">
-              <p className="font-semibold">ไม่พบผู้ใช้งานตามเงื่อนไข</p>
-              <button type="button" onClick={() => { setQuery(""); setStatus("all"); usersTable.resetPage(); }} className="mt-3 min-h-11 rounded-xl border border-stone-300 px-4 py-2 text-sm font-semibold">
+            <EmptyState icon="search" title="ไม่พบผู้ใช้งานตามเงื่อนไข" description="ลองเปลี่ยนคำค้นหา หน่วยงาน หรือสถานะ">
+              <button type="button" onClick={() => { setQuery(""); setStatus("all"); setFacilityFilter(""); usersTable.resetPage(); }} className="secondary-action action-sm gap-2">
+                <AppIcon name="undo" size={15} />
                 ล้างตัวกรอง
               </button>
-            </div>
+            </EmptyState>
           )}
 
           <TablePagination {...usersTable} onPage={usersTable.onPage} label="แบ่งหน้าผู้ใช้งานระบบ" className="border-t border-black/6" />

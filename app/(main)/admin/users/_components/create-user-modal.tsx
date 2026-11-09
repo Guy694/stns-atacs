@@ -1,7 +1,10 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState, useId } from "react";
+import { useActionState, useEffect, useMemo, useRef, useState, useId } from "react";
 import { createUserAction } from "@/app/(main)/admin/users/actions";
+import { ActionIconButton } from "@/app/_components/ui/action-icon-button";
+import { FacilitySelect } from "@/app/_components/ui/facility-select";
+import { AppIcon } from "@/app/_components/ui/icon";
 import { submitWithoutReset } from "@/app/_components/ui/submit-without-reset";
 
 type FacilityOption = {
@@ -17,7 +20,7 @@ export function CreateUserModal({ children, facilities }: Props) {
   const fieldId = useId();
   const [open, setOpen] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
-  const facilityRef = useRef<HTMLSelectElement>(null);
+  const facilityOptions = useMemo(() => facilities.map((f) => ({ id: f.id, name: f.facility_name, typecode: f.typecode, districtName: f.district_name })), [facilities]);
   const [role, setRole] = useState<"admin" | "officer" | "viewer">("officer");
   const [facilityId, setFacilityId] = useState("");
 
@@ -27,12 +30,6 @@ export function CreateUserModal({ children, facilities }: Props) {
       setFacilityId("");
     }
   }
-
-  useEffect(() => {
-    if (open && role === "officer") {
-      facilityRef.current?.focus();
-    }
-  }, [open, role]);
 
   useEffect(() => {
     if (!open) return;
@@ -62,12 +59,12 @@ export function CreateUserModal({ children, facilities }: Props) {
       <span onClick={() => setOpen(true)} className="cursor-pointer">{children}</span>
 
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setOpen(false)} />
           <div role="dialog" aria-modal="true" aria-labelledby="create-user-heading" className="relative z-10 max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-xl sm:p-8">
             <div className="flex items-center justify-between">
               <h2 id="create-user-heading" className="text-xl font-semibold">เพิ่มผู้ใช้งานใหม่</h2>
-              <button type="button" aria-label="ปิด" onClick={() => setOpen(false)} className="min-h-11 min-w-11 rounded-xl text-[var(--muted)] hover:bg-stone-100 hover:text-[var(--foreground)]">✕</button>
+              <ActionIconButton icon="close" label="ปิด" onClick={() => setOpen(false)} className="-mr-2 border-transparent bg-transparent" />
             </div>
 
             {error && (
@@ -125,21 +122,15 @@ export function CreateUserModal({ children, facilities }: Props) {
                   </div>
                   <div>
                     <label htmlFor={`${fieldId}-facilityId`} className="block text-sm font-medium">หน่วยงานของเจ้าหน้าที่</label>
-                  <select id={`${fieldId}-facilityId`}
-                    ref={facilityRef}
+                  <FacilitySelect
+                    id={`${fieldId}-facilityId`}
                     name="facilityId"
+                    facilities={facilityOptions}
                     value={facilityId}
-                    onChange={(e) => setFacilityId(e.target.value)}
+                    onChange={setFacilityId}
                     required
-                    className="mt-1 w-full rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
-                  >
-                    <option value="">— เลือกหน่วยงาน —</option>
-                    {facilities.map((f) => (
-                      <option key={f.id} value={f.id}>
-                        {f.facility_name} {f.district_name ? `· อ.${f.district_name}` : ""}
-                      </option>
-                    ))}
-                  </select>
+                    className="mt-1"
+                  />
                   <p className="mt-1 text-xs text-[var(--muted)]">ใช้สำหรับกำหนดว่าเจ้าหน้าที่จะจัดการข้อมูลของหน่วยงานใด (จำเป็น)</p>
                   </div>
                 </div>
@@ -150,10 +141,11 @@ export function CreateUserModal({ children, facilities }: Props) {
               )}
 
               <div className="flex justify-end gap-3 pt-2">
-                <button type="button" onClick={() => setOpen(false)} className="rounded-xl border border-black/10 bg-white/80 px-5 py-2 text-sm font-medium hover:bg-white">
+                <button type="button" onClick={() => setOpen(false)} className="secondary-action">
                   ยกเลิก
                 </button>
-                <button type="submit" disabled={pending || (role === "officer" && !facilityId)} className="rounded-xl bg-[var(--accent-strong)] px-6 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50">
+                <button type="submit" disabled={pending || (role === "officer" && !facilityId)} className="primary-action">
+                  <AppIcon name="plus" size={16} />
                   {pending ? "กำลังบันทึก…" : "เพิ่มผู้ใช้งาน"}
                 </button>
               </div>

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 
 import { AppIcon } from "@/app/_components/ui/icon";
 import { ActionIconLink } from "@/app/_components/ui/action-icon-button";
+import { PhotoBackdrop } from "@/app/_components/ui/photo-backdrop";
 import { StatusBadge } from "@/app/_components/ui/status-badge";
 import { getCurrentUser } from "@/lib/auth";
 import { formatThaiDate } from "@/lib/date-format";
@@ -90,7 +91,8 @@ export default async function InspectionPage({
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6">
       {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
+      <div className="relative isolate flex flex-wrap items-center justify-between gap-3 overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--surface-strong)] px-5 py-5 sm:px-6">
+        <PhotoBackdrop image="it-storage" fade="left" />
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-bold" style={{ color: "var(--foreground)" }}>
             <AppIcon name="clipboard-check" className="h-6 w-6 text-[var(--primary)]" /> ตรวจนับทรัพย์สิน
@@ -100,15 +102,15 @@ export default async function InspectionPage({
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Link href="/inspection/coverage" className="inline-flex min-h-11 items-center rounded-xl border border-[var(--line)] bg-white px-4 text-sm font-medium hover:bg-[var(--primary-soft)]">
-            ความครอบคลุมประจำปี
+          <Link href="/inspection/coverage" className="secondary-action gap-2">
+            <AppIcon name="layers" className="h-4 w-4" /> ความครอบคลุมประจำปี
           </Link>
           {canMutate && view !== "new" && (
             <Link
               href="/inspection?view=new"
               className="primary-action"
             >
-              + เริ่มรอบตรวจนับใหม่
+              <AppIcon name="plus" className="h-4 w-4" /> เริ่มรอบตรวจนับใหม่
             </Link>
           )}
         </div>
@@ -133,7 +135,7 @@ export default async function InspectionPage({
       {/* List */}
       {view !== "new" && (
         <div className="glass-panel rounded-2xl overflow-hidden">
-          <form method="GET" className="grid gap-3 border-b border-black/6 bg-[var(--neutral-bg)]/60 px-4 py-4 sm:grid-cols-[minmax(240px,1fr)_180px_auto_auto]">
+          <form method="GET" className="grid items-center gap-3 border-b border-black/6 bg-[var(--neutral-bg)]/60 px-4 py-4 sm:grid-cols-[minmax(240px,1fr)_180px_auto_auto]">
             {sort && <input type="hidden" name="sort" value={sort.key} />}
             {sort && <input type="hidden" name="dir" value={sort.dir} />}
             <label htmlFor="inspection-search" className="sr-only">ค้นหารอบตรวจนับ</label>
@@ -157,23 +159,17 @@ export default async function InspectionPage({
             </select>
             <button
               type="submit"
-              className="min-h-9 rounded-xl bg-[var(--accent-strong)] px-4 py-2 text-xs font-semibold text-white transition hover:opacity-90"
+              className="primary-action action-sm"
             >
-              ค้นหา
+              <AppIcon name="search" className="h-4 w-4" /> ค้นหา
             </button>
-            {hasActiveFilters && (
-              <Link
-                href="/inspection"
-                className="inline-flex min-h-9 items-center justify-center rounded-xl border border-black/10 bg-white/80 px-4 py-2 text-xs text-[var(--muted)] hover:bg-white"
-              >
-                ล้างตัวกรอง
-              </Link>
-            )}
+            {hasActiveFilters && <ActionIconLink href="/inspection" icon="close" label="ล้างตัวกรอง" />}
           </form>
 
           {inspections.length === 0 ? (
-            <div className="text-center py-16" style={{ color: "var(--muted)" }}>
-	              <AppIcon name="clipboard-check" className="mx-auto mb-3 h-10 w-10 text-[var(--primary)]" />
+            <div className="relative isolate overflow-hidden py-16 text-center" style={{ color: "var(--muted)" }}>
+              <PhotoBackdrop image="office-desk" fade="bottom" />
+              <AppIcon name="clipboard-check" className="mx-auto mb-3 h-10 w-10 text-[var(--primary)]" />
               <p className="font-semibold">ยังไม่มีรอบการตรวจนับ</p>
               <p className="text-sm mt-1">คลิก &quot;เริ่มรอบตรวจนับใหม่&quot; เพื่อบันทึกครั้งแรก</p>
             </div>
@@ -261,14 +257,8 @@ export default async function InspectionPage({
                         </p>
                       </td>
                       <td className="px-4 py-3">
-                        <div className="flex flex-col items-start gap-2">
-                          <Link
-                            href={"/inspection/" + ins.id}
-                            className="text-xs font-semibold"
-                            style={{ color: "var(--accent)" }}
-                          >
-                            ดูรายละเอียด →
-                          </Link>
+                        <div className="flex items-center justify-end gap-2">
+                          <ActionIconLink href={"/inspection/" + ins.id} icon="eye" tone="primary" label={`ดูรายละเอียด ${ins.roundName}`} />
                           {canMutate && ins.roundStatus !== "Closed" && (
                             <ActionIconLink
                               href={`/inspection/${ins.id}?delete=1#delete-round`}

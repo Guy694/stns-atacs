@@ -6,6 +6,8 @@ import { MenuVisibilityTable, type MenuVisibilityRow } from "./_components/menu-
 import { getMenuVisibility } from "@/lib/app-settings";
 import { getCurrentUser } from "@/lib/auth";
 import { APP_MENU_GROUPS, APP_MENU_ITEMS } from "@/lib/menu";
+import { AppIcon } from "@/app/_components/ui/icon";
+import { PageHero, SettingsBreadcrumb } from "@/app/(main)/admin/_components/page-hero";
 
 type MenuSettingsPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -39,13 +41,13 @@ export default async function MenuSettingsPage({ searchParams }: MenuSettingsPag
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6">
-      <div>
-        <p className="text-xs font-semibold text-[var(--accent-strong)]">ตั้งค่าระบบ · เมนู</p>
-        <h1 className="section-title mt-1 text-3xl font-semibold">ตั้งค่าการแสดงเมนู</h1>
-        <p className="mt-1 text-sm text-[var(--muted)]">
-          เปิดหรือปิดเมนูหลักของระบบ โดยยังคงตรวจสิทธิ์ผู้ใช้ตามตารางสิทธิ์เหมือนเดิม
-        </p>
-      </div>
+      <SettingsBreadcrumb current="การแสดงเมนู" />
+      <PageHero
+        icon="menu"
+        image="office-desk"
+        title="ตั้งค่าการแสดงเมนู"
+        description="เปิดหรือปิดเมนูหลักของระบบ โดยยังคงตรวจสิทธิ์ผู้ใช้ตามตารางสิทธิ์เหมือนเดิม"
+      />
 
       {notice ? (
         <div className="rounded-xl border border-[var(--state-success-border)] bg-[var(--state-success-bg)] px-4 py-3 text-sm text-[var(--state-success-fg)]">
@@ -64,6 +66,7 @@ export default async function MenuSettingsPage({ searchParams }: MenuSettingsPag
               type="submit"
               className="primary-action"
             >
+              <AppIcon name="check" size={16} />
               บันทึกการตั้งค่า
             </button>
           </div>
@@ -75,8 +78,9 @@ export default async function MenuSettingsPage({ searchParams }: MenuSettingsPag
       </form>
 
       <div>
-        <Link href="/admin/settings" className="text-sm font-semibold text-[var(--primary)] hover:underline">
-          ← กลับหน้าตั้งค่าระบบ
+        <Link href="/admin/settings" className="inline-flex items-center gap-1.5 text-sm font-semibold text-[var(--primary-text)] hover:underline">
+          <AppIcon name="arrow-left" size={15} />
+          กลับหน้าตั้งค่าระบบ
         </Link>
       </div>
     </div>

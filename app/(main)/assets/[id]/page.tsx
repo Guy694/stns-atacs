@@ -8,7 +8,9 @@ import Image from "next/image";
 import { headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 
-import { AppIcon } from "@/app/_components/ui/icon";
+import { AppIcon, type IconName } from "@/app/_components/ui/icon";
+import { ActionIconButton, ActionIconLink } from "@/app/_components/ui/action-icon-button";
+import { PhotoBackdrop } from "@/app/_components/ui/photo-backdrop";
 import { StatusBadge } from "@/app/_components/ui/status-badge";
 import { assetClassLabel } from "@/lib/asset-classes";
 import { assetStatusLabel, assetStatusTone } from "@/lib/asset-status";
@@ -21,6 +23,7 @@ import { listAssetLocations } from "@/lib/asset-locations";
 import { DeleteAssetButton } from "@/app/(main)/assets/_components/delete-asset-button";
 import { QrDownloadButton } from "@/app/(main)/assets/_components/print-button";
 import { getAgentDeviceByLinkedAssetId, type AgentDevice } from "@/lib/agent";
+import { agentOfflineThresholdMinutes, effectiveAgentStatus } from "@/lib/agent-monitor-summary";
 import { listAssetStatusHistory } from "@/lib/asset-status-history";
 import { canAccessAssetFacility, canManageAssetRecord, canManageFacility, canSeeSensitiveAssetNetwork } from "@/lib/permissions";
 import { formatThaiDate } from "@/lib/date-format";
@@ -58,7 +61,8 @@ function Field({ label, value }: { label: string; value?: string | null }) {
 function AssetImageGallery({ images, assetName }: { images: string[]; assetName: string }) {
   if (images.length === 0) {
     return (
-      <div className="mb-4 flex min-h-36 items-center justify-center rounded-xl border border-dashed border-black/15 bg-[var(--neutral-bg)] px-4 py-6 text-center text-sm text-[var(--muted)]">
+      <div className="mb-4 flex min-h-36 flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-black/15 bg-[var(--neutral-bg)] px-4 py-6 text-center text-sm text-[var(--muted)]">
+        <AppIcon name="package" size={28} />
         ยังไม่มีรูปภาพทรัพย์สิน
       </div>
     );
@@ -134,9 +138,15 @@ function ComputerSpecPanel({ device }: { device: AgentDevice | null }) {
             รายงานล่าสุด {device.lastReportedLabel ?? "–"}
           </p>
         </div>
-        <StatusBadge tone={device.status === "offline" ? "danger" : "success"}>
-          {device.status === "offline" ? "offline" : "online"}
-        </StatusBadge>
+        {(() => {
+          // X1: computed from the last contact, not the stored status (cron may not have run).
+          const live = effectiveAgentStatus(device, new Date(), agentOfflineThresholdMinutes(process.env.AGENT_OFFLINE_MINUTES));
+          return (
+            <StatusBadge tone={live === "online" ? "success" : live === "offline" ? "danger" : "neutral"}>
+              {live === "online" ? "ออนไลน์" : live === "offline" ? "ออฟไลน์" : "เลิกใช้งาน"}
+            </StatusBadge>
+          );
+        })()}
       </div>
       <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Field label="RAM" value={formatRam(device.ramMb)} />
@@ -277,10 +287,10 @@ export default async function AssetDetailPage({ params, searchParams }: Props) {
     },
   ];
 
-  const printLinks = [
-    { href: `/print/assets/register?ids=${asset.id}`, label: "ทะเบียนคุมทรัพย์สิน (A4 แนวนอน)" },
-    { href: `/print/assets/${asset.id}`, label: "พิมพ์ประวัติครุภัณฑ์" },
-    { href: `/print/stickers?ids=${asset.id}&size=mini`, label: "พิมพ์สติ๊กเกอร์ QR (A4)" },
+  const printLinks: { href: string; label: string; icon: IconName }[] = [
+    { href: `/print/assets/register?ids=${asset.id}`, label: "พิมพ์ทะเบียนคุมทรัพย์สิน (A4 แนวนอน)", icon: "file-text" },
+    { href: `/print/assets/${asset.id}`, label: "พิมพ์ประวัติครุภัณฑ์", icon: "printer" },
+    { href: `/print/stickers?ids=${asset.id}&size=mini`, label: "พิมพ์สติ๊กเกอร์ QR (A4)", icon: "qr" },
   ];
   const showWorkflowActions = !terminal && canMutateThisAsset;
 
@@ -288,15 +298,15 @@ export default async function AssetDetailPage({ params, searchParams }: Props) {
     <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6">
 
       {/* Breadcrumb */}
-      <nav className="flex flex-wrap items-center gap-2 text-xs text-[var(--muted)]">
+      <nav aria-label="เส้นทางนำทาง" className="flex flex-wrap items-center gap-1.5 text-xs text-[var(--muted)]">
         <Link href="/dashboard" className="hover:text-[var(--foreground)]">หน้าหลัก</Link>
-        <span>/</span>
+        <AppIcon name="chevron-right" size={14} />
         {user.role === "officer" ? (
           <Link href={`/facilities/${asset.facilityId}`} className="hover:text-[var(--foreground)]">รายการทรัพย์สิน</Link>
         ) : (
           <Link href="/assets" className="hover:text-[var(--foreground)]">ทรัพย์สินทั้งหมด</Link>
         )}
-        <span>/</span>
+        <AppIcon name="chevron-right" size={14} />
         <span className="text-[var(--foreground)]">{asset.assetNumber}</span>
       </nav>
 
@@ -319,7 +329,8 @@ export default async function AssetDetailPage({ params, searchParams }: Props) {
 
       {/* Header */}
       <div className="flex flex-col gap-4">
-        <div className="min-w-0">
+        <div className="glass-panel relative isolate min-w-0 overflow-hidden rounded-2xl px-5 py-5 sm:px-6">
+          <PhotoBackdrop image="it-storage" opacity="opacity-[0.12]" fade="left" />
           <div className="flex flex-wrap items-center gap-2">
             <StatusBadge tone="primary">
               {assetClassLabel(asset.assetClass)}
@@ -348,24 +359,9 @@ export default async function AssetDetailPage({ params, searchParams }: Props) {
           updatedBy={asset.updatedBy}
         />
 
-        {/* Toolbar: one primary action (แก้ไข), workflow actions as secondary/danger, print behind a disclosure on mobile */}
+        {/* Toolbar: workflow actions keep icon + text; edit / print / delete are icon-only buttons with tooltips */}
         <div className="flex flex-col gap-2">
           <div role="group" aria-label="การดำเนินการ" className="flex flex-wrap items-center gap-2">
-            {canMutateThisAsset && (
-              <AssetFormModal
-                facilities={user.role === "admin" ? facilitiesForSelect : facilitiesForSelect.filter((facility) => facility.id === asset.facilityId)}
-                deviceTypes={deviceTypes}
-                workGroups={user.role === "admin" ? workGroups : workGroups.filter((group) => group.facilityId === asset.facilityId)}
-                locations={assetLocations}
-                updaterName={user.fullName}
-                mode="edit"
-                asset={asset}
-              >
-                <button type="button" className="primary-action">
-                  <AppIcon name="pencil" className="h-4 w-4" /> แก้ไข
-                </button>
-              </AssetFormModal>
-            )}
             {showWorkflowActions && canTransfer && (
               <Link href={`/transfer?assetId=${asset.id}`} className="secondary-action gap-2">
                 <AppIcon name="package" className="h-4 w-4" /> โอนย้าย
@@ -386,26 +382,27 @@ export default async function AssetDetailPage({ params, searchParams }: Props) {
                 <AppIcon name="clipboard-check" className="h-4 w-4" /> ชำรุด / เสนอจำหน่าย
               </Link>
             )}
-            {printLinks.map((link) => (
-              <Link key={link.href} href={link.href} className="secondary-action hidden gap-2 sm:inline-flex">
-                <AppIcon name="printer" className="h-4 w-4" /> {link.label}
-              </Link>
-            ))}
-            {canMutateThisAsset && canDeleteThisAsset && <DeleteAssetButton assetId={asset.id} assetName={asset.assetName} redirectTo={`/facilities/${asset.facilityId}/?toast=deleted`} />}
-          </div>
-          <details className="group rounded-xl border border-[var(--line)] bg-white/80 sm:hidden">
-            <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-2 px-4 text-sm font-semibold text-[var(--accent-strong)] [&::-webkit-details-marker]:hidden">
-              <span className="inline-flex items-center gap-2"><AppIcon name="printer" className="h-4 w-4" /> การดำเนินการอื่น</span>
-              <AppIcon name="arrow-down" className="h-4 w-4 transition group-open:rotate-180" />
-            </summary>
-            <div className="flex flex-col gap-2 border-t border-[var(--line)] p-3">
+            {/* Secondary actions: icon-only with tooltip + aria-label (แก้ไข / พิมพ์ / ลบ) */}
+            <div className="flex flex-wrap items-center gap-1.5 sm:ml-auto">
+              {canMutateThisAsset && (
+                <AssetFormModal
+                  facilities={user.role === "admin" ? facilitiesForSelect : facilitiesForSelect.filter((facility) => facility.id === asset.facilityId)}
+                  deviceTypes={deviceTypes}
+                  workGroups={user.role === "admin" ? workGroups : workGroups.filter((group) => group.facilityId === asset.facilityId)}
+                  locations={assetLocations}
+                  updaterName={user.fullName}
+                  mode="edit"
+                  asset={asset}
+                >
+                  <ActionIconButton icon="pencil" tone="primary" label="แก้ไขข้อมูลทรัพย์สิน" />
+                </AssetFormModal>
+              )}
               {printLinks.map((link) => (
-                <Link key={link.href} href={link.href} className="secondary-action justify-start gap-2">
-                  <AppIcon name="printer" className="h-4 w-4" /> {link.label}
-                </Link>
+                <ActionIconLink key={link.href} href={link.href} icon={link.icon} label={link.label} />
               ))}
+              {canMutateThisAsset && canDeleteThisAsset && <DeleteAssetButton assetId={asset.id} assetName={asset.assetName} redirectTo={`/facilities/${asset.facilityId}/?toast=deleted`} />}
             </div>
-          </details>
+          </div>
           {terminal ? (
             <p className="rounded-xl border border-stone-300 bg-stone-100 px-4 py-2.5 text-sm text-stone-600">
               ทรัพย์สินนี้{asset.currentStatus === "Lost" ? "บันทึกสูญหาย" : "จำหน่าย"}แล้วตามคำขอที่อนุมัติ จึงไม่มีการดำเนินการเพิ่มเติม
@@ -562,11 +559,13 @@ export default async function AssetDetailPage({ params, searchParams }: Props) {
                 className="h-auto w-full object-contain"
               />
             </div>
-            <p className="mt-1 break-all text-[11px] leading-4 text-[var(--muted)]">{assetScanUrl}</p>
-            <QrDownloadButton
-              downloadUrl={withBasePath(`/api/qr/asset/${asset.id}/`)}
-              filename={`${sanitizeDownloadName(`${asset.assetRegistrationNo || `asset-${asset.id}`} ${asset.assetName}`)}.svg`}
-            />
+            <div className="mt-2 flex items-center justify-center gap-2">
+              <p className="min-w-0 break-all text-left text-[11px] leading-4 text-[var(--muted)]">{assetScanUrl}</p>
+              <QrDownloadButton
+                downloadUrl={withBasePath(`/api/qr/asset/${asset.id}/`)}
+                filename={`${sanitizeDownloadName(`${asset.assetRegistrationNo || `asset-${asset.id}`} ${asset.assetName}`)}.svg`}
+              />
+            </div>
           </div>
 
           {/* สถานะ + ข้อมูลย่อ */}
@@ -609,7 +608,7 @@ export default async function AssetDetailPage({ params, searchParams }: Props) {
             href="/assets"
             className="flex items-center justify-center gap-2 rounded-xl border border-[var(--line)] bg-white/60 px-4 py-2.5 text-sm text-[var(--muted)] transition hover:bg-white"
           >
-            ← กลับรายการทรัพย์สิน
+            <AppIcon name="arrow-left" size={16} /> กลับรายการทรัพย์สิน
           </Link>
 
         </div>

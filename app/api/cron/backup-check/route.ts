@@ -7,6 +7,7 @@ import { evaluateBackupHealth, type BackupFileInfo, type BackupStatusFile } from
 import { readRequestIp, recordSecurityEvent } from "@/lib/security";
 import { notifyTelegramSafe } from "@/lib/telegram";
 import { isAuthorizedCronHeader } from "@/lib/cron-auth";
+import { recordCronRun } from "@/lib/cron-status";
 
 export const dynamic = "force-dynamic";
 
@@ -77,6 +78,8 @@ export async function GET(req: NextRequest) {
   if (req.nextUrl.searchParams.get("dry") === "1") {
     return NextResponse.json({ ok: true, directory: dir, health });
   }
+  // The job ran; "failed" here means the backups themselves need attention (shown in ตั้งค่าระบบ).
+  await recordCronRun("backup-check", health.level === "ok", health.level === "ok" ? "ไฟล์สำรองปกติ" : health.problems.join(" · "));
   if (health.level === "ok") {
     return NextResponse.json({ ok: true, directory: dir, health, sent: false, reason: "healthy" });
   }

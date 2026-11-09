@@ -1,13 +1,16 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useMemo } from "react";
 
+import { FacilitySelect } from "@/app/_components/ui/facility-select";
+import { AppIcon } from "@/app/_components/ui/icon";
 import { updateUserFacilityAction } from "@/app/(main)/admin/users/actions";
 
 type FacilityOption = {
   id: number;
   facility_name: string;
   district_name: string | null;
+  typecode?: string | null;
 };
 
 type Props = {
@@ -24,6 +27,7 @@ export function UserFacilityInline({ userId, role, currentFacilityId, facilities
   );
 
   const disabled = role !== "officer";
+  const facilityOptions = useMemo(() => facilities.map((f) => ({ id: f.id, name: f.facility_name, typecode: f.typecode, districtName: f.district_name })), [facilities]);
 
   return (
     <form action={formAction} className="space-y-1">
@@ -31,27 +35,23 @@ export function UserFacilityInline({ userId, role, currentFacilityId, facilities
       <input type="hidden" name="role" value={role} />
 
       <div className="flex items-center gap-2">
-        <select
+        {/* เปลี่ยนแล้วบันทึกทันที (auto-save) — ไม่ต้องกดปุ่มบันทึก */}
+        <FacilitySelect
           name="facilityId"
+          facilities={facilityOptions}
           defaultValue={currentFacilityId?.toString() ?? ""}
+          emptyLabel="— ไม่ระบุ —"
           disabled={disabled || pending}
-          className="min-w-[180px] rounded-lg border border-black/10 bg-white/80 px-2.5 py-1.5 text-xs outline-none focus:border-[var(--accent)] disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          <option value="">— ไม่ระบุ —</option>
-          {facilities.map((f) => (
-            <option key={f.id} value={f.id}>
-              {f.facility_name} {f.district_name ? `· อ.${f.district_name}` : ""}
-            </option>
-          ))}
-        </select>
-
-        <button
-          type="submit"
-          disabled={disabled || pending}
-          className="rounded-lg border border-black/10 bg-white/90 px-2.5 py-1.5 text-xs font-medium text-[var(--accent-strong)] hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {pending ? "..." : "บันทึก"}
-        </button>
+          autoSubmit
+          aria-label="หน่วยงานของผู้ใช้"
+          className="min-w-[200px]"
+        />
+        {pending && (
+          <span role="status" className="inline-flex items-center text-[var(--muted)]">
+            <AppIcon name="refresh" size={15} className="animate-spin" />
+            <span className="sr-only">กำลังบันทึก</span>
+          </span>
+        )}
       </div>
 
       {disabled && <p className="text-[10px] text-[var(--muted)]">ใช้เฉพาะ role Officer</p>}

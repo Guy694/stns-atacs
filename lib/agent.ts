@@ -15,6 +15,8 @@ import {
   type AgentUninstallInstruction,
   type AgentUninstallReason,
 } from "@/lib/agent-uninstall";
+import { INSTALL_SCOPE_PREFIX, deriveInstallToken, installTokenMatches, installTokenSecret } from "@/lib/agent-install-token";
+import { REENROLL_QUIET_DAYS, decideReenroll } from "@/lib/agent-reenroll";
 import { executeStatement, selectRows } from "@/lib/mysql";
 import { formatThaiDateTime } from "@/lib/date-format";
 import { dbDateTime, todayBangkok } from "@/lib/local-date";
@@ -230,6 +232,16 @@ async function assetsHaveDeletedAt() {
   deletedAtProbe = { present, checkedAt: Date.now() };
   return present;
 }
+
+/** Re-enrolment refused: the fingerprint belongs to an active device that is still reporting. */
+export class AgentDeviceAlreadyEnrolledError extends Error {
+  readonly code = "DEVICE_ALREADY_ENROLLED";
+  constructor(readonly device: { deviceId: number; hostname: string | null; facilityName: string; lastSeenAt: string | null }) {
+    super("DEVICE_ALREADY_ENROLLED");
+  }
+}
+
+export const AGENT_REENROLL_QUIET_DAYS = REENROLL_QUIET_DAYS;
 
 function hashSecret(value: string) {
   return crypto.createHash("sha256").update(value).digest("hex");
@@ -452,6 +464,70 @@ export async function revokeAgentEnrollment(id: number) {
   await executeStatement("UPDATE agent_enrollments SET is_active = 0 WHERE id = ?", [id]);
 }
 
+type InstallScopeRow = RowDataPacket & { id: number; facility_id: number; work_group_id: number | null; token_hash: string };
+
+const INSTALL_SCOPE_LIKE = `${INSTALL_SCOPE_PREFIX}%`;
+
+/**
+ * รหัสติดตั้งของหน่วยงาน (+กลุ่มงาน): ใช้แถวเดิมถ้ายังตรวจผ่าน ไม่มีก็สร้างใหม่
+ * plaintext ไม่ถูกเก็บ — คำนวณจาก AUTH_SECRET ทุกครั้ง แล้วเก็บเฉพาะ sha256
+ */
+export async function getOrCreateInstallScopeToken(input: {
+  facilityId: number;
+  workGroupId: number | null;
+  enrollmentName: string;
+  createdByUserId?: number | null;
+}): Promise<{ token: string; enrollmentId: number; created: boolean; rotated: number }> {
+  const secret = installTokenSecret();
+  const workGroupId = input.workGroupId ?? null;
+  const rows = await selectRows<InstallScopeRow>(
+    `SELECT ae.id, ae.facility_id, ae.work_group_id, ae.token_hash
+     FROM agent_enrollments ae
+     WHERE ae.facility_id = ?
+       AND ((? IS NULL AND ae.work_group_id IS NULL) OR ae.work_group_id = ?)
+       AND ae.enrollment_name LIKE ?
+       AND ae.is_active = 1
+       AND ae.expires_at IS NULL
+     ORDER BY ae.id ASC`,
+    [input.facilityId, workGroupId, workGroupId, INSTALL_SCOPE_LIKE]
+  );
+
+  let rotated = 0;
+  for (const row of rows) {
+    const scope = { id: Number(row.id), facilityId: Number(row.facility_id), workGroupId: row.work_group_id == null ? null : Number(row.work_group_id) };
+    if (installTokenMatches(scope, row.token_hash, secret)) {
+      return { token: deriveInstallToken(scope, secret), enrollmentId: scope.id, created: false, rotated };
+    }
+    // AUTH_SECRET เปลี่ยน: คำนวณรหัสเดิมไม่ได้แล้ว ปิดแถวนี้แล้วออกรหัสใหม่
+    await executeStatement("UPDATE agent_enrollments SET is_active = 0 WHERE id = ?", [row.id]);
+    rotated += 1;
+  }
+
+  const result = await executeStatement(
+    `INSERT INTO agent_enrollments (facility_id, work_group_id, enrollment_name, token_hash, expires_at, created_by_user_id, is_active)
+     VALUES (?, ?, ?, ?, NULL, ?, 1)`,
+    [input.facilityId, workGroupId, input.enrollmentName.slice(0, 255), hashSecret(randomToken("atacs_pending")), input.createdByUserId ?? null]
+  );
+  const id = Number(result.insertId);
+  const token = deriveInstallToken({ id, facilityId: input.facilityId, workGroupId }, secret);
+  await executeStatement("UPDATE agent_enrollments SET token_hash = ? WHERE id = ?", [hashSecret(token), id]);
+  return { token, enrollmentId: id, created: true, rotated };
+}
+
+/** ยกเลิกรหัสติดตั้งของหน่วยงาน (+กลุ่มงาน) — คำสั่งที่คัดลอกไปแล้วจะลงทะเบียนเครื่องใหม่ไม่ได้ เครื่องเดิมยังทำงานต่อ */
+export async function revokeInstallScopeEnrollments(input: { facilityId: number; workGroupId: number | null }) {
+  const workGroupId = input.workGroupId ?? null;
+  const result = await executeStatement(
+    `UPDATE agent_enrollments SET is_active = 0
+     WHERE facility_id = ?
+       AND ((? IS NULL AND work_group_id IS NULL) OR work_group_id = ?)
+       AND enrollment_name LIKE ?
+       AND is_active = 1`,
+    [input.facilityId, workGroupId, workGroupId, INSTALL_SCOPE_LIKE]
+  );
+  return Number(result.affectedRows ?? 0);
+}
+
 async function getEnrollmentByToken(token: string) {
   const tokenHash = hashSecret(token.trim());
   const rows = await selectRows<EnrollmentRow>(
@@ -571,6 +647,29 @@ async function enrollAgentDeviceForEnrollment(input: {
      LIMIT 1`,
     [input.enrollment.facility_id, fingerprint]
   );
+
+  // Fingerprint takeover protection: an active device that is still reporting can only be spoken for by its
+  // own key. The real agent re-uses that key on reinstall, so a fresh enrolment here is a copy/spoof.
+  if (existing[0]) {
+    const decision = decideReenroll(
+      {
+        isActive: Number(existing[0].is_active ?? 0) === 1,
+        uninstallRequestedAt: existing[0].uninstall_requested_at ?? null,
+        uninstalledAt: existing[0].uninstalled_at ?? null,
+        lastSeenAt: existing[0].last_seen_at ?? null,
+        lastReportedAt: existing[0].last_reported_at ?? null,
+      },
+      Date.now()
+    );
+    if (decision === "blocked") {
+      throw new AgentDeviceAlreadyEnrolledError({
+        deviceId: existing[0].id,
+        hostname: existing[0].hostname ?? null,
+        facilityName: existing[0].facility_name ?? input.enrollment.facility_name,
+        lastSeenAt: existing[0].last_seen_at ? dbDateTime(existing[0].last_seen_at) : null,
+      });
+    }
+  }
 
   let deviceId = existing[0]?.id ?? 0;
   const agentUuid = existing[0]?.agent_uuid ?? crypto.randomUUID();

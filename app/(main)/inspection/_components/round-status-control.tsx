@@ -3,6 +3,8 @@
 import { useActionState, useState } from "react";
 
 import { setRoundStatusAction } from "@/app/(main)/inspection/actions";
+import { ActionIconButton } from "@/app/_components/ui/action-icon-button";
+import { AppIcon } from "@/app/_components/ui/icon";
 
 type Props = { inspectionId: number; status: "Open" | "Closed"; remainingItems: number; closedBy: string; closedAtLabel: string };
 
@@ -16,10 +18,10 @@ export function RoundStatusControl({ inspectionId, status, remainingItems, close
       <form action={formAction} className="flex flex-col items-start gap-2 sm:items-end">
         <input type="hidden" name="inspectionId" value={inspectionId} />
         <input type="hidden" name="status" value="Open" />
-        <p className="text-sm text-[var(--foreground)]">ปิดรอบแล้ว{closedBy ? ` โดย ${closedBy}` : ""}{closedAtLabel ? ` · ${closedAtLabel}` : ""}</p>
-        <button disabled={pending} className="min-h-11 rounded-xl border border-[var(--line)] bg-white px-4 text-sm font-semibold text-[var(--foreground)] hover:bg-stone-50 disabled:opacity-60">
-          {pending ? "กำลังเปิดรอบ…" : "เปิดรอบอีกครั้งเพื่อแก้ไขผล"}
-        </button>
+        <div className="flex items-center gap-2">
+          <p className="text-sm text-[var(--foreground)]">ปิดรอบแล้ว{closedBy ? ` โดย ${closedBy}` : ""}{closedAtLabel ? ` · ${closedAtLabel}` : ""}</p>
+          <ActionIconButton type="submit" icon={pending ? "refresh" : "power-on"} tone="primary" disabled={pending} label={pending ? "กำลังเปิดรอบ…" : "เปิดรอบอีกครั้งเพื่อแก้ไขผล"} />
+        </div>
         {error && <p role="alert" className="text-sm text-rose-700">{error}</p>}
       </form>
     );
@@ -27,8 +29,8 @@ export function RoundStatusControl({ inspectionId, status, remainingItems, close
 
   if (!confirming) {
     return (
-      <button type="button" onClick={() => setConfirming(true)} className="min-h-11 rounded-xl bg-[var(--accent-strong)] px-4 text-sm font-semibold text-white hover:opacity-90">
-        ปิดรอบตรวจนับ
+      <button type="button" onClick={() => setConfirming(true)} className="primary-action">
+        <AppIcon name="power-off" className="h-4 w-4" /> ปิดรอบตรวจนับ
       </button>
     );
   }
@@ -46,9 +48,9 @@ export function RoundStatusControl({ inspectionId, status, remainingItems, close
         </label>
       )}
       {error && <p role="alert" className="text-rose-700">{error}</p>}
-      <div className="flex gap-2">
-        <button disabled={pending} className="min-h-11 rounded-lg bg-[var(--accent-strong)] px-4 font-semibold text-white disabled:opacity-60">{pending ? "กำลังปิดรอบ…" : "ยืนยันปิดรอบ"}</button>
-        <button type="button" onClick={() => setConfirming(false)} className="min-h-11 rounded-lg border border-[var(--line)] px-4">ยกเลิก</button>
+      <div className="flex items-center gap-2">
+        <button disabled={pending} className="primary-action"><AppIcon name="check" className="h-4 w-4" />{pending ? "กำลังปิดรอบ…" : "ยืนยันปิดรอบ"}</button>
+        <ActionIconButton icon="close" label="ยกเลิก" onClick={() => setConfirming(false)} />
       </div>
     </form>
   );

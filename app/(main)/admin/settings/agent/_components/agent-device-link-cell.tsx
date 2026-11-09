@@ -4,6 +4,8 @@ import { useState, useTransition } from "react";
 
 import { linkAgentDeviceAction } from "@/app/(main)/admin/settings/agent/actions";
 import type { AssetSelectOption } from "@/lib/assets";
+import { ActionIconButton } from "@/app/_components/ui/action-icon-button";
+import { AppIcon } from "@/app/_components/ui/icon";
 import { useEscapeToClose } from "@/app/_components/ui/use-escape-to-close";
 
 type Props = {
@@ -59,27 +61,30 @@ export function AgentDeviceLinkCell({
   }
 
   return (
-    <td className="min-w-40 px-4 py-3">
+    <td className="px-4 py-2 align-middle">
       {linkedAssetId ? (
         <div>
-          <p className="font-medium">{linkedAssetName ?? "Asset linked"}</p>
-          <p className="font-mono text-xs text-[var(--muted)]">{linkedAssetRegistrationNo ?? `#${linkedAssetId}`}</p>
-          <button
-            type="button"
-            onClick={() => { setSearch(""); setOpen(true); }}
-            className="mt-1 text-xs text-[var(--accent)] underline-offset-2 hover:underline"
-          >
-            เปลี่ยน
-          </button>
+          <p className="line-clamp-2 font-medium">{linkedAssetName ?? "ผูกทะเบียนแล้ว"}</p>
+          <p className="flex flex-wrap items-center gap-x-2 text-xs text-[var(--muted)]">
+            <span className="font-mono">{linkedAssetRegistrationNo ?? `#${linkedAssetId}`}</span>
+            <button
+              type="button"
+              onClick={() => { setSearch(""); setOpen(true); }}
+              className="font-medium text-[var(--accent-strong)] underline-offset-2 hover:underline"
+            >
+              เปลี่ยน
+            </button>
+          </p>
         </div>
       ) : (
         <div>
           <button
             type="button"
             onClick={() => { setSearch(""); setOpen(true); }}
-            className="rounded-lg border border-[var(--accent)]/30 bg-[var(--accent)]/5 px-2.5 py-1 text-xs font-medium text-[var(--accent)] transition hover:bg-[var(--accent)]/10"
+            className="secondary-action action-sm gap-1.5 whitespace-nowrap"
           >
-            ผูก Asset
+            <AppIcon name="tag" size={14} aria-hidden="true" />
+            ผูกทะเบียน
           </button>
           {autoLinkDisabled && (
             <p className="mt-1 text-xs text-[var(--muted)]">ยกเลิกการผูกแล้ว — ไม่ผูกอัตโนมัติ</p>
@@ -98,15 +103,7 @@ export function AgentDeviceLinkCell({
                 <h3 className="text-lg font-semibold">ผูก Agent Device กับ Asset</h3>
                 <p className="mt-0.5 text-sm text-[var(--muted)]">เลือก asset ที่ตรงกับเครื่องนี้</p>
               </div>
-              <button
-                type="button"
-                onClick={() => setOpen(false)}
-                className="mt-0.5 rounded-lg p-1.5 text-[var(--muted)] hover:bg-black/6"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-5 w-5">
-                  <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
-                </svg>
-              </button>
+              <ActionIconButton icon="close" label="ปิด" onClick={() => setOpen(false)} />
             </div>
 
             {error && <p role="alert" className="mb-3 text-sm text-rose-700">{error}</p>}

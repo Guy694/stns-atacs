@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 
 import { AppIcon } from "@/app/_components/ui/icon";
 import { StatusBadge } from "@/app/_components/ui/status-badge";
+import { PhotoBackdrop } from "@/app/_components/ui/photo-backdrop";
 import { assetStatusLabel, assetStatusTone } from "@/lib/asset-status";
 import { getCurrentUser } from "@/lib/auth";
 import { getAssetById, listAssets } from "@/lib/assets";
@@ -29,7 +30,15 @@ const STATUS_RANK: Record<string, number> = { Pending: 0, Approved: 1, Rejected:
 const baht = (value: number | null) => (value === null ? "-" : value.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
 
 function RequestTable({ rows: allRows, empty, params, prefix = "", label, capped = false }: { rows: DisposalRequest[]; empty: string; params: SearchParamsLike; prefix?: string; label: string; capped?: boolean }) {
-  if (allRows.length === 0) return <p className="px-5 py-6 text-center text-sm text-[var(--muted)]">{empty}</p>;
+  if (allRows.length === 0) {
+    return (
+      <div className="relative isolate overflow-hidden px-5 py-10 text-center text-sm text-[var(--muted)]">
+        <PhotoBackdrop image="office-desk" fade="bottom" />
+        <AppIcon name="archive" className="mx-auto mb-2 h-8 w-8 text-[var(--primary)]" />
+        <p>{empty}</p>
+      </div>
+    );
+  }
   const sort = readSort(params, SORT_KEYS, null, prefix);
   const sorted = sortRows(allRows, sort, {
     id: (row) => row.requestedAt,
@@ -209,8 +218,7 @@ export default async function DisposalPage({ searchParams }: Props) {
       return (
         <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-6">
           <div>
-            <p className="text-xs font-semibold text-[var(--accent-strong)]">จำหน่าย/ชำรุด/สูญหาย</p>
-            <h1 className="section-title mt-1 text-3xl font-semibold">บันทึกการดำเนินการ</h1>
+            <h1 className="section-title text-3xl font-semibold">บันทึกการดำเนินการ</h1>
           </div>
           <div className="glass-panel rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-800">
             {canMutate ? "ทรัพย์สินนี้จำหน่ายหรือบันทึกสูญหายแล้ว" : "บัญชีของคุณไม่มีสิทธิ์บันทึกชำรุดหรือเสนอจำหน่าย"}
@@ -229,8 +237,7 @@ export default async function DisposalPage({ searchParams }: Props) {
             <span>/</span>
             <span>{asset.assetNumber}</span>
           </nav>
-          <p className="text-xs font-semibold text-[var(--accent-strong)]">จำหน่าย/ชำรุด/สูญหาย</p>
-          <h1 className="section-title mt-1 text-3xl font-semibold">บันทึกการดำเนินการ</h1>
+          <h1 className="section-title text-3xl font-semibold">บันทึกการดำเนินการ</h1>
         </div>
         <div className="glass-panel rounded-2xl p-6">
           {pendingForAsset && (
@@ -257,28 +264,32 @@ export default async function DisposalPage({ searchParams }: Props) {
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6">
-      <div>
-        <p className="text-xs font-semibold text-[var(--accent-strong)]">จำหน่าย/ชำรุด/สูญหาย</p>
-        <h1 className="section-title mt-1 text-3xl font-semibold">จำหน่าย / ชำรุด / สูญหาย</h1>
+      <div className="relative isolate overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--surface-strong)] px-5 py-5 sm:px-6">
+        <PhotoBackdrop image="it-storage" fade="left" />
+        <h1 className="section-title flex items-center gap-2 text-3xl font-semibold"><AppIcon name="archive" className="h-7 w-7 text-[var(--primary)]" /> จำหน่าย / ชำรุด / สูญหาย</h1>
         <p className="mt-1 text-sm text-[var(--muted)]">ค้นหาทรัพย์สินที่ต้องการดำเนินการ</p>
       </div>
 
       {canMutate && <form method="GET" className="glass-panel flex gap-3 rounded-2xl p-4">
+        <label htmlFor="disposal-search" className="sr-only">ค้นหาทรัพย์สิน</label>
         <input
+          id="disposal-search"
           name="q"
           defaultValue={q}
           autoFocus
           placeholder="ค้นหาชื่อ / เลขทะเบียน / ประเภท…"
           className="filter-control min-w-0 flex-1"
         />
-        <button type="submit" className="rounded-xl bg-[var(--primary)] px-4 py-2.5 text-xs font-semibold text-white transition hover:bg-[var(--primary-hover)]">
-          ค้นหา
+        <button type="submit" className="primary-action action-sm">
+          <AppIcon name="search" className="h-4 w-4" /> ค้นหา
         </button>
       </form>}
 
       {q && results.length === 0 && (
-        <div className="glass-panel rounded-2xl p-10 text-center text-[var(--muted)]">
-          ไม่พบทรัพย์สินที่ตรงกับ &quot;{q}&quot;
+        <div className="glass-panel relative isolate overflow-hidden rounded-2xl p-10 text-center text-[var(--muted)]">
+          <PhotoBackdrop image="it-storage" fade="bottom" />
+          <AppIcon name="search" className="mx-auto mb-3 h-8 w-8 text-[var(--primary)]" />
+          <p>ไม่พบทรัพย์สินที่ตรงกับ &quot;{q}&quot;</p>
         </div>
       )}
 
@@ -303,9 +314,9 @@ export default async function DisposalPage({ searchParams }: Props) {
                   {canMutate ? (
                     <Link
                       href={`/disposal?assetId=${asset.id}`}
-                      className="whitespace-nowrap rounded-xl bg-rose-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-rose-700"
+                      className="inline-flex min-h-9 items-center gap-1.5 whitespace-nowrap rounded-xl bg-rose-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-rose-700"
                     >
-                      ดำเนินการ →
+                      ดำเนินการ <AppIcon name="arrow-right" className="h-4 w-4" />
                     </Link>
                   ) : (
                     <span className="rounded-xl border border-stone-300 bg-stone-100 px-4 py-2 text-xs font-medium text-stone-500">
@@ -320,7 +331,8 @@ export default async function DisposalPage({ searchParams }: Props) {
       )}
 
       {!q && canMutate && (
-        <div className="glass-panel rounded-2xl p-10 text-center text-[var(--muted)]">
+        <div className="glass-panel relative isolate overflow-hidden rounded-2xl p-10 text-center text-[var(--muted)]">
+          <PhotoBackdrop image="office-desk" fade="bottom" />
           <AppIcon name="clipboard-check" className="mx-auto mb-3 h-10 w-10 text-[var(--primary)]" />
           <p className="text-sm">ป้อนชื่อหรือรหัสทรัพย์สินเพื่อเริ่มต้น</p>
         </div>
@@ -350,7 +362,7 @@ export default async function DisposalPage({ searchParams }: Props) {
             <h2 className="font-semibold">เอกสารจำหน่าย (Excel)</h2>
             <p className="mt-0.5 text-xs text-[var(--muted)]">พิมพ์แนบบันทึกขออนุมัติ หรือรายงานผลการจำหน่ายประจำปี{facilityScopeId ? "" : " (ทุกหน่วยงาน)"}</p>
             <div className="mt-3 flex flex-wrap items-end gap-3">
-              <a href={withBasePath("/api/export/disposal/?type=pending")} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[var(--primary-soft-strong)] bg-[var(--primary-soft)] px-4 text-sm font-semibold text-[var(--primary-text)] hover:bg-[var(--primary-soft-strong)]">
+              <a href={withBasePath("/api/export/disposal/?type=pending")} title="ดาวน์โหลดรายการขออนุมัติจำหน่าย (Excel)" className="secondary-action gap-2">
                 <AppIcon name="download" className="h-4 w-4" /> รายการขออนุมัติจำหน่าย ({pendingList.rows.length})
               </a>
               <form method="GET" action={withBasePath("/api/export/disposal/")} className="flex items-end gap-2">
@@ -360,7 +372,7 @@ export default async function DisposalPage({ searchParams }: Props) {
                     {Array.from({ length: 5 }, (_, index) => currentFy - index).map((year) => <option key={year} value={year}>{year}</option>)}
                   </select>
                 </label>
-                <button type="submit" className="inline-flex min-h-9 items-center gap-2 rounded-xl border border-[var(--line)] bg-white px-4 text-xs font-semibold hover:bg-[var(--primary-soft)]">
+                <button type="submit" title="ดาวน์โหลดรายงานการจำหน่ายประจำปี (Excel)" className="secondary-action action-sm gap-2">
                   <AppIcon name="download" className="h-4 w-4" /> รายงานการจำหน่ายประจำปี
                 </button>
               </form>
@@ -369,7 +381,7 @@ export default async function DisposalPage({ searchParams }: Props) {
           <section className="glass-panel overflow-hidden rounded-2xl">
             <div className="flex items-center justify-between border-b border-black/6 px-5 py-3">
               <h2 className="font-semibold">ผลการพิจารณาล่าสุด</h2>
-              <Link href="/reports?view=disposal" className="text-xs font-medium text-[var(--primary)] hover:underline">ดูรายงาน</Link>
+              <Link href="/reports?view=disposal" className="inline-flex items-center gap-1 text-xs font-medium text-[var(--primary)] hover:underline">ดูรายงาน <AppIcon name="arrow-right" className="h-3.5 w-3.5" /></Link>
             </div>
             <RequestTable rows={decided} empty="ยังไม่มีผลการพิจารณา" params={params} prefix="h" label="แบ่งหน้าผลการพิจารณา" capped={decidedList.rows.length >= LIST_CAP} />
           </section>

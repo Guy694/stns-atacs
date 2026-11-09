@@ -12,7 +12,7 @@ import {
   recordEnrollSuccess,
 } from "@/app/api/agent/_lib/enroll-limits";
 import { INVALID, isPlainObject, optionalInteger, optionalString, readJsonBody } from "@/app/api/agent/_lib/request-body";
-import { enrollAgentDevice, enrollAgentDeviceWithInstallKey } from "@/lib/agent";
+import { AGENT_REENROLL_QUIET_DAYS, AgentDeviceAlreadyEnrolledError, enrollAgentDevice, enrollAgentDeviceWithInstallKey } from "@/lib/agent";
 import { isAgentInstallKeyConfigured, verifyAgentInstallKey } from "@/lib/agent-install-key";
 import { formatThaiDateTime } from "@/lib/date-format";
 import { notifyTelegramSafe } from "@/lib/telegram";
@@ -198,6 +198,46 @@ export async function POST(req: NextRequest) {
       deviceId: result.deviceId,
     });
   } catch (error) {
+    if (error instanceof AgentDeviceAlreadyEnrolledError) {
+      // Fingerprint takeover attempt (or a reimaged machine whose old record is still active).
+      // Counts as a failed attempt so guessing fingerprints runs into the per-IP limit.
+      recordEnrollFailure(clientIp);
+      const ip = readRequestIp(req.headers);
+      const { device } = error;
+      await recordSecurityEvent({
+        eventType: "agent_reenroll_blocked",
+        ipAddress: ip,
+        identity: hostname ?? fingerprint,
+        path: req.nextUrl.pathname,
+        detail: `ปฏิเสธการลงทะเบียนซ้ำของ Device #${device.deviceId} (${device.hostname ?? "-"}) ที่ยังรายงานอยู่ ล่าสุด ${formatThaiDateTime(device.lastSeenAt)}`,
+      });
+      await notifyTelegramSafe({
+        category: "security",
+        title: "ปฏิเสธการลงทะเบียน Agent ซ้ำบน fingerprint ของเครื่องที่ยังใช้งานอยู่",
+        throttle: false,
+        details: {
+          "ผู้ขอลงทะเบียน": hostname ?? "-",
+          "เครื่องเดิม": device.hostname ?? "-",
+          "เดิมรายงานล่าสุด": formatThaiDateTime(device.lastSeenAt),
+          หน่วยงาน: device.facilityName,
+          Device: `#${device.deviceId}`,
+          IP: ip,
+          "ถ้าเป็นการติดตั้งใหม่จริง": "ตั้งค่าระบบ › Agent › ลบออกจากระบบ (เครื่องนี้) แล้วรันคำสั่งติดตั้งอีกครั้ง",
+          "ถ้าไม่ใช่": "ยกเลิกรหัสติดตั้งของหน่วยงานนี้ที่ ตั้งค่าระบบ › Agent",
+        },
+      });
+      return NextResponse.json(
+        {
+          error: "Device already enrolled",
+          code: "DEVICE_ALREADY_ENROLLED",
+          message:
+            `This machine is already registered and still reporting (device #${device.deviceId}). ` +
+            `If it was reinstalled, ask an ATACS admin to remove it in Settings > Agent ("ลบออกจากระบบ") and run the install command again, ` +
+            `or wait ${AGENT_REENROLL_QUIET_DAYS} days without reports. / เครื่องนี้ลงทะเบียนอยู่แล้ว ให้ผู้ดูแลกด "ลบออกจากระบบ" ก่อนติดตั้งใหม่`,
+        },
+        { status: 409 }
+      );
+    }
     const message = error instanceof Error ? error.message : "Unknown error";
     if (message === "INVALID_ENROLLMENT_TOKEN") {
       recordEnrollFailure(clientIp);

@@ -8,6 +8,8 @@ import { pageHref as tablePageHref, readSort, sortHref } from "@/lib/table-sort"
 import { formatThaiDateTime } from "@/lib/date-format";
 import Link from "next/link";
 import { withBasePath } from "@/lib/base-path";
+import { AppIcon } from "@/app/_components/ui/icon";
+import { EmptyState, PageHero, SummaryCard } from "@/app/(main)/admin/_components/page-hero";
 
 type AuditPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -70,106 +72,89 @@ export default async function AuditLogPage({ searchParams }: AuditPageProps) {
 
   return (
     <div className="mx-auto w-full max-w-7xl space-y-6">
-      <div>
-        <p className="text-xs font-semibold text-[var(--accent-strong)]">ระบบและความปลอดภัย · ประวัติการใช้งาน</p>
-        <h1 className="section-title mt-1 text-3xl font-semibold">ประวัติการใช้งาน (Audit Log)</h1>
-        <p className="mt-1 text-sm" style={{ color: "var(--muted)" }}>
-          บันทึกการดำเนินการล่าสุด พร้อมค้นหาและกรองเชิงลึก
-        </p>
-      </div>
+      <PageHero
+        icon="audit"
+        image="office-desk"
+        title="ประวัติการใช้งาน (Audit Log)"
+        description="บันทึกการดำเนินการล่าสุด พร้อมค้นหาและกรองเชิงลึก"
+      />
 
-      <p className="text-sm text-[var(--muted)]">สรุปรายการในหน้านี้</p>
-      <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
-        <div className="glass-panel rounded-2xl p-4">
-          <p className="text-xs text-[var(--muted)]">รายการที่แสดง</p>
-          <p className="mt-1 text-2xl font-semibold text-[var(--foreground)]">{logs.length}</p>
+      <section aria-label="สรุปรายการในหน้านี้" className="space-y-2">
+        <p className="text-xs text-[var(--muted)]">สรุปรายการในหน้านี้</p>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+          <SummaryCard icon="file-text" image="office-desk" label="รายการที่แสดง" value={logs.length.toLocaleString("th-TH")} />
+          <SummaryCard icon="users" image="meeting-room" label="ผู้ใช้งานที่เคลื่อนไหว" value={uniqueUsers.toLocaleString("th-TH")} />
+          {([
+            ["create", "plus", "success"],
+            ["update", "pencil", "info"],
+            ["delete", "trash", "danger"],
+            ["transfer", "repeat", "neutral"],
+          ] as const).map(([key, icon, tone]) => (
+            <SummaryCard key={key} icon={icon} image="it-storage" label={ACTION_LABEL[key]} value={(countsByAction[key] ?? 0).toLocaleString("th-TH")} tone={(countsByAction[key] ?? 0) > 0 ? tone : "neutral"} />
+          ))}
         </div>
-        <div className="glass-panel rounded-2xl p-4">
-          <p className="text-xs text-[var(--muted)]">ผู้ใช้งานที่เคลื่อนไหว</p>
-          <p className="mt-1 text-2xl font-semibold text-[var(--foreground)]">{uniqueUsers}</p>
-        </div>
-        {(["create", "update", "delete", "transfer"] as const).map((key) => (
-          <div key={key} className="glass-panel rounded-2xl p-4">
-            <p className="text-xs text-[var(--muted)]">{ACTION_LABEL[key]}</p>
-            <p className="mt-1 text-2xl font-semibold text-[var(--foreground)]">{countsByAction[key] ?? 0}</p>
-          </div>
-        ))}
-      </div>
+      </section>
 
-      <form method="GET" className="glass-panel flex flex-wrap gap-3 rounded-2xl p-4">
-        <input
-          name="search"
-          defaultValue={search}
-          placeholder="ค้นหาจากรายละเอียด / entity / ผู้ใช้"
-          className="filter-control min-w-0 flex-1"
-        />
-        <input
-          name="actor"
-          defaultValue={actorFilter}
-          placeholder="ชื่อผู้ใช้"
-          className="filter-control"
-        />
-        <input
-          name="entity"
-          defaultValue={entityFilter}
-          placeholder="entity เช่น users"
-          className="filter-control"
-        />
-        <input
-          name="dateFrom"
-          type="date"
-          defaultValue={dateFrom}
-          className="filter-control"
-        />
-        <input
-          name="dateTo"
-          type="date"
-          defaultValue={dateTo}
-          className="filter-control"
-        />
-        <select
-          name="action"
-          defaultValue={actionFilter}
-          className="filter-control"
-        >
+      <form method="GET" action={withBasePath("/admin/audit/")} className="glass-panel grid gap-2 rounded-2xl p-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,2fr)_repeat(5,minmax(0,1fr))]">
+        <div className="relative sm:col-span-2 lg:col-span-1">
+          <AppIcon name="search" size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]" />
+          <input
+            name="search"
+            type="search"
+            aria-label="ค้นหาจากรายละเอียด entity หรือผู้ใช้"
+            defaultValue={search}
+            placeholder="ค้นหาจากรายละเอียด / entity / ผู้ใช้"
+            className="filter-control pl-9"
+          />
+        </div>
+        <input name="actor" aria-label="ชื่อผู้ใช้" defaultValue={actorFilter} placeholder="ชื่อผู้ใช้" className="filter-control" />
+        <input name="entity" aria-label="entity" defaultValue={entityFilter} placeholder="entity เช่น users" className="filter-control" />
+        <input name="dateFrom" type="date" aria-label="ตั้งแต่วันที่" title="ตั้งแต่วันที่" defaultValue={dateFrom} className="filter-control" />
+        <input name="dateTo" type="date" aria-label="ถึงวันที่" title="ถึงวันที่" defaultValue={dateTo} className="filter-control" />
+        <select name="action" aria-label="การดำเนินการ" defaultValue={actionFilter} className="filter-control">
           <option value="">ทุกการดำเนินการ</option>
           {Object.entries(ACTION_LABEL).map(([key, label]) => (
             <option key={key} value={key}>{label}</option>
           ))}
         </select>
-        <button type="submit" className="rounded-xl bg-[var(--accent-strong)] px-4 py-2 text-xs font-semibold text-white transition hover:opacity-90">
-          ค้นหา
-        </button>
-        <a
-          href={withBasePath(`/api/export/audit/?search=${encodeURIComponent(search)}&actor=${encodeURIComponent(actorFilter)}&entity=${encodeURIComponent(entityFilter)}&action=${encodeURIComponent(actionFilter)}&dateFrom=${encodeURIComponent(dateFrom)}&dateTo=${encodeURIComponent(dateTo)}`)}
-          className="secondary-action"
-        >
-          ส่งออก CSV
-        </a>
-        {(search || actorFilter || entityFilter || actionFilter || dateFrom || dateTo) && (
-          <Link href="/admin/audit" className="rounded-xl border border-black/10 bg-white/80 px-4 py-2 text-xs text-[var(--muted)] hover:bg-white">
-            ล้างตัวกรอง
-          </Link>
-        )}
+        <div className="flex flex-wrap items-center gap-2 sm:col-span-2 lg:col-span-6">
+          <button type="submit" className="primary-action action-sm">
+            <AppIcon name="search" size={15} />
+            ค้นหา
+          </button>
+          {hasFilters && (
+            <Link href="/admin/audit" className="secondary-action action-sm gap-2">
+              <AppIcon name="undo" size={15} />
+              ล้างตัวกรอง
+            </Link>
+          )}
+          <a
+            href={withBasePath(`/api/export/audit/?search=${encodeURIComponent(search)}&actor=${encodeURIComponent(actorFilter)}&entity=${encodeURIComponent(entityFilter)}&action=${encodeURIComponent(actionFilter)}&dateFrom=${encodeURIComponent(dateFrom)}&dateTo=${encodeURIComponent(dateTo)}`)}
+            className="secondary-action action-sm ml-auto gap-2"
+          >
+            <AppIcon name="download" size={15} />
+            ส่งออก CSV
+          </a>
+        </div>
       </form>
 
       <div className="glass-panel rounded-2xl overflow-hidden">
         {logs.length === 0 ? (
-          <div className="text-center py-16" style={{ color: "var(--muted)" }}>
-            {hasFilters ? (
-              <>
-                <p>ไม่พบประวัติที่ตรงกับเงื่อนไขที่เลือก</p>
-                <Link href="/admin/audit" className="mt-2 inline-block text-sm text-[var(--primary-text)] underline">ล้างตัวกรอง</Link>
-              </>
-            ) : (
-              <p>ยังไม่มีประวัติการใช้งาน</p>
-            )}
-          </div>
+          hasFilters ? (
+            <EmptyState icon="search" title="ไม่พบประวัติที่ตรงกับเงื่อนไขที่เลือก" description="ลองขยายช่วงวันที่หรือเปลี่ยนคำค้นหา">
+              <Link href="/admin/audit" className="secondary-action action-sm gap-2">
+                <AppIcon name="undo" size={15} />
+                ล้างตัวกรอง
+              </Link>
+            </EmptyState>
+          ) : (
+            <EmptyState icon="history" title="ยังไม่มีประวัติการใช้งาน" description="เมื่อมีการสร้าง แก้ไข หรือลบข้อมูล รายการจะแสดงที่นี่" />
+          )
         ) : (
           <div className="overflow-x-auto">
           <table className="w-full min-w-[760px] text-sm">
             <thead>
-              <tr style={{ background: "var(--neutral-bg)", borderBottom: "1px solid var(--line)" }}>
+              <tr style={{ borderBottom: "1px solid var(--line)" }}>
                 <th className="px-4 py-3 text-left font-semibold" style={{ color: "var(--muted)" }}>ลำดับ</th>
                 {([["time", "วันที่/เวลา"], ["user", "ผู้ใช้"], ["action", "การดำเนินการ"], ["entity", "ข้อมูล"], ["summary", "รายละเอียด"]] as const).map(([key, label]) => (
                   <SortableTh key={key} label={label} sortKey={key} sort={sort} href={sortHref("/admin/audit", params, key, sort)}
@@ -179,7 +164,7 @@ export default async function AuditLogPage({ searchParams }: AuditPageProps) {
             </thead>
             <tbody>
               {logs.map((log, rowIndex) => (
-                <tr key={log.id} style={{ borderBottom: "1px solid var(--line)" }} className="hover:bg-[var(--neutral-bg)]">
+                <tr key={log.id} style={{ borderBottom: "1px solid var(--line)" }}>
                   <td className="px-4 py-3 text-xs tabular-nums text-[var(--muted)]">{((page - 1) * pageSize + rowIndex + 1).toLocaleString("th-TH")}</td>
                   <td className="px-4 py-3 text-xs font-mono" style={{ color: "var(--muted)" }}>
                     {formatThaiDateTime(log.createdAt)}
