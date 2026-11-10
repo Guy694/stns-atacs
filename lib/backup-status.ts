@@ -33,13 +33,24 @@ export type BackupHealthInput = {
 
 const HOUR_MS = 60 * 60 * 1000;
 
+/**
+ * Database dumps we accept: atacs-db-*.sql.gz from docker/backup.sh (repo compose), or stn_atacs_*.sql.gz from the
+ * production host script (~/bin/db-backup.sh) that dumps every system's database into one shared folder.
+ */
+const DUMP_PATTERN = /^(atacs-db-.*|stn_atacs_\d{8}_\d{6})\.sql\.gz$/;
+
+/** Files worth stat-ing in the backup folder (other systems' dumps in a shared folder are skipped). */
+export function isBackupDirEntry(name: string) {
+  return name.startsWith("atacs-") || name.startsWith("stn_atacs_");
+}
+
 export function evaluateBackupHealth(input: BackupHealthInput): BackupHealth {
   const now = input.now ?? Date.now();
   const maxAgeHours = input.maxAgeHours ?? 36;
   const minBytes = input.minBytes ?? 10 * 1024;
 
   const dumps = input.files
-    .filter((file) => /^atacs-db-.*\.sql\.gz$/.test(file.name))
+    .filter((file) => DUMP_PATTERN.test(file.name))
     .sort((a, b) => b.modifiedAt - a.modifiedAt);
   const badFileCount = input.files.filter((file) => file.name.endsWith(".bad")).length;
 

@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { loadTs } from "./helpers/load-ts.mjs";
 
-const { evaluateBackupHealth } = loadTs("lib/backup-status.ts");
+const { evaluateBackupHealth, isBackupDirEntry } = loadTs("lib/backup-status.ts");
 
 const NOW = Date.UTC(2026, 8, 24, 3, 0, 0);
 const hoursAgo = (hours) => NOW - hours * 60 * 60 * 1000;
@@ -52,4 +52,27 @@ test("warns about rejected files and a single copy without calling it critical",
   assert.equal(health.level, "warning");
   assert.equal(health.badFileCount, 1);
   assert.equal(health.problems.length, 2);
+});
+
+// Production server: ~/bin/db-backup.sh writes <db>_YYYYMMDD_HHMMSS.sql.gz for every database into one folder.
+test("recognises the host backup script's stn_atacs_* dumps and ignores other systems' dumps", () => {
+  const health = evaluateBackupHealth({
+    files: [
+      dump("stn_atacs_20260924_023001.sql.gz", 1),
+      dump("stn_atacs_20260923_023001.sql.gz", 25),
+      dump("stneoc_20260924_023001.sql.gz", 0.5),
+      dump("vitalsync_db_20260924_023001.sql.gz", 0.5),
+    ],
+    now: NOW,
+  });
+  assert.equal(health.level, "ok");
+  assert.equal(health.latestDatabaseFile, "stn_atacs_20260924_023001.sql.gz");
+});
+
+test("only ATACS files are read from a shared backup folder", () => {
+  assert.equal(isBackupDirEntry("atacs-db-20260924-023000.sql.gz"), true);
+  assert.equal(isBackupDirEntry("atacs-db-20260924-023000.sql.gz.bad"), true);
+  assert.equal(isBackupDirEntry("stn_atacs_20260924_023001.sql.gz"), true);
+  assert.equal(isBackupDirEntry("stneoc_20260924_023001.sql.gz"), false);
+  assert.equal(isBackupDirEntry("backup.log"), false);
 });

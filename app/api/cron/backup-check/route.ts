@@ -3,7 +3,7 @@ import path from "node:path";
 
 import { NextRequest, NextResponse } from "next/server";
 
-import { evaluateBackupHealth, type BackupFileInfo, type BackupStatusFile } from "@/lib/backup-status";
+import { evaluateBackupHealth, isBackupDirEntry, type BackupFileInfo, type BackupStatusFile } from "@/lib/backup-status";
 import { readRequestIp, recordSecurityEvent } from "@/lib/security";
 import { notifyTelegramSafe } from "@/lib/telegram";
 import { isAuthorizedCronHeader } from "@/lib/cron-auth";
@@ -29,7 +29,7 @@ async function readBackupDir(dir: string): Promise<{ files: BackupFileInfo[]; st
 
   const files: BackupFileInfo[] = [];
   for (const name of entries) {
-    if (!name.startsWith("atacs-")) continue;
+    if (!isBackupDirEntry(name)) continue;
     try {
       const stat = await fs.stat(path.join(dir, name));
       if (stat.isFile()) files.push({ name, bytes: stat.size, modifiedAt: stat.mtimeMs });

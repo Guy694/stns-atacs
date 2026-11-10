@@ -121,7 +121,8 @@ services:
       APP_BASE_PATH: ${NEXT_PUBLIC_BASE_PATH:-/stns-atacs}
       CRON_INTERVAL_SECONDS: ${CRON_INTERVAL_SECONDS:-3600}
       DAILY_SUMMARY_TIME: ${DAILY_SUMMARY_TIME:-08:00}
-      TZ: Asia/Bangkok
+      # curl image has no tzdata: "Asia/Bangkok" would silently fall back to UTC. POSIX form needs none.
+      TZ: ICT-7
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
@@ -132,10 +133,10 @@ services:
         last_summary_day=""
         while true; do
           now=$$(date +%s)
-          if [ $$((now - last_health)) -ge "$$CRON_INTERVAL_SECONDS" ]; then call /api/cron/agent-health; last_health=$$now; fi
+          if [ $$((now - last_health)) -ge "$$CRON_INTERVAL_SECONDS" ]; then call /api/cron/agent-health/; last_health=$$now; fi
           today=$$(date +%Y-%m-%d)
           if [ "$$(date +%H:%M)" \> "$$DAILY_SUMMARY_TIME" ] || [ "$$(date +%H:%M)" = "$$DAILY_SUMMARY_TIME" ]; then
-            if [ "$$today" != "$$last_summary_day" ]; then call /api/cron/daily-summary; call /api/cron/backup-check; last_summary_day=$$today; fi
+            if [ "$$today" != "$$last_summary_day" ]; then call /api/cron/daily-summary/; call /api/cron/backup-check/; last_summary_day=$$today; fi
           fi
           sleep 60
         done
