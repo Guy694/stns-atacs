@@ -76,10 +76,24 @@ export function TopNavigation({ current, user }: TopNavigationProps) {
             />
           </div>
         ) : (
-          <Link href="/login" className="primary-action shrink-0 !bg-[var(--brand-green)] hover:!bg-[var(--brand-green-strong)]">
-            <AppIcon name="key" className="h-4 w-4" />
-            เข้าสู่ระบบ
-          </Link>
+          // ผู้เยี่ยมชม: ปุ่มทั้งหมดอยู่ที่แถบบนจุดเดียว (ไม่ซ้ำกับส่วนหัวของหน้า)
+          <div className="flex shrink-0 items-center gap-2">
+            {current !== "register" && (
+              <Link
+                href="/register"
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-white/50 px-4 text-sm font-semibold text-white transition-colors duration-200 hover:bg-[var(--nav-hover)]"
+              >
+                <AppIcon name="user" className="h-4 w-4" />
+                ลงทะเบียน
+              </Link>
+            )}
+            {current !== "login" && (
+              <Link href="/login" className="primary-action shrink-0 !bg-[var(--brand-green)] hover:!bg-[var(--brand-green-strong)]">
+                <AppIcon name="key" className="h-4 w-4" />
+                เข้าสู่ระบบ
+              </Link>
+            )}
+          </div>
         )}
       </div>
     </header>

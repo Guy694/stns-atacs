@@ -19,7 +19,6 @@ import { DashboardFilters } from "@/app/_components/dashboard-filters";
 import { SplashScreen } from "@/app/_components/splash-screen";
 import { SPLASH_SEEN_SCRIPT } from "@/lib/splash";
 import { TopNavigation } from "@/app/_components/top-navigation";
-import { AppIcon } from "@/app/_components/ui/icon";
 import { PhotoBackdrop } from "@/app/_components/ui/photo-backdrop";
 import { getDashboardData } from "@/lib/atacs";
 import { buildDashboardSummary, readDashboardFilters } from "@/lib/dashboard-summary";
@@ -64,8 +63,8 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
 
       <section aria-labelledby="public-heading" className="relative isolate overflow-hidden rounded-2xl bg-[#14507f] px-6 py-8 text-white sm:px-10">
         <PhotoBackdrop image="meeting-room" opacity="opacity-[0.14]" fade="left" />
-        <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-          <div className="max-w-2xl">
+        <div>
+          <div className="max-w-3xl">
             <h1 id="public-heading" className="section-title text-3xl font-semibold leading-tight sm:text-4xl">
               {summary.categoryLabel ? summary.categoryLabel.replace(/^\d+\.\s*/, "") : "ทะเบียนทรัพย์สินและครุภัณฑ์ จ.สตูล"}
             </h1>
@@ -74,14 +73,6 @@ export default async function PublicDashboardPage({ searchParams }: Props) {
                 ? `ภาพรวมเฉพาะ${summary.categoryLabel.replace(/^\d+\.\s*/, "")} ของหน่วยบริการสาธารณสุขใน จ.สตูล — จำนวน สถานะการใช้งาน มูลค่า และการกระจายตามอำเภอ`
                 : "ภาพรวมจำนวน สถานะการใช้งาน และมูลค่าครุภัณฑ์ของหน่วยบริการสาธารณสุขในจังหวัด แยกตามปีงบประมาณ อำเภอ หน่วยงาน และประเภท"}
             </p>
-          </div>
-          <div className="flex flex-wrap gap-3">
-            <Link href="/login" className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-white px-5 text-sm font-semibold text-[#14507f] transition-colors duration-200 hover:bg-sky-50">
-              <AppIcon name="key" className="h-4 w-4" /> เข้าสู่ระบบสำหรับเจ้าหน้าที่
-            </Link>
-            <Link href="/register" className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-white/60 px-5 text-sm font-semibold text-white transition-colors duration-200 hover:bg-white/10">
-              <AppIcon name="user" className="h-4 w-4" /> ลงทะเบียนผู้ใช้งาน
-            </Link>
           </div>
         </div>
       </section>

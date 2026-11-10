@@ -1,9 +1,7 @@
-import fs from "node:fs/promises";
-import path from "node:path";
-
 import { NextRequest, NextResponse } from "next/server";
 
-import { evaluateBackupHealth, isBackupDirEntry, type BackupFileInfo, type BackupStatusFile } from "@/lib/backup-status";
+import { backupCheckDir, readBackupDir } from "@/lib/backup-dir";
+import { evaluateBackupHealth } from "@/lib/backup-status";
 import { readRequestIp, recordSecurityEvent } from "@/lib/security";
 import { notifyTelegramSafe } from "@/lib/telegram";
 import { isAuthorizedCronHeader } from "@/lib/cron-auth";
@@ -17,35 +15,6 @@ function isAuthorized(req: NextRequest) {
 
 function bangkokToday() {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
-}
-
-async function readBackupDir(dir: string): Promise<{ files: BackupFileInfo[]; status: BackupStatusFile | null; error: string | null }> {
-  let entries: string[];
-  try {
-    entries = await fs.readdir(dir);
-  } catch {
-    return { files: [], status: null, error: `อ่านโฟลเดอร์สำรองข้อมูลไม่ได้ (${dir})` };
-  }
-
-  const files: BackupFileInfo[] = [];
-  for (const name of entries) {
-    if (!isBackupDirEntry(name)) continue;
-    try {
-      const stat = await fs.stat(path.join(dir, name));
-      if (stat.isFile()) files.push({ name, bytes: stat.size, modifiedAt: stat.mtimeMs });
-    } catch {
-      // ไฟล์หายไประหว่างอ่าน — ข้าม
-    }
-  }
-
-  let status: BackupStatusFile | null = null;
-  try {
-    status = JSON.parse(await fs.readFile(path.join(dir, "last-status.json"), "utf8")) as BackupStatusFile;
-  } catch {
-    status = null;
-  }
-
-  return { files, status, error: null };
 }
 
 /**
@@ -64,7 +33,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const dir = process.env.BACKUP_CHECK_DIR?.trim() || "/backups";
+  const dir = backupCheckDir();
   const { files, status, error } = await readBackupDir(dir);
 
   const health = error

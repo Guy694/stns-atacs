@@ -42,7 +42,7 @@ export default async function RegisterPage({ searchParams }: RegisterPageProps) 
 
   const claim = await getPendingRegistrationClaim();
   if (!claim) {
-    redirect("/login?error=กรุณาเข้าสู่ระบบด้วย ThaiD หรือ Google ก่อนการสมัครสมาชิก");
+    redirect(`/login?error=${encodeURIComponent("กรุณาเข้าสู่ระบบด้วย ThaiD หรือ Google ก่อนการสมัครสมาชิก")}`);
   }
 
   const params = await searchParams;

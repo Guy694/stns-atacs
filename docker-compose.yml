@@ -143,6 +143,25 @@ services:
     depends_on:
       - app
 
+  # Uptime watchdog: polls /api/health/ every minute, Telegram after 3 failures in a row,
+  # reminder every 30 min while down, and a recovery message (scripts/uptime-watchdog.mjs).
+  watchdog:
+    image: node:22-alpine
+    restart: unless-stopped
+    user: "node"
+    mem_limit: 64m
+    environment:
+      WATCHDOG_URL: http://app:3000${NEXT_PUBLIC_BASE_PATH:-/stns-atacs}/api/health/
+      WATCHDOG_PUBLIC_URL: ${WATCHDOG_PUBLIC_URL:-}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+      TZ: Asia/Bangkok
+    volumes:
+      - ./scripts/uptime-watchdog.mjs:/watchdog/uptime-watchdog.mjs:ro
+    command: ["node", "/watchdog/uptime-watchdog.mjs"]
+    depends_on:
+      - app
+
   # Nightly backup of the database and uploaded photos into ./backups on the host
   # (keeps BACKUP_KEEP_DAYS days). Manual run: docker compose exec backup bash /backup.sh now
   backup:

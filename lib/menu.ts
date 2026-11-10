@@ -164,6 +164,15 @@ export const APP_MENU_ITEMS: AppMenuItem[] = [
     permissionKey: "audit.view",
   },
   {
+    key: "admin-security",
+    href: "/admin/security",
+    label: "ความปลอดภัยระบบ",
+    description: "สถานะเซิร์ฟเวอร์ การเข้าสู่ระบบ IP และเหตุการณ์ผิดปกติ",
+    icon: "shield",
+    group: "system",
+    permissionKey: "audit.view",
+  },
+  {
     key: "reports",
     href: "/reports",
     label: "รายงาน",
