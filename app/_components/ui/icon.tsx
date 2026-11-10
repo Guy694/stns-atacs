@@ -58,6 +58,7 @@ import {
   Wrench,
   X,
   type LucideIcon,
+  Camera,
 } from "lucide-react";
 
 /**
@@ -71,6 +72,7 @@ const ICONS = {
   "arrow-left": ArrowLeft,
   "arrow-right": ArrowRight,
   audit: ClipboardList,
+  camera: Camera,
   building: Building2,
   check: Check,
   "chevron-down": ChevronDown,

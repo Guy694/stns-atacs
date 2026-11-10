@@ -2,7 +2,19 @@
 @import "sweetalert2/dist/sweetalert2.min.css";
 
 :root {
-  --background: #f4f8fc;
+  /* Theme: blue (navigation), green (accent), white (content). */
+  --nav-bg: #0b4a7d;
+  --nav-bg-strong: #083a63;
+  --nav-fg: #ffffff;
+  --nav-muted: rgba(255, 255, 255, 0.74);
+  --nav-subtle: rgba(255, 255, 255, 0.56);
+  --nav-line: rgba(255, 255, 255, 0.12);
+  --nav-hover: rgba(255, 255, 255, 0.1);
+  --brand-green: #16a34a;
+  --brand-green-strong: #15803d;
+  --brand-green-soft: #e9f8ef;
+  --brand-green-text: #166534;
+  --background: #f7fafc;
   --foreground: #18324a;
   --surface: #ffffff;
   --surface-strong: #ffffff;
@@ -112,8 +124,13 @@ html {
   box-shadow: 0 2px 8px rgba(15, 60, 100, 0.04);
 }
 
+.nav-scroll {
+  scrollbar-color: rgba(255, 255, 255, 0.28) transparent;
+  scrollbar-width: thin;
+}
+
 .sidebar-gradient {
-  background: #ffffff;
+  background: var(--nav-bg);
 }
 
 .section-title {

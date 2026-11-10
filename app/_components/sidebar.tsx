@@ -26,7 +26,7 @@ export function MobileMenuButton() {
     <button
       type="button"
       onClick={() => setMobileMenuOpen(true)}
-      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[var(--accent-strong)] text-white shadow-sm transition-colors duration-200 hover:bg-[#125b86] lg:hidden"
+      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[var(--nav-hover)] text-white transition-colors duration-200 hover:bg-white/20 lg:hidden"
       aria-label="เปิดเมนู"
       title="เปิดเมนู"
       aria-expanded={mobileOpen}
@@ -57,13 +57,13 @@ function NavLink({
       aria-current={isActive ? "page" : undefined}
       className={`group relative flex min-h-11 items-center gap-3 rounded-[10px] px-3 py-2.5 text-sm font-medium transition-colors ${
         isActive
-          ? "bg-[var(--primary-soft)] text-[var(--accent-strong)]"
-          : "text-slate-600 hover:bg-slate-50 hover:text-slate-950"
+          ? "bg-white font-semibold text-[var(--nav-bg)] shadow-sm"
+          : "text-[var(--nav-muted)] hover:bg-[var(--nav-hover)] hover:text-white"
       }`}
     >
-      <AppIcon name={item.icon} className={`w-4 shrink-0 ${isActive ? "text-[var(--accent)]" : "text-slate-400 group-hover:text-slate-600"}`} />
+      <AppIcon name={item.icon} className={`w-4 shrink-0 ${isActive ? "text-[var(--brand-green)]" : "text-[var(--nav-subtle)] group-hover:text-white"}`} />
       <span className="flex-1">{item.label}</span>
-      {isActive && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--accent)]" aria-hidden="true" />}
+      {isActive && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--brand-green)]" aria-hidden="true" />}
       {badgeCount > 0 && (
         <span className="min-w-5 rounded-full bg-amber-400 px-1.5 py-0.5 text-center text-[10px] font-bold leading-none text-amber-950">
           {badgeCount > 99 ? "99+" : badgeCount}
@@ -145,30 +145,34 @@ export function Sidebar({ user, grantedPermissions, pendingRegistrationCount, me
   const sidebarContent = (
     <div className="flex h-full flex-col">
       {/* Brand */}
-      <div className="flex items-center gap-3 border-b border-[var(--line)] px-4 py-4">
+      {/* Exactly as tall as the navbar (76px + 1px border) so the two bottom lines meet. */}
+      <div className="flex h-[77px] shrink-0 items-center gap-3 border-b border-[var(--nav-line)] pl-4 pr-16 lg:pr-4">
         <Image
           src={withBasePath("/logo.png")}
           alt="ตราสัญลักษณ์ ATACS"
           width={44}
           height={44}
-          className="h-11 w-11 rounded-xl border border-[var(--line)] bg-white object-contain p-1"
+          className="h-11 w-11 rounded-xl bg-white object-contain p-1 shadow-sm"
           priority
         />
         <div className="min-w-0">
-          <p className="text-base font-bold tracking-[0.08em] text-[var(--accent-strong)]">ATACS</p>
-          <p className="truncate text-xs font-medium text-slate-600">{APP_NAME}</p>
-          <p className="truncate text-[11px] text-slate-500">สสจ. จังหวัดสตูล</p>
+          <p className="flex items-center gap-1.5 text-base font-bold tracking-[0.08em] text-white">
+            ATACS
+            <span className="h-1.5 w-1.5 rounded-full bg-[var(--brand-green)]" aria-hidden="true" />
+          </p>
+          <p className="truncate text-xs font-medium text-[var(--nav-muted)]" title={APP_NAME}>{APP_NAME}</p>
+          <p className="truncate text-[11px] text-[var(--nav-subtle)]">สสจ. จังหวัดสตูล</p>
         </div>
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 py-4" aria-label="เมนูหลัก">
+      <nav className="nav-scroll flex-1 space-y-0.5 overflow-y-auto px-3 py-4" aria-label="เมนูหลัก">
         {APP_MENU_GROUPS.map((group) => {
           const groupItems = items.filter((item) => item.group === group.key);
           if (groupItems.length === 0) return null;
           return (
             <div key={group.key} className="mb-5">
-              <p className="mb-1.5 px-3 text-[11px] font-semibold text-slate-400">{group.label}</p>
+              <p className="mb-1.5 px-3 text-[11px] font-semibold text-[var(--nav-subtle)]">{group.label}</p>
               <div className="space-y-0.5">
                 {groupItems.map((item) => (
                   <NavLink
@@ -186,12 +190,12 @@ export function Sidebar({ user, grantedPermissions, pendingRegistrationCount, me
 
         {user.role !== "officer" && (
           <>
-            <div className="my-3 h-px bg-[var(--line)]" />
+            <div className="my-3 h-px bg-[var(--nav-line)]" />
 
             <Link
               href="/public"
               onClick={() => setMobileMenuOpen(false)}
-              className="flex min-h-11 items-center gap-3 rounded-[10px] px-3 py-2.5 text-sm font-medium text-slate-500 transition hover:bg-slate-50 hover:text-slate-800"
+              className="flex min-h-11 items-center gap-3 rounded-[10px] px-3 py-2.5 text-sm font-medium text-[var(--nav-muted)] transition hover:bg-[var(--nav-hover)] hover:text-white"
             >
               <AppIcon name="globe" className="w-4 shrink-0" />
               หน้าข้อมูลสาธารณะ
@@ -221,7 +225,7 @@ export function Sidebar({ user, grantedPermissions, pendingRegistrationCount, me
         aria-label="เมนูนำทาง"
         aria-hidden={!mobileOpen}
         inert={!mobileOpen}
-        className={`fixed inset-y-0 left-0 z-50 w-[82vw] max-w-80 border-r border-[var(--line)] bg-white shadow-xl transition-transform duration-300 lg:hidden ${
+        className={`fixed inset-y-0 left-0 z-50 w-[82vw] max-w-80 bg-[var(--nav-bg)] text-white shadow-xl transition-transform duration-300 lg:hidden ${
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
@@ -231,25 +235,23 @@ export function Sidebar({ user, grantedPermissions, pendingRegistrationCount, me
           onClick={() => setMobileMenuOpen(false)}
           aria-label="ปิดเมนู"
           title="ปิดเมนู"
-          className="absolute right-3 top-3 flex h-11 w-11 items-center justify-center rounded-xl text-slate-500 transition-colors duration-200 hover:bg-slate-100 hover:text-slate-900"
+          className="absolute right-3 top-4 z-10 flex h-11 w-11 items-center justify-center rounded-xl text-[var(--nav-muted)] transition-colors duration-200 hover:bg-[var(--nav-hover)] hover:text-white"
         >
           <AppIcon name="close" />
         </button>
         <div className="flex h-full flex-col">
           <div className="min-h-0 flex-1">{sidebarContent}</div>
           {/* ชื่อผู้ใช้ซ่อนจากแถบบนในจอเล็ก จึงแสดงไว้ท้ายเมนูแทน */}
-          <div className="border-t border-[var(--line)] px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] text-xs text-[var(--muted)]">
-            <p className="truncate font-semibold text-[var(--accent-strong)]">{user.fullName}</p>
+          <div className="border-t border-[var(--nav-line)] px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] text-xs text-[var(--nav-muted)]">
+            <p className="truncate font-semibold text-white">{user.fullName}</p>
             <p className="mt-0.5">{roleLabel(user.role)}</p>
           </div>
         </div>
       </div>
 
       {/* Desktop sidebar (static) */}
-      <aside className="hidden w-64 shrink-0 bg-[var(--background)] p-3 lg:sticky lg:top-0 lg:flex lg:h-screen lg:flex-col">
-        <div className="h-full overflow-hidden rounded-2xl border border-[var(--line)] bg-white">
-          {sidebarContent}
-        </div>
+      <aside className="hidden w-64 shrink-0 bg-[var(--nav-bg)] text-white lg:sticky lg:top-0 lg:flex lg:h-screen lg:flex-col">
+        {sidebarContent}
       </aside>
     </>
   );

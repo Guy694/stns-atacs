@@ -2,7 +2,7 @@ import { withBasePath } from "@/lib/base-path";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
-// Short URL printed in small QR stickers (fewer QR modules). Goes to the scan page, which requires login.
+// Short URL printed in small QR stickers (fewer QR modules). Goes to the scan page (public card, or the full page when signed in).
 export async function GET(_request: Request, { params }: RouteContext) {
   const id = Number((await params).id);
   if (!Number.isSafeInteger(id) || id <= 0) return new Response("Not found", { status: 404 });

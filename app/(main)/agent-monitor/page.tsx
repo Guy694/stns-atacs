@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { FacilitySelect } from "@/app/_components/ui/facility-select";
 import { StatusBadge } from "@/app/_components/ui/status-badge";
 import { listAgentDevices } from "@/lib/agent";
 import {
@@ -17,7 +18,6 @@ import {
   CONNECTION_LABELS,
   isConnectionState,
   isOsFamilyKey,
-  osFamily,
   osFamilyLabel,
   summarizeAgentFleet,
   type AgentConnectionState,
@@ -32,6 +32,9 @@ import { hasPermission } from "@/lib/role-permissions";
 import { SortableTh, TablePagination } from "@/app/_components/ui/data-table";
 import { pageHref, paginate, readPage, readSort, sortHref, sortRows } from "@/lib/table-sort";
 
+import { filterMonitorRows, normalizeSeverityFilter } from "@/lib/agent-monitor-filter";
+import { isMissingSchemaError } from "@/lib/schema-errors";
+
 import { FleetDashboard } from "./_components/fleet-dashboard";
 
 type Props = { searchParams: Promise<Record<string, string | string[] | undefined>> };
@@ -40,10 +43,10 @@ const one = (value: string | string[] | undefined) => (Array.isArray(value) ? va
 const TONE: Record<HealthSeverity, "danger" | "warning" | "info"> = { critical: "danger", warning: "warning", info: "info" };
 const CONNECTION_TONE: Record<AgentConnectionState, "success" | "danger" | "neutral"> = { online: "success", offline: "danger", never: "neutral" };
 const SEVERITY_FILTERS = [
-  { key: "", label: "มีปัญหาทั้งหมด" },
-  { key: "critical", label: "วิกฤต" },
+  { key: "", label: "ทุกเครื่อง" },
+  { key: "issues", label: "เฉพาะที่มีปัญหา" },
   { key: "warning", label: "วิกฤต + ควรแก้ไข" },
-  { key: "all", label: "ทุกเครื่อง" },
+  { key: "critical", label: "วิกฤต" },
 ] as const;
 
 function DiskBar({ volume }: { volume: { mount: string; totalGb: number; freeGb: number } | null }) {
@@ -76,7 +79,8 @@ export default async function AgentMonitorPage({ searchParams }: Props) {
   const requestedFacility = Number(one(params.facility)) || 0;
   // เจ้าหน้าที่เห็นเฉพาะหน่วยงานตัวเองเสมอ ตัวกรองหน่วยงานใช้ได้เฉพาะผู้ดูแลระบบ
   const facilityId = facilityScopeId ?? (requestedFacility > 0 ? requestedFacility : undefined);
-  const severity = one(params.severity);
+  // ค่าเริ่มต้นแสดงทุกเครื่อง (เดิมซ่อนเครื่องที่ปกติ ทำให้หน้าว่างเมื่อทุกเครื่องปกติ)
+  const severity = normalizeSeverityFilter(one(params.severity));
   const issue = one(params.issue) as HealthIssueCode | "";
   const query = one(params.q).trim().toLowerCase().slice(0, 100);
   const osParam = one(params.os);
@@ -88,8 +92,11 @@ export default async function AgentMonitorPage({ searchParams }: Props) {
   let dbError = "";
   try {
     devices = await listAgentDevices(facilityId ? { facilityId } : undefined);
-  } catch {
-    dbError = "ยังไม่พบตาราง Agent กรุณารัน database/agent_inventory.sql";
+  } catch (error) {
+    console.error("[agent-monitor] listAgentDevices failed", error);
+    dbError = isMissingSchemaError(error)
+      ? "ยังไม่พบตาราง Agent กรุณารัน database/agent_inventory.sql"
+      : "โหลดรายการเครื่องไม่สำเร็จ (ฐานข้อมูลไม่ตอบสนอง) กรุณารีเฟรชหน้านี้อีกครั้ง";
   }
   const facilities = facilityScopeId ? [] : await listAllFacilitiesForSelect();
   const now = new Date();
@@ -99,24 +106,7 @@ export default async function AgentMonitorPage({ searchParams }: Props) {
   const fleet = summarizeAgentFleet(devices, { now, latestVersion: AGENT_LATEST_VERSION, offlineMinutes });
   const connectionOf = new Map(summary.rows.map((row) => [row.device.id, agentConnectionState(row.device, now, offlineMinutes)]));
 
-  const visibleRows = summary.rows.filter((row) => {
-    const state = connectionOf.get(row.device.id);
-    // "ออฟไลน์" ในตัวกรองรวมเครื่องที่ยังไม่เคยรายงานด้วย ให้ตรงกับการ์ดสรุปด้านบน
-    if (conn === "offline" ? state === "online" : conn && state !== conn) return false;
-    if (os && osFamily(row.device.operatingSystem) !== os) return false;
-    if (issue && !row.issues.some((item) => item.code === issue)) return false;
-    if (severity === "critical" && row.worst !== "critical") return false;
-    if (severity === "warning" && row.worst !== "critical" && row.worst !== "warning") return false;
-    if (!severity && !issue && row.issues.every((item) => item.code === "agent-outdated" || item.code === "no-serial")) return false;
-    if (query) {
-      const haystack = [row.device.hostname, row.device.currentUser, row.device.facilityName, row.device.linkedAssetRegistrationNo, row.device.manufacturerModel]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-      if (!haystack.includes(query)) return false;
-    }
-    return true;
-  });
+  const visibleRows = filterMonitorRows(summary.rows, { connectionOf, severity, issue, conn, os, query });
 
   const sort = readSort(params, ["device", "disk", "issues", "lastSeen"]);
   const sorted = sortRows(visibleRows, sort, {
@@ -210,15 +200,17 @@ export default async function AgentMonitorPage({ searchParams }: Props) {
 
       <form method="GET" className="glass-panel flex flex-wrap items-end gap-3 rounded-2xl p-4">
         {!facilityScopeId && (
-          <label className="text-sm">
-            <span className="block text-xs text-[var(--muted)]">หน่วยงาน</span>
-            <select name="facility" defaultValue={String(facilityId ?? "")} className="mt-1 rounded-xl border border-black/10 bg-white/80 px-3 py-2 text-sm">
-              <option value="">ทุกหน่วยงาน</option>
-              {facilities.map((facility) => (
-                <option key={facility.id} value={facility.id}>{facility.facility_name}</option>
-              ))}
-            </select>
-          </label>
+          <div className="min-w-[240px] text-sm">
+            <label htmlFor="monitor-facility" className="block text-xs text-[var(--muted)]">หน่วยงาน</label>
+            <FacilitySelect
+              id="monitor-facility"
+              name="facility"
+              emptyLabel="ทุกหน่วยงาน"
+              defaultValue={String(facilityId ?? "")}
+              className="mt-1"
+              facilities={facilities.map((facility) => ({ id: facility.id, name: facility.facility_name, typecode: facility.typecode, districtName: facility.district_name }))}
+            />
+          </div>
         )}
         <label className="text-sm">
           <span className="block text-xs text-[var(--muted)]">ระดับ</span>
@@ -269,7 +261,14 @@ export default async function AgentMonitorPage({ searchParams }: Props) {
               {visibleRows.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="px-4 py-10 text-center text-[var(--muted)]">
-                    {summary.total === 0 ? "ยังไม่มีเครื่องที่ติดตั้ง Agent" : "ไม่พบเครื่องที่มีปัญหาตามเงื่อนไข"}
+                    {summary.total === 0 ? (
+                      "ยังไม่มีเครื่องที่ติดตั้ง Agent"
+                    ) : (
+                      <>
+                        ไม่พบเครื่องตามเงื่อนไขที่เลือก{" "}
+                        <Link href="/agent-monitor" className="font-medium text-[var(--primary)] hover:underline">แสดงทุกเครื่อง</Link>
+                      </>
+                    )}
                   </td>
                 </tr>
               ) : (

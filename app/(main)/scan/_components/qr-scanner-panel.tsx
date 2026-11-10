@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { AppIcon } from "@/app/_components/ui/icon";
-import { QR_SCANNER_MESSAGES, cameraAvailable, useQrScanner } from "@/app/_components/ui/use-qr-scanner";
+import { QR_SCANNER_MESSAGES, cameraAvailable, readCameraPermission, useQrScanner, watchCameraPermission } from "@/app/_components/ui/use-qr-scanner";
 import { scanTarget } from "@/lib/asset-scan";
 
 export function QrScannerPanel({ searchPath }: { searchPath: string }) {
@@ -31,11 +31,37 @@ export function QrScannerPanel({ searchPath }: { searchPath: string }) {
     },
   });
 
+  // เปิดหน้าแล้วขอสิทธิ์กล้องทันที (เบราว์เซอร์เด้งถามครั้งแรก ครั้งต่อไปเปิดกล้องเลย)
+  // ถ้าเคยกด "ไม่อนุญาต" ไว้ เบราว์เซอร์จะไม่ถามซ้ำ จึงแสดงวิธีเปิดสิทธิ์แทน และเปิดกล้องเองเมื่อผู้ใช้อนุญาตในการตั้งค่า
+  const [permissionDenied, setPermissionDenied] = useState(false);
+  useEffect(() => {
+    let stop = () => {};
+    let cancelled = false;
+    (async () => {
+      if (!cameraAvailable()) return;
+      const state = await readCameraPermission();
+      if (cancelled) return;
+      if (state === "denied") setPermissionDenied(true);
+      else setActive(true);
+      stop = await watchCameraPermission((next) => {
+        setPermissionDenied(next === "denied");
+        if (next === "granted") setActive(true);
+      });
+      if (cancelled) stop();
+    })();
+    return () => {
+      cancelled = true;
+      stop();
+    };
+  }, []);
+
+  const denied = permissionDenied || status === "denied";
   const statusMessage = QR_SCANNER_MESSAGES[status];
   const scanning = status === "scanning" || status === "starting";
 
   function start() {
     setMessage("");
+    setPermissionDenied(false);
     if (!cameraAvailable()) {
       setMessage(QR_SCANNER_MESSAGES.unavailable ?? "");
       return;
@@ -66,7 +92,7 @@ export function QrScannerPanel({ searchPath }: { searchPath: string }) {
           {!active && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-6 text-center text-slate-200">
               <AppIcon name="qr" aria-hidden="true" className="h-14 w-14 opacity-80" />
-              <p className="text-sm">กดปุ่มด้านล่างเพื่อเปิดกล้อง แล้วหันไปที่สติ๊กเกอร์ QR บนครุภัณฑ์</p>
+              <p className="text-sm">{denied ? "ยังไม่ได้รับอนุญาตให้ใช้กล้อง" : "กดปุ่มด้านล่างเพื่อเปิดกล้อง แล้วหันไปที่สติ๊กเกอร์ QR บนครุภัณฑ์"}</p>
             </div>
           )}
           {active && (
@@ -80,14 +106,25 @@ export function QrScannerPanel({ searchPath }: { searchPath: string }) {
               <AppIcon name="power-off" aria-hidden="true" className="h-5 w-5" /> ปิดกล้อง
             </button>
           ) : (
-            <button type="button" onClick={start} className="primary-action w-full max-w-sm" data-autofocus>
-              <AppIcon name="qr" aria-hidden="true" className="h-5 w-5" /> เปิดกล้องสแกน
+            <button type="button" onClick={() => { setActive(false); window.setTimeout(start, 0); }} className="primary-action w-full max-w-sm" data-autofocus>
+              <AppIcon name={denied ? "refresh" : "qr"} aria-hidden="true" className="h-5 w-5" /> {denied ? "ลองอีกครั้ง" : "เปิดกล้องสแกน"}
             </button>
           )}
           <p role="status" aria-live="polite" className="min-h-5 text-center text-sm text-[var(--muted)]">
-            {message || (status === "scanning" ? "กำลังสแกน… ถือให้ QR อยู่ในกรอบ" : statusMessage ?? "")}
+            {message || (status === "scanning" ? "กำลังสแกน… ถือให้ QR อยู่ในกรอบ" : denied ? QR_SCANNER_MESSAGES.denied : statusMessage ?? "")}
           </p>
         </div>
+
+        {denied && (
+          <div className="mx-auto mt-3 w-full max-w-sm rounded-xl border border-[var(--state-warning-border)] bg-[var(--state-warning-bg)] p-3 text-sm text-[var(--state-warning-fg)]">
+            <p className="flex items-center gap-2 font-semibold"><AppIcon name="camera" size={16} /> วิธีอนุญาตให้ใช้กล้อง</p>
+            <ul className="mt-2 space-y-1.5 text-xs leading-relaxed">
+              <li><b>Android (Chrome):</b> แตะไอคอนหน้าที่อยู่เว็บ (แม่กุญแจ/ปรับแต่ง) › สิทธิ์ › กล้อง › อนุญาต</li>
+              <li><b>iPhone/iPad (Safari):</b> แตะ “aA” ที่ช่องที่อยู่เว็บ › การตั้งค่าเว็บไซต์ › กล้อง › อนุญาต — หรือ การตั้งค่า › Safari › กล้อง</li>
+              <li><b>คอมพิวเตอร์:</b> คลิกไอคอนแม่กุญแจหน้าที่อยู่เว็บ › กล้อง › อนุญาต แล้วรีเฟรชหน้า</li>
+            </ul>
+          </div>
+        )}
       </section>
 
       <section aria-labelledby="manual-heading" className="glass-panel rounded-2xl p-4 sm:p-5">

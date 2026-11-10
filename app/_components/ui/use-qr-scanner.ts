@@ -20,6 +20,34 @@ export function cameraAvailable() {
   return typeof window !== "undefined" && window.isSecureContext !== false && Boolean(navigator.mediaDevices?.getUserMedia);
 }
 
+export type CameraPermission = "granted" | "prompt" | "denied" | "unknown";
+
+/**
+ * Current camera permission without prompting. "unknown" when the Permissions API cannot answer
+ * (older Safari/Firefox) — callers should then just try to start the camera.
+ */
+export async function readCameraPermission(): Promise<CameraPermission> {
+  try {
+    const result = await navigator.permissions?.query({ name: "camera" as PermissionName });
+    return result?.state ?? "unknown";
+  } catch {
+    return "unknown";
+  }
+}
+
+/** Calls `onChange` when the user flips the camera permission in the browser settings (Chrome, Edge, Safari 16+). */
+export async function watchCameraPermission(onChange: (state: CameraPermission) => void): Promise<() => void> {
+  try {
+    const result = await navigator.permissions?.query({ name: "camera" as PermissionName });
+    if (!result) return () => {};
+    const handler = () => onChange(result.state);
+    result.addEventListener("change", handler);
+    return () => result.removeEventListener("change", handler);
+  } catch {
+    return () => {};
+  }
+}
+
 async function createNativeDetector(): Promise<Detector | null> {
   const Native = (window as unknown as { BarcodeDetector?: DetectorConstructor }).BarcodeDetector;
   if (!Native) return null;
@@ -140,7 +168,7 @@ export function useQrScanner({
 
 export const QR_SCANNER_MESSAGES: Partial<Record<QrScannerStatus, string>> = {
   starting: "กำลังเปิดกล้อง…",
-  denied: "ไม่ได้รับอนุญาตให้ใช้กล้อง — เปิดสิทธิ์กล้องให้เว็บไซต์นี้ในการตั้งค่าเบราว์เซอร์ แล้วลองอีกครั้ง",
+  denied: "ไม่ได้รับอนุญาตให้ใช้กล้อง — อนุญาตกล้องให้เว็บไซต์นี้ตามขั้นตอนด้านล่าง แล้วกด “ลองอีกครั้ง”",
   unavailable: "อุปกรณ์หรือเบราว์เซอร์นี้เปิดกล้องไม่ได้ (ต้องเข้าผ่าน https) — ใช้แอปกล้องของโทรศัพท์สแกนสติ๊กเกอร์ หรือพิมพ์เลขครุภัณฑ์แทน",
   error: "เปิดกล้องไม่สำเร็จ ลองใหม่อีกครั้ง หรือใช้แอปกล้องของโทรศัพท์สแกนแทน",
 };

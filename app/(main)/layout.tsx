@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 
+import { AppFooter } from "@/app/_components/app-footer";
 import { MainNavbar } from "@/app/_components/main-navbar";
 import { MobileBottomNav } from "@/app/_components/mobile-bottom-nav";
 import { RouteGate } from "@/app/_components/route-gate";
@@ -14,7 +15,6 @@ import { SPLASH_SEEN_SCRIPT } from "@/lib/splash";
 import { getAnnouncement } from "@/lib/announcement";
 import { ANNOUNCEMENT_IMAGE_URL_PREFIX, isAnnouncementVisible } from "@/lib/announcement-shared";
 import { withBasePath } from "@/lib/base-path";
-import { APP_VERSION_LABEL } from "@/lib/app-version";
 import { getMenuVisibility } from "@/lib/app-settings";
 import { getCurrentUser } from "@/lib/auth";
 import { canBypassMaintenance, isMaintenanceEnabled } from "@/lib/maintenance";
@@ -86,13 +86,7 @@ export default async function MainLayout({ children }: { children: React.ReactNo
           </RouteGate>
           {children}
         </main>
-        <footer className="px-4 pb-6 sm:px-6 lg:px-8">
-          <div className="mx-auto grid max-w-[1600px] grid-cols-1 items-center gap-1 border-t border-[var(--line)] px-4 py-4 text-xs text-[var(--muted)] sm:grid-cols-[1fr_auto_1fr] sm:text-sm">
-            <span className="hidden sm:block" aria-hidden="true" />
-            <span className="text-center">กลุ่มงานสุขภาพดิจิทัล สำนักงานสาธารณสุขจังหวัดสตูล</span>
-            <span className="text-right font-medium tabular-nums" title="เวอร์ชันของระบบ">{APP_VERSION_LABEL}</span>
-          </div>
-        </footer>
+        <AppFooter />
       </div>
       <MobileBottomNav user={user} grantedPermissions={grantedPermissions} menuVisibility={menuVisibility} />
       <Toaster />
