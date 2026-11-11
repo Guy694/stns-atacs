@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Prompt } from "next/font/google";
 import "./globals.css";
 
+import { VisitBeacon } from "./_components/visit-beacon";
+
 const promptFont = Prompt({
   variable: "--font-body",
   subsets: ["thai", "latin"],
@@ -27,7 +29,7 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         {children}
-       
+        <VisitBeacon />
       </body>
     </html>
   );

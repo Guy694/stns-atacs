@@ -22,6 +22,8 @@ import {
   verifyPassword,
 } from "@/lib/auth";
 import { notifyTelegramSafe } from "@/lib/telegram";
+import { getPasswordLoginState } from "@/lib/password-login";
+import { passwordLoginAllowedFor } from "@/lib/password-login-policy";
 import { readRequestIp, recordSecurityEvent } from "@/lib/security";
 import { checkLoginLock, loginLockMessage, LOGIN_SUCCESS_EVENT } from "@/lib/login-throttle";
 import { canBypassMaintenance, isMaintenanceEnabled } from "@/lib/maintenance";
@@ -112,7 +114,7 @@ export async function registerFirstTimeAction(formData: FormData) {
       if (!existingUser.is_active) {
         redirect("/pending-approval");
       }
-      await createSession(existingUser.id);
+      await createSession(existingUser.id, "thaid");
       redirect("/dashboard");
     }
 
@@ -160,6 +162,9 @@ export async function registerFirstTimeAction(formData: FormData) {
 }
 
 export async function registerOfficerWithPasswordAction(formData: FormData) {
+  if ((await getPasswordLoginState()).mode !== "all") {
+    redirect(`/login?error=${toQuery("การลงทะเบียนด้วย Username/Password ถูกปิดโดยผู้ดูแลระบบ กรุณาเข้าสู่ระบบด้วย ThaiD หรือ Google")}`);
+  }
   const firstName = normalizeDisplayName(String(formData.get("firstName") ?? ""));
   const lastName = normalizeDisplayName(String(formData.get("lastName") ?? ""));
   const fullName = normalizeDisplayName(`${firstName} ${lastName}`);
@@ -235,6 +240,12 @@ export async function loginWithPasswordAction(formData: FormData) {
   const password = String(formData.get("password") ?? "");
   const nextPath = safeNextPath(formData.get("next"));
 
+  const passwordLogin = await getPasswordLoginState();
+  if (passwordLogin.mode === "off") {
+    await recordLoginSecurityEvent("login_password_disabled", username || "(empty)", "พยายามใช้ Username/Password ขณะปิดใช้งาน");
+    redirect(`/login?error=${toQuery("การเข้าสู่ระบบด้วย Username/Password ถูกปิดโดยผู้ดูแลระบบ กรุณาเข้าสู่ระบบด้วย ThaiD หรือ Google")}`);
+  }
+
   const inputError = validatePasswordLoginInput(username, password);
   if (inputError) {
     const context = await recordLoginSecurityEvent("login_invalid_input", username || "(empty)", inputError);
@@ -299,6 +310,12 @@ export async function loginWithPasswordAction(formData: FormData) {
     redirect(`/login?tab=password&next=${encodeURIComponent(nextPath)}&error=${toQuery("บัญชีผู้ใช้ถูกระงับการใช้งาน")}`);
   }
 
+  // ปิด Username/Password สำหรับเจ้าหน้าที่ (เฉพาะผู้ดูแลระบบ): ตรวจหลังยืนยันรหัสผ่าน เพื่อไม่บอกใบ้ว่าบัญชีใดเป็นแอดมิน
+  if (!passwordLoginAllowedFor(passwordLogin.mode, user.role)) {
+    await recordLoginSecurityEvent("login_password_disabled", username, "บัญชีนี้ต้องเข้าสู่ระบบด้วย ThaiD หรือ Google");
+    redirect(`/login?error=${toQuery("การเข้าสู่ระบบด้วย Username/Password ถูกปิดโดยผู้ดูแลระบบ กรุณาเข้าสู่ระบบด้วย ThaiD หรือ Google")}`);
+  }
+
   // ปิดปรับปรุงระบบ: รับเฉพาะผู้ดูแลระบบ (ตรวจหลังยืนยันรหัสผ่าน เพื่อไม่ให้บอกใบ้ว่าบัญชีใดเป็นแอดมิน)
   if (!canBypassMaintenance(user) && (await isMaintenanceEnabled())) {
     await recordLoginSecurityEvent("login_blocked_maintenance", username, "ระบบอยู่ระหว่างปิดปรับปรุง");
@@ -307,7 +324,7 @@ export async function loginWithPasswordAction(formData: FormData) {
 
   try {
     await linkPendingGoogleIdentity(user);
-    await createSession(user.id);
+    await createSession(user.id, "password");
   } catch (error) {
     console.error("Password login session creation failed", error);
     loginSystemErrorRedirect(nextPath);

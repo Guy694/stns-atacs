@@ -10,6 +10,7 @@ import type { RowDataPacket } from "mysql2/promise";
 import { getCurrentUser, hashPassword, splitDisplayName, verifyPassword, revokeUserSessions } from "@/lib/auth";
 import { isDuplicateEntryError, normalizeProfileEmail } from "@/lib/input-guards";
 import { executeStatement, selectRows } from "@/lib/mysql";
+import { passwordPolicyError } from "@/lib/password-policy";
 
 async function getUser() {
   const user = await getCurrentUser();
@@ -78,12 +79,13 @@ export async function changePasswordAction(_prev: string | null, fd: FormData): 
   const confirmPassword = (fd.get("confirmPassword") as string | null)?.trim() ?? "";
 
   if (!currentPassword) return "กรุณากรอกรหัสผ่านปัจจุบัน";
-  if (newPassword.length < 8) return "รหัสผ่านใหม่ต้องมีอย่างน้อย 8 ตัวอักษร";
   if (newPassword !== confirmPassword) return "รหัสผ่านใหม่และยืนยันรหัสผ่านไม่ตรงกัน";
 
-  type PwRow = RowDataPacket & { password_hash: string | null };
-  const rows = await selectRows<PwRow>("SELECT password_hash FROM users WHERE id = ? LIMIT 1", [user.id]);
+  type PwRow = RowDataPacket & { password_hash: string | null; username: string | null };
+  const rows = await selectRows<PwRow>("SELECT password_hash, username FROM users WHERE id = ? LIMIT 1", [user.id]);
   const storedHash = rows[0]?.password_hash;
+  const policyError = passwordPolicyError(newPassword, { username: rows[0]?.username ?? null });
+  if (policyError) return `รหัสผ่านใหม่: ${policyError}`;
 
   if (!storedHash) return "บัญชีนี้ไม่มีรหัสผ่าน (ใช้ ThaiD เท่านั้น) กรุณาติดต่อผู้ดูแลระบบ";
 

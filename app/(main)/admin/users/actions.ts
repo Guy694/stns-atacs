@@ -18,6 +18,7 @@ import { executeStatement, selectRows } from "@/lib/mysql";
 import { isMissingSchemaError, userFacingError } from "@/lib/schema-errors";
 import { roleChangeBlockReason } from "@/lib/role-permissions";
 import type { RowDataPacket } from "mysql2/promise";
+import { passwordPolicyError } from "@/lib/password-policy";
 
 async function requireAdmin() {
   const user = await getCurrentUser();
@@ -57,6 +58,7 @@ type UserAuditRow = RowDataPacket & {
   id: number;
   full_name: string;
   role: "admin" | "officer" | "viewer";
+  username?: string | null;
 };
 
 /** Active admins other than `userId` (B12: never leave the system without an admin). */
@@ -77,7 +79,7 @@ async function roleChangeError(actorId: number | string, userId: number, current
 
 async function getUserAuditRow(userId: number) {
   const rows = await selectRows<UserAuditRow>(
-    "SELECT id, TRIM(CONCAT(first_name, ' ', last_name)) AS full_name, role FROM users WHERE id = ? LIMIT 1",
+    "SELECT id, TRIM(CONCAT(first_name, ' ', last_name)) AS full_name, role, username FROM users WHERE id = ? LIMIT 1",
     [userId]
   );
   return rows[0] ?? null;
@@ -144,7 +146,8 @@ export async function createUserAction(_prev: string | null, fd: FormData): Prom
 
   let passwordHash: string | null = null;
   if (username && password) {
-    if (password.length < 8) return "รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร";
+    const policyError = passwordPolicyError(password, { username });
+    if (policyError) return policyError;
     passwordHash = hashPassword(password);
   }
 
@@ -467,9 +470,9 @@ export async function resetUserPasswordAction(_prev: string | null, fd: FormData
   const newPassword = (fd.get("newPassword") as string | null)?.trim() ?? "";
 
   if (!userId || isNaN(userId)) return "User ID ไม่ถูกต้อง";
-  if (newPassword.length < 8) return "รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร";
-
   const target = await getUserAuditRow(userId);
+  const policyError = passwordPolicyError(newPassword, { username: target?.username ?? null });
+  if (policyError) return policyError;
   const hash = hashPassword(newPassword);
   await executeStatement("UPDATE users SET password_hash = ? WHERE id = ?", [hash, userId]);
   // SEC-09: แอดมินรีเซ็ตรหัสผ่าน = เตะผู้ใช้คนนั้นออกจากทุกเครื่อง

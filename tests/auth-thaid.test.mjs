@@ -65,6 +65,8 @@ function setup(initialRows, beforeUpdate, options = {}) {
       if (id === "@/lib/mysql") return db;
       if (id === "@/lib/cookie-security") return { secureCookiesEnabled: () => false };
       if (id === "@/lib/google-link") return { googleLinkForLogin: () => null };
+      if (id === "@/lib/password-policy") return { passwordPolicyError: () => null };
+      if (id === "@/lib/request-ip") return { readRequestIp: () => "unknown" };
       if (id === "@/lib/schema-errors") {
         return { isMissingSchemaError: (error) => error?.code === "ER_NO_SUCH_TABLE" || error?.code === "ER_BAD_FIELD_ERROR" };
       }

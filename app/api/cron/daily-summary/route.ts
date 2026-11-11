@@ -6,6 +6,7 @@ import { readRequestIp, recordSecurityEvent } from "@/lib/security";
 import { notifyTelegramSafe } from "@/lib/telegram";
 import { isAuthorizedCronHeader } from "@/lib/cron-auth";
 import { recordCronRun } from "@/lib/cron-status";
+import { purgeOldVisitorData } from "@/lib/visitor-log-data";
 
 function isAuthorized(req: NextRequest) {
   return isAuthorizedCronHeader(req.headers.get("authorization"));
@@ -41,6 +42,9 @@ export async function GET(req: NextRequest) {
   };
 
   if (req.nextUrl.searchParams.get("dry") === "1") return NextResponse.json({ ok: true, date: today, counts, data });
+
+  // เก็บประวัติผู้เข้าชม 90 วัน (VISITOR_LOG_RETENTION_DAYS) — ไม่ให้งานสรุปล้มถ้ายังไม่ได้รัน migration
+  await purgeOldVisitorData().catch((error) => console.error("[cron] visitor purge failed", error instanceof Error ? error.message : error));
   if (!hasSummaryContent(data)) {
     await recordCronRun("daily-summary", true, "ไม่มีงานค้าง");
     return NextResponse.json({ ok: true, date: today, counts, sent: false, reason: "nothing-to-report" });

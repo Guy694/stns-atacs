@@ -69,6 +69,16 @@ export default async function AuthSettingsPage({ searchParams }: AuthSettingsPag
         </div>
       </section>
 
+      <section className="glass-panel flex flex-wrap items-center justify-between gap-4 rounded-2xl p-6">
+        <div>
+          <h2 className="text-lg font-semibold">Username / Password</h2>
+          <p className="mt-1 text-sm text-[var(--muted)]">เปิดสำหรับทุกคน · เฉพาะผู้ดูแลระบบ · หรือปิดทั้งหมด จัดการได้ที่เมนูความปลอดภัยระบบ</p>
+        </div>
+        <Link href="/admin/security/#login-methods" className="secondary-action gap-2">
+          <AppIcon name="shield" size={16} /> ไปที่ความปลอดภัยระบบ
+        </Link>
+      </section>
+
       <div>
         <Link href="/admin/settings" className="inline-flex items-center gap-1.5 text-sm font-semibold text-[var(--primary-text)] hover:underline">
           <AppIcon name="arrow-left" size={15} />

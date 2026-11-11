@@ -8,6 +8,8 @@ import { listAllFacilitiesForSelect } from "@/lib/assets";
 import { ProfileForm } from "./_components/profile-form";
 import { ChangePasswordForm } from "./_components/change-password-form";
 import { FacilityForm } from "./_components/facility-form";
+import { MySessions } from "./_components/my-sessions";
+import { listActiveSessions } from "@/lib/session-admin";
 
 type UserDetailRow = RowDataPacket & {
   full_name: string;
@@ -26,7 +28,7 @@ function formatDate(v: Date | string | null) {
   return formatThaiDateTime(v);
 }
 
-export default async function ProfilePage() {
+export default async function ProfilePage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
@@ -52,6 +54,10 @@ export default async function ProfilePage() {
       facilities = await listAllFacilitiesForSelect(user.facilityId ? { facilityId: Number(user.facilityId) } : undefined);
     } catch { /* ignore */ }
   }
+
+  const params = await searchParams;
+  const sessionNotice = typeof params.notice === "string" ? params.notice.slice(0, 200) : "";
+  const mySessions = await listActiveSessions({ userId: user.id }).catch(() => ({ sessions: [], tracked: false }));
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6">
@@ -102,6 +108,8 @@ export default async function ProfilePage() {
           facilities={facilities}
         />
       )}
+
+      <MySessions sessions={mySessions.sessions} notice={sessionNotice} />
 
       {/* Change password */}
       {hasPassword ? (

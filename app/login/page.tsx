@@ -12,6 +12,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { withBasePath } from "@/lib/base-path";
 import { safeNextPath } from "@/lib/input-guards";
 import { getGoogleAuthStatus } from "@/lib/google-auth";
+import { getPasswordLoginState } from "@/lib/password-login";
 import { getThaiIdStatus } from "@/lib/thaiid";
 import { SubmitButton } from "@/app/_components/ui/submit-button";
 
@@ -37,6 +38,8 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   const thaiIdStatus = await getThaiIdStatus();
   const googleAuthStatus = getGoogleAuthStatus();
   const hasAltLogin = thaiIdStatus.enabled || googleAuthStatus.enabled;
+  // all = ฟอร์มปกติ · admin-only = ฟอร์มยังอยู่ (ผู้ดูแลระบบ) พร้อมคำอธิบาย · off = ไม่มีฟอร์มรหัสผ่าน
+  const passwordMode = (await getPasswordLoginState()).mode;
   const facilities = isOfficerRegistration ? await listAllFacilitiesForSelect() : [];
   // A4: test accounts are shown only when explicitly enabled (never by default on a dev or staging server).
   // A3: real figures instead of fixed marketing numbers; the strip is hidden if they cannot be read.
@@ -312,6 +315,12 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
               </>
             ) : (
               <>
+                {passwordMode === "admin-only" && (
+                  <p className="rounded-2xl border border-[var(--state-info-border)] bg-[var(--state-info-bg)] px-4 py-3 text-sm text-[var(--state-info-fg)]">
+                    เจ้าหน้าที่กรุณาเข้าสู่ระบบด้วย ThaiD{googleAuthStatus.enabled ? " หรือ Google" : ""} — Username/Password ใช้ได้เฉพาะผู้ดูแลระบบ
+                  </p>
+                )}
+                {passwordMode !== "off" && (
                 <form action={loginWithPasswordAction} className="space-y-4">
                   <input type="hidden" name="next" value={nextPath} />
                   <div className="space-y-1.5">
@@ -356,6 +365,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
                     <AppIcon name="key" className="h-4 w-4" /> เข้าสู่ระบบ
                   </SubmitButton>
                 </form>
+                )}
 
                 {showTestCredentials ? (
                   <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-xs text-sky-900">
@@ -374,7 +384,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
                 {hasAltLogin ? (
                   <>
                     {/* Divider */}
-                    <div className="flex items-center gap-3">
+                    <div className={`flex items-center gap-3 ${passwordMode === "off" ? "hidden" : ""}`}>
                       <div className="flex-1 h-px" style={{ background: "var(--line)" }} />
                       <span className="text-xs" style={{ color: "var(--muted)" }}>หรือ</span>
                       <div className="flex-1 h-px" style={{ background: "var(--line)" }} />

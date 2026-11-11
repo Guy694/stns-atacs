@@ -148,3 +148,15 @@ export async function exportSecurityEvents(filter: SecurityEventFilter) {
   );
   return rows.map(toEvent);
 }
+
+/** Raw agent_unknown_id events (90 days) for lib/agent-auth-failure summarizeUnknownAgents. */
+export async function listUnknownAgentEvents(days = 90) {
+  const rows = await selectRows<RowDataPacket>(
+    `SELECT identity_value, ip_address, detail, DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS created_at
+     FROM security_events
+     WHERE event_type = 'agent_unknown_id' AND created_at >= NOW() - INTERVAL ? DAY
+     ORDER BY created_at DESC LIMIT 2000`,
+    [days]
+  );
+  return rows.map((row) => ({ identity: row.identity_value ?? null, ip: String(row.ip_address), detail: row.detail ?? null, createdAt: String(row.created_at) }));
+}

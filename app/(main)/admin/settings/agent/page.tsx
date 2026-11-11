@@ -22,6 +22,10 @@ import { listAllFacilitiesForSelect, listAssetsForFacilityIds } from "@/lib/asse
 import { getFacilityScopeId } from "@/lib/facility-scope";
 import { listFacilityWorkGroups, requiresAgentWorkGroup } from "@/lib/facility-work-groups";
 import { hasPermission } from "@/lib/role-permissions";
+import { summarizeUnknownAgents } from "@/lib/agent-auth-failure";
+import { listUnknownAgentEvents } from "@/lib/security-dashboard-data";
+import { ensureIpGeoInBackground, geoForIps } from "@/lib/visitor-log-data";
+import { UnknownAgentsPanel } from "@/app/(main)/admin/settings/agent/_components/unknown-agents-panel";
 
 const AUTO_UPDATE_NOTICES: Record<string, { notice?: string; error?: string }> = {
   saved: { notice: "บันทึกการตั้งค่าอัปเดต Agent แล้ว" },
@@ -70,6 +74,11 @@ export default async function AgentSettingsPage({ searchParams }: AgentSettingsP
   } catch {
     dbError = "ยังไม่พบโครงสร้าง Agent หรือกลุ่มงาน กรุณารัน database/agent_inventory.sql และ database/add_facility_work_groups.sql ก่อน";
   }
+
+  // SEC8: agents reporting with an id that no longer exists (central admins only — they span every facility).
+  const unknownAgents = isCentralAdmin ? summarizeUnknownAgents(await listUnknownAgentEvents().catch(() => [])) : [];
+  const unknownAgentGeo = await geoForIps(unknownAgents.map((agent) => agent.ips[0]));
+  ensureIpGeoInBackground(unknownAgents.map((agent) => agent.ips[0]).filter((ip) => !unknownAgentGeo.has(ip)));
 
   // Server component: one timestamp per request so relative times match on server and client.
   const nowMs = new Date().getTime();
@@ -193,6 +202,8 @@ export default async function AgentSettingsPage({ searchParams }: AgentSettingsP
               </p>
             )}
           </div>
+
+          <UnknownAgentsPanel agents={unknownAgents} geo={unknownAgentGeo} />
 
           <InstallScopeList scopes={scopes} legacy={legacy} nowMs={nowMs} />
 

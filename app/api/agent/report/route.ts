@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { rejectAgentCredentials } from "@/app/api/agent/_lib/reject-credentials";
+
 import { isPlainObject, readJsonBody } from "@/app/api/agent/_lib/request-body";
-import { AgentLinkedAssetError, isRetiredAgentUuid, reportAgentInventory, type AgentReportPayload } from "@/lib/agent";
+import { AgentLinkedAssetError, reportAgentInventory, type AgentReportPayload } from "@/lib/agent";
 import { announcedApiBaseUrl } from "@/lib/agent-api-base";
 import { AGENT_INSTALL_API_BASE_URL } from "@/lib/agent-install";
 import { AGENT_LATEST_VERSION, AGENT_REPORT_MAX_BYTES, cleanAgentCapabilities, cleanText } from "@/lib/agent-payload";
@@ -90,35 +92,7 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     if (message === "INVALID_AGENT_CREDENTIALS") {
-      if (await isRetiredAgentUuid(agentId)) {
-        // เครื่องที่ถอนการติดตั้ง/ลบออกจากระบบแล้วแต่ Agent ยังทำงานอยู่ (เช่น เครื่องที่ปิดไปนานกลับมาเปิด)
-        // บันทึกไว้ แต่ไม่แจ้ง Telegram ทุกรอบ 4 ชั่วโมง; agent 2.2.0 ใช้ code นี้ตรวจว่าถูกถอนไปแล้วหรือยัง
-        await recordSecurityEvent({
-          eventType: "agent_retired_report",
-          ipAddress: readRequestIp(req.headers),
-          identity: agentId,
-          path: req.nextUrl.pathname,
-          detail: "Agent ที่ถอนการติดตั้งหรือลบออกจากระบบแล้วยังส่งรายงานมา",
-          skipBurstAlert: true,
-        });
-        return NextResponse.json(
-          { error: "This agent was uninstalled or retired by an administrator", code: "AGENT_RETIRED" },
-          { status: 401 }
-        );
-      }
-      await recordSecurityEvent({
-        eventType: "agent_invalid_credentials",
-        ipAddress: readRequestIp(req.headers),
-        identity: agentId,
-        path: req.nextUrl.pathname,
-        detail: "Agent inventory credentials ไม่ถูกต้อง",
-      });
-      await notifyTelegramSafe({
-        category: "security",
-        title: "พยายามส่ง Agent inventory ด้วย credentials ที่ไม่ถูกต้อง",
-        details: { "Agent ID": agentId, IP: readRequestIp(req.headers) },
-      });
-      return NextResponse.json({ error: "Agent credentials are invalid" }, { status: 401 });
+      return rejectAgentCredentials(req, agentId, payload, "report");
     }
     if (message === "INVALID_FINGERPRINT") {
       return NextResponse.json({ error: "Fingerprint is invalid" }, { status: 400 });

@@ -1214,17 +1214,27 @@ export async function retireAgentDevice(deviceId: number): Promise<"retired" | "
 }
 
 /** ใช้ตอนรายงานได้ 401: เครื่องนี้ถูกถอน/ลบออกจากระบบไปแล้วหรือไม่ (ไม่ต้องแจ้งเตือนความปลอดภัยซ้ำทุกรอบ) */
-export async function isRetiredAgentUuid(agentId: string) {
-  if (!agentId.trim()) return false;
+/**
+ * Whether this agent id exists: null = not in the database at all (stale agent), otherwise its active flag.
+ * On a database error the agent is treated as known-active so a real wrong-key attempt still alerts.
+ */
+export async function agentUuidStatus(agentId: string): Promise<{ isActive: boolean } | null> {
+  if (!agentId.trim()) return null;
   try {
-    const rows = await selectRows<RowDataPacket & { is_active: number }>(
-      "SELECT is_active FROM agent_devices WHERE agent_uuid = ? LIMIT 1",
+    const rows = await selectRows<RowDataPacket & { is_active: number; uninstalled_at: unknown }>(
+      "SELECT is_active, uninstalled_at FROM agent_devices WHERE agent_uuid = ? LIMIT 1",
       [agentId.trim()]
     );
-    return rows[0] ? Number(rows[0].is_active) !== 1 : false;
+    if (!rows[0]) return null;
+    return { isActive: Number(rows[0].is_active) === 1 && !rows[0].uninstalled_at };
   } catch {
-    return false;
+    return { isActive: true };
   }
+}
+
+export async function isRetiredAgentUuid(agentId: string) {
+  const status = await agentUuidStatus(agentId);
+  return status !== null && !status.isActive;
 }
 
 export type AgentUninstalledResult =

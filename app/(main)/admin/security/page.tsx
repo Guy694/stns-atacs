@@ -22,7 +22,15 @@ import { readSecurityFilter, SECURITY_WINDOWS, type SecurityFilterParams } from 
 import { buildSystemChecks, overallStatus, type CheckStatus } from "@/lib/system-health";
 import { probeSystem } from "@/lib/system-health-probe";
 
+import { getPasswordLoginState, loginMethodCoverage } from "@/lib/password-login";
+
+import { ensureIpGeoInBackground, geoForIps } from "@/lib/visitor-log-data";
+
 import { DailyChart } from "./_components/daily-chart";
+import { IpLocation } from "./_components/ip-location";
+import { LoginMethodsPanel } from "./_components/login-methods-panel";
+import { SessionsPanel } from "./_components/sessions-panel";
+import { listActiveSessions } from "@/lib/session-admin";
 
 type Props = { searchParams: Promise<Record<string, string | string[] | undefined>> };
 
@@ -60,7 +68,19 @@ export default async function SecurityDashboardPage({ searchParams }: Props) {
   const page = Number(Array.isArray(params.page) ? params.page[0] : params.page) || 1;
   const now = new Date();
 
-  const system = await probeSystem(now);
+  const one = (key: string) => {
+    const value = params[key];
+    return ((Array.isArray(value) ? value[0] : value) ?? "").slice(0, 300);
+  };
+  const [system, passwordLogin, coverage, sessionList] = await Promise.all([
+    probeSystem(now),
+    getPasswordLoginState(),
+    loginMethodCoverage().catch(() => []),
+    listActiveSessions().catch(() => ({ sessions: [], tracked: false })),
+  ]);
+  const sessionIps = sessionList.sessions.map((session) => session.lastIp ?? session.ip).filter((ip): ip is string => Boolean(ip));
+  const sessionGeo = await geoForIps(sessionIps);
+  ensureIpGeoInBackground(sessionIps.filter((ip) => !sessionGeo.has(ip)));
   const checks = buildSystemChecks(system, { backupMaxAgeHours: Number(process.env.BACKUP_MAX_AGE_HOURS ?? 36) || 36 });
   const overall = overallStatus(checks);
 
@@ -71,6 +91,7 @@ export default async function SecurityDashboardPage({ searchParams }: Props) {
     series: ReturnType<typeof buildDailySeries>;
     ips: Awaited<ReturnType<typeof topSuspiciousIps>>;
     events: Awaited<ReturnType<typeof listSecurityEvents>>;
+    geo: Awaited<ReturnType<typeof geoForIps>>;
   } | null = null;
   try {
     const [byType, daily, ips, events] = await Promise.all([
@@ -79,7 +100,10 @@ export default async function SecurityDashboardPage({ searchParams }: Props) {
       topSuspiciousIps(filter.days),
       listSecurityEvents(filter, page),
     ]);
-    data = { kpi: summarizeSecurityKpis(byType), byType, series: buildDailySeries(daily, { days: 30, today: todayBangkok(now) }), ips, events };
+    const allIps = [...ips.map((item) => item.ip), ...events.rows.map((row) => row.ip)];
+    const geo = await geoForIps(allIps);
+    ensureIpGeoInBackground(allIps.filter((ip) => !geo.has(ip)));
+    data = { kpi: summarizeSecurityKpis(byType), byType, series: buildDailySeries(daily, { days: 30, today: todayBangkok(now) }), ips, events, geo };
   } catch (error) {
     console.error("[admin/security] load failed", error);
     loadError = isMissingSchemaError(error)
@@ -98,9 +122,14 @@ export default async function SecurityDashboardPage({ searchParams }: Props) {
         title="ความปลอดภัยระบบ"
         description="สถานะเซิร์ฟเวอร์ การเข้าสู่ระบบ และเหตุการณ์ผิดปกติ จากบันทึกความปลอดภัยของระบบ (เก็บ IP ทุกเหตุการณ์)"
         actions={
+          <>
+          <Link href="/admin/security/visitors/" className="primary-action action-sm gap-2">
+            <AppIcon name="globe" size={16} /> ผู้เข้าใช้งานและตำแหน่ง IP
+          </Link>
           <a href={withBasePath(hrefWith(filter, {}, "/api/export/security/"))} className="secondary-action action-sm gap-2">
             <AppIcon name="download" size={16} /> ส่งออก CSV
           </a>
+          </>
         }
       >
         <nav aria-label="ช่วงเวลา" className="mt-3 inline-flex flex-wrap gap-1 rounded-xl border border-[var(--line)] bg-white p-1">
@@ -147,6 +176,17 @@ export default async function SecurityDashboardPage({ searchParams }: Props) {
         </p>
       </section>
 
+      <SessionsPanel
+        sessions={sessionList.sessions}
+        tracked={sessionList.tracked}
+        geo={sessionGeo}
+        notice={one("sessnotice")}
+        error={one("sesserror")}
+        nowMs={now.getTime()}
+      />
+
+      <LoginMethodsPanel state={passwordLogin} coverage={coverage} notice={one("notice")} error={one("pwerror")} />
+
       {loadError && (
         <div role="alert" className="rounded-xl border border-[var(--state-warning-border)] bg-[var(--state-warning-bg)] px-4 py-3 text-sm text-[var(--state-warning-fg)]">{loadError}</div>
       )}
@@ -187,7 +227,7 @@ export default async function SecurityDashboardPage({ searchParams }: Props) {
                   <table className="w-full min-w-[640px] text-sm">
                     <thead className="bg-black/[0.03] text-left text-xs text-[var(--muted)]">
                       <tr>
-                        <th className="px-4 py-2.5 font-medium">IP</th>
+                        <th className="px-4 py-2.5 font-medium">IP / ตำแหน่ง</th>
                         <th className="px-4 py-2.5 text-right font-medium">ครั้ง</th>
                         <th className="px-4 py-2.5 font-medium">เหตุการณ์ / บัญชีที่ลอง</th>
                         <th className="px-4 py-2.5 font-medium">ล่าสุด</th>
@@ -197,9 +237,7 @@ export default async function SecurityDashboardPage({ searchParams }: Props) {
                       {data.ips.map((item) => (
                         <tr key={item.ip} className="border-t border-[var(--line)] align-top">
                           <td className="px-4 py-2.5">
-                            <Link href={hrefWith(filter, { ip: item.ip, page: undefined })} className="font-mono text-xs font-semibold text-[var(--primary-text)] hover:underline">
-                              {item.ip}
-                            </Link>
+                            <IpLocation ip={item.ip} geo={data.geo.get(item.ip)} href={hrefWith(filter, { ip: item.ip, page: undefined })} />
                             {item.succeeded > 0 && (
                               <StatusBadge tone="warning" className="mt-1 block w-fit text-[10px]">เข้าสู่ระบบสำเร็จ {n(item.succeeded)} ครั้ง</StatusBadge>
                             )}
@@ -290,7 +328,7 @@ export default async function SecurityDashboardPage({ searchParams }: Props) {
                   <tr>
                     <th className="px-4 py-2.5 font-medium">เวลา</th>
                     <th className="px-4 py-2.5 font-medium">เหตุการณ์</th>
-                    <th className="px-4 py-2.5 font-medium">IP</th>
+                    <th className="px-4 py-2.5 font-medium">IP / ตำแหน่ง</th>
                     <th className="px-4 py-2.5 font-medium">ผู้ใช้ / รายละเอียด</th>
                   </tr>
                 </thead>
@@ -307,7 +345,7 @@ export default async function SecurityDashboardPage({ searchParams }: Props) {
                           <td className="whitespace-nowrap px-4 py-2.5 text-xs tabular-nums text-[var(--muted)]">{formatThaiDateTime(event.createdAt)}</td>
                           <td className="px-4 py-2.5"><StatusBadge tone={TONE_BADGE[info.tone]} className="text-[11px]">{info.label}</StatusBadge></td>
                           <td className="px-4 py-2.5">
-                            <Link href={hrefWith(filter, { ip: event.ip, page: undefined })} className="font-mono text-xs text-[var(--primary-text)] hover:underline">{event.ip}</Link>
+                            <IpLocation ip={event.ip} geo={data.geo.get(event.ip)} href={hrefWith(filter, { ip: event.ip, page: undefined })} compact />
                           </td>
                           <td className="px-4 py-2.5">
                             {event.identity && <p className="font-medium">{event.identity}</p>}

@@ -157,7 +157,7 @@ export async function GET(req: NextRequest) {
         return redirectWithDeletedState(getPublicRequestUrl(req, withBasePath("/pending-approval")));
       }
       await clearPendingRegistrationClaim();
-      await createSession(user.id);
+      await createSession(user.id, "google");
       await notifyTelegramSafe({
         category: "security",
         title: "เข้าสู่ระบบสำเร็จ",

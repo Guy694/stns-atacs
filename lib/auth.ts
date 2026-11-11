@@ -3,12 +3,15 @@ import "server-only";
 import crypto from "node:crypto";
 
 import type { RowDataPacket } from "mysql2/promise";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 
 import { executeStatement, selectRows } from "@/lib/mysql";
 import { isMissingSchemaError } from "@/lib/schema-errors";
 import { secureCookiesEnabled } from "@/lib/cookie-security";
 import { googleLinkForLogin } from "@/lib/google-link";
+import { passwordPolicyError } from "@/lib/password-policy";
+import { readRequestIp } from "@/lib/request-ip";
+import type { LoginMethod } from "@/lib/session-meta";
 
 const SESSION_COOKIE_NAME = "atacs_session";
 const REGISTRATION_COOKIE_NAME = "atacs_registration_claim";
@@ -324,10 +327,8 @@ export function validateOfficerRegistrationInput(input: {
   if (!/^[a-zA-Z0-9._-]{4,50}$/.test(input.username)) {
     return "Username ต้องมี 4-50 ตัว และใช้เฉพาะ a-z, 0-9, จุด, ขีดกลาง หรือขีดล่าง";
   }
-  if (input.password.length < 10) return "รหัสผ่านต้องมีอย่างน้อย 10 ตัวอักษร";
-  if (!/[A-Za-z]/.test(input.password) || !/[0-9]/.test(input.password)) {
-    return "รหัสผ่านต้องมีทั้งตัวอักษรและตัวเลข";
-  }
+  const policyError = passwordPolicyError(input.password, { username: input.username });
+  if (policyError) return policyError;
   if (input.password !== input.confirmPassword) return "ยืนยันรหัสผ่านไม่ตรงกัน";
   if (!input.facilityId || !Number.isInteger(input.facilityId)) return "กรุณาเลือกหน่วยงานที่สังกัด";
   return null;
@@ -652,19 +653,44 @@ export async function linkGoogleIdentity(userId: number, googleSub: string) {
   );
 }
 
-export async function createSession(userId: number) {
+/** Client IP and user agent of the current request (null outside a request, e.g. in tests). */
+async function requestClient(): Promise<{ ip: string | null; userAgent: string | null }> {
+  try {
+    const headerList = await headers();
+    const ip = readRequestIp(headerList);
+    return { ip: ip === "unknown" ? null : ip, userAgent: headerList.get("user-agent")?.slice(0, 300) || null };
+  } catch {
+    return { ip: null, userAgent: null };
+  }
+}
+
+export async function createSession(userId: number, loginMethod: LoginMethod) {
   const sessionToken = `${crypto.randomUUID()}-${crypto.randomBytes(16).toString("hex")}`;
   const sessionTokenHash = sha256(sessionToken);
   const cookieExpiresAt = nowPlusDays(SESSION_TTL_DAYS);
   const idleTimeoutMinutes = getSessionIdleTimeoutMinutes();
+  const client = await requestClient();
 
-  await executeStatement(
-    `
-      INSERT INTO auth_sessions (user_id, session_token_hash, expires_at)
-      VALUES (?, ?, DATE_ADD(NOW(), INTERVAL ? MINUTE))
-    `,
-    [userId, sessionTokenHash, idleTimeoutMinutes]
-  );
+  try {
+    // SEC2: where and how this session started (admin › ความปลอดภัยระบบ › เซสชัน)
+    await executeStatement(
+      `
+        INSERT INTO auth_sessions (user_id, session_token_hash, expires_at, ip_address, user_agent, login_method, last_seen_at, last_ip)
+        VALUES (?, ?, DATE_ADD(NOW(), INTERVAL ? MINUTE), ?, ?, ?, NOW(), ?)
+      `,
+      [userId, sessionTokenHash, idleTimeoutMinutes, client.ip, client.userAgent, loginMethod, client.ip]
+    );
+  } catch (error) {
+    // database/add_session_metadata.sql not run yet: sign in anyway.
+    if (!isMissingSchemaError(error)) throw error;
+    await executeStatement(
+      `
+        INSERT INTO auth_sessions (user_id, session_token_hash, expires_at)
+        VALUES (?, ?, DATE_ADD(NOW(), INTERVAL ? MINUTE))
+      `,
+      [userId, sessionTokenHash, idleTimeoutMinutes]
+    );
+  }
 
   await executeStatement(
     `
@@ -837,14 +863,21 @@ export async function getCurrentUser() {
   }
 
   try {
+    const client = await requestClient();
     await executeStatement(
       `
         UPDATE auth_sessions
-        SET expires_at = DATE_ADD(NOW(), INTERVAL ? MINUTE)
+        SET expires_at = DATE_ADD(NOW(), INTERVAL ? MINUTE), last_seen_at = NOW(), last_ip = COALESCE(?, last_ip)
         WHERE session_token_hash = ?
       `,
-      [getSessionIdleTimeoutMinutes(), tokenHash]
-    );
+      [getSessionIdleTimeoutMinutes(), client.ip, tokenHash]
+    ).catch(async (error) => {
+      if (!isMissingSchemaError(error)) throw error;
+      await executeStatement(
+        `UPDATE auth_sessions SET expires_at = DATE_ADD(NOW(), INTERVAL ? MINUTE) WHERE session_token_hash = ?`,
+        [getSessionIdleTimeoutMinutes(), tokenHash]
+      );
+    });
   } catch {
     // Ignore refresh errors and continue using current session data.
   }

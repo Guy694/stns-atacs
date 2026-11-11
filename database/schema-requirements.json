@@ -242,5 +242,26 @@
         "deleted_by"
       ]
     }
+  },
+  {
+    "file": "add_visitor_access_log.sql (ผู้เข้าใช้งานและตำแหน่ง IP — เมนูความปลอดภัยระบบ)",
+    "tables": [
+      "visitor_access_log",
+      "ip_geo_cache"
+    ],
+    "columns": {}
+  },
+  {
+    "file": "add_session_metadata.sql (SEC2 IP/อุปกรณ์/ช่องทางของเซสชัน)",
+    "tables": [],
+    "columns": {
+      "auth_sessions": [
+        "ip_address",
+        "user_agent",
+        "login_method",
+        "last_seen_at",
+        "last_ip"
+      ]
+    }
   }
 ]

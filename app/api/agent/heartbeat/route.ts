@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { rejectAgentCredentials } from "@/app/api/agent/_lib/reject-credentials";
+
 import { INVALID, isPlainObject, optionalString, readJsonBody } from "@/app/api/agent/_lib/request-body";
 import { heartbeatAgent } from "@/lib/agent";
 import { notifyTelegramSafe } from "@/lib/telegram";
@@ -57,19 +59,7 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     if (message === "INVALID_AGENT_CREDENTIALS") {
-      await recordSecurityEvent({
-        eventType: "agent_invalid_credentials",
-        ipAddress: readRequestIp(req.headers),
-        identity: agentId,
-        path: req.nextUrl.pathname,
-        detail: "Agent heartbeat credentials ไม่ถูกต้อง",
-      });
-      await notifyTelegramSafe({
-        category: "security",
-        title: "พยายามส่ง Agent heartbeat ด้วย credentials ที่ไม่ถูกต้อง",
-        details: { "Agent ID": agentId, IP: readRequestIp(req.headers) },
-      });
-      return NextResponse.json({ error: "Agent credentials are invalid" }, { status: 401 });
+      return rejectAgentCredentials(req, agentId, null, "heartbeat");
     }
     return NextResponse.json({ error: "Unable to update heartbeat" }, { status: 500 });
   }

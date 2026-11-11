@@ -213,7 +213,7 @@ export async function GET(req: NextRequest) {
       }
 
       await linkPendingGoogleIdentity(user);
-      await createSession(user.id);
+      await createSession(user.id, "thaid");
       await notifyTelegramSafe({
         category: "security",
         title: "เข้าสู่ระบบสำเร็จ",

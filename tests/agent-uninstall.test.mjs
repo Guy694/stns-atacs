@@ -308,14 +308,14 @@ test("POST /api/agent/uninstalled/: auth, body cap, outcomes and alerts", async 
   assert.match(ctx.alerts[0].eventKey, /^agent-uninstalled:5:/);
 });
 
-function reportRoute(result, { retired = false } = {}) {
+function reportRoute(result, { retired = false, unknown = false } = {}) {
   const events = [], alerts = [];
   let updateChecked = false;
   const route = loadTs("app/api/agent/report/route.ts", {
     "next/server": nextServer,
     "@/lib/agent": {
       AgentLinkedAssetError: class extends Error {},
-      isRetiredAgentUuid: async () => retired,
+      agentUuidStatus: async () => (unknown ? null : { isActive: !retired }),
       reportAgentInventory: async () => { if (!result) throw new Error("INVALID_AGENT_CREDENTIALS"); return result; },
     },
     "@/lib/agent-api-base": { announcedApiBaseUrl: () => null },
@@ -326,7 +326,7 @@ function reportRoute(result, { retired = false } = {}) {
     "@/lib/security": { readRequestIp: () => "10.0.0.9", recordSecurityEvent: async (input) => { events.push(input); } },
   });
   const post = () => route.POST(routeRequest("https://stn.moph.go.th/stns-atacs/api/agent/report/", {
-    headers: creds, body: JSON.stringify({ fingerprint: "fafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafa", capabilities: ["self-update", "self-uninstall"] }),
+    headers: creds, body: JSON.stringify({ fingerprint: "fafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafa", capabilities: ["self-update", "self-uninstall"], hostname: "DESKTOP-OLD", currentUser: "nurse01" }),
   }));
   return { post, events, alerts, wasUpdateChecked: () => updateChecked };
 }
@@ -355,8 +355,23 @@ test("POST /api/agent/report/: response shape with uninstall, and quiet 401 for 
   ctx = reportRoute(null, { retired: false });
   response = await ctx.post();
   assert.equal(response.status, 401);
-  assert.equal(response.body.code, undefined);
-  assert.equal(ctx.alerts.length, 1);
+  assert.equal(response.body.code, "AGENT_INVALID");
+  assert.equal(ctx.alerts.length, 1, "known id with a wrong key is a security alert");
+  assert.equal(ctx.alerts[0].category, "security");
+  assert.match(ctx.events[0].detail, /DESKTOP-OLD/, "the event says which machine sent it");
+});
+
+test("POST /api/agent/report/: an agent id that is not in the database is logged quietly with its machine name", async () => {
+  const ctx = reportRoute(null, { unknown: true });
+  const response = await ctx.post();
+  assert.equal(response.status, 401);
+  assert.equal(response.body.code, "AGENT_UNKNOWN");
+  assert.equal(ctx.events[0].eventType, "agent_unknown_id");
+  assert.equal(ctx.events[0].skipBurstAlert, true);
+  assert.match(ctx.events[0].detail, /เครื่อง DESKTOP-OLD · ผู้ใช้ nurse01/);
+  assert.equal(ctx.alerts.length, 1, "one quiet agent notice per id per day");
+  assert.equal(ctx.alerts[0].category, "agent");
+  assert.match(ctx.alerts[0].eventKey, /^agent-unknown:agent-/);
 });
 
 test("manual uninstall one-liners: basePath-aware URLs, -UseBasicParsing, notify flag", () => {
