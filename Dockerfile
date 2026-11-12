@@ -2,7 +2,7 @@
 # ATACS (Next.js) production image: standalone server, non-root user.
 # Build:  docker compose build app
 
-ARG NODE_IMAGE=node:22-trixie-slim
+ARG NODE_IMAGE=node:24-trixie-slim
 
 # ── 1) Install dependencies (cached while package-lock.json is unchanged) ──
 FROM ${NODE_IMAGE} AS deps

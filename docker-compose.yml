@@ -146,7 +146,7 @@ services:
   # Uptime watchdog: polls /api/health/ every minute, Telegram after 3 failures in a row,
   # reminder every 30 min while down, and a recovery message (scripts/uptime-watchdog.mjs).
   watchdog:
-    image: node:22-alpine
+    image: node:24-alpine
     restart: unless-stopped
     user: "node"
     mem_limit: 64m
