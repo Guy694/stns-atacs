@@ -9,12 +9,14 @@ import {
   getAgentDeviceById,
   getAgentDeviceFacilityId,
   getAgentEnrollmentFacilityId,
+  listAgentDevices,
   linkAgentDeviceToAsset,
   requestAgentUninstall,
   retireAgentDevice,
   revokeAgentEnrollment,
 } from "@/lib/agent";
 import { AGENT_UNINSTALL_MIGRATION_MESSAGE, agentVersionSupportsSelfUninstall } from "@/lib/agent-uninstall";
+import { findStaleAgents, staleAgentDays } from "@/lib/agent-stale";
 import { parseAgentAutoUpdateMode, parsePilotFacilityIds } from "@/lib/agent-update";
 import { getAgentAutoUpdateSettings, setAgentAutoUpdateSettings } from "@/lib/app-settings";
 import { getCurrentUser } from "@/lib/auth";
@@ -291,4 +293,59 @@ export async function retireAgentDeviceAction(formData: FormData): Promise<Agent
   revalidatePath("/admin/settings/agent");
   revalidatePath("/agent-monitor");
   return { ok: true, message: `ลบ ${label} ออกจากระบบแล้ว — รายงานจากเครื่องนี้จะถูกปฏิเสธ ประวัติและทะเบียนยังอยู่` };
+}
+
+/**
+ * N6: ยืนยันเลิกใช้เครื่องที่ไม่ส่งข้อมูลนาน (ลบออกจากระบบทีละหลายเครื่อง)
+ * เซิร์ฟเวอร์ตรวจซ้ำว่าแต่ละเครื่องยังเงียบเกินเกณฑ์จริง — เครื่องที่เพิ่งกลับมาส่งข้อมูลจะไม่ถูกลบ
+ */
+export async function retireStaleAgentsAction(deviceIds: number[]): Promise<AgentDeviceLifecycleActionResult> {
+  const user = await requireGlobalAgentAdmin();
+  if (!user) return NOT_ALLOWED;
+  const wanted = new Set(deviceIds.filter((id) => Number.isSafeInteger(id) && id > 0));
+  if (wanted.size === 0) return { ok: false, message: "ยังไม่ได้เลือกเครื่อง" };
+
+  const days = staleAgentDays(process.env);
+  const stale = findStaleAgents(await listAgentDevices(), Date.now(), days).filter((device) => wanted.has(device.id));
+  const retired: typeof stale = [];
+  for (const device of stale) {
+    try {
+      if ((await retireAgentDevice(device.id)) === "retired") retired.push(device);
+    } catch (error) {
+      console.error("[agent-retire-stale] failed", device.id, error);
+    }
+  }
+  const skipped = wanted.size - retired.length;
+  if (retired.length === 0) return { ok: false, message: "ไม่มีเครื่องที่ลบได้ (เครื่องอาจกลับมาส่งข้อมูลแล้ว หรือถูกลบไปก่อนหน้า)" };
+
+  for (const device of retired) {
+    await writeAuditLogSafe({
+      userId: user.id,
+      userName: user.fullName,
+      action: "delete",
+      entity: "agent_devices",
+      entityId: device.id,
+      summary: `ยืนยันเลิกใช้ Agent ที่ไม่ส่งข้อมูล ${device.daysSilent} วัน: ${deviceLabel(device)} (${device.facilityName})`,
+    });
+  }
+  const names = retired.map((device) => `${deviceLabel(device)} (${device.daysSilent} วัน)`);
+  await recordSecurityEvent({
+    eventType: "agent_retired",
+    identity: user.fullName,
+    path: "/admin/settings/agent",
+    detail: `ยืนยันเลิกใช้ ${retired.length} เครื่องที่ไม่ส่งข้อมูลเกิน ${days} วัน: ${names.join(", ")}`.slice(0, 1000),
+    skipBurstAlert: true,
+  });
+  await notifyTelegramSafe({
+    category: "agent",
+    title: `ยืนยันเลิกใช้ Agent ${retired.length} เครื่อง (ไม่ส่งข้อมูลเกิน ${days} วัน)`,
+    eventKey: `agent-retired-stale:${Date.now()}`,
+    details: { เครื่อง: names.slice(0, 10).join(", ") + (names.length > 10 ? ` และอีก ${names.length - 10} เครื่อง` : ""), "ทำโดย": user.fullName },
+  });
+  revalidatePath("/admin/settings/agent");
+  revalidatePath("/agent-monitor");
+  return {
+    ok: true,
+    message: `เลิกใช้ ${retired.length} เครื่องแล้ว${skipped ? ` (ข้าม ${skipped} เครื่องที่กลับมาส่งข้อมูลหรือลบไปแล้ว)` : ""} — ประวัติและทะเบียนครุภัณฑ์ยังอยู่`,
+  };
 }

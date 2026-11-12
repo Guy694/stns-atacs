@@ -29,6 +29,6 @@ test("M15: stored values are parsed defensively", () => {
 
 test("M15: every scheduled job has an expected interval", () => {
   const keys = cron.CRON_JOBS.map((job) => job.key);
-  assert.deepEqual([...keys].sort(), ["agent-health", "backup-check", "daily-summary"]);
+  assert.deepEqual([...keys].sort(), ["agent-health", "backup-check", "daily-summary", "security-weekly"]);
   for (const job of cron.CRON_JOBS) assert.ok(job.everyMinutes > 0 && job.label);
 });

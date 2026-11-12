@@ -25,7 +25,8 @@ import { notifyTelegramSafe } from "@/lib/telegram";
 import { getPasswordLoginState } from "@/lib/password-login";
 import { passwordLoginAllowedFor } from "@/lib/password-login-policy";
 import { readRequestIp, recordSecurityEvent } from "@/lib/security";
-import { checkLoginLock, loginLockMessage, LOGIN_SUCCESS_EVENT } from "@/lib/login-throttle";
+import { justReachedLock } from "@/lib/login-lockout";
+import { checkLoginLock, countRecentLoginFailures, loginLockMessage, loginLockPolicy, LOGIN_SUCCESS_EVENT } from "@/lib/login-throttle";
 import { canBypassMaintenance, isMaintenanceEnabled } from "@/lib/maintenance";
 import { safeNextPath } from "@/lib/input-guards";
 
@@ -52,6 +53,39 @@ async function recordLoginSecurityEvent(eventType: string, identity: string, det
     detail,
   });
   return context;
+}
+
+/** N3: แจ้ง Telegram ครั้งเดียวตอนที่บัญชี/IP เพิ่งถูกล็อก (ไม่ใช่ทุกครั้งที่ลองต่อ) */
+async function alertIfJustLocked(username: string, clientIp: string, context: Record<string, string>) {
+  try {
+    const policy = loginLockPolicy();
+    const counts = await countRecentLoginFailures(username, clientIp, policy);
+    if (!counts.available) return;
+    const scope = justReachedLock(counts, policy);
+    if (!scope) return;
+    const what = scope === "account" ? `บัญชี ${username}` : `IP ${clientIp}`;
+    await recordSecurityEvent({
+      eventType: "login_lock_triggered",
+      ipAddress: clientIp,
+      identity: username,
+      path: "/login",
+      detail: `ล็อก${scope === "account" ? "บัญชี" : " IP"}ชั่วคราว ${policy.windowMinutes} นาที: ${what} ใส่รหัสผ่านผิด ${scope === "account" ? counts.account : counts.ip} ครั้ง`,
+      skipBurstAlert: true,
+    });
+    await notifyTelegramSafe({
+      category: "security",
+      title: scope === "account" ? "🔒 บัญชีถูกล็อกชั่วคราว (ใส่รหัสผ่านผิดหลายครั้ง)" : "🔒 IP ถูกล็อกชั่วคราว (ไล่เดารหัสผ่านหลายบัญชี)",
+      throttle: false,
+      details: {
+        [scope === "account" ? "บัญชี" : "IP"]: scope === "account" ? username : clientIp,
+        "ผิดติดต่อกัน": `${scope === "account" ? counts.account : counts.ip} ครั้งใน ${policy.windowMinutes} นาที`,
+        "ปลดล็อกเอง": `หลัง ${policy.windowMinutes} นาที หรือผู้ดูแลกดปลดล็อกที่ ความปลอดภัยระบบ`,
+        ...context,
+      },
+    });
+  } catch (error) {
+    console.error("[login-lock] alert failed", error instanceof Error ? error.message : error);
+  }
 }
 
 function loginSystemErrorRedirect(nextPath: string) {
@@ -294,6 +328,7 @@ export async function loginWithPasswordAction(formData: FormData) {
       title: "เข้าสู่ระบบไม่สำเร็จ",
       details: { Username: username, วิธี: "Username/Password", ...context },
     });
+    await alertIfJustLocked(username, clientIp, context);
     redirect(`/login?tab=password&next=${encodeURIComponent(nextPath)}&error=${toQuery("Username หรือรหัสผ่านไม่ถูกต้อง")}`);
   }
 

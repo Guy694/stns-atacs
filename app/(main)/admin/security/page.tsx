@@ -30,6 +30,8 @@ import { DailyChart } from "./_components/daily-chart";
 import { IpLocation } from "./_components/ip-location";
 import { LoginMethodsPanel } from "./_components/login-methods-panel";
 import { SessionsPanel } from "./_components/sessions-panel";
+import { LockoutsPanel } from "./_components/lockouts-panel";
+import { listLockedLogins } from "@/lib/login-lockout-data";
 import { listActiveSessions } from "@/lib/session-admin";
 
 type Props = { searchParams: Promise<Record<string, string | string[] | undefined>> };
@@ -78,6 +80,10 @@ export default async function SecurityDashboardPage({ searchParams }: Props) {
     loginMethodCoverage().catch(() => []),
     listActiveSessions().catch(() => ({ sessions: [], tracked: false })),
   ]);
+  const locked = await listLockedLogins().catch(() => null);
+  const lockedIps = locked ? [...new Set([...locked.ips.map((row) => row.ip), ...locked.accounts.flatMap((row) => row.ips)])] : [];
+  const lockGeo = await geoForIps(lockedIps);
+  ensureIpGeoInBackground(lockedIps.filter((ip) => !lockGeo.has(ip)));
   const sessionIps = sessionList.sessions.map((session) => session.lastIp ?? session.ip).filter((ip): ip is string => Boolean(ip));
   const sessionGeo = await geoForIps(sessionIps);
   ensureIpGeoInBackground(sessionIps.filter((ip) => !sessionGeo.has(ip)));
@@ -175,6 +181,17 @@ export default async function SecurityDashboardPage({ searchParams }: Props) {
           ระบบเฝ้าดู (stn-atacs-watchdog) ตรวจ <code>/api/health/</code> ทุก 1 นาที ล่มติดกัน 3 ครั้งจะแจ้ง Telegram เตือนซ้ำทุก 30 นาที และแจ้งเมื่อกลับมาใช้งานได้
         </p>
       </section>
+
+      {locked && (
+        <LockoutsPanel
+          accounts={locked.accounts}
+          ips={locked.ips}
+          policy={locked.policy}
+          geo={lockGeo}
+          notice={one("locknotice")}
+          error={one("lockerror")}
+        />
+      )}
 
       <SessionsPanel
         sessions={sessionList.sessions}

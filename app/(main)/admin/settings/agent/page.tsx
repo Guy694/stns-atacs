@@ -25,6 +25,8 @@ import { hasPermission } from "@/lib/role-permissions";
 import { summarizeUnknownAgents } from "@/lib/agent-auth-failure";
 import { listUnknownAgentEvents } from "@/lib/security-dashboard-data";
 import { ensureIpGeoInBackground, geoForIps } from "@/lib/visitor-log-data";
+import { StaleAgentsPanel } from "@/app/(main)/admin/settings/agent/_components/stale-agents-panel";
+import { findStaleAgents, staleAgentDays } from "@/lib/agent-stale";
 import { UnknownAgentsPanel } from "@/app/(main)/admin/settings/agent/_components/unknown-agents-panel";
 
 const AUTO_UPDATE_NOTICES: Record<string, { notice?: string; error?: string }> = {
@@ -82,6 +84,20 @@ export default async function AgentSettingsPage({ searchParams }: AgentSettingsP
 
   // Server component: one timestamp per request so relative times match on server and client.
   const nowMs = new Date().getTime();
+  // N6: in-service machines silent past the threshold (central admins: retiring spans facilities)
+  const staleDays = staleAgentDays(process.env);
+  const staleAgents = isCentralAdmin
+    ? findStaleAgents(devices, nowMs, staleDays).map((device) => ({
+        id: device.id,
+        hostname: device.hostname,
+        facilityName: device.facilityName,
+        agentVersion: device.agentVersion,
+        lastContactAt: device.lastContactAt,
+        daysSilent: device.daysSilent,
+        selfUninstall: device.selfUninstall,
+      }))
+    : [];
+
   const offlineMinutes = agentOfflineThresholdMinutes(process.env.AGENT_OFFLINE_MINUTES);
   // X1: never trust the stored 'online' alone — it only flips when the agent-health cron runs.
   const liveStatus = (device: (typeof devices)[number]) =>
@@ -202,6 +218,8 @@ export default async function AgentSettingsPage({ searchParams }: AgentSettingsP
               </p>
             )}
           </div>
+
+          <StaleAgentsPanel rows={staleAgents} days={staleDays} />
 
           <UnknownAgentsPanel agents={unknownAgents} geo={unknownAgentGeo} />
 

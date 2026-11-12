@@ -4,6 +4,7 @@ import type { RowDataPacket } from "mysql2/promise";
 
 import { selectRows } from "@/lib/mysql";
 import { isMissingSchemaError } from "@/lib/schema-errors";
+import { LOGIN_IP_UNLOCK_EVENT, LOGIN_UNLOCK_EVENT } from "@/lib/login-lockout";
 
 /**
  * SEC-08: จำกัดการเดารหัสผ่าน
@@ -76,17 +77,21 @@ export async function countRecentLoginFailures(username: string, ipAddress: stri
            AND created_at >= DATE_SUB(NOW(), INTERVAL ? MINUTE)
            AND created_at > COALESCE((
              SELECT MAX(created_at) FROM security_events s2
-             WHERE s2.event_type = ? AND s2.identity_value = ?
+             WHERE s2.event_type IN (?, ?) AND s2.identity_value = ?
            ), '1970-01-01')`,
-        [LOGIN_FAILURE_EVENT, username, policy.windowMinutes, LOGIN_SUCCESS_EVENT, username]
+        [LOGIN_FAILURE_EVENT, username, policy.windowMinutes, LOGIN_SUCCESS_EVENT, LOGIN_UNLOCK_EVENT, username]
       ),
       selectRows<CountRow>(
         `SELECT COUNT(*) AS total
          FROM security_events
          WHERE event_type = ?
            AND ip_address = ?
-           AND created_at >= DATE_SUB(NOW(), INTERVAL ? MINUTE)`,
-        [LOGIN_FAILURE_EVENT, ipAddress, policy.windowMinutes]
+           AND created_at >= DATE_SUB(NOW(), INTERVAL ? MINUTE)
+           AND created_at > COALESCE((
+             SELECT MAX(created_at) FROM security_events s3
+             WHERE s3.event_type = ? AND s3.ip_address = ?
+           ), '1970-01-01')`,
+        [LOGIN_FAILURE_EVENT, ipAddress, policy.windowMinutes, LOGIN_IP_UNLOCK_EVENT, ipAddress]
       ),
     ]);
     return { account: Number(accountRows[0]?.total ?? 0), ip: Number(ipRows[0]?.total ?? 0), available: true };

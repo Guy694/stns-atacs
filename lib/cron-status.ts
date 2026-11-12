@@ -4,7 +4,7 @@ import { getAppSetting, setAppSetting } from "@/lib/app-settings";
  * M15: ทุก route ใน app/api/cron บันทึกเวลาที่รันล่าสุดไว้ใน app_settings (ไม่ต้องรัน migration)
  * หน้า ตั้งค่าระบบ แสดงสถานะ เพื่อให้เห็นทันทีเมื่อไม่มีตัวเรียก cron หรือ CRON_SECRET ไม่ตรงกัน
  */
-export type CronJobKey = "agent-health" | "daily-summary" | "backup-check";
+export type CronJobKey = "agent-health" | "daily-summary" | "backup-check" | "security-weekly";
 export type CronRun = { at: string; ok: boolean; detail?: string };
 export type CronHealth = "ok" | "late" | "failed" | "never";
 
@@ -12,6 +12,7 @@ export const CRON_JOBS: { key: CronJobKey; label: string; everyMinutes: number }
   { key: "agent-health", label: "ตรวจเครื่อง Agent ที่ขาดการติดต่อ", everyMinutes: 60 },
   { key: "daily-summary", label: "สรุปงานค้างประจำวัน (Telegram)", everyMinutes: 24 * 60 },
   { key: "backup-check", label: "ตรวจไฟล์สำรองฐานข้อมูล", everyMinutes: 24 * 60 },
+  { key: "security-weekly", label: "รายงานความปลอดภัยรายสัปดาห์ (Telegram)", everyMinutes: 7 * 24 * 60 },
 ];
 
 const settingKey = (job: CronJobKey) => `cron.last_run.${job}`;
